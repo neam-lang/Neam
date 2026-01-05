@@ -17,7 +17,7 @@ Release artifacts for the Neam compiler/runtime/CLI published in
 - Alignment with Neam guardrails: deny-by-default capabilities, provenance-rich
   receipts, and reproducible bundles.
 
-## Release artifact model
+## Release artifact model (v0.13 alignment)
 
 Each Neam release publishes the following assets to GitHub Releases:
 
@@ -25,7 +25,9 @@ Each Neam release publishes the following assets to GitHub Releases:
   `neam-<version>-<os>-<arch>.tar.gz` containing:
   - `bin/neam` (runtime/CLI), `bin/neamc` (compiler), and any shared libs.
   - `share/neam/` with schema snapshots, Construct templates, policy packs, and
-    MCP tool schemas for TerminalTool/PythonTool/WebSearchTool.
+    MCP tool schemas for TerminalTool/PythonTool/WebSearchTool, plus Media I/O
+    Kernel assets (terminal renderer descriptors, device capability manifests,
+    audio backend hints).
   - `LICENSE` and `NOTICE` files.
 - `SHA256SUMS` file covering every tarball.
 - Optional `SHA256SUMS.sig` signed with a maintainers’ key.
@@ -47,6 +49,10 @@ The installer script is intentionally small and auditable:
   4. Extract to a versioned directory (default: `/usr/local/neam/<version>`).
   5. Create deterministic symlinks (`neam`, `neamc`) in `bin/`.
   6. Emit a minimal receipt (paths, checksum used, timestamp) for auditability.
+  7. Validate presence of media capability manifests so multimodal terminal
+     rendering and audio device selection can be surfaced safely by the CLI
+     before enabling flags like `--voice` or `--no-images` (bypass with
+     `--allow-missing-media` if installing partial bundles for testing).
 
 ## Usage
 
@@ -71,6 +77,8 @@ Key flags:
 - `--os` / `--arch`: override platform detection when cross-installing.
 - `--execute`: perform the installation; omit to keep dry-run mode.
 - `--gpg-keyring`: optional path to a keyring for verifying `SHA256SUMS.sig`.
+- `--allow-missing-media`: skip the Media I/O Kernel asset check (not
+  recommended outside of testing partial artifacts).
 
 ## Threat model and mitigations
 
@@ -97,6 +105,7 @@ Key flags:
       │   ├── construct-templates/
       │   ├── policy-profiles/
       │   ├── schemas/ (MCP snapshots, AsyncAPI/CloudEvents/A2A, tool schemas)
+      │   ├── media/ (terminal renderer descriptors, audio backend hints)
       │   └── skills-index/
       └── receipts/
           └── install-<timestamp>.json
