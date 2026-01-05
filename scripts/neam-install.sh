@@ -10,6 +10,7 @@ OS_OVERRIDE=""
 ARCH_OVERRIDE=""
 EXECUTE=false
 GPG_KEYRING=""
+ALLOW_MISSING_MEDIA=false
 
 usage() {
   cat <<'USAGE'
@@ -19,13 +20,14 @@ Usage:
   neam-install.sh [--version <tag>] [--owner <org>] [--repo <name>] \
                   [--install-dir <path>] [--os <linux|darwin|windows>] \
                   [--arch <amd64|arm64>] [--artifact-prefix <name>] \
-                  [--gpg-keyring <path>] [--execute]
+                  [--gpg-keyring <path>] [--allow-missing-media] [--execute]
 
 Defaults:
   version      v0.13.0
   owner/repo   Praveengovianalytics/NeamC (override if using a different release host)
   install-dir  /usr/local/neam
   mode         dry-run (plan only)
+  media checks enabled (fail if media manifest missing)
 
 Examples:
   ./neam-install.sh --version v0.13.0
@@ -90,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     --arch) ARCH_OVERRIDE="$2"; shift 2 ;;
     --artifact-prefix) ARTIFACT_PREFIX="$2"; shift 2 ;;
     --gpg-keyring) GPG_KEYRING="$2"; shift 2 ;;
+    --allow-missing-media) ALLOW_MISSING_MEDIA=true; shift ;;
     --execute) EXECUTE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) err "unknown argument: $1"; usage; exit 1 ;;
@@ -162,6 +165,16 @@ tar -xzf "${TMPDIR}/${ARTIFACT}" -C "${TARGET_ROOT}" --strip-components=1
 
 ln -sfn "${TARGET_ROOT}/bin/neam" "${BIN_ROOT}/neam"
 ln -sfn "${TARGET_ROOT}/bin/neamc" "${BIN_ROOT}/neamc"
+
+MEDIA_MANIFEST="${TARGET_ROOT}/share/neam/media"
+if [[ ! -d "${MEDIA_MANIFEST}" ]]; then
+  if [[ "${ALLOW_MISSING_MEDIA}" == true ]]; then
+    log "warning: media capability assets not found at ${MEDIA_MANIFEST}; continuing due to --allow-missing-media"
+  else
+    err "media capability assets not found at ${MEDIA_MANIFEST}; rerun with --allow-missing-media to bypass"
+    exit 1
+  fi
+fi
 
 RECEIPT="${TARGET_ROOT}/receipts/install-$(date -u +%Y%m%dT%H%M%SZ).json"
 cat <<RECEIPT > "${RECEIPT}"

@@ -2,6 +2,12 @@
 
 **Version:** v0.13 (Draft) — End-to-End Requirements Specification (Jan 05, 2026)
 
+> Latest updates (v0.13, Jan 05, 2026): native terminal multimodal I/O (text,
+> images, streaming audio), a Media I/O Kernel with audio device capabilities,
+> realtime audio/image output support in the runtime and NeamCode, A2A + EDA
+> alignment, and tightened security guardrails around device effects and terminal
+> rendering.
+
 Neam is an agent-native programming language and runtime designed to make agentic
 applications simple, safe, and production-ready. It combines Rust/Cargo-like
 ergonomics with Bun-like simplicity and bakes in agent-focused primitives such as
@@ -30,6 +36,16 @@ repository via GitHub Releases.
 - **Tooling + Ecosystem:** built-in TerminalTool, PythonTool, WebSearchTool with
   sandbox profiles and receipts; MCP host kernel for tools/resources/prompts;
   package ecosystem (NeamPackage) and audited skill marketplace (NeamSkills).
+- **Media I/O Kernel + Terminal Rendering:** portable audio input/output,
+  inline terminal image rendering (Kitty/iTerm2/Sixel where available), and
+  artifact-based media handling with backpressure and cancellation. Device
+  effects (AudioInput/AudioOutput/Camera/TerminalRender/MediaExport) are
+  explicit capabilities with approval/retention policies enforced by
+  NeamC/Neam.
+- **NeamCode + Provider Realtime:** terminal agent experience with modality
+  routing (text-only, STT→LLM→TTS fallback, or provider-native realtime audio)
+  and CLI flags to force/deny audio or images. A2A client/server support is
+  aligned with the v0.13 AgentCard + version negotiation requirements.
 - **Event- and Interop-Ready:** first-class CloudEvents/AsyncAPI contracts,
   Kafka/NATS adapters, Beam integration option, and Agent2Agent (A2A) protocol
   for cross-vendor collaboration.
@@ -50,6 +66,11 @@ The installer is designed to be shipped via GitHub Releases with:
 - Safe defaults: deny ambient network during install steps, avoid curl | sh,
   prefer argv-style command invocation, and require explicit `--execute` to make
   changes (default mode is a dry-run plan).
+- Media-aware artifacts: runtime bundles include the Media I/O Kernel, device
+  capability manifests, and terminal renderer assets; NeamC enforces that audio
+  and camera effects declare policies in the Construct page before builds will
+  pass. The installer validates that media capability assets exist (override
+  with `--allow-missing-media` only when testing partial bundles).
 
 See [INSTALL.md](./INSTALL.md) for the full installer design, threat model, and
 operational guidance.
