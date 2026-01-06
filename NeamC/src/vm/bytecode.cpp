@@ -9,6 +9,7 @@
 #include <istream>
 #include <limits>
 #include <ostream>
+#include <sstream>
 #include <stdexcept>
 
 namespace
@@ -30,12 +31,27 @@ void Bytecode::write_op(OpCode op)
   code_.push_back(static_cast<uint8_t>(op));
 }
 
+void Bytecode::write_byte(uint8_t value)
+{
+  code_.push_back(value);
+}
+
 void Bytecode::write_short(uint16_t value)
 {
   const uint8_t low = static_cast<uint8_t>(value & 0xFF);
   const uint8_t high = static_cast<uint8_t>((value >> 8) & 0xFF);
   code_.push_back(low);
   code_.push_back(high);
+}
+
+void Bytecode::patch_short(std::size_t index, uint16_t value)
+{
+  if (index + 1 >= code_.size())
+  {
+    throw std::runtime_error("Patch index out of range");
+  }
+  code_[index] = static_cast<uint8_t>(value & 0xFF);
+  code_[index + 1] = static_cast<uint8_t>((value >> 8) & 0xFF);
 }
 
 void Bytecode::emit_constant(Value value)
@@ -119,6 +135,12 @@ void write_value(std::ostream& out, const Value& value)
     case ValueType::Agent:
       type = 4;
       break;
+    case ValueType::Function:
+      type = 5;
+      break;
+    case ValueType::Native:
+      type = 6;
+      break;
   }
   out.put(static_cast<char>(type));
   if (!out)
@@ -145,6 +167,25 @@ void write_value(std::ostream& out, const Value& value)
     case ValueType::Agent:
       write_string(out, value.as_agent().name);
       break;
+    case ValueType::Function:
+    {
+      const auto& fn = value.as_function();
+      write_string(out, fn.name);
+      write_u32(out, static_cast<uint32_t>(fn.arity));
+      std::stringstream nested;
+      fn.chunk->serialize(nested);
+      const auto nested_str = nested.str();
+      write_u32(out, static_cast<uint32_t>(nested_str.size()));
+      out.write(nested_str.data(), static_cast<std::streamsize>(nested_str.size()));
+      break;
+    }
+    case ValueType::Native:
+    {
+      const auto& native = value.as_native();
+      write_string(out, native.name);
+      write_u32(out, static_cast<uint32_t>(native.arity));
+      break;
+    }
   }
 
   if (!out)
@@ -188,6 +229,27 @@ Value read_value(std::istream& in)
       return Value::String(read_string(in));
     case 4:
       return Value::Agent(read_string(in));
+    case 5:
+    {
+      const auto name = read_string(in);
+      const auto arity = read_u32(in);
+      const auto nested_size = read_u32(in);
+      std::string nested_data(nested_size, '\0');
+      in.read(nested_data.data(), static_cast<std::streamsize>(nested_size));
+      if (static_cast<uint32_t>(in.gcount()) != nested_size)
+      {
+        throw std::runtime_error("Failed to read nested function chunk");
+      }
+      std::stringstream nested_stream(nested_data);
+      auto nested_chunk = std::make_shared<Bytecode>(Bytecode::deserialize(nested_stream));
+      return Value::FunctionValue(Function{name, arity, std::move(nested_chunk)});
+    }
+    case 6:
+    {
+      const auto name = read_string(in);
+      const auto arity = read_u32(in);
+      return Value::Native(NativeFunction{name, arity, {}});  // bound at runtime
+    }
     default:
       throw std::runtime_error("Unknown value type tag");
   }

@@ -1,13 +1,16 @@
 //
-// NeamC - Minimal AST definitions for compiler backend
+// NeamC - AST definitions for compiler backend
 //
 
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
+
+#include "neamc/vm/value.hpp"
 
 namespace neamc
 {
@@ -16,12 +19,19 @@ enum class BinaryOp
   Add,
   Subtract,
   Multiply,
-  Divide
+  Divide,
+  Greater,
+  GreaterEqual,
+  Less,
+  LessEqual,
+  Equal,
+  NotEqual
 };
 
 enum class UnaryOp
 {
-  Negate
+  Negate,
+  Not
 };
 
 struct Expression;
@@ -32,7 +42,18 @@ using StmtPtr = std::unique_ptr<Statement>;
 
 struct LiteralExpr
 {
-  double value;
+  vm::Value value;
+};
+
+struct IdentifierExpr
+{
+  std::string name;
+};
+
+struct AssignmentExpr
+{
+  std::string name;
+  ExprPtr value;
 };
 
 struct UnaryExpr
@@ -48,9 +69,16 @@ struct BinaryExpr
   ExprPtr right;
 };
 
+struct CallExpr
+{
+  ExprPtr callee;
+  std::vector<ExprPtr> arguments;
+};
+
 struct Expression
 {
-  using Variant = std::variant<LiteralExpr, UnaryExpr, BinaryExpr>;
+  using Variant =
+      std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr>;
   Variant node;
 };
 
@@ -64,14 +92,41 @@ struct BlockStmt
   std::vector<StmtPtr> statements;
 };
 
-struct AgentDecl
+struct LetStmt
 {
   std::string name;
+  ExprPtr initializer;
+};
+
+struct IfStmt
+{
+  ExprPtr condition;
+  StmtPtr then_branch;
+  StmtPtr else_branch;  // may be null
+};
+
+struct WhileStmt
+{
+  ExprPtr condition;
+  StmtPtr body;
+};
+
+struct ReturnStmt
+{
+  ExprPtr value;
+};
+
+struct FunctionDecl
+{
+  std::string name;
+  std::vector<std::string> parameters;
+  StmtPtr body;  // always a BlockStmt
 };
 
 struct Statement
 {
-  using Variant = std::variant<ExpressionStmt, BlockStmt, AgentDecl>;
+  using Variant =
+      std::variant<ExpressionStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt, FunctionDecl>;
   Variant node;
 };
 
