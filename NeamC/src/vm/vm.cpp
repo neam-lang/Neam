@@ -121,6 +121,16 @@ Value VirtualMachine::run(const Bytecode& chunk)
       case OpCode::OP_DUP:
         stack_.push_back(peek());
         break;
+      case OpCode::OP_NEGATE:
+      {
+        Value value = pop();
+        if (!value.is_number())
+        {
+          throw std::runtime_error("Negation on non-number type");
+        }
+        stack_.push_back(Value::Number(-value.as_number()));
+        break;
+      }
       case OpCode::OP_ADD:
       case OpCode::OP_SUB:
       case OpCode::OP_MUL:

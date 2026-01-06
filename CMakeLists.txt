@@ -17,10 +17,31 @@ target_include_directories(neamc_vm
         ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include
 )
 
+add_library(neamc_compiler
+    NeamC/src/parser.cpp
+    NeamC/src/compiler.cpp
+    NeamC/src/pipeline.cpp
+)
+
+target_link_libraries(neamc_compiler
+    PUBLIC
+        neamc_vm
+)
+
+target_include_directories(neamc_compiler
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include
+)
+
 add_executable(neamc
     NeamC/src/neamc/main.cpp
 )
-target_link_libraries(neamc PRIVATE neamc_vm)
+target_link_libraries(neamc PRIVATE neamc_compiler)
+
+add_executable(neam
+    NeamC/src/neam_run.cpp
+)
+target_link_libraries(neam PRIVATE neamc_vm)
 
 enable_testing()
 
@@ -29,3 +50,9 @@ add_executable(vm_test
 )
 target_link_libraries(vm_test PRIVATE neamc_vm)
 add_test(NAME vm_test COMMAND vm_test)
+
+add_executable(compiler_test
+    tests/compiler_test.cpp
+)
+target_link_libraries(compiler_test PRIVATE neamc_compiler)
+add_test(NAME compiler_test COMMAND compiler_test)
