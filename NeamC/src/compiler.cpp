@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "neamc/vm/object.hpp"
+
 namespace neamc
 {
 using vm::OpCode;
@@ -75,9 +77,11 @@ vm::Value Compiler::compile_function(const FunctionDecl& decl)
   fn_compiler.chunk_.write_op(OpCode::OP_NIL);
   fn_compiler.chunk_.write_op(OpCode::OP_RETURN);
 
-  auto function_chunk = std::make_shared<vm::Chunk>(fn_compiler.chunk_);
-  vm::Function fn_value{decl.name, decl.parameters.size(), std::move(function_chunk)};
-  return vm::Value::FunctionValue(std::move(fn_value));
+  auto* fn_obj = vm::new_function();
+  fn_obj->arity = static_cast<int>(decl.parameters.size());
+  fn_obj->name = vm::copy_string(decl.name.c_str(), decl.name.size());
+  fn_obj->chunk = fn_compiler.chunk_;
+  return vm::Value::FunctionValue(fn_obj);
 }
 
 void Compiler::begin_scope()
@@ -135,7 +139,16 @@ void Compiler::emit_statement(const Statement& stmt)
         else if constexpr (std::is_same_v<T, LetStmt>)
         {
           emit_expression(*node.initializer);
-          locals_.push_back(Local{node.name, scope_depth_});
+          if (scope_depth_ == 0)
+          {
+            const auto name_constant = chunk_.add_constant(vm::Value::String(node.name));
+            chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+            chunk_.write_short(static_cast<uint16_t>(name_constant));
+          }
+          else
+          {
+            locals_.push_back(Local{node.name, scope_depth_});
+          }
         }
         else if constexpr (std::is_same_v<T, IfStmt>)
         {
@@ -182,7 +195,15 @@ void Compiler::emit_statement(const Statement& stmt)
           const auto constant_index = chunk_.add_constant(std::move(fn_value));
           chunk_.write_op(OpCode::OP_CONST);
           chunk_.write_short(static_cast<uint16_t>(constant_index));
-          locals_.push_back(Local{node.name, scope_depth_});
+          if (scope_depth_ == 0)
+          {
+            chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+            chunk_.write_short(static_cast<uint16_t>(chunk_.add_constant(vm::Value::String(node.name))));
+          }
+          else
+          {
+            locals_.push_back(Local{node.name, scope_depth_});
+          }
         }
       },
       stmt.node);
@@ -203,14 +224,9 @@ void Compiler::emit_expression(const Expression& expr)
           const auto slot = resolve_local(node.name);
           if (slot < 0)
           {
-            if (node.name == "print")
-            {
-              chunk_.emit_constant(vm::Value::Native(vm::NativeFunction{"print", 1, {}}));
-            }
-            else
-            {
-              throw std::runtime_error("Undefined variable: " + node.name);
-            }
+            const auto name_constant = chunk_.add_constant(vm::Value::String(node.name));
+            chunk_.write_op(OpCode::OP_GET_GLOBAL);
+            chunk_.write_short(static_cast<uint16_t>(name_constant));
           }
           else
           {
@@ -224,10 +240,15 @@ void Compiler::emit_expression(const Expression& expr)
           const auto slot = resolve_local(node.name);
           if (slot < 0)
           {
-            throw std::runtime_error("Undefined variable: " + node.name);
+            const auto name_constant = chunk_.add_constant(vm::Value::String(node.name));
+            chunk_.write_op(OpCode::OP_SET_GLOBAL);
+            chunk_.write_short(static_cast<uint16_t>(name_constant));
           }
-          chunk_.write_op(OpCode::OP_SET_LOCAL);
-          chunk_.write_short(static_cast<uint16_t>(slot));
+          else
+          {
+            chunk_.write_op(OpCode::OP_SET_LOCAL);
+            chunk_.write_short(static_cast<uint16_t>(slot));
+          }
         }
         else if constexpr (std::is_same_v<T, UnaryExpr>)
         {
