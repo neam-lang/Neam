@@ -4,6 +4,11 @@
 
 #pragma once
 
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "neamc/ast.hpp"
 #include "neamc/vm/bytecode.hpp"
 
@@ -15,9 +20,23 @@ public:
   vm::Chunk compile(const Program& program);
 
 private:
+  struct Local
+  {
+    std::string name;
+    int depth = 0;
+  };
+
+  vm::Value compile_function(const FunctionDecl& decl);
+  void begin_scope();
+  void end_scope();
+  int resolve_local(const std::string& name) const;
+
   void emit_statement(const Statement& stmt);
   void emit_expression(const Expression& expr);
+  void emit_block(const BlockStmt& block);
 
   vm::Chunk chunk_{};
+  std::vector<Local> locals_{};
+  int scope_depth_ = 0;
 };
 }  // namespace neamc
