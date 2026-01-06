@@ -238,7 +238,7 @@ Value read_value(std::istream& in)
     case 3:
     {
       const auto s = read_string(in);
-      return Value::String(s);
+      return Value::String(s.c_str(), s.size());
     }
     case 4:
     {

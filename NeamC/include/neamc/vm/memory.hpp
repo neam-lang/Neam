@@ -29,6 +29,7 @@ void* reallocate(void* pointer, std::size_t old_size, std::size_t new_size);
 void mark_object(Obj* object);
 void mark_value(const Value& value);
 void collect_garbage(VirtualMachine& vm);
+void free_objects();
 
 template <typename T>
 T* allocate_object(ObjType type)
