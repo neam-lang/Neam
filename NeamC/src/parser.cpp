@@ -617,7 +617,8 @@ ExprPtr Parser::parse_primary()
   }
   if (match(TokenType::String))
   {
-    return make_literal(vm::Value::String(previous().lexeme));
+    return make_literal(
+        vm::Value::String(previous().lexeme.c_str(), previous().lexeme.size()));
   }
   if (match(TokenType::True))
   {

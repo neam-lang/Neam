@@ -44,11 +44,6 @@ Value Value::String(const char* chars, std::size_t length)
   return Value::ObjVal(copy_string(chars, length));
 }
 
-Value Value::String(const std::string& value)
-{
-  return Value::String(value.data(), value.size());
-}
-
 Value Value::FunctionValue(ObjFunction* function)
 {
   return Value::ObjVal(reinterpret_cast<Obj*>(function));
