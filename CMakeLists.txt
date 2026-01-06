@@ -25,6 +25,10 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/tree_sitter_parser.cpp
     NeamC/src/compiler.cpp
     NeamC/src/pipeline.cpp
+    NeamC/src/vm/memory.cpp
+    NeamC/src/vm/object.cpp
+    NeamC/src/vm/table.cpp
+    NeamC/src/vm/native.cpp
     NeamC/src/vm/value.cpp
     NeamC/src/vm/bytecode.cpp
     NeamC/src/vm/vm.cpp
