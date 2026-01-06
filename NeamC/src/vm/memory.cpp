@@ -189,4 +189,18 @@ void collect_garbage(VirtualMachine& vm)
     }
   }
 }
+
+void free_objects()
+{
+  Obj* object = objects;
+  while (object)
+  {
+    Obj* next = object->next;
+    free_object(object);
+    object = next;
+  }
+  objects = nullptr;
+  bytes_allocated = 0;
+  next_gc = 1024 * 1024;
+}
 }  // namespace neamc::vm

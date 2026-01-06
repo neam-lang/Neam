@@ -6,7 +6,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
 
 namespace neamc::vm
 {
@@ -40,7 +39,6 @@ struct Value
   static Value ObjVal(Obj* object);
 
   static Value String(const char* chars, std::size_t length);
-  static Value String(const std::string& value);
   static Value FunctionValue(ObjFunction* function);
   static Value Native(ObjNative* native);
 

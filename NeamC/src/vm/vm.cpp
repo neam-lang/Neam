@@ -16,6 +16,8 @@ namespace neamc::vm
 VirtualMachine::VirtualMachine()
 {
   current_vm = this;
+  globals_.clear();
+  interned_strings_.clear();
   register_core_natives(*this);
 }
 
@@ -25,6 +27,7 @@ VirtualMachine::~VirtualMachine()
   {
     current_vm = nullptr;
   }
+  free_objects();
 }
 
 Value VirtualMachine::pop()
