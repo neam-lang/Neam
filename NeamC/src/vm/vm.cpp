@@ -6,54 +6,25 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 
 namespace neamc::vm
 {
-namespace
-{
-Value print_native(const std::vector<Value>& args)
-{
-  for (const auto& arg : args)
-  {
-    switch (arg.type())
-    {
-      case ValueType::Nil:
-        std::cout << "nil";
-        break;
-      case ValueType::Bool:
-        std::cout << (arg.as_bool() ? "true" : "false");
-        break;
-      case ValueType::Number:
-        std::cout << arg.as_number();
-        break;
-      case ValueType::String:
-        std::cout << arg.as_string();
-        break;
-      case ValueType::Agent:
-        std::cout << "<agent:" << arg.as_agent().name << ">";
-        break;
-      case ValueType::Function:
-        std::cout << "<fn " << arg.as_function().name << ">";
-        break;
-      case ValueType::Native:
-        std::cout << "<native " << arg.as_native().name << ">";
-        break;
-    }
-    if (&arg != &args.back())
-    {
-      std::cout << " ";
-    }
-  }
-  std::cout << std::endl;
-  return Value::Nil();
-}
-}  // namespace
-
 VirtualMachine::VirtualMachine()
 {
-  register_native("print", print_native, 1);
+  current_vm = this;
+  register_core_natives(*this);
+}
+
+VirtualMachine::~VirtualMachine()
+{
+  if (current_vm == this)
+  {
+    current_vm = nullptr;
+  }
 }
 
 Value VirtualMachine::pop()
@@ -62,7 +33,7 @@ Value VirtualMachine::pop()
   {
     throw std::runtime_error("Stack underflow");
   }
-  Value value = std::move(stack_.back());
+  Value value = stack_.back();
   stack_.pop_back();
   return value;
 }
@@ -115,11 +86,11 @@ uint16_t VirtualMachine::read_short(const std::vector<uint8_t>& code, std::size_
 
 bool VirtualMachine::values_equal(const Value& lhs, const Value& rhs)
 {
-  if (lhs.type() != rhs.type())
+  if (lhs.type != rhs.type)
   {
     return false;
   }
-  switch (lhs.type())
+  switch (lhs.type)
   {
     case ValueType::Nil:
       return true;
@@ -127,14 +98,20 @@ bool VirtualMachine::values_equal(const Value& lhs, const Value& rhs)
       return lhs.as_bool() == rhs.as_bool();
     case ValueType::Number:
       return lhs.as_number() == rhs.as_number();
-    case ValueType::String:
-      return lhs.as_string() == rhs.as_string();
-    case ValueType::Agent:
-      return lhs.as_agent().name == rhs.as_agent().name;
-    case ValueType::Function:
-      return lhs.as_function().name == rhs.as_function().name;
-    case ValueType::Native:
-      return lhs.as_native().name == rhs.as_native().name;
+    case ValueType::Obj:
+    {
+      if (is_obj_type(lhs, ObjType::OBJ_STRING) && is_obj_type(rhs, ObjType::OBJ_STRING))
+      {
+        auto* a = as_string(lhs);
+        auto* b = as_string(rhs);
+        if (a->length != b->length)
+        {
+          return false;
+        }
+        return std::memcmp(a->chars, b->chars, a->length) == 0;
+      }
+      return lhs.as_obj() == rhs.as_obj();
+    }
   }
   return false;
 }
@@ -175,12 +152,28 @@ Value VirtualMachine::binary_numeric_op(const Value& lhs, const Value& rhs, OpCo
   return Value::Number(result);
 }
 
+Value VirtualMachine::concatenate(const Value& lhs, const Value& rhs)
+{
+  if (!is_obj_type(lhs, ObjType::OBJ_STRING) || !is_obj_type(rhs, ObjType::OBJ_STRING))
+  {
+    throw std::runtime_error("Concatenation expects string operands");
+  }
+  const auto* a = as_string(lhs);
+  const auto* b = as_string(rhs);
+  const std::size_t length = a->length + b->length;
+  char* chars = ALLOCATE(char, length + 1);
+  std::memcpy(chars, a->chars, a->length);
+  std::memcpy(chars + a->length, b->chars, b->length);
+  chars[length] = '\0';
+  return Value::ObjVal(take_string(chars, length));
+}
+
 Value VirtualMachine::run(const Bytecode& chunk)
 {
   stack_.clear();
-  events_.clear();
   frames_.clear();
-  frames_.push_back(CallFrame{&chunk, 0, 0});
+  frames_.push_back(CallFrame{&chunk, nullptr, 0, 0});
+  const bool trace = std::getenv("NEAM_TRACE") != nullptr;
 
   while (!frames_.empty())
   {
@@ -194,6 +187,10 @@ Value VirtualMachine::run(const Bytecode& chunk)
     }
 
     const OpCode op = static_cast<OpCode>(code[frame.ip++]);
+    if (trace)
+    {
+      std::cerr << "Executing op " << static_cast<int>(op) << " stack=" << stack_.size() << "\n";
+    }
     switch (op)
     {
       case OpCode::OP_CONST:
@@ -241,6 +238,36 @@ Value VirtualMachine::run(const Bytecode& chunk)
         stack_[frame.stack_start + slot] = peek();
         break;
       }
+      case OpCode::OP_DEFINE_GLOBAL:
+      {
+        const auto name_index = read_short(code, frame.ip);
+        auto* name = as_string(constants[name_index]);
+        globals_.set(name, peek());
+        (void)pop();
+        break;
+      }
+      case OpCode::OP_GET_GLOBAL:
+      {
+        const auto name_index = read_short(code, frame.ip);
+        auto* name = as_string(constants[name_index]);
+        Value value;
+        if (!globals_.get(name, &value))
+        {
+          throw std::runtime_error("Undefined global variable");
+        }
+        stack_.push_back(value);
+        break;
+      }
+      case OpCode::OP_SET_GLOBAL:
+      {
+        const auto name_index = read_short(code, frame.ip);
+        auto* name = as_string(constants[name_index]);
+        if (globals_.set(name, peek()))
+        {
+          throw std::runtime_error("Undefined global variable");
+        }
+        break;
+      }
       case OpCode::OP_NEGATE:
       {
         Value value = pop();
@@ -264,7 +291,15 @@ Value VirtualMachine::run(const Bytecode& chunk)
       {
         Value rhs = pop();
         Value lhs = pop();
-        stack_.push_back(binary_numeric_op(lhs, rhs, op));
+        if (op == OpCode::OP_ADD && is_obj_type(lhs, ObjType::OBJ_STRING) &&
+            is_obj_type(rhs, ObjType::OBJ_STRING))
+        {
+          stack_.push_back(concatenate(lhs, rhs));
+        }
+        else
+        {
+          stack_.push_back(binary_numeric_op(lhs, rhs, op));
+        }
         break;
       }
       case OpCode::OP_EQUAL:
@@ -317,6 +352,7 @@ Value VirtualMachine::run(const Bytecode& chunk)
         break;
       }
       case OpCode::OP_CALL:
+      case OpCode::OP_CALL_NATIVE:
       {
         if (frame.ip >= code.size())
         {
@@ -329,36 +365,34 @@ Value VirtualMachine::run(const Bytecode& chunk)
           throw std::runtime_error("Call stack underflow");
         }
         Value callee = stack_[callee_index];
-        if (callee.is_function())
+        if (is_obj_type(callee, ObjType::OBJ_FUNCTION))
         {
-          const auto& fn = callee.as_function();
-          if (fn.arity != arg_count)
+          auto* fn = as_function(callee);
+          if (fn->arity != arg_count)
           {
             throw std::runtime_error("Argument count mismatch for function call");
           }
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-          frames_.push_back(CallFrame{fn.chunk.get(), 0, callee_index});
+          frames_.push_back(CallFrame{&fn->chunk, fn, 0, callee_index});
         }
-        else if (callee.is_native())
+        else if (is_obj_type(callee, ObjType::OBJ_NATIVE))
         {
-          const auto& native = callee.as_native();
-          if (native.arity != arg_count)
+          auto* native = as_native(callee);
+          if (native->arity != arg_count)
           {
             throw std::runtime_error("Argument count mismatch for native call");
           }
-          auto it = natives_.find(native.name);
-          if (it == natives_.end())
+          if (!native->function)
           {
-            throw std::runtime_error("Unknown native function: " + native.name);
+            throw std::runtime_error("Unbound native function");
           }
           std::vector<Value> args(arg_count);
           for (std::size_t i = 0; i < arg_count; ++i)
           {
             args[arg_count - 1 - i] = pop();
           }
-          // remove callee
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-          Value result = it->second.callable(args);
+          Value result = native->function(static_cast<int>(arg_count), args.data());
           stack_.push_back(std::move(result));
         }
         else
@@ -367,47 +401,9 @@ Value VirtualMachine::run(const Bytecode& chunk)
         }
         break;
       }
-      case OpCode::OP_CALL_NATIVE:
-      {
-        if (frame.ip >= code.size())
-        {
-          throw std::runtime_error("OP_CALL_NATIVE missing argument count");
-        }
-        const auto arg_count = code[frame.ip++];
-        const auto callee_index = stack_.size() - 1 - arg_count;
-        if (callee_index >= stack_.size())
-        {
-          throw std::runtime_error("Call stack underflow");
-        }
-        Value callee = stack_[callee_index];
-        if (!callee.is_native())
-        {
-          throw std::runtime_error("Attempted native call on non-native value");
-        }
-        const auto& native = callee.as_native();
-        if (native.arity != arg_count)
-        {
-          throw std::runtime_error("Argument count mismatch for native call");
-        }
-        auto it = natives_.find(native.name);
-        if (it == natives_.end())
-        {
-          throw std::runtime_error("Unknown native function: " + native.name);
-        }
-        std::vector<Value> args(arg_count);
-        for (std::size_t i = 0; i < arg_count; ++i)
-        {
-          args[arg_count - 1 - i] = pop();
-        }
-        stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-        Value result = it->second.callable(args);
-        stack_.push_back(std::move(result));
-        break;
-      }
       case OpCode::OP_RETURN:
       {
         Value result = pop();
-        // Pop locals
         while (stack_.size() > frames_.back().stack_start)
         {
           stack_.pop_back();
@@ -420,11 +416,6 @@ Value VirtualMachine::run(const Bytecode& chunk)
         stack_.push_back(std::move(result));
         break;
       }
-      case OpCode::OP_EMIT:
-      {
-        events_.push_back(pop());
-        break;
-      }
       default:
         throw std::runtime_error("Unknown opcode encountered");
     }
@@ -433,8 +424,10 @@ Value VirtualMachine::run(const Bytecode& chunk)
   return Value::Nil();
 }
 
-void VirtualMachine::register_native(const std::string& name, NativeFn fn, std::size_t arity)
+void VirtualMachine::define_native(const std::string& name, int arity, NativeFn function)
 {
-  natives_[name] = NativeFunction{name, arity, std::move(fn)};
+  auto* name_string = copy_string(name.c_str(), name.size());
+  Value native_val = Value::Native(new_native(name_string, arity, function));
+  globals_.set(name_string, native_val);
 }
 }  // namespace neamc::vm

@@ -6,45 +6,57 @@
 
 #include <stdexcept>
 
+#include "neamc/vm/object.hpp"
+
 namespace neamc::vm
 {
-Value Value::FunctionValue(Function fn)
+Value Value::Nil()
 {
-  return Value{std::make_shared<vm::Function>(std::move(fn))};
+  return Value{};
 }
 
-Value Value::Native(NativeFunction fn)
+Value Value::Bool(bool value)
 {
-  return Value{std::make_shared<vm::NativeFunction>(std::move(fn))};
+  Value v;
+  v.type = ValueType::Bool;
+  v.as.boolean = value;
+  return v;
 }
 
-ValueType Value::type() const
+Value Value::Number(double value)
 {
-  if (is_nil())
-  {
-    return ValueType::Nil;
-  }
-  if (is_bool())
-  {
-    return ValueType::Bool;
-  }
-  if (is_number())
-  {
-    return ValueType::Number;
-  }
-  if (is_string())
-  {
-    return ValueType::String;
-  }
-  if (is_agent())
-  {
-    return ValueType::Agent;
-  }
-  if (is_function())
-  {
-    return ValueType::Function;
-  }
-  return ValueType::Native;
+  Value v;
+  v.type = ValueType::Number;
+  v.as.number = value;
+  return v;
+}
+
+Value Value::ObjVal(Obj* object)
+{
+  Value v;
+  v.type = ValueType::Obj;
+  v.as.obj = object;
+  return v;
+}
+
+Value Value::String(const char* chars, std::size_t length)
+{
+  return Value::ObjVal(copy_string(chars, length));
+}
+
+Value Value::String(const std::string& value)
+{
+  return Value::String(value.data(), value.size());
+}
+
+Value Value::FunctionValue(ObjFunction* function)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(function));
+}
+
+Value Value::Native(ObjNative* native)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(native));
 }
 
 bool Value::as_bool() const
@@ -53,7 +65,7 @@ bool Value::as_bool() const
   {
     throw std::runtime_error("Expected bool value");
   }
-  return std::get<bool>(storage_);
+  return as.boolean;
 }
 
 double Value::as_number() const
@@ -62,42 +74,62 @@ double Value::as_number() const
   {
     throw std::runtime_error("Expected number value");
   }
-  return std::get<double>(storage_);
+  return as.number;
 }
 
-const std::string& Value::as_string() const
+Obj* Value::as_obj() const
 {
-  if (!is_string())
+  if (!is_obj())
   {
-    throw std::runtime_error("Expected string value");
+    throw std::runtime_error("Expected object value");
   }
-  return *std::get<StringRef>(storage_);
+  return as.obj;
 }
 
-const AgentRef& Value::as_agent() const
+bool Value::is_string() const
 {
-  if (!is_agent())
-  {
-    throw std::runtime_error("Expected agent reference");
-  }
-  return *std::get<AgentHandle>(storage_);
+  return is_obj_type(*this, ObjType::OBJ_STRING);
 }
 
-const Function& Value::as_function() const
+bool Value::is_function() const
 {
-  if (!is_function())
-  {
-    throw std::runtime_error("Expected function value");
-  }
-  return *std::get<FunctionHandle>(storage_);
+  return is_obj_type(*this, ObjType::OBJ_FUNCTION);
 }
 
-const NativeFunction& Value::as_native() const
+bool Value::is_native() const
 {
-  if (!is_native())
+  return is_obj_type(*this, ObjType::OBJ_NATIVE);
+}
+
+bool is_obj_type(const Value& value, ObjType type)
+{
+  return value.is_obj() && value.as_obj()->type == type;
+}
+
+ObjString* as_string(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_STRING))
   {
-    throw std::runtime_error("Expected native function value");
+    throw std::runtime_error("Expected string object");
   }
-  return *std::get<NativeHandle>(storage_);
+  return reinterpret_cast<ObjString*>(value.as.obj);
+}
+
+ObjFunction* as_function(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_FUNCTION))
+  {
+    throw std::runtime_error("Expected function object");
+  }
+  return reinterpret_cast<ObjFunction*>(value.as.obj);
+}
+
+ObjNative* as_native(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_NATIVE))
+  {
+    throw std::runtime_error("Expected native object");
+  }
+  return reinterpret_cast<ObjNative*>(value.as.obj);
 }
 }  // namespace neamc::vm
