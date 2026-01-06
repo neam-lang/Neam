@@ -11,7 +11,9 @@
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
+#include "neamc/vm/object.hpp"
 namespace
 {
 constexpr std::array<uint8_t, 4> kMagic{{'N', 'E', 'A', 'M'}};
@@ -118,7 +120,7 @@ std::string read_string(std::istream& in)
 void write_value(std::ostream& out, const Value& value)
 {
   uint8_t type = 0;
-  switch (value.type())
+  switch (value.type)
   {
     case ValueType::Nil:
       type = 0;
@@ -129,18 +131,22 @@ void write_value(std::ostream& out, const Value& value)
     case ValueType::Number:
       type = 2;
       break;
-    case ValueType::String:
-      type = 3;
+    case ValueType::Obj:
+    {
+      if (is_obj_type(value, ObjType::OBJ_STRING))
+      {
+        type = 3;
+      }
+      else if (is_obj_type(value, ObjType::OBJ_FUNCTION))
+      {
+        type = 4;
+      }
+      else
+      {
+        type = 5;  // native
+      }
       break;
-    case ValueType::Agent:
-      type = 4;
-      break;
-    case ValueType::Function:
-      type = 5;
-      break;
-    case ValueType::Native:
-      type = 6;
-      break;
+    }
   }
   out.put(static_cast<char>(type));
   if (!out)
@@ -148,42 +154,46 @@ void write_value(std::ostream& out, const Value& value)
     throw std::runtime_error("Failed to write value type");
   }
 
-  switch (value.type())
+  switch (type)
   {
-    case ValueType::Nil:
+    case 0:
       break;
-    case ValueType::Bool:
+    case 1:
       out.put(static_cast<char>(value.as_bool() ? 1 : 0));
       break;
-    case ValueType::Number:
+    case 2:
     {
       double number = value.as_number();
       out.write(reinterpret_cast<const char*>(&number), sizeof(number));
       break;
     }
-    case ValueType::String:
-      write_string(out, value.as_string());
-      break;
-    case ValueType::Agent:
-      write_string(out, value.as_agent().name);
-      break;
-    case ValueType::Function:
+    case 3:
     {
-      const auto& fn = value.as_function();
-      write_string(out, fn.name);
-      write_u32(out, static_cast<uint32_t>(fn.arity));
+      const auto* string = as_string(value);
+      write_string(out, std::string(string->chars, string->length));
+      break;
+    }
+    case 4:
+    {
+      const auto* fn = as_function(value);
+      const std::string name_str =
+          fn->name ? std::string(fn->name->chars, fn->name->length) : std::string();
+      write_string(out, name_str);
+      write_u32(out, static_cast<uint32_t>(fn->arity));
       std::stringstream nested;
-      fn.chunk->serialize(nested);
+      fn->chunk.serialize(nested);
       const auto nested_str = nested.str();
       write_u32(out, static_cast<uint32_t>(nested_str.size()));
       out.write(nested_str.data(), static_cast<std::streamsize>(nested_str.size()));
       break;
     }
-    case ValueType::Native:
+    case 5:
     {
-      const auto& native = value.as_native();
-      write_string(out, native.name);
-      write_u32(out, static_cast<uint32_t>(native.arity));
+      const auto* native = as_native(value);
+      const std::string name_str =
+          native->name ? std::string(native->name->chars, native->name->length) : std::string();
+      write_string(out, name_str);
+      write_u32(out, static_cast<uint32_t>(native->arity));
       break;
     }
   }
@@ -226,10 +236,11 @@ Value read_value(std::istream& in)
       return Value::Number(number);
     }
     case 3:
-      return Value::String(read_string(in));
+    {
+      const auto s = read_string(in);
+      return Value::String(s);
+    }
     case 4:
-      return Value::Agent(read_string(in));
-    case 5:
     {
       const auto name = read_string(in);
       const auto arity = read_u32(in);
@@ -241,14 +252,18 @@ Value read_value(std::istream& in)
         throw std::runtime_error("Failed to read nested function chunk");
       }
       std::stringstream nested_stream(nested_data);
-      auto nested_chunk = std::make_shared<Bytecode>(Bytecode::deserialize(nested_stream));
-      return Value::FunctionValue(Function{name, arity, std::move(nested_chunk)});
+      ObjFunction* fn = new_function();
+      fn->name = copy_string(name.c_str(), name.size());
+      fn->arity = static_cast<int>(arity);
+      fn->chunk = Bytecode::deserialize(nested_stream);
+      return Value::FunctionValue(fn);
     }
-    case 6:
+    case 5:
     {
       const auto name = read_string(in);
       const auto arity = read_u32(in);
-      return Value::Native(NativeFunction{name, arity, {}});  // bound at runtime
+      auto* native_name = copy_string(name.c_str(), name.size());
+      return Value::Native(new_native(native_name, static_cast<int>(arity), nullptr));
     }
     default:
       throw std::runtime_error("Unknown value type tag");

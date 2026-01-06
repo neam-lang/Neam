@@ -50,7 +50,8 @@ int main(int argc, char** argv)
     }
     else if (result.is_string())
     {
-      std::cout << "Result: " << result.as_string() << "\n";
+      auto* str = neamc::vm::as_string(result);
+      std::cout << "Result: " << std::string(str->chars, str->length) << "\n";
     }
     else if (result.is_nil())
     {
@@ -58,7 +59,7 @@ int main(int argc, char** argv)
     }
     else
     {
-      std::cout << "Result: <agent>\n";
+      std::cout << "Result: <object>\n";
     }
   }
   catch (const std::exception& ex)

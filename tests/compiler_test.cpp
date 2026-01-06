@@ -5,6 +5,7 @@
 #include "neamc/pipeline.hpp"
 #include "neamc/vm/vm.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <sstream>
 
@@ -17,13 +18,16 @@ int main()
   const std::string manifest = R"({"name":"math"})";
   auto unit = pipeline.compile("let x = 1 + 2; return x;", manifest);
 
-  // Expect constants for 1 and 2, with add, set_local, return opcodes
-  assert(unit.chunk.constants().size() == 2);
+  // Expect constants for 1 and 2, with add, global define, and return opcodes
+  assert(unit.chunk.constants().size() >= 2);
   const auto& code = unit.chunk.code();
   assert(!code.empty());
   assert(static_cast<OpCode>(code[0]) == OpCode::OP_CONST);
   assert(static_cast<OpCode>(code[3]) == OpCode::OP_CONST);
   assert(static_cast<OpCode>(code[6]) == OpCode::OP_ADD);
+  auto define_it =
+      std::find(code.begin(), code.end(), static_cast<uint8_t>(OpCode::OP_DEFINE_GLOBAL));
+  assert(define_it != code.end());
 
   std::stringstream buffer;
   unit.chunk.serialize(buffer);
