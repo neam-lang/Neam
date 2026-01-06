@@ -141,7 +141,8 @@ void Compiler::emit_statement(const Statement& stmt)
           emit_expression(*node.initializer);
           if (scope_depth_ == 0)
           {
-            const auto name_constant = chunk_.add_constant(vm::Value::String(node.name));
+            const auto name_constant =
+                chunk_.add_constant(vm::Value::String(node.name.c_str(), node.name.size()));
             chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
             chunk_.write_short(static_cast<uint16_t>(name_constant));
           }
@@ -198,7 +199,8 @@ void Compiler::emit_statement(const Statement& stmt)
           if (scope_depth_ == 0)
           {
             chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
-            chunk_.write_short(static_cast<uint16_t>(chunk_.add_constant(vm::Value::String(node.name))));
+            chunk_.write_short(static_cast<uint16_t>(
+                chunk_.add_constant(vm::Value::String(node.name.c_str(), node.name.size()))));
           }
           else
           {
@@ -224,7 +226,8 @@ void Compiler::emit_expression(const Expression& expr)
           const auto slot = resolve_local(node.name);
           if (slot < 0)
           {
-            const auto name_constant = chunk_.add_constant(vm::Value::String(node.name));
+            const auto name_constant =
+                chunk_.add_constant(vm::Value::String(node.name.c_str(), node.name.size()));
             chunk_.write_op(OpCode::OP_GET_GLOBAL);
             chunk_.write_short(static_cast<uint16_t>(name_constant));
           }
@@ -240,7 +243,8 @@ void Compiler::emit_expression(const Expression& expr)
           const auto slot = resolve_local(node.name);
           if (slot < 0)
           {
-            const auto name_constant = chunk_.add_constant(vm::Value::String(node.name));
+            const auto name_constant =
+                chunk_.add_constant(vm::Value::String(node.name.c_str(), node.name.size()));
             chunk_.write_op(OpCode::OP_SET_GLOBAL);
             chunk_.write_short(static_cast<uint16_t>(name_constant));
           }
