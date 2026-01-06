@@ -17,18 +17,32 @@ namespace neamc::vm
 enum class OpCode : uint8_t
 {
   OP_CONST = 0,
+  OP_NIL,
+  OP_TRUE,
+  OP_FALSE,
   OP_POP,
   OP_DUP,
+  OP_GET_LOCAL,
+  OP_SET_LOCAL,
 
   OP_NEGATE,
+  OP_NOT,
 
   OP_ADD,
   OP_SUB,
   OP_MUL,
   OP_DIV,
+  OP_EQUAL,
+  OP_GREATER,
+  OP_LESS,
 
   OP_JUMP,
   OP_JUMP_IF_FALSE,
+  OP_LOOP,
+
+  OP_CALL,
+  OP_CALL_NATIVE,
+  OP_RETURN,
 
   OP_EMIT
 };
@@ -38,8 +52,10 @@ class Bytecode
 public:
   std::size_t add_constant(Value value);
   void write_op(OpCode op);
+  void write_byte(uint8_t value);
   void write_short(uint16_t value);
   void emit_constant(Value value);
+  void patch_short(std::size_t index, uint16_t value);
 
   void set_manifest(std::string manifest) { manifest_ = std::move(manifest); }
   const std::string& manifest() const { return manifest_; }
