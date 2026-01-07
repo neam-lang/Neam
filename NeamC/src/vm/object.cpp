@@ -35,7 +35,9 @@ ObjString* take_string(char* chars, std::size_t length)
   auto* string = allocate_string(chars, length, hash);
   if (current_vm)
   {
+    current_vm->push_root(Value::ObjVal(reinterpret_cast<Obj*>(string)));
     current_vm->strings().set(string, Value::Nil());
+    current_vm->pop_root();
   }
   return string;
 }
@@ -56,7 +58,9 @@ ObjString* copy_string(const char* chars, std::size_t length)
   auto* string = allocate_string(heap_chars, length, hash);
   if (current_vm)
   {
+    current_vm->push_root(Value::ObjVal(reinterpret_cast<Obj*>(string)));
     current_vm->strings().set(string, Value::Nil());
+    current_vm->pop_root();
   }
   return string;
 }
