@@ -32,8 +32,11 @@ public:
   ~VirtualMachine();
   Value run(const Bytecode& chunk);
   void define_native(const std::string& name, int arity, NativeFn function);
+  void push_root(Value value);
+  void pop_root();
   const std::vector<Value>& stack() const { return stack_; }
   const std::vector<CallFrame>& frames() const { return frames_; }
+  const std::vector<Value>& roots() const { return gc_roots_; }
   Table& globals() { return globals_; }
   Table& strings() { return interned_strings_; }
 
@@ -49,6 +52,7 @@ private:
 
   std::vector<Value> stack_{};
   std::vector<CallFrame> frames_{};
+  std::vector<Value> gc_roots_{};
   Table globals_{};
   Table interned_strings_{};
 };

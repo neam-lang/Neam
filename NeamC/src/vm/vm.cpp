@@ -381,7 +381,7 @@ Value VirtualMachine::run(const Bytecode& chunk)
         else if (is_obj_type(callee, ObjType::OBJ_NATIVE))
         {
           auto* native = as_native(callee);
-          if (native->arity != arg_count)
+          if (native->arity >= 0 && native->arity != arg_count)
           {
             throw std::runtime_error("Argument count mismatch for native call");
           }
@@ -425,6 +425,20 @@ Value VirtualMachine::run(const Bytecode& chunk)
   }
 
   return Value::Nil();
+}
+
+void VirtualMachine::push_root(Value value)
+{
+  gc_roots_.push_back(value);
+}
+
+void VirtualMachine::pop_root()
+{
+  if (gc_roots_.empty())
+  {
+    throw std::runtime_error("GC root stack underflow");
+  }
+  gc_roots_.pop_back();
 }
 
 void VirtualMachine::define_native(const std::string& name, int arity, NativeFn function)
