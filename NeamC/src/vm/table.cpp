@@ -184,4 +184,16 @@ void mark_table(Table& table)
     }
   }
 }
+
+void table_remove_white(Table& table)
+{
+  for (auto& entry : table.entries_mut())
+  {
+    if (entry.key && !entry.key->marked)
+    {
+      entry.key = nullptr;
+      entry.value = Value::Bool(true);  // tombstone marker
+    }
+  }
+}
 }  // namespace neamc::vm

@@ -4,6 +4,7 @@
 
 #include "neamc/vm/memory.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <vector>
 
@@ -154,7 +155,7 @@ void collect_garbage(VirtualMachine& vm)
     }
   }
   mark_table(vm.globals());
-  mark_table(vm.strings());
+  table_remove_white(vm.strings());
 
   while (!gray_stack.empty())
   {
@@ -188,6 +189,7 @@ void collect_garbage(VirtualMachine& vm)
       free_object(unreached);
     }
   }
+  next_gc = std::max(bytes_allocated * 2, static_cast<std::size_t>(1024 * 1024));
 }
 
 void free_objects()

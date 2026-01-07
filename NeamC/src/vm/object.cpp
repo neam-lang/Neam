@@ -24,7 +24,20 @@ ObjString* allocate_string(char* chars, std::size_t length, uint32_t hash)
 ObjString* take_string(char* chars, std::size_t length)
 {
   const auto hash = hash_string(chars, length);
-  return allocate_string(chars, length, hash);
+  if (current_vm)
+  {
+    if (auto* interned = current_vm->strings().find_string(chars, length, hash))
+    {
+      reallocate(chars, sizeof(char) * (length + 1), 0);
+      return interned;
+    }
+  }
+  auto* string = allocate_string(chars, length, hash);
+  if (current_vm)
+  {
+    current_vm->strings().set(string, Value::Nil());
+  }
+  return string;
 }
 
 ObjString* copy_string(const char* chars, std::size_t length)
