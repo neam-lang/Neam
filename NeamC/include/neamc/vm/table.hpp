@@ -40,4 +40,5 @@ private:
 };
 
 void mark_table(Table& table);
+void table_remove_white(Table& table);
 }  // namespace neamc::vm
