@@ -154,8 +154,11 @@ void collect_garbage(VirtualMachine& vm)
       mark_value(constant);
     }
   }
+  for (const auto& root : vm.roots())
+  {
+    mark_value(root);
+  }
   mark_table(vm.globals());
-  table_remove_white(vm.strings());
 
   while (!gray_stack.empty())
   {
@@ -163,6 +166,7 @@ void collect_garbage(VirtualMachine& vm)
     gray_stack.pop_back();
     blacken_object(obj, gray_stack);
   }
+  table_remove_white(vm.strings());
 
   Obj* previous = nullptr;
   Obj* current = objects;
