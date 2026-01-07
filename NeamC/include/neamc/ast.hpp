@@ -87,6 +87,11 @@ struct ExpressionStmt
   ExprPtr expression;
 };
 
+struct EmitStmt
+{
+  ExprPtr value;
+};
+
 struct BlockStmt
 {
   std::vector<StmtPtr> statements;
@@ -126,7 +131,8 @@ struct FunctionDecl
 struct Statement
 {
   using Variant =
-      std::variant<ExpressionStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt, FunctionDecl>;
+      std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
+                   FunctionDecl>;
   Variant node;
 };
 

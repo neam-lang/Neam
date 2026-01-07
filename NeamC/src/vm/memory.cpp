@@ -158,6 +158,10 @@ void collect_garbage(VirtualMachine& vm)
   {
     mark_value(root);
   }
+  for (const auto& emitted : vm.emitted())
+  {
+    mark_value(emitted);
+  }
   mark_table(vm.globals());
 
   while (!gray_stack.empty())
