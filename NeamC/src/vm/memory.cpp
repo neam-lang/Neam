@@ -154,6 +154,10 @@ void collect_garbage(VirtualMachine& vm)
       mark_value(constant);
     }
   }
+  for (const auto& root : vm.roots())
+  {
+    mark_value(root);
+  }
   mark_table(vm.globals());
 
   while (!gray_stack.empty())

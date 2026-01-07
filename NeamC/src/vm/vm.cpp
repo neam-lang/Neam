@@ -427,6 +427,20 @@ Value VirtualMachine::run(const Bytecode& chunk)
   return Value::Nil();
 }
 
+void VirtualMachine::push_root(Value value)
+{
+  gc_roots_.push_back(value);
+}
+
+void VirtualMachine::pop_root()
+{
+  if (gc_roots_.empty())
+  {
+    throw std::runtime_error("GC root stack underflow");
+  }
+  gc_roots_.pop_back();
+}
+
 void VirtualMachine::define_native(const std::string& name, int arity, NativeFn function)
 {
   auto* name_string = copy_string(name.c_str(), name.size());
