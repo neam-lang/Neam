@@ -62,6 +62,13 @@ StmtPtr make_expression_stmt(ExprPtr expression)
   return stmt;
 }
 
+StmtPtr make_emit_stmt(ExprPtr value)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->node = EmitStmt{std::move(value)};
+  return stmt;
+}
+
 StmtPtr make_block_stmt(std::vector<StmtPtr> statements)
 {
   auto stmt = std::make_unique<Statement>();
@@ -160,7 +167,8 @@ void Parser::tokenize()
   static const std::unordered_map<std::string, TokenType> kKeywords = {
       {"let", TokenType::Let},     {"if", TokenType::If},         {"else", TokenType::Else},
       {"while", TokenType::While}, {"fun", TokenType::Fun},       {"return", TokenType::Return},
-      {"true", TokenType::True},   {"false", TokenType::False},   {"nil", TokenType::Nil}};
+      {"emit", TokenType::Emit},   {"true", TokenType::True},     {"false", TokenType::False},
+      {"nil", TokenType::Nil}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -349,6 +357,10 @@ StmtPtr Parser::parse_statement()
   {
     return parse_return();
   }
+  if (match(TokenType::Emit))
+  {
+    return parse_emit();
+  }
   if (match(TokenType::LeftBrace))
   {
     return parse_block();
@@ -378,6 +390,16 @@ StmtPtr Parser::parse_return()
     error("Expected ';' after return value");
   }
   return make_return_stmt(std::move(value));
+}
+
+StmtPtr Parser::parse_emit()
+{
+  auto value = parse_expression();
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after emit value");
+  }
+  return make_emit_stmt(std::move(value));
 }
 
 StmtPtr Parser::parse_function()

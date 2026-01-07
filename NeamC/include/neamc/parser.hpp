@@ -48,6 +48,7 @@ enum class TokenType
   While,
   Fun,
   Return,
+  Emit,
   True,
   False,
   Nil,
@@ -83,6 +84,7 @@ private:
   StmtPtr parse_statement();
   StmtPtr parse_declaration();
   StmtPtr parse_return();
+  StmtPtr parse_emit();
   StmtPtr parse_function();
   StmtPtr parse_let();
   StmtPtr parse_block();

@@ -175,6 +175,7 @@ Value VirtualMachine::run(const Bytecode& chunk)
 {
   stack_.clear();
   frames_.clear();
+  emitted_.clear();
   frames_.push_back(CallFrame{&chunk, nullptr, 0, 0});
   const bool trace = std::getenv("NEAM_TRACE") != nullptr;
 
@@ -402,6 +403,12 @@ Value VirtualMachine::run(const Bytecode& chunk)
         {
           throw std::runtime_error("Attempted to call non-callable value");
         }
+        break;
+      }
+      case OpCode::OP_EMIT:
+      {
+        Value value = pop();
+        emitted_.push_back(std::move(value));
         break;
       }
       case OpCode::OP_RETURN:
