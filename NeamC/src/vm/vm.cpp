@@ -381,7 +381,7 @@ Value VirtualMachine::run(const Bytecode& chunk)
         else if (is_obj_type(callee, ObjType::OBJ_NATIVE))
         {
           auto* native = as_native(callee);
-          if (native->arity != arg_count)
+          if (native->arity >= 0 && native->arity != arg_count)
           {
             throw std::runtime_error("Argument count mismatch for native call");
           }

@@ -54,7 +54,7 @@ Value clock_native(int, Value*)
 
 void register_core_natives(VirtualMachine& vm)
 {
-  vm.define_native("print", 1, print_native);
+  vm.define_native("print", -1, print_native);
   vm.define_native("clock", 0, clock_native);
 }
 }  // namespace neamc::vm

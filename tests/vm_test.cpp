@@ -58,6 +58,15 @@ int main()
     assert(result.is_nil());
   }
 
+  // Variadic print should accept multiple arguments
+  {
+    Pipeline pipeline;
+    auto unit = pipeline.compile("print(\"hello\", 42); return nil;", {});
+    VirtualMachine vm;
+    const auto result = vm.run(unit.chunk);
+    assert(result.is_nil());
+  }
+
   std::cout << "All VM tests passed\n";
   return 0;
 }
