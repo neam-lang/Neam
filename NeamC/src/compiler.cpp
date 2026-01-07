@@ -132,6 +132,11 @@ void Compiler::emit_statement(const Statement& stmt)
           emit_expression(*node.expression);
           chunk_.write_op(OpCode::OP_POP);
         }
+        else if constexpr (std::is_same_v<T, EmitStmt>)
+        {
+          emit_expression(*node.value);
+          chunk_.write_op(OpCode::OP_EMIT);
+        }
         else if constexpr (std::is_same_v<T, BlockStmt>)
         {
           emit_block(node);

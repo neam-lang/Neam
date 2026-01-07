@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <string>
 #include <stdexcept>
 
 using namespace neamc;
@@ -65,6 +66,23 @@ int main()
     VirtualMachine vm;
     const auto result = vm.run(unit.chunk);
     assert(result.is_nil());
+  }
+
+  // Emit should capture values in order
+  {
+    Pipeline pipeline;
+    auto unit = pipeline.compile("emit \"hello\"; emit 42; return nil;", {});
+    VirtualMachine vm;
+    const auto result = vm.run(unit.chunk);
+    assert(result.is_nil());
+    const auto& emitted = vm.emitted();
+    assert(emitted.size() == 2);
+    assert(is_obj_type(emitted[0], ObjType::OBJ_STRING));
+    const auto* str = as_string(emitted[0]);
+    assert(str->length == 5);
+    assert(std::string(str->chars, str->length) == "hello");
+    assert(emitted[1].is_number());
+    assert(emitted[1].as_number() == 42.0);
   }
 
   std::cout << "All VM tests passed\n";
