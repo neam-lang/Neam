@@ -21,10 +21,14 @@ enum class TokenType
   RightBrace,
   Comma,
   Semicolon,
+  Colon,
   Minus,
   Plus,
   Slash,
   Star,
+  Dot,
+  LeftBracket,
+  RightBracket,
 
   // One or two character tokens.
   Bang,
@@ -49,6 +53,18 @@ enum class TokenType
   Fun,
   Return,
   Emit,
+  Skill,
+  Agent,
+  Description,
+  Params,
+  Impl,
+  Provider,
+  Model,
+  Endpoint,
+  ApiKeyEnv,
+  Temperature,
+  System,
+  Skills,
   True,
   False,
   Nil,
@@ -86,10 +102,15 @@ private:
   StmtPtr parse_return();
   StmtPtr parse_emit();
   StmtPtr parse_function();
+  StmtPtr parse_skill();
+  StmtPtr parse_agent();
   StmtPtr parse_let();
   StmtPtr parse_block();
   StmtPtr parse_if();
   StmtPtr parse_while();
+  SkillParam parse_skill_param();
+  std::vector<SkillParam> parse_skill_params();
+  std::vector<std::string> parse_identifier_list();
   ExprPtr parse_expression();
   ExprPtr parse_assignment();
   ExprPtr parse_equality();

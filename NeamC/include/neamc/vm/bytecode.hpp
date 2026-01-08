@@ -45,9 +45,16 @@ enum class OpCode : uint8_t
 
   OP_CALL,
   OP_CALL_NATIVE,
+  OP_GET_PROPERTY,
+  OP_INVOKE,
   OP_RETURN,
 
-  OP_EMIT
+  OP_EMIT,
+
+  OP_BUILD_LIST,
+  OP_BUILD_MAP,
+  OP_DEFINE_SKILL,
+  OP_DEFINE_AGENT
 };
 
 class Bytecode

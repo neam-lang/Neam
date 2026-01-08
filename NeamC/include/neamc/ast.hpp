@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -75,10 +76,27 @@ struct CallExpr
   std::vector<ExprPtr> arguments;
 };
 
+struct GetExpr
+{
+  ExprPtr object;
+  std::string name;
+};
+
+struct ListExpr
+{
+  std::vector<ExprPtr> elements;
+};
+
+struct MapExpr
+{
+  std::vector<std::pair<std::string, ExprPtr>> entries;
+};
+
 struct Expression
 {
   using Variant =
-      std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr>;
+      std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr,
+                   GetExpr, ListExpr, MapExpr>;
   Variant node;
 };
 
@@ -128,11 +146,38 @@ struct FunctionDecl
   StmtPtr body;  // always a BlockStmt
 };
 
+struct SkillParam
+{
+  std::string name;
+  std::string type;
+  std::vector<std::string> enum_values;
+};
+
+struct SkillDecl
+{
+  std::string name;
+  std::string description;
+  std::vector<SkillParam> params;
+  FunctionDecl impl;
+};
+
+struct AgentDecl
+{
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<std::string> skills;
+};
+
 struct Statement
 {
   using Variant =
       std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
-                   FunctionDecl>;
+                   FunctionDecl, SkillDecl, AgentDecl>;
   Variant node;
 };
 
