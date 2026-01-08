@@ -639,6 +639,8 @@ Value VirtualMachine::run(const Bytecode& chunk)
         {
           auto* skill = as_skill(callee);
           const std::string skill_name(skill->name->chars, skill->name->length);
+          emit_debug_event(DebugEventType::BeforeToolExecution, "skill:" + skill_name,
+                           frame.ip - 1, {});
           if (!allowed_skills_.empty() && allowed_skills_.count(skill_name) == 0)
           {
             throw std::runtime_error("Skill blocked by env policy");
@@ -782,6 +784,15 @@ Value VirtualMachine::run(const Bytecode& chunk)
             {
               messages.push_back({message.role, message.content});
             }
+            std::ostringstream preview;
+            preview << "provider=" << provider_name << "\n";
+            preview << "model=" << config.model << "\n";
+            for (const auto& message : messages)
+            {
+              preview << "[" << message.role << "] " << message.content << "\n";
+            }
+            emit_debug_event(DebugEventType::BeforeAgentAsk, "agent.ask", frame.ip - 1,
+                             preview.str());
             const auto response_text = provider->chat(messages);
             agent->context->history.push_back({"assistant", response_text});
             stack_.push_back(Value::String(response_text.c_str(), response_text.size()));
@@ -1081,5 +1092,15 @@ void VirtualMachine::define_native(const std::string& name, int arity, NativeFn 
   auto* name_string = copy_string(name.c_str(), name.size());
   Value native_val = Value::Native(new_native(name_string, arity, function));
   globals_.set(name_string, native_val);
+}
+
+void VirtualMachine::emit_debug_event(DebugEventType type, std::string label, std::size_t ip,
+                                      std::string payload)
+{
+  if (!debug_hook_)
+  {
+    return;
+  }
+  debug_hook_(DebugEvent{type, std::move(label), ip, std::move(payload)});
 }
 }  // namespace neamc::vm

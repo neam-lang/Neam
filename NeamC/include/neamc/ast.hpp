@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
@@ -15,6 +16,20 @@
 
 namespace neamc
 {
+struct SourceSpan
+{
+  std::size_t position = 0;
+  std::size_t length = 0;
+  std::size_t line = 0;
+  std::size_t column = 0;
+};
+
+struct IdentifierRef
+{
+  std::string name;
+  SourceSpan span;
+};
+
 enum class BinaryOp
 {
   Add,
@@ -97,6 +112,7 @@ struct Expression
   using Variant =
       std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr,
                    GetExpr, ListExpr, MapExpr>;
+  SourceSpan span;
   Variant node;
 };
 
@@ -170,7 +186,7 @@ struct AgentDecl
   std::optional<std::string> api_key_env;
   std::optional<double> temperature;
   std::optional<std::string> system;
-  std::vector<std::string> skills;
+  std::vector<IdentifierRef> skills;
 };
 
 struct Statement
@@ -178,6 +194,7 @@ struct Statement
   using Variant =
       std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
                    FunctionDecl, SkillDecl, AgentDecl>;
+  SourceSpan span;
   Variant node;
 };
 
