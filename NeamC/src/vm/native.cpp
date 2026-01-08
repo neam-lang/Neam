@@ -14,8 +14,9 @@ namespace neamc::vm
 {
 namespace
 {
-Value print_native(int arg_count, Value* args)
+Value print_native(VirtualMachine& vm, int arg_count, Value* args)
 {
+  (void)vm;
   for (int i = 0; i < arg_count; ++i)
   {
     const auto& arg = args[i];
@@ -128,8 +129,9 @@ Value print_native(int arg_count, Value* args)
   return Value::Nil();
 }
 
-Value clock_native(int, Value*)
+Value clock_native(VirtualMachine& vm, int, Value*)
 {
+  (void)vm;
   const auto now = std::chrono::system_clock::now().time_since_epoch();
   const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
   return Value::Number(static_cast<double>(ms) / 1000.0);
