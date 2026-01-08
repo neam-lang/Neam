@@ -14,6 +14,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tree_sitter)
 
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+find_package(CURL REQUIRED)
+
 add_library(tree_sitter_lib STATIC
     ${tree_sitter_SOURCE_DIR}/lib/src/lib.c
 )
@@ -29,6 +37,11 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/object.cpp
     NeamC/src/vm/table.cpp
     NeamC/src/vm/native.cpp
+    NeamC/src/vm/llm/http_client.cpp
+    NeamC/src/vm/llm/message_codec.cpp
+    NeamC/src/vm/llm/ollama_adapter.cpp
+    NeamC/src/vm/llm/openai_adapter.cpp
+    NeamC/src/vm/llm/provider_factory.cpp
     NeamC/src/vm/value.cpp
     NeamC/src/vm/bytecode.cpp
     NeamC/src/vm/vm.cpp
@@ -44,10 +57,12 @@ target_include_directories(neamc_core
 target_link_libraries(neamc_core
     PUBLIC
         tree_sitter_lib
+        CURL::libcurl
+        nlohmann_json::nlohmann_json
 )
 
 add_library(libneam SHARED ${NEAMC_CORE_SOURCES})
-target_link_libraries(libneam PUBLIC tree_sitter_lib)
+target_link_libraries(libneam PUBLIC tree_sitter_lib CURL::libcurl nlohmann_json::nlohmann_json)
 target_include_directories(libneam
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include

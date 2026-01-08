@@ -15,6 +15,8 @@
 #include <stdexcept>
 #include <unordered_map>
 
+#include "neamc/llm/provider_factory.hpp"
+
 namespace neamc::vm
 {
 namespace
@@ -27,6 +29,39 @@ std::string to_std_string(const Value& value)
   }
   auto* str = as_string(value);
   return std::string(str->chars, str->length);
+}
+
+std::string to_std_string(const ObjString* value)
+{
+  if (!value)
+  {
+    return {};
+  }
+  return std::string(value->chars, value->length);
+}
+
+std::string resolve_env_config(const VirtualMachine& vm, const std::string& key,
+                               const char* env_var, const std::string& fallback)
+{
+  if (vm.env())
+  {
+    const auto it = vm.env()->config.find(key);
+    if (it != vm.env()->config.end() && !it->second.empty())
+    {
+      return it->second;
+    }
+  }
+  if (env_var)
+  {
+    if (const char* env_value = std::getenv(env_var))
+    {
+      if (*env_value != '\0')
+      {
+        return std::string(env_value);
+      }
+    }
+  }
+  return fallback;
 }
 
 std::string escape_json_string(const std::string& input)
@@ -218,6 +253,7 @@ VirtualMachine::VirtualMachine()
   auto* std_map = new_map({{"env", Value::Env(env)}});
   auto* std_name = copy_string("std", 3);
   globals_.set(std_name, Value::Map(std_map));
+  env_ = env;
 }
 
 VirtualMachine::~VirtualMachine()
@@ -595,7 +631,8 @@ Value VirtualMachine::run(const Bytecode& chunk)
             args[arg_count - 1 - i] = pop();
           }
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-          Value result = native->function(static_cast<int>(arg_count), args.data());
+          Value result =
+              native->function(*this, static_cast<int>(arg_count), args.data());
           stack_.push_back(std::move(result));
         }
         else if (is_obj_type(callee, ObjType::OBJ_SKILL))
@@ -712,12 +749,40 @@ Value VirtualMachine::run(const Bytecode& chunk)
               agent->context = new_context();
             }
             agent->context->history.push_back({"user", query});
-            std::ostringstream response;
-            response << "Agent " << std::string(agent->name->chars, agent->name->length)
-                     << " (" << std::string(agent->provider->chars, agent->provider->length)
-                     << "/" << std::string(agent->model->chars, agent->model->length)
-                     << ") response: " << query;
-            const auto response_text = response.str();
+            llm::ProviderConfig config;
+            config.model = to_std_string(agent->model);
+            config.endpoint = to_std_string(agent->endpoint);
+            config.api_key = to_std_string(agent->api_key_env);
+            config.temperature = agent->temperature;
+            config.default_host =
+                resolve_env_config(*this, "ollama_host", "NEAM_OLLAMA_HOST",
+                                   "http://localhost:11434");
+
+            if (!config.api_key.empty())
+            {
+              if (const char* env_value = std::getenv(config.api_key.c_str()))
+              {
+                config.api_key = env_value;
+              }
+              else
+              {
+                config.api_key.clear();
+              }
+            }
+
+            const std::string provider_name = to_std_string(agent->provider);
+            auto provider = llm::create_provider(provider_name, config);
+
+            std::vector<llm::Message> messages;
+            if (agent->system)
+            {
+              messages.push_back({"system", to_std_string(agent->system)});
+            }
+            for (const auto& message : agent->context->history)
+            {
+              messages.push_back({message.role, message.content});
+            }
+            const auto response_text = provider->chat(messages);
             agent->context->history.push_back({"assistant", response_text});
             stack_.push_back(Value::String(response_text.c_str(), response_text.size()));
           }
@@ -844,6 +909,29 @@ Value VirtualMachine::run(const Bytecode& chunk)
               const std::string skill_name = to_std_string(item);
               env->allowed_skills.insert(skill_name);
               allowed_skills_.insert(skill_name);
+            }
+            stack_.push_back(Value::Nil());
+          }
+          else if (method == "config")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("env.config expects 1 argument");
+            }
+            if (!args[0].is_map())
+            {
+              throw std::runtime_error("env.config expects a map");
+            }
+            auto* map = as_map(args[0]);
+            for (const auto& entry : map->entries)
+            {
+              if (!entry.second.is_string())
+              {
+                throw std::runtime_error("env.config values must be strings");
+              }
+              auto* value = as_string(entry.second);
+              env->config[entry.first] =
+                  std::string(value->chars, value->length);
             }
             stack_.push_back(Value::Nil());
           }
