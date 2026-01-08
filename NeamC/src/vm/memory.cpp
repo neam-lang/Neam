@@ -46,6 +46,48 @@ void free_object(Obj* object)
       std::free(object);
       break;
     }
+    case ObjType::OBJ_LIST:
+    {
+      auto* list = reinterpret_cast<ObjList*>(object);
+      list->~ObjList();
+      std::free(list);
+      break;
+    }
+    case ObjType::OBJ_MAP:
+    {
+      auto* map = reinterpret_cast<ObjMap*>(object);
+      map->~ObjMap();
+      std::free(map);
+      break;
+    }
+    case ObjType::OBJ_SKILL:
+    {
+      auto* skill = reinterpret_cast<ObjSkill*>(object);
+      skill->~ObjSkill();
+      std::free(skill);
+      break;
+    }
+    case ObjType::OBJ_AGENT:
+    {
+      auto* agent = reinterpret_cast<ObjAgent*>(object);
+      agent->~ObjAgent();
+      std::free(agent);
+      break;
+    }
+    case ObjType::OBJ_CONTEXT:
+    {
+      auto* context = reinterpret_cast<ObjContext*>(object);
+      context->~ObjContext();
+      std::free(context);
+      break;
+    }
+    case ObjType::OBJ_ENV:
+    {
+      auto* env = reinterpret_cast<ObjEnv*>(object);
+      env->~ObjEnv();
+      std::free(env);
+      break;
+    }
   }
 }
 
@@ -87,6 +129,86 @@ void blacken_object(Obj* object, std::vector<Obj*>& gray_stack)
       }
       break;
     }
+    case ObjType::OBJ_LIST:
+    {
+      auto* list = reinterpret_cast<ObjList*>(object);
+      for (const auto& item : list->items)
+      {
+        mark_value(const_cast<Value&>(item));
+      }
+      break;
+    }
+    case ObjType::OBJ_MAP:
+    {
+      auto* map = reinterpret_cast<ObjMap*>(object);
+      for (const auto& entry : map->entries)
+      {
+        mark_value(const_cast<Value&>(entry.second));
+      }
+      break;
+    }
+    case ObjType::OBJ_SKILL:
+    {
+      auto* skill = reinterpret_cast<ObjSkill*>(object);
+      if (skill->name)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(skill->name), gray_stack);
+      }
+      if (skill->description)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(skill->description), gray_stack);
+      }
+      if (skill->params)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(skill->params), gray_stack);
+      }
+      if (skill->impl)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(skill->impl), gray_stack);
+      }
+      break;
+    }
+    case ObjType::OBJ_AGENT:
+    {
+      auto* agent = reinterpret_cast<ObjAgent*>(object);
+      if (agent->name)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->name), gray_stack);
+      }
+      if (agent->provider)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->provider), gray_stack);
+      }
+      if (agent->model)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->model), gray_stack);
+      }
+      if (agent->endpoint)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->endpoint), gray_stack);
+      }
+      if (agent->api_key_env)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->api_key_env), gray_stack);
+      }
+      if (agent->system)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->system), gray_stack);
+      }
+      if (agent->skills)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->skills), gray_stack);
+      }
+      if (agent->context)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->context), gray_stack);
+      }
+      break;
+    }
+    case ObjType::OBJ_CONTEXT:
+      break;
+    case ObjType::OBJ_ENV:
+      break;
   }
 }
 }  // namespace

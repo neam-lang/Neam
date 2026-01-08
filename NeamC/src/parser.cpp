@@ -55,6 +55,27 @@ ExprPtr make_call(ExprPtr callee, std::vector<ExprPtr> arguments)
   return expr;
 }
 
+ExprPtr make_get(ExprPtr object, std::string name)
+{
+  auto expr = std::make_unique<Expression>();
+  expr->node = GetExpr{std::move(object), std::move(name)};
+  return expr;
+}
+
+ExprPtr make_list(std::vector<ExprPtr> elements)
+{
+  auto expr = std::make_unique<Expression>();
+  expr->node = ListExpr{std::move(elements)};
+  return expr;
+}
+
+ExprPtr make_map(std::vector<std::pair<std::string, ExprPtr>> entries)
+{
+  auto expr = std::make_unique<Expression>();
+  expr->node = MapExpr{std::move(entries)};
+  return expr;
+}
+
 StmtPtr make_expression_stmt(ExprPtr expression)
 {
   auto stmt = std::make_unique<Statement>();
@@ -108,6 +129,28 @@ StmtPtr make_function_decl(std::string name, std::vector<std::string> params, St
 {
   auto stmt = std::make_unique<Statement>();
   stmt->node = FunctionDecl{std::move(name), std::move(params), std::move(body)};
+  return stmt;
+}
+
+StmtPtr make_skill_decl(std::string name, std::string description, std::vector<SkillParam> params,
+                        FunctionDecl impl)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->node = SkillDecl{std::move(name), std::move(description), std::move(params), std::move(impl)};
+  return stmt;
+}
+
+StmtPtr make_agent_decl(std::string name, std::string provider, std::string model,
+                        std::optional<std::string> endpoint,
+                        std::optional<std::string> api_key_env,
+                        std::optional<double> temperature,
+                        std::optional<std::string> system,
+                        std::vector<std::string> skills)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->node = AgentDecl{std::move(name), std::move(provider), std::move(model), std::move(endpoint),
+                         std::move(api_key_env), std::move(temperature), std::move(system),
+                         std::move(skills)};
   return stmt;
 }
 }  // namespace
@@ -168,7 +211,17 @@ void Parser::tokenize()
       {"let", TokenType::Let},     {"if", TokenType::If},         {"else", TokenType::Else},
       {"while", TokenType::While}, {"fun", TokenType::Fun},       {"return", TokenType::Return},
       {"emit", TokenType::Emit},   {"true", TokenType::True},     {"false", TokenType::False},
-      {"nil", TokenType::Nil}};
+      {"nil", TokenType::Nil},     {"skill", TokenType::Skill},   {"agent", TokenType::Agent},
+      {"description", TokenType::Description},
+      {"params", TokenType::Params},
+      {"impl", TokenType::Impl},
+      {"provider", TokenType::Provider},
+      {"model", TokenType::Model},
+      {"endpoint", TokenType::Endpoint},
+      {"api_key_env", TokenType::ApiKeyEnv},
+      {"temperature", TokenType::Temperature},
+      {"system", TokenType::System},
+      {"skills", TokenType::Skills}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -202,6 +255,18 @@ void Parser::tokenize()
         continue;
       case ';':
         add(TokenType::Semicolon);
+        continue;
+      case ':':
+        add(TokenType::Colon);
+        continue;
+      case '.':
+        add(TokenType::Dot);
+        continue;
+      case '[':
+        add(TokenType::LeftBracket);
+        continue;
+      case ']':
+        add(TokenType::RightBracket);
         continue;
       case '+':
         add(TokenType::Plus);
@@ -332,6 +397,14 @@ void Parser::tokenize()
 
 StmtPtr Parser::parse_declaration()
 {
+  if (match(TokenType::Skill))
+  {
+    return parse_skill();
+  }
+  if (match(TokenType::Agent))
+  {
+    return parse_agent();
+  }
   if (match(TokenType::Fun))
   {
     return parse_function();
@@ -435,6 +508,325 @@ StmtPtr Parser::parse_function()
   }
   auto body = parse_block();
   return make_function_decl(name, std::move(params), std::move(body));
+}
+
+StmtPtr Parser::parse_skill()
+{
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected skill name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after skill name");
+  }
+
+  std::optional<std::string> description;
+  std::vector<SkillParam> params;
+  std::optional<FunctionDecl> impl;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Description))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after description");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for description");
+      }
+      description = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Params))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after params");
+      }
+      params = parse_skill_params();
+      continue;
+    }
+    if (match(TokenType::Impl))
+    {
+      if (!match(TokenType::LeftParen))
+      {
+        error("Expected '(' after impl");
+      }
+      std::vector<std::string> impl_params;
+      if (!check(TokenType::RightParen))
+      {
+        do
+        {
+          if (!match(TokenType::Identifier))
+          {
+            error("Expected parameter name in impl");
+          }
+          impl_params.push_back(previous().lexeme);
+        } while (match(TokenType::Comma));
+      }
+      if (!match(TokenType::RightParen))
+      {
+        error("Expected ')' after impl parameters");
+      }
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected impl body");
+      }
+      auto body = parse_block();
+      impl = FunctionDecl{name + ".impl", std::move(impl_params), std::move(body)};
+      continue;
+    }
+
+    error("Unexpected token in skill block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated skill block");
+  }
+  if (!description.has_value())
+  {
+    error("Skill missing description");
+  }
+  if (!impl.has_value())
+  {
+    error("Skill missing impl");
+  }
+  return make_skill_decl(name, *description, std::move(params), std::move(*impl));
+}
+
+StmtPtr Parser::parse_agent()
+{
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected agent name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after agent name");
+  }
+
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<std::string> skills;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Provider))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after provider");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for provider");
+      }
+      provider = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Model))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after model");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for model");
+      }
+      model = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Endpoint))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after endpoint");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for endpoint");
+      }
+      endpoint = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::ApiKeyEnv))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after api_key_env");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for api_key_env");
+      }
+      api_key_env = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Temperature))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after temperature");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for temperature");
+      }
+      temperature = std::strtod(previous().lexeme.c_str(), nullptr);
+      continue;
+    }
+    if (match(TokenType::System))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after system");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for system");
+      }
+      system = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Skills))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after skills");
+      }
+      skills = parse_identifier_list();
+      continue;
+    }
+    error("Unexpected token in agent block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated agent block");
+  }
+  if (!provider.has_value())
+  {
+    error("Agent missing provider");
+  }
+  if (!model.has_value())
+  {
+    error("Agent missing model");
+  }
+  return make_agent_decl(name, *provider, *model, std::move(endpoint), std::move(api_key_env),
+                         std::move(temperature), std::move(system), std::move(skills));
+}
+
+SkillParam Parser::parse_skill_param()
+{
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected param name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::Colon))
+  {
+    error("Expected ':' after param name");
+  }
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected type name for param");
+  }
+  const auto type = previous().lexeme;
+  std::vector<std::string> enum_values;
+
+  if (match(TokenType::LeftParen))
+  {
+    if (!match(TokenType::Identifier) || previous().lexeme != "enum")
+    {
+      error("Expected 'enum' in param type annotation");
+    }
+    if (!match(TokenType::Equal))
+    {
+      error("Expected '=' after enum");
+    }
+    if (!match(TokenType::LeftBracket))
+    {
+      error("Expected '[' after enum=");
+    }
+    if (!check(TokenType::RightBracket))
+    {
+      do
+      {
+        if (!match(TokenType::String))
+        {
+          error("Expected string literal in enum list");
+        }
+        enum_values.push_back(previous().lexeme);
+      } while (match(TokenType::Comma));
+    }
+    if (!match(TokenType::RightBracket))
+    {
+      error("Expected ']' after enum list");
+    }
+    if (!match(TokenType::RightParen))
+    {
+      error("Expected ')' after enum spec");
+    }
+  }
+
+  return SkillParam{name, type, std::move(enum_values)};
+}
+
+std::vector<SkillParam> Parser::parse_skill_params()
+{
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' to start params");
+  }
+  std::vector<SkillParam> params;
+  if (!check(TokenType::RightBrace))
+  {
+    do
+    {
+      params.push_back(parse_skill_param());
+    } while (match(TokenType::Comma));
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Expected '}' after params");
+  }
+  return params;
+}
+
+std::vector<std::string> Parser::parse_identifier_list()
+{
+  if (!match(TokenType::LeftBracket))
+  {
+    error("Expected '[' to start list");
+  }
+  std::vector<std::string> values;
+  if (!check(TokenType::RightBracket))
+  {
+    do
+    {
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected identifier in list");
+      }
+      values.push_back(previous().lexeme);
+    } while (match(TokenType::Comma));
+  }
+  if (!match(TokenType::RightBracket))
+  {
+    error("Expected ']' after list");
+  }
+  return values;
 }
 
 StmtPtr Parser::parse_let()
@@ -611,21 +1003,35 @@ ExprPtr Parser::parse_unary()
 ExprPtr Parser::parse_call()
 {
   auto expr = parse_primary();
-  while (match(TokenType::LeftParen))
+  while (true)
   {
-    std::vector<ExprPtr> args;
-    if (!check(TokenType::RightParen))
+    if (match(TokenType::LeftParen))
     {
-      do
+      std::vector<ExprPtr> args;
+      if (!check(TokenType::RightParen))
       {
-        args.push_back(parse_expression());
-      } while (match(TokenType::Comma));
+        do
+        {
+          args.push_back(parse_expression());
+        } while (match(TokenType::Comma));
+      }
+      if (!match(TokenType::RightParen))
+      {
+        error("Expected ')' after arguments");
+      }
+      expr = make_call(std::move(expr), std::move(args));
+      continue;
     }
-    if (!match(TokenType::RightParen))
+    if (match(TokenType::Dot))
     {
-      error("Expected ')' after arguments");
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected property name after '.'");
+      }
+      expr = make_get(std::move(expr), previous().lexeme);
+      continue;
     }
-    expr = make_call(std::move(expr), std::move(args));
+    break;
   }
   return expr;
 }
@@ -657,6 +1063,56 @@ ExprPtr Parser::parse_primary()
   if (match(TokenType::Identifier))
   {
     return make_identifier(previous().lexeme);
+  }
+  if (match(TokenType::LeftBracket))
+  {
+    std::vector<ExprPtr> elements;
+    if (!check(TokenType::RightBracket))
+    {
+      do
+      {
+        elements.push_back(parse_expression());
+      } while (match(TokenType::Comma));
+    }
+    if (!match(TokenType::RightBracket))
+    {
+      error("Expected ']' after list literal");
+    }
+    return make_list(std::move(elements));
+  }
+  if (match(TokenType::LeftBrace))
+  {
+    std::vector<std::pair<std::string, ExprPtr>> entries;
+    if (!check(TokenType::RightBrace))
+    {
+      do
+      {
+        std::string key;
+        if (match(TokenType::Identifier))
+        {
+          key = previous().lexeme;
+        }
+        else if (match(TokenType::String))
+        {
+          key = previous().lexeme;
+        }
+        else
+        {
+          error("Expected identifier or string key in map literal");
+        }
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after map key");
+        }
+        auto value = parse_expression();
+        entries.emplace_back(std::move(key), std::move(value));
+      } while (match(TokenType::Comma));
+    }
+    if (!match(TokenType::RightBrace))
+    {
+      error("Expected '}' after map literal");
+    }
+    return make_map(std::move(entries));
   }
   if (match(TokenType::LeftParen))
   {

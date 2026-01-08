@@ -85,6 +85,40 @@ int main()
     assert(emitted[1].as_number() == 42.0);
   }
 
+  // Skills and agents should compile and expose agent methods
+  {
+    Pipeline pipeline;
+    const std::string program = R"neam(
+      skill Echo {
+        description: "Echo input back to the caller."
+        params: { text: String }
+        impl(text) { return text; }
+      }
+
+      agent Bot {
+        provider: "openai"
+        model: "gpt-4-turbo"
+        system: "You are helpful."
+        skills: [Echo]
+      }
+
+      Bot.ask("hello");
+      return Bot.context.history();
+    )neam";
+    auto unit = pipeline.compile(program, {});
+    VirtualMachine vm;
+    const auto result = vm.run(unit.chunk);
+    assert(result.is_list());
+    auto* list = as_list(result);
+    assert(list->items.size() == 2);
+    assert(list->items[0].is_map());
+    auto* first = as_map(list->items[0]);
+    auto role_it = first->entries.find("role");
+    assert(role_it != first->entries.end());
+    auto* role_str = as_string(role_it->second);
+    assert(std::string(role_str->chars, role_str->length) == "user");
+  }
+
   std::cout << "All VM tests passed\n";
   return 0;
 }

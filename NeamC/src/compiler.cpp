@@ -34,6 +34,31 @@ void patch_jump(vm::Chunk& chunk, std::size_t offset_index)
   }
   chunk.patch_short(offset_index, static_cast<uint16_t>(offset));
 }
+
+std::size_t emit_string_constant(vm::Chunk& chunk, const std::string& value)
+{
+  return chunk.add_constant(vm::Value::String(value.c_str(), value.size()));
+}
+
+void emit_build_list(vm::Chunk& chunk, std::size_t count)
+{
+  if (count > std::numeric_limits<uint8_t>::max())
+  {
+    throw std::runtime_error("List literal too large");
+  }
+  chunk.write_op(OpCode::OP_BUILD_LIST);
+  chunk.write_byte(static_cast<uint8_t>(count));
+}
+
+void emit_build_map(vm::Chunk& chunk, std::size_t count)
+{
+  if (count > std::numeric_limits<uint8_t>::max())
+  {
+    throw std::runtime_error("Map literal too large");
+  }
+  chunk.write_op(OpCode::OP_BUILD_MAP);
+  chunk.write_byte(static_cast<uint8_t>(count));
+}
 }  // namespace
 
 vm::Chunk Compiler::compile(const Program& program)
@@ -212,6 +237,106 @@ void Compiler::emit_statement(const Statement& stmt)
             locals_.push_back(Local{node.name, scope_depth_});
           }
         }
+        else if constexpr (std::is_same_v<T, SkillDecl>)
+        {
+          auto fn_value = compile_function(node.impl);
+          const auto fn_constant = chunk_.add_constant(std::move(fn_value));
+
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.description)));
+
+          for (const auto& param : node.params)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, param.name)));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "type")));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, param.type)));
+
+            std::size_t param_field_count = 1;
+            if (!param.enum_values.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "enum")));
+              for (const auto& enum_value : param.enum_values)
+              {
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(
+                    static_cast<uint16_t>(emit_string_constant(chunk_, enum_value)));
+              }
+              emit_build_list(chunk_, param.enum_values.size());
+              ++param_field_count;
+            }
+            emit_build_map(chunk_, param_field_count);
+          }
+
+          emit_build_map(chunk_, node.params.size());
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(fn_constant));
+          chunk_.write_op(OpCode::OP_DEFINE_SKILL);
+        }
+        else if constexpr (std::is_same_v<T, AgentDecl>)
+        {
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.provider)));
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.model)));
+
+          if (node.endpoint.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.endpoint.value())));
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+
+          if (node.api_key_env.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.api_key_env.value())));
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+
+          if (node.temperature.has_value())
+          {
+            chunk_.emit_constant(vm::Value::Number(node.temperature.value()));
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+
+          if (node.system.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.system.value())));
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+
+          for (const auto& skill_name : node.skills)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, skill_name)));
+          }
+          emit_build_list(chunk_, node.skills.size());
+          chunk_.write_op(OpCode::OP_DEFINE_AGENT);
+        }
       },
       stmt.node);
 }
@@ -314,19 +439,63 @@ void Compiler::emit_expression(const Expression& expr)
         }
         else if constexpr (std::is_same_v<T, CallExpr>)
         {
-          emit_expression(*node.callee);
-          for (const auto& arg : node.arguments)
+          if (const auto* get_expr = std::get_if<GetExpr>(&node.callee->node))
           {
-            emit_expression(*arg);
+            emit_expression(*get_expr->object);
+            for (const auto& arg : node.arguments)
+            {
+              emit_expression(*arg);
+            }
+            const auto name_constant =
+                chunk_.add_constant(vm::Value::String(get_expr->name.c_str(), get_expr->name.size()));
+            chunk_.write_op(OpCode::OP_INVOKE);
+            chunk_.write_short(static_cast<uint16_t>(name_constant));
+            chunk_.write_byte(static_cast<uint8_t>(node.arguments.size()));
           }
-          const auto arg_count = static_cast<uint8_t>(node.arguments.size());
-          bool native_call = false;
-          if (const auto* ident = std::get_if<IdentifierExpr>(&node.callee->node))
+          else
           {
-            native_call = ident->name == "print";
+            emit_expression(*node.callee);
+            for (const auto& arg : node.arguments)
+            {
+              emit_expression(*arg);
+            }
+            const auto arg_count = static_cast<uint8_t>(node.arguments.size());
+            bool native_call = false;
+            if (const auto* ident = std::get_if<IdentifierExpr>(&node.callee->node))
+            {
+              native_call = ident->name == "print";
+            }
+            chunk_.write_op(native_call ? OpCode::OP_CALL_NATIVE : OpCode::OP_CALL);
+            chunk_.write_byte(arg_count);
           }
-          chunk_.write_op(native_call ? OpCode::OP_CALL_NATIVE : OpCode::OP_CALL);
-          chunk_.write_byte(arg_count);
+        }
+        else if constexpr (std::is_same_v<T, GetExpr>)
+        {
+          emit_expression(*node.object);
+          const auto name_constant =
+              chunk_.add_constant(vm::Value::String(node.name.c_str(), node.name.size()));
+          chunk_.write_op(OpCode::OP_GET_PROPERTY);
+          chunk_.write_short(static_cast<uint16_t>(name_constant));
+        }
+        else if constexpr (std::is_same_v<T, ListExpr>)
+        {
+          for (const auto& element : node.elements)
+          {
+            emit_expression(*element);
+          }
+          emit_build_list(chunk_, node.elements.size());
+        }
+        else if constexpr (std::is_same_v<T, MapExpr>)
+        {
+          for (const auto& entry : node.entries)
+          {
+            const auto key_constant =
+                chunk_.add_constant(vm::Value::String(entry.first.c_str(), entry.first.size()));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(key_constant));
+            emit_expression(*entry.second);
+          }
+          emit_build_map(chunk_, node.entries.size());
         }
       },
       expr.node);
