@@ -54,6 +54,36 @@ Value Value::Native(ObjNative* native)
   return Value::ObjVal(reinterpret_cast<Obj*>(native));
 }
 
+Value Value::List(ObjList* list)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(list));
+}
+
+Value Value::Map(ObjMap* map)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(map));
+}
+
+Value Value::Skill(ObjSkill* skill)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(skill));
+}
+
+Value Value::Agent(ObjAgent* agent)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(agent));
+}
+
+Value Value::Context(ObjContext* context)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(context));
+}
+
+Value Value::Env(ObjEnv* env)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(env));
+}
+
 bool Value::as_bool() const
 {
   if (!is_bool())
@@ -96,6 +126,36 @@ bool Value::is_native() const
   return is_obj_type(*this, ObjType::OBJ_NATIVE);
 }
 
+bool Value::is_list() const
+{
+  return is_obj_type(*this, ObjType::OBJ_LIST);
+}
+
+bool Value::is_map() const
+{
+  return is_obj_type(*this, ObjType::OBJ_MAP);
+}
+
+bool Value::is_skill() const
+{
+  return is_obj_type(*this, ObjType::OBJ_SKILL);
+}
+
+bool Value::is_agent() const
+{
+  return is_obj_type(*this, ObjType::OBJ_AGENT);
+}
+
+bool Value::is_context() const
+{
+  return is_obj_type(*this, ObjType::OBJ_CONTEXT);
+}
+
+bool Value::is_env() const
+{
+  return is_obj_type(*this, ObjType::OBJ_ENV);
+}
+
 bool is_obj_type(const Value& value, ObjType type)
 {
   return value.is_obj() && value.as_obj()->type == type;
@@ -126,5 +186,59 @@ ObjNative* as_native(const Value& value)
     throw std::runtime_error("Expected native object");
   }
   return reinterpret_cast<ObjNative*>(value.as.obj);
+}
+
+ObjList* as_list(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_LIST))
+  {
+    throw std::runtime_error("Expected list object");
+  }
+  return reinterpret_cast<ObjList*>(value.as.obj);
+}
+
+ObjMap* as_map(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_MAP))
+  {
+    throw std::runtime_error("Expected map object");
+  }
+  return reinterpret_cast<ObjMap*>(value.as.obj);
+}
+
+ObjSkill* as_skill(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_SKILL))
+  {
+    throw std::runtime_error("Expected skill object");
+  }
+  return reinterpret_cast<ObjSkill*>(value.as.obj);
+}
+
+ObjAgent* as_agent(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_AGENT))
+  {
+    throw std::runtime_error("Expected agent object");
+  }
+  return reinterpret_cast<ObjAgent*>(value.as.obj);
+}
+
+ObjContext* as_context(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_CONTEXT))
+  {
+    throw std::runtime_error("Expected context object");
+  }
+  return reinterpret_cast<ObjContext*>(value.as.obj);
+}
+
+ObjEnv* as_env(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_ENV))
+  {
+    throw std::runtime_error("Expected env object");
+  }
+  return reinterpret_cast<ObjEnv*>(value.as.obj);
 }
 }  // namespace neamc::vm

@@ -82,6 +82,59 @@ ObjNative* new_native(ObjString* name, int arity, NativeFn function)
   return native;
 }
 
+ObjList* new_list(std::vector<Value> items)
+{
+  auto* list = allocate_object<ObjList>(ObjType::OBJ_LIST);
+  list->items = std::move(items);
+  return list;
+}
+
+ObjMap* new_map(std::unordered_map<std::string, Value> entries)
+{
+  auto* map = allocate_object<ObjMap>(ObjType::OBJ_MAP);
+  map->entries = std::move(entries);
+  return map;
+}
+
+ObjSkill* new_skill(ObjString* name, ObjString* description, ObjMap* params, ObjFunction* impl)
+{
+  auto* skill = allocate_object<ObjSkill>(ObjType::OBJ_SKILL);
+  skill->name = name;
+  skill->description = description;
+  skill->params = params;
+  skill->impl = impl;
+  return skill;
+}
+
+ObjContext* new_context()
+{
+  auto* context = allocate_object<ObjContext>(ObjType::OBJ_CONTEXT);
+  return context;
+}
+
+ObjAgent* new_agent(ObjString* name, ObjString* provider, ObjString* model, ObjString* endpoint,
+                    ObjString* api_key_env, ObjString* system, double temperature, ObjList* skills,
+                    ObjContext* context)
+{
+  auto* agent = allocate_object<ObjAgent>(ObjType::OBJ_AGENT);
+  agent->name = name;
+  agent->provider = provider;
+  agent->model = model;
+  agent->endpoint = endpoint;
+  agent->api_key_env = api_key_env;
+  agent->system = system;
+  agent->temperature = temperature;
+  agent->skills = skills;
+  agent->context = context;
+  return agent;
+}
+
+ObjEnv* new_env()
+{
+  auto* env = allocate_object<ObjEnv>(ObjType::OBJ_ENV);
+  return env;
+}
+
 uint32_t hash_string(const char* key, std::size_t length)
 {
   constexpr uint32_t fnv_offset = 2166136261u;

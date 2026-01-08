@@ -14,6 +14,12 @@ struct Obj;
 struct ObjString;
 struct ObjFunction;
 struct ObjNative;
+struct ObjList;
+struct ObjMap;
+struct ObjSkill;
+struct ObjAgent;
+struct ObjContext;
+struct ObjEnv;
 
 enum class ValueType
 {
@@ -41,6 +47,12 @@ struct Value
   static Value String(const char* chars, std::size_t length);
   static Value FunctionValue(ObjFunction* function);
   static Value Native(ObjNative* native);
+  static Value List(ObjList* list);
+  static Value Map(ObjMap* map);
+  static Value Skill(ObjSkill* skill);
+  static Value Agent(ObjAgent* agent);
+  static Value Context(ObjContext* context);
+  static Value Env(ObjEnv* env);
 
   bool is_nil() const { return type == ValueType::Nil; }
   bool is_bool() const { return type == ValueType::Bool; }
@@ -49,6 +61,12 @@ struct Value
   bool is_string() const;
   bool is_function() const;
   bool is_native() const;
+  bool is_list() const;
+  bool is_map() const;
+  bool is_skill() const;
+  bool is_agent() const;
+  bool is_context() const;
+  bool is_env() const;
 
   bool as_bool() const;
   double as_number() const;
@@ -59,5 +77,11 @@ bool is_obj_type(const Value& value, ObjType type);
 ObjString* as_string(const Value& value);
 ObjFunction* as_function(const Value& value);
 ObjNative* as_native(const Value& value);
+ObjList* as_list(const Value& value);
+ObjMap* as_map(const Value& value);
+ObjSkill* as_skill(const Value& value);
+ObjAgent* as_agent(const Value& value);
+ObjContext* as_context(const Value& value);
+ObjEnv* as_env(const Value& value);
 
 }  // namespace neamc::vm
