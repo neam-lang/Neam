@@ -16,6 +16,7 @@
 
 namespace neamc::vm
 {
+class VirtualMachine;
 struct Obj
 {
   ObjType type;
@@ -50,7 +51,7 @@ struct ObjFunction : Obj
   ObjString* name{nullptr};
 };
 
-using NativeFn = Value (*)(int argCount, Value* args);
+using NativeFn = Value (*)(VirtualMachine& vm, int argCount, Value* args);
 
 struct ObjNative : Obj
 {
@@ -103,6 +104,7 @@ struct ObjAgent : Obj
 struct ObjEnv : Obj
 {
   std::unordered_set<std::string> allowed_skills;
+  std::unordered_map<std::string, std::string> config;
 };
 
 ObjString* allocate_string(char* chars, std::size_t length, uint32_t hash);
