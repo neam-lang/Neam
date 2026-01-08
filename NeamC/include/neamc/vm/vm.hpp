@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -22,6 +23,22 @@ namespace neamc::vm
 class VirtualMachine
 {
 public:
+  enum class DebugEventType
+  {
+    BeforeAgentAsk,
+    BeforeToolExecution
+  };
+
+  struct DebugEvent
+  {
+    DebugEventType type;
+    std::string label;
+    std::size_t ip = 0;
+    std::string payload;
+  };
+
+  using DebugHook = std::function<void(const DebugEvent&)>;
+
   struct CallFrame
   {
     const Bytecode* chunk = nullptr;
@@ -33,6 +50,7 @@ public:
   ~VirtualMachine();
   Value run(const Bytecode& chunk);
   void define_native(const std::string& name, int arity, NativeFn function);
+  void set_debug_hook(DebugHook hook) { debug_hook_ = std::move(hook); }
   void push_root(Value value);
   void pop_root();
   const std::vector<Value>& stack() const { return stack_; }
@@ -45,6 +63,8 @@ public:
   ObjEnv* env() const { return env_; }
 
 private:
+  void emit_debug_event(DebugEventType type, std::string label, std::size_t ip,
+                        std::string payload);
   Value pop();
   Value& peek();
   Value& peek_offset(std::size_t distance);
@@ -62,5 +82,6 @@ private:
   ObjEnv* env_{nullptr};
   Table globals_{};
   Table interned_strings_{};
+  DebugHook debug_hook_{};
 };
 }  // namespace neamc::vm

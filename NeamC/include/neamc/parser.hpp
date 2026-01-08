@@ -77,6 +77,8 @@ struct Token
   TokenType type;
   std::string lexeme;
   std::size_t position = 0;
+  std::size_t line = 0;
+  std::size_t column = 0;
 };
 
 class Parser
@@ -110,7 +112,7 @@ private:
   StmtPtr parse_while();
   SkillParam parse_skill_param();
   std::vector<SkillParam> parse_skill_params();
-  std::vector<std::string> parse_identifier_list();
+  std::vector<IdentifierRef> parse_identifier_list();
   ExprPtr parse_expression();
   ExprPtr parse_assignment();
   ExprPtr parse_equality();

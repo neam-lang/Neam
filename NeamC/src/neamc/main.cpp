@@ -8,13 +8,16 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
+#include "neamc/lsp/server.hpp"
 #include "neamc/pipeline.hpp"
 
 namespace
 {
 void usage()
 {
-  std::cout << "Usage: neamc <input.neam> [-o output.neamb] [--manifest <json>]\n";
+  std::cout << "Usage: neamc <input.neam> [-o output.neamb] [--manifest <json>] [--lsp]\n";
 }
 }  // namespace
 
@@ -30,6 +33,7 @@ int main(int argc, char** argv)
   std::string input;
   std::string output;
   std::string manifest;
+  bool run_lsp = false;
 
   for (std::size_t i = 0; i < args.size(); ++i)
   {
@@ -57,6 +61,10 @@ int main(int argc, char** argv)
       }
       manifest = args[++i];
     }
+    else if (arg == "--lsp")
+    {
+      run_lsp = true;
+    }
     else if (input.empty())
     {
       input = arg;
@@ -66,6 +74,13 @@ int main(int argc, char** argv)
       std::cerr << "Unexpected argument: " << arg << "\n";
       return 1;
     }
+  }
+
+  if (run_lsp)
+  {
+    neamc::lsp::Server server;
+    server.run();
+    return 0;
   }
 
   if (input.empty())
@@ -102,6 +117,21 @@ int main(int argc, char** argv)
 
     unit.chunk.serialize(out_file);
     std::cout << "Wrote bytecode bundle to " << output << "\n";
+
+    nlohmann::json map;
+    map["manifest"] = unit.chunk.manifest();
+    map["mappings"] = nlohmann::json::array();
+    for (const auto& entry : unit.chunk.source_map())
+    {
+      map["mappings"].push_back({{"offset", entry.offset}, {"line", entry.line}});
+    }
+    const std::string map_path = output + ".nb.map";
+    std::ofstream map_file(map_path);
+    if (map_file)
+    {
+      map_file << map.dump(2);
+      std::cout << "Wrote source map to " << map_path << "\n";
+    }
   }
   catch (const std::exception& ex)
   {

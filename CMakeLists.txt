@@ -33,6 +33,8 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/tree_sitter_parser.cpp
     NeamC/src/compiler.cpp
     NeamC/src/pipeline.cpp
+    NeamC/src/package/manifest.cpp
+    NeamC/src/lsp/server.cpp
     NeamC/src/vm/memory.cpp
     NeamC/src/vm/object.cpp
     NeamC/src/vm/table.cpp
@@ -77,6 +79,16 @@ add_executable(neam
     NeamC/src/neam_run.cpp
 )
 target_link_libraries(neam PRIVATE neamc_core)
+
+add_executable(neam-lsp
+    NeamC/src/lsp/main.cpp
+)
+target_link_libraries(neam-lsp PRIVATE neamc_core)
+
+add_executable(neam-dap
+    NeamC/src/dap/main.cpp
+)
+target_link_libraries(neam-dap PRIVATE neamc_core)
 
 enable_testing()
 
