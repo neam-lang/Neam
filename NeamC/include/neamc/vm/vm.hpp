@@ -42,6 +42,7 @@ public:
   std::unordered_set<std::string>& allowed_skills() { return allowed_skills_; }
   Table& globals() { return globals_; }
   Table& strings() { return interned_strings_; }
+  ObjEnv* env() const { return env_; }
 
 private:
   Value pop();
@@ -58,6 +59,7 @@ private:
   std::vector<Value> gc_roots_{};
   std::vector<Value> emitted_{};
   std::unordered_set<std::string> allowed_skills_{};
+  ObjEnv* env_{nullptr};
   Table globals_{};
   Table interned_strings_{};
 };
