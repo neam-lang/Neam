@@ -4,6 +4,7 @@
 
 #include "neamc/parser.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <stdexcept>
@@ -13,129 +14,164 @@ namespace neamc
 {
 namespace
 {
-ExprPtr make_literal(vm::Value value)
+SourceSpan span_from_token(const Token& token)
+{
+  return SourceSpan{token.position, token.lexeme.size(), token.line, token.column};
+}
+
+SourceSpan merge_span(const SourceSpan& start, const SourceSpan& end)
+{
+  SourceSpan merged = start;
+  const std::size_t end_pos = end.position + end.length;
+  if (end_pos > start.position)
+  {
+    merged.length = end_pos - start.position;
+  }
+  return merged;
+}
+
+ExprPtr make_literal(vm::Value value, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = LiteralExpr{std::move(value)};
   return expr;
 }
 
-ExprPtr make_identifier(std::string name)
+ExprPtr make_identifier(std::string name, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = IdentifierExpr{std::move(name)};
   return expr;
 }
 
-ExprPtr make_assignment(std::string name, ExprPtr value)
+ExprPtr make_assignment(std::string name, ExprPtr value, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = AssignmentExpr{std::move(name), std::move(value)};
   return expr;
 }
 
-ExprPtr make_unary(UnaryOp op, ExprPtr operand)
+ExprPtr make_unary(UnaryOp op, ExprPtr operand, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = UnaryExpr{op, std::move(operand)};
   return expr;
 }
 
-ExprPtr make_binary(BinaryOp op, ExprPtr left, ExprPtr right)
+ExprPtr make_binary(BinaryOp op, ExprPtr left, ExprPtr right, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = BinaryExpr{op, std::move(left), std::move(right)};
   return expr;
 }
 
-ExprPtr make_call(ExprPtr callee, std::vector<ExprPtr> arguments)
+ExprPtr make_call(ExprPtr callee, std::vector<ExprPtr> arguments, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = CallExpr{std::move(callee), std::move(arguments)};
   return expr;
 }
 
-ExprPtr make_get(ExprPtr object, std::string name)
+ExprPtr make_get(ExprPtr object, std::string name, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = GetExpr{std::move(object), std::move(name)};
   return expr;
 }
 
-ExprPtr make_list(std::vector<ExprPtr> elements)
+ExprPtr make_list(std::vector<ExprPtr> elements, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = ListExpr{std::move(elements)};
   return expr;
 }
 
-ExprPtr make_map(std::vector<std::pair<std::string, ExprPtr>> entries)
+ExprPtr make_map(std::vector<std::pair<std::string, ExprPtr>> entries, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
+  expr->span = span;
   expr->node = MapExpr{std::move(entries)};
   return expr;
 }
 
-StmtPtr make_expression_stmt(ExprPtr expression)
+StmtPtr make_expression_stmt(ExprPtr expression, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = ExpressionStmt{std::move(expression)};
   return stmt;
 }
 
-StmtPtr make_emit_stmt(ExprPtr value)
+StmtPtr make_emit_stmt(ExprPtr value, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = EmitStmt{std::move(value)};
   return stmt;
 }
 
-StmtPtr make_block_stmt(std::vector<StmtPtr> statements)
+StmtPtr make_block_stmt(std::vector<StmtPtr> statements, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = BlockStmt{std::move(statements)};
   return stmt;
 }
 
-StmtPtr make_let_stmt(std::string name, ExprPtr initializer)
+StmtPtr make_let_stmt(std::string name, ExprPtr initializer, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = LetStmt{std::move(name), std::move(initializer)};
   return stmt;
 }
 
-StmtPtr make_if_stmt(ExprPtr condition, StmtPtr then_branch, StmtPtr else_branch)
+StmtPtr make_if_stmt(ExprPtr condition, StmtPtr then_branch, StmtPtr else_branch, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = IfStmt{std::move(condition), std::move(then_branch), std::move(else_branch)};
   return stmt;
 }
 
-StmtPtr make_while_stmt(ExprPtr condition, StmtPtr body)
+StmtPtr make_while_stmt(ExprPtr condition, StmtPtr body, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = WhileStmt{std::move(condition), std::move(body)};
   return stmt;
 }
 
-StmtPtr make_return_stmt(ExprPtr value)
+StmtPtr make_return_stmt(ExprPtr value, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = ReturnStmt{std::move(value)};
   return stmt;
 }
 
-StmtPtr make_function_decl(std::string name, std::vector<std::string> params, StmtPtr body)
+StmtPtr make_function_decl(std::string name, std::vector<std::string> params, StmtPtr body,
+                           SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = FunctionDecl{std::move(name), std::move(params), std::move(body)};
   return stmt;
 }
 
 StmtPtr make_skill_decl(std::string name, std::string description, std::vector<SkillParam> params,
-                        FunctionDecl impl)
+                        FunctionDecl impl, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = SkillDecl{std::move(name), std::move(description), std::move(params), std::move(impl)};
   return stmt;
 }
@@ -145,9 +181,11 @@ StmtPtr make_agent_decl(std::string name, std::string provider, std::string mode
                         std::optional<std::string> api_key_env,
                         std::optional<double> temperature,
                         std::optional<std::string> system,
-                        std::vector<std::string> skills)
+                        std::vector<IdentifierRef> skills,
+                        SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
   stmt->node = AgentDecl{std::move(name), std::move(provider), std::move(model), std::move(endpoint),
                          std::move(api_key_env), std::move(temperature), std::move(system),
                          std::move(skills)};
@@ -393,6 +431,30 @@ void Parser::tokenize()
   }
 
   tokens_.push_back(Token{TokenType::Eof, "", source_.size()});
+
+  std::vector<std::size_t> line_starts;
+  line_starts.reserve(64);
+  line_starts.push_back(0);
+  for (std::size_t i = 0; i < source_.size(); ++i)
+  {
+    if (source_[i] == '\n')
+    {
+      line_starts.push_back(i + 1);
+    }
+  }
+  for (auto& token : tokens_)
+  {
+    auto it = std::upper_bound(line_starts.begin(), line_starts.end(), token.position);
+    if (it == line_starts.begin())
+    {
+      token.line = 0;
+      token.column = token.position;
+      continue;
+    }
+    const std::size_t line_index = static_cast<std::size_t>(it - line_starts.begin() - 1);
+    token.line = line_index;
+    token.column = token.position - line_starts[line_index];
+  }
 }
 
 StmtPtr Parser::parse_declaration()
@@ -444,39 +506,44 @@ StmtPtr Parser::parse_statement()
   {
     error("Expected ';' after expression");
   }
-  return make_expression_stmt(std::move(expr));
+  return make_expression_stmt(std::move(expr), expr->span);
 }
 
 StmtPtr Parser::parse_return()
 {
+  SourceSpan span = span_from_token(previous());
   ExprPtr value;
   if (!check(TokenType::Semicolon))
   {
     value = parse_expression();
+    span = merge_span(span, value->span);
   }
   else
   {
-    value = make_literal(vm::Value::Nil());
+    value = make_literal(vm::Value::Nil(), span);
   }
   if (!match(TokenType::Semicolon))
   {
     error("Expected ';' after return value");
   }
-  return make_return_stmt(std::move(value));
+  return make_return_stmt(std::move(value), span);
 }
 
 StmtPtr Parser::parse_emit()
 {
+  SourceSpan span = span_from_token(previous());
   auto value = parse_expression();
+  span = merge_span(span, value->span);
   if (!match(TokenType::Semicolon))
   {
     error("Expected ';' after emit value");
   }
-  return make_emit_stmt(std::move(value));
+  return make_emit_stmt(std::move(value), span);
 }
 
 StmtPtr Parser::parse_function()
 {
+  SourceSpan span = span_from_token(previous());
   if (!match(TokenType::Identifier))
   {
     error("Expected function name");
@@ -507,11 +574,12 @@ StmtPtr Parser::parse_function()
     error("Expected function body");
   }
   auto body = parse_block();
-  return make_function_decl(name, std::move(params), std::move(body));
+  return make_function_decl(name, std::move(params), std::move(body), span);
 }
 
 StmtPtr Parser::parse_skill()
 {
+  SourceSpan span = span_from_token(previous());
   if (!match(TokenType::Identifier))
   {
     error("Expected skill name");
@@ -596,11 +664,12 @@ StmtPtr Parser::parse_skill()
   {
     error("Skill missing impl");
   }
-  return make_skill_decl(name, *description, std::move(params), std::move(*impl));
+  return make_skill_decl(name, *description, std::move(params), std::move(*impl), span);
 }
 
 StmtPtr Parser::parse_agent()
 {
+  SourceSpan span = span_from_token(previous());
   if (!match(TokenType::Identifier))
   {
     error("Expected agent name");
@@ -617,7 +686,7 @@ StmtPtr Parser::parse_agent()
   std::optional<std::string> api_key_env;
   std::optional<double> temperature;
   std::optional<std::string> system;
-  std::vector<std::string> skills;
+  std::vector<IdentifierRef> skills;
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -724,7 +793,7 @@ StmtPtr Parser::parse_agent()
     error("Agent missing model");
   }
   return make_agent_decl(name, *provider, *model, std::move(endpoint), std::move(api_key_env),
-                         std::move(temperature), std::move(system), std::move(skills));
+                         std::move(temperature), std::move(system), std::move(skills), span);
 }
 
 SkillParam Parser::parse_skill_param()
@@ -804,13 +873,13 @@ std::vector<SkillParam> Parser::parse_skill_params()
   return params;
 }
 
-std::vector<std::string> Parser::parse_identifier_list()
+std::vector<IdentifierRef> Parser::parse_identifier_list()
 {
   if (!match(TokenType::LeftBracket))
   {
     error("Expected '[' to start list");
   }
-  std::vector<std::string> values;
+  std::vector<IdentifierRef> values;
   if (!check(TokenType::RightBracket))
   {
     do
@@ -819,7 +888,7 @@ std::vector<std::string> Parser::parse_identifier_list()
       {
         error("Expected identifier in list");
       }
-      values.push_back(previous().lexeme);
+      values.push_back(IdentifierRef{previous().lexeme, span_from_token(previous())});
     } while (match(TokenType::Comma));
   }
   if (!match(TokenType::RightBracket))
@@ -831,6 +900,7 @@ std::vector<std::string> Parser::parse_identifier_list()
 
 StmtPtr Parser::parse_let()
 {
+  SourceSpan span = span_from_token(previous());
   if (!match(TokenType::Identifier))
   {
     error("Expected identifier after 'let'");
@@ -845,11 +915,13 @@ StmtPtr Parser::parse_let()
   {
     error("Expected ';' after let initializer");
   }
-  return make_let_stmt(name, std::move(initializer));
+  span = merge_span(span, initializer->span);
+  return make_let_stmt(name, std::move(initializer), span);
 }
 
 StmtPtr Parser::parse_block()
 {
+  SourceSpan span = span_from_token(previous());
   std::vector<StmtPtr> statements;
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -859,11 +931,12 @@ StmtPtr Parser::parse_block()
   {
     error("Unterminated block");
   }
-  return make_block_stmt(std::move(statements));
+  return make_block_stmt(std::move(statements), span);
 }
 
 StmtPtr Parser::parse_if()
 {
+  SourceSpan span = span_from_token(previous());
   if (!match(TokenType::LeftParen))
   {
     error("Expected '(' after 'if'");
@@ -879,11 +952,13 @@ StmtPtr Parser::parse_if()
   {
     else_branch = parse_statement();
   }
-  return make_if_stmt(std::move(condition), std::move(then_branch), std::move(else_branch));
+  span = merge_span(span, condition->span);
+  return make_if_stmt(std::move(condition), std::move(then_branch), std::move(else_branch), span);
 }
 
 StmtPtr Parser::parse_while()
 {
+  SourceSpan span = span_from_token(previous());
   if (!match(TokenType::LeftParen))
   {
     error("Expected '(' after 'while'");
@@ -894,7 +969,8 @@ StmtPtr Parser::parse_while()
     error("Expected ')' after condition");
   }
   auto body = parse_statement();
-  return make_while_stmt(std::move(condition), std::move(body));
+  span = merge_span(span, condition->span);
+  return make_while_stmt(std::move(condition), std::move(body), span);
 }
 
 ExprPtr Parser::parse_expression()
@@ -910,7 +986,8 @@ ExprPtr Parser::parse_assignment()
     auto value = parse_assignment();
     if (auto ident = std::get_if<IdentifierExpr>(&expr->node))
     {
-      return make_assignment(ident->name, std::move(value));
+      auto span = merge_span(expr->span, value->span);
+      return make_assignment(ident->name, std::move(value), span);
     }
     error("Invalid assignment target");
   }
@@ -924,8 +1001,9 @@ ExprPtr Parser::parse_equality()
   {
     const auto op_token = previous().type;
     auto right = parse_comparison();
+    auto span = merge_span(expr->span, right->span);
     expr = make_binary(op_token == TokenType::EqualEqual ? BinaryOp::Equal : BinaryOp::NotEqual,
-                       std::move(expr), std::move(right));
+                       std::move(expr), std::move(right), span);
   }
   return expr;
 }
@@ -956,7 +1034,8 @@ ExprPtr Parser::parse_comparison()
       default:
         break;
     }
-    expr = make_binary(op, std::move(expr), std::move(right));
+    auto span = merge_span(expr->span, right->span);
+    expr = make_binary(op, std::move(expr), std::move(right), span);
   }
   return expr;
 }
@@ -968,8 +1047,9 @@ ExprPtr Parser::parse_term()
   {
     const auto op_token = previous().type;
     auto right = parse_factor();
+    auto span = merge_span(expr->span, right->span);
     expr = make_binary(op_token == TokenType::Plus ? BinaryOp::Add : BinaryOp::Subtract, std::move(expr),
-                       std::move(right));
+                       std::move(right), span);
   }
   return expr;
 }
@@ -981,8 +1061,9 @@ ExprPtr Parser::parse_factor()
   {
     const auto op_token = previous().type;
     auto right = parse_unary();
+    auto span = merge_span(expr->span, right->span);
     expr = make_binary(op_token == TokenType::Star ? BinaryOp::Multiply : BinaryOp::Divide, std::move(expr),
-                       std::move(right));
+                       std::move(right), span);
   }
   return expr;
 }
@@ -991,11 +1072,17 @@ ExprPtr Parser::parse_unary()
 {
   if (match(TokenType::Bang))
   {
-    return make_unary(UnaryOp::Not, parse_unary());
+    const Token op_token = previous();
+    auto operand = parse_unary();
+    auto span = merge_span(span_from_token(op_token), operand->span);
+    return make_unary(UnaryOp::Not, std::move(operand), span);
   }
   if (match(TokenType::Minus))
   {
-    return make_unary(UnaryOp::Negate, parse_unary());
+    const Token op_token = previous();
+    auto operand = parse_unary();
+    auto span = merge_span(span_from_token(op_token), operand->span);
+    return make_unary(UnaryOp::Negate, std::move(operand), span);
   }
   return parse_call();
 }
@@ -1019,7 +1106,8 @@ ExprPtr Parser::parse_call()
       {
         error("Expected ')' after arguments");
       }
-      expr = make_call(std::move(expr), std::move(args));
+      auto span = merge_span(expr->span, span_from_token(previous()));
+      expr = make_call(std::move(expr), std::move(args), span);
       continue;
     }
     if (match(TokenType::Dot))
@@ -1028,7 +1116,8 @@ ExprPtr Parser::parse_call()
       {
         error("Expected property name after '.'");
       }
-      expr = make_get(std::move(expr), previous().lexeme);
+      auto span = merge_span(expr->span, span_from_token(previous()));
+      expr = make_get(std::move(expr), previous().lexeme, span);
       continue;
     }
     break;
@@ -1041,31 +1130,33 @@ ExprPtr Parser::parse_primary()
   if (match(TokenType::Number))
   {
     const double value = std::strtod(previous().lexeme.c_str(), nullptr);
-    return make_literal(vm::Value::Number(value));
+    return make_literal(vm::Value::Number(value), span_from_token(previous()));
   }
   if (match(TokenType::String))
   {
     return make_literal(
-        vm::Value::String(previous().lexeme.c_str(), previous().lexeme.size()));
+        vm::Value::String(previous().lexeme.c_str(), previous().lexeme.size()),
+        span_from_token(previous()));
   }
   if (match(TokenType::True))
   {
-    return make_literal(vm::Value::Bool(true));
+    return make_literal(vm::Value::Bool(true), span_from_token(previous()));
   }
   if (match(TokenType::False))
   {
-    return make_literal(vm::Value::Bool(false));
+    return make_literal(vm::Value::Bool(false), span_from_token(previous()));
   }
   if (match(TokenType::Nil))
   {
-    return make_literal(vm::Value::Nil());
+    return make_literal(vm::Value::Nil(), span_from_token(previous()));
   }
   if (match(TokenType::Identifier))
   {
-    return make_identifier(previous().lexeme);
+    return make_identifier(previous().lexeme, span_from_token(previous()));
   }
   if (match(TokenType::LeftBracket))
   {
+    SourceSpan span = span_from_token(previous());
     std::vector<ExprPtr> elements;
     if (!check(TokenType::RightBracket))
     {
@@ -1078,10 +1169,12 @@ ExprPtr Parser::parse_primary()
     {
       error("Expected ']' after list literal");
     }
-    return make_list(std::move(elements));
+    span = merge_span(span, span_from_token(previous()));
+    return make_list(std::move(elements), span);
   }
   if (match(TokenType::LeftBrace))
   {
+    SourceSpan span = span_from_token(previous());
     std::vector<std::pair<std::string, ExprPtr>> entries;
     if (!check(TokenType::RightBrace))
     {
@@ -1112,7 +1205,8 @@ ExprPtr Parser::parse_primary()
     {
       error("Expected '}' after map literal");
     }
-    return make_map(std::move(entries));
+    span = merge_span(span, span_from_token(previous()));
+    return make_map(std::move(entries), span);
   }
   if (match(TokenType::LeftParen))
   {

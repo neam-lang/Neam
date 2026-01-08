@@ -65,6 +65,7 @@ vm::Chunk Compiler::compile(const Program& program)
 {
   chunk_ = vm::Chunk{};
   chunk_.set_manifest(program.manifest);
+  chunk_.clear_source_map();
   locals_.clear();
   scope_depth_ = 0;
 
@@ -83,6 +84,7 @@ vm::Value Compiler::compile_function(const FunctionDecl& decl)
 {
   Compiler fn_compiler;
   fn_compiler.chunk_.set_manifest("fn:" + decl.name);
+  fn_compiler.chunk_.clear_source_map();
   fn_compiler.scope_depth_ = 0;
   fn_compiler.locals_.clear();
 
@@ -148,6 +150,7 @@ void Compiler::emit_block(const BlockStmt& block)
 
 void Compiler::emit_statement(const Statement& stmt)
 {
+  chunk_.set_current_line(stmt.span.line);
   std::visit(
       [this](auto&& node)
       {
@@ -329,10 +332,11 @@ void Compiler::emit_statement(const Statement& stmt)
             chunk_.write_op(OpCode::OP_NIL);
           }
 
-          for (const auto& skill_name : node.skills)
+          for (const auto& skill_ref : node.skills)
           {
             chunk_.write_op(OpCode::OP_CONST);
-            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, skill_name)));
+            chunk_.write_short(
+                static_cast<uint16_t>(emit_string_constant(chunk_, skill_ref.name)));
           }
           emit_build_list(chunk_, node.skills.size());
           chunk_.write_op(OpCode::OP_DEFINE_AGENT);
@@ -343,6 +347,7 @@ void Compiler::emit_statement(const Statement& stmt)
 
 void Compiler::emit_expression(const Expression& expr)
 {
+  chunk_.set_current_line(expr.span.line);
   std::visit(
       [this](auto&& node)
       {
