@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "neamc/vm/bytecode.hpp"
@@ -38,6 +39,7 @@ public:
   const std::vector<CallFrame>& frames() const { return frames_; }
   const std::vector<Value>& roots() const { return gc_roots_; }
   const std::vector<Value>& emitted() const { return emitted_; }
+  std::unordered_set<std::string>& allowed_skills() { return allowed_skills_; }
   Table& globals() { return globals_; }
   Table& strings() { return interned_strings_; }
 
@@ -55,6 +57,7 @@ private:
   std::vector<CallFrame> frames_{};
   std::vector<Value> gc_roots_{};
   std::vector<Value> emitted_{};
+  std::unordered_set<std::string> allowed_skills_{};
   Table globals_{};
   Table interned_strings_{};
 };
