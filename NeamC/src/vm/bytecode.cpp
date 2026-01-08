@@ -17,7 +17,7 @@
 namespace
 {
 constexpr std::array<uint8_t, 4> kMagic{{'N', 'E', 'A', 'M'}};
-constexpr uint8_t kVersion = 0x01;
+constexpr uint8_t kVersion = 0x02;
 }  // namespace
 
 namespace neamc::vm
@@ -31,6 +31,15 @@ std::size_t Bytecode::add_constant(Value value)
 void Bytecode::write_op(OpCode op)
 {
   code_.push_back(static_cast<uint8_t>(op));
+  if (current_line_ != std::numeric_limits<std::size_t>::max())
+  {
+    const std::size_t offset = code_.size() - 1;
+    if (source_map_.empty() || source_map_.back().offset != offset ||
+        source_map_.back().line != current_line_)
+    {
+      source_map_.push_back(SourceMapEntry{offset, current_line_});
+    }
+  }
 }
 
 void Bytecode::write_byte(uint8_t value)
@@ -297,6 +306,13 @@ void Bytecode::serialize(std::ostream& out) const
   {
     write_value(out, constant);
   }
+
+  write_u32(out, static_cast<uint32_t>(source_map_.size()));
+  for (const auto& entry : source_map_)
+  {
+    write_u32(out, static_cast<uint32_t>(entry.offset));
+    write_u32(out, static_cast<uint32_t>(entry.line));
+  }
 }
 
 Bytecode Bytecode::deserialize(std::istream& in)
@@ -312,7 +328,8 @@ Bytecode Bytecode::deserialize(std::istream& in)
   {
     throw std::runtime_error("Missing bundle version");
   }
-  if (static_cast<uint8_t>(version_char) != kVersion)
+  const auto version = static_cast<uint8_t>(version_char);
+  if (version != 0x01 && version != kVersion)
   {
     throw std::runtime_error("Unsupported bundle version");
   }
@@ -336,6 +353,18 @@ Bytecode Bytecode::deserialize(std::istream& in)
   for (uint32_t i = 0; i < constant_count; ++i)
   {
     chunk.constants_.push_back(read_value(in));
+  }
+
+  if (version >= 0x02)
+  {
+    const auto map_count = read_u32(in);
+    chunk.source_map_.reserve(map_count);
+    for (uint32_t i = 0; i < map_count; ++i)
+    {
+      const auto offset = read_u32(in);
+      const auto line = read_u32(in);
+      chunk.source_map_.push_back(SourceMapEntry{offset, line});
+    }
   }
 
   return chunk;

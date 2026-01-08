@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iosfwd>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,12 @@ enum class OpCode : uint8_t
 class Bytecode
 {
 public:
+  struct SourceMapEntry
+  {
+    std::size_t offset = 0;
+    std::size_t line = 0;
+  };
+
   std::size_t add_constant(Value value);
   void write_op(OpCode op);
   void write_byte(uint8_t value);
@@ -69,6 +76,9 @@ public:
 
   void set_manifest(std::string manifest) { manifest_ = std::move(manifest); }
   const std::string& manifest() const { return manifest_; }
+  void set_current_line(std::size_t line) { current_line_ = line; }
+  void clear_source_map() { source_map_.clear(); }
+  const std::vector<SourceMapEntry>& source_map() const { return source_map_; }
 
   void serialize(std::ostream& out) const;
   static Bytecode deserialize(std::istream& in);
@@ -80,6 +90,8 @@ private:
   std::vector<uint8_t> code_{};
   std::vector<Value> constants_{};
   std::string manifest_{};
+  std::vector<SourceMapEntry> source_map_{};
+  std::size_t current_line_ = std::numeric_limits<std::size_t>::max();
 };
 
 using Chunk = Bytecode;
