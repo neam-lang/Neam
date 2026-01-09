@@ -1,5 +1,2 @@
-{"timestamp":"2026-01-09T12:00:00Z","run_id":"uuid-1234","type":"START","payload":{}}
-{"timestamp":"2026-01-09T12:00:01Z","run_id":"uuid-1234","type":"TOOL_CALL","payload":{"agent":"DrNeam","tool":"web_search","args":{"query":"symptoms of X"}}}
-{"timestamp":"2026-01-09T12:00:02Z","run_id":"uuid-1234","type":"TOOL_RESULT","payload":{"tool":"web_search","result":{"items":[]}}}
-{"timestamp":"2026-01-09T12:00:03Z","run_id":"uuid-1234","type":"LLM_OUTPUT","payload":{"agent":"DrNeam","content":"(response text)"}}
-{"timestamp":"2026-01-09T12:00:04Z","run_id":"uuid-1234","type":"END","payload":{}}
+{"type":"START","run_id":"test-run","timestamp":"2026-01-01T00:00:00Z"}
+{"type":"END","run_id":"test-run","status":"success"}
