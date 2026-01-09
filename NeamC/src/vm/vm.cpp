@@ -11,12 +11,15 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <nlohmann/json-schema.hpp>
+#include <nlohmann/json.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 
 #include "neamc/llm/provider_factory.hpp"
 #include "neamc/vm/knowledge.hpp"
+#include "neamc/vm/schema.hpp"
 
 namespace neamc::vm
 {
@@ -283,6 +286,234 @@ bool parse_history_json(const std::string& input, std::vector<ObjContext::Messag
   }
   return false;
 }
+
+nlohmann::json value_to_json(const Value& value)
+{
+  if (value.is_nil())
+  {
+    return nullptr;
+  }
+  if (value.is_bool())
+  {
+    return value.as_bool();
+  }
+  if (value.is_number())
+  {
+    return value.as_number();
+  }
+  if (value.is_string())
+  {
+    return to_std_string(value);
+  }
+  if (value.is_list())
+  {
+    nlohmann::json result = nlohmann::json::array();
+    auto* list = as_list(value);
+    for (const auto& item : list->items)
+    {
+      result.push_back(value_to_json(item));
+    }
+    return result;
+  }
+  if (value.is_map())
+  {
+    nlohmann::json result = nlohmann::json::object();
+    auto* map = as_map(value);
+    for (const auto& entry : map->entries)
+    {
+      result[entry.first] = value_to_json(entry.second);
+    }
+    return result;
+  }
+  if (value.is_skill())
+  {
+    auto* skill = as_skill(value);
+    return std::string("<skill ") + to_std_string(skill->name) + ">";
+  }
+  if (value.is_agent())
+  {
+    auto* agent = as_agent(value);
+    return std::string("<agent ") + to_std_string(agent->name) + ">";
+  }
+  return "<object>";
+}
+
+bool schema_is_sensitive(const Value& schema_value)
+{
+  if (!schema_value.is_map())
+  {
+    return false;
+  }
+  auto* map = as_map(schema_value);
+  auto it = map->entries.find("sensitive");
+  if (it == map->entries.end())
+  {
+    return false;
+  }
+  return it->second.is_bool() && it->second.as_bool();
+}
+
+nlohmann::json build_skill_schema(const ObjSkill* skill)
+{
+  nlohmann::json schema = nlohmann::json::object();
+  schema["type"] = "object";
+  nlohmann::json properties = nlohmann::json::object();
+  nlohmann::json required = nlohmann::json::array();
+  for (const auto& name : skill->param_names)
+  {
+    auto it = skill->params->entries.find(name);
+    if (it == skill->params->entries.end())
+    {
+      continue;
+    }
+    properties[name] = value_to_json(it->second);
+    required.push_back(name);
+  }
+  schema["properties"] = std::move(properties);
+  schema["required"] = std::move(required);
+  schema["additionalProperties"] = false;
+  return schema;
+}
+
+nlohmann::json build_args_object(const ObjSkill* skill, const std::vector<Value>& args)
+{
+  nlohmann::json obj = nlohmann::json::object();
+  const std::size_t count = skill->param_names.size();
+  for (std::size_t i = 0; i < count && i < args.size(); ++i)
+  {
+    obj[skill->param_names[i]] = value_to_json(args[i]);
+  }
+  return obj;
+}
+
+nlohmann::json build_redacted_args(const ObjSkill* skill, const std::vector<Value>& args)
+{
+  nlohmann::json obj = nlohmann::json::object();
+  const std::size_t count = skill->param_names.size();
+  for (std::size_t i = 0; i < count && i < args.size(); ++i)
+  {
+    const auto& name = skill->param_names[i];
+    auto schema_it = skill->params->entries.find(name);
+    const bool sensitive =
+        schema_it != skill->params->entries.end() && schema_is_sensitive(schema_it->second);
+    if (sensitive)
+    {
+      obj[name] = "***";
+    }
+    else
+    {
+      obj[name] = value_to_json(args[i]);
+    }
+  }
+  return obj;
+}
+
+void validate_skill_args(const ObjSkill* skill, const std::vector<Value>& args)
+{
+  if (skill->param_names.size() != args.size())
+  {
+    throw SchemaViolationError("Argument count does not match skill schema");
+  }
+  const auto schema = build_skill_schema(skill);
+  const auto instance = build_args_object(skill, args);
+  nlohmann::json_schema::json_validator validator;
+  validator.set_root_schema(schema);
+  struct Handler : nlohmann::json_schema::error_handler
+  {
+    bool has_error = false;
+    std::string message;
+    void error(const nlohmann::json::json_pointer&, const nlohmann::json&,
+               const std::string& msg) override
+    {
+      has_error = true;
+      message = msg;
+    }
+  } handler;
+  validator.validate(instance, handler);
+  if (handler.has_error)
+  {
+    throw SchemaViolationError(handler.message.empty() ? "Schema validation failed"
+                                                       : handler.message);
+  }
+}
+
+std::string opcode_name(OpCode op)
+{
+  switch (op)
+  {
+    case OpCode::OP_CONST:
+      return "OP_CONST";
+    case OpCode::OP_NIL:
+      return "OP_NIL";
+    case OpCode::OP_TRUE:
+      return "OP_TRUE";
+    case OpCode::OP_FALSE:
+      return "OP_FALSE";
+    case OpCode::OP_POP:
+      return "OP_POP";
+    case OpCode::OP_DUP:
+      return "OP_DUP";
+    case OpCode::OP_GET_LOCAL:
+      return "OP_GET_LOCAL";
+    case OpCode::OP_SET_LOCAL:
+      return "OP_SET_LOCAL";
+    case OpCode::OP_DEFINE_GLOBAL:
+      return "OP_DEFINE_GLOBAL";
+    case OpCode::OP_GET_GLOBAL:
+      return "OP_GET_GLOBAL";
+    case OpCode::OP_SET_GLOBAL:
+      return "OP_SET_GLOBAL";
+    case OpCode::OP_NEGATE:
+      return "OP_NEGATE";
+    case OpCode::OP_NOT:
+      return "OP_NOT";
+    case OpCode::OP_ADD:
+      return "OP_ADD";
+    case OpCode::OP_SUB:
+      return "OP_SUB";
+    case OpCode::OP_MUL:
+      return "OP_MUL";
+    case OpCode::OP_DIV:
+      return "OP_DIV";
+    case OpCode::OP_EQUAL:
+      return "OP_EQUAL";
+    case OpCode::OP_GREATER:
+      return "OP_GREATER";
+    case OpCode::OP_LESS:
+      return "OP_LESS";
+    case OpCode::OP_JUMP:
+      return "OP_JUMP";
+    case OpCode::OP_JUMP_IF_FALSE:
+      return "OP_JUMP_IF_FALSE";
+    case OpCode::OP_LOOP:
+      return "OP_LOOP";
+    case OpCode::OP_CALL:
+      return "OP_CALL";
+    case OpCode::OP_CALL_NATIVE:
+      return "OP_CALL_NATIVE";
+    case OpCode::OP_GET_PROPERTY:
+      return "OP_GET_PROPERTY";
+    case OpCode::OP_INVOKE:
+      return "OP_INVOKE";
+    case OpCode::OP_RETURN:
+      return "OP_RETURN";
+    case OpCode::OP_EMIT:
+      return "OP_EMIT";
+    case OpCode::OP_TRACE:
+      return "OP_TRACE";
+    case OpCode::OP_BUILD_LIST:
+      return "OP_BUILD_LIST";
+    case OpCode::OP_BUILD_MAP:
+      return "OP_BUILD_MAP";
+    case OpCode::OP_DEFINE_SKILL:
+      return "OP_DEFINE_SKILL";
+    case OpCode::OP_DEFINE_KNOWLEDGE:
+      return "OP_DEFINE_KNOWLEDGE";
+    case OpCode::OP_DEFINE_AGENT:
+      return "OP_DEFINE_AGENT";
+  }
+  return "OP_UNKNOWN";
+}
 }  // namespace
 
 VirtualMachine::VirtualMachine()
@@ -454,6 +685,8 @@ Value VirtualMachine::run(const Bytecode& chunk)
   stack_.clear();
   frames_.clear();
   emitted_.clear();
+  trace_logger_.start_run();
+  trace_logger_.log_start();
   frames_.push_back(CallFrame{&chunk, nullptr, 0, 0});
   const bool trace = std::getenv("NEAM_TRACE") != nullptr;
 
@@ -473,6 +706,7 @@ Value VirtualMachine::run(const Bytecode& chunk)
     {
       std::cerr << "Executing op " << static_cast<int>(op) << " stack=" << stack_.size() << "\n";
     }
+    trace_logger_.log_step(opcode_name(op), frame.ip - 1, stack_.size());
     switch (op)
     {
       case OpCode::OP_CONST:
@@ -682,6 +916,12 @@ Value VirtualMachine::run(const Bytecode& chunk)
         {
           auto* skill = as_skill(callee);
           const std::string skill_name(skill->name->chars, skill->name->length);
+          std::vector<Value> args(arg_count);
+          for (std::size_t i = 0; i < arg_count; ++i)
+          {
+            args[arg_count - 1 - i] = stack_[stack_.size() - 1 - i];
+          }
+          trace_logger_.log_tool_call("vm", skill_name, build_redacted_args(skill, args));
           emit_debug_event(DebugEventType::BeforeToolExecution, "skill:" + skill_name,
                            frame.ip - 1, {});
           if (!allowed_skills_.empty() && allowed_skills_.count(skill_name) == 0)
@@ -696,8 +936,12 @@ Value VirtualMachine::run(const Bytecode& chunk)
           {
             throw std::runtime_error("Argument count mismatch for skill call");
           }
+          validate_skill_args(skill, args);
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-          frames_.push_back(CallFrame{&skill->impl->chunk, skill->impl, 0, callee_index});
+          CallFrame tool_frame{&skill->impl->chunk, skill->impl, 0, callee_index};
+          tool_frame.is_tool = true;
+          tool_frame.tool_name = skill_name;
+          frames_.push_back(std::move(tool_frame));
         }
         else
         {
@@ -873,6 +1117,7 @@ Value VirtualMachine::run(const Bytecode& chunk)
                              preview.str());
             const auto response_text = provider->chat(messages);
             agent->context->history.push_back({"assistant", response_text});
+            trace_logger_.log_llm_output(to_std_string(agent->name), response_text);
             stack_.push_back(Value::String(response_text.c_str(), response_text.size()));
           }
           else if (method == "reset")
@@ -1072,6 +1317,7 @@ Value VirtualMachine::run(const Bytecode& chunk)
       {
         Value impl_value = pop();
         Value params_value = pop();
+        Value param_order_value = pop();
         Value description_value = pop();
         Value name_value = pop();
         auto* name = as_string(name_value);
@@ -1084,9 +1330,20 @@ Value VirtualMachine::run(const Bytecode& chunk)
         {
           throw std::runtime_error("Skill params must be map");
         }
+        if (!is_obj_type(param_order_value, ObjType::OBJ_LIST))
+        {
+          throw std::runtime_error("Skill param order must be list");
+        }
         auto* params = as_map(params_value);
+        auto* param_order = as_list(param_order_value);
+        std::vector<std::string> param_names;
+        param_names.reserve(param_order->items.size());
+        for (const auto& item : param_order->items)
+        {
+          param_names.push_back(to_std_string(item));
+        }
         auto* impl = as_function(impl_value);
-        auto* skill = new_skill(name, description, params, impl);
+        auto* skill = new_skill(name, description, params, std::move(param_names), impl);
         globals_.set(name, Value::Skill(skill));
         break;
       }
@@ -1167,16 +1424,43 @@ Value VirtualMachine::run(const Bytecode& chunk)
         emitted_.push_back(std::move(value));
         break;
       }
+      case OpCode::OP_TRACE:
+      {
+        Value event_value = pop();
+        nlohmann::json payload = value_to_json(event_value);
+        if (payload.is_object() && payload.contains("type"))
+        {
+          const std::string type = payload["type"].get<std::string>();
+          nlohmann::json event_payload = nlohmann::json::object();
+          if (payload.contains("payload"))
+          {
+            event_payload = payload["payload"];
+          }
+          trace_logger_.log_custom_event(type, event_payload);
+        }
+        else
+        {
+          trace_logger_.log_custom_event("STEP", payload);
+        }
+        break;
+      }
       case OpCode::OP_RETURN:
       {
         Value result = pop();
+        const bool is_tool = frames_.back().is_tool;
+        const std::string tool_name = frames_.back().tool_name;
         while (stack_.size() > frames_.back().stack_start)
         {
           stack_.pop_back();
         }
         frames_.pop_back();
+        if (is_tool)
+        {
+          trace_logger_.log_tool_result(tool_name, value_to_json(result));
+        }
         if (frames_.empty())
         {
+          trace_logger_.log_end();
           return result;
         }
         stack_.push_back(std::move(result));

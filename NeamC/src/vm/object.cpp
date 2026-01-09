@@ -96,12 +96,14 @@ ObjMap* new_map(std::unordered_map<std::string, Value> entries)
   return map;
 }
 
-ObjSkill* new_skill(ObjString* name, ObjString* description, ObjMap* params, ObjFunction* impl)
+ObjSkill* new_skill(ObjString* name, ObjString* description, ObjMap* params,
+                    std::vector<std::string> param_names, ObjFunction* impl)
 {
   auto* skill = allocate_object<ObjSkill>(ObjType::OBJ_SKILL);
   skill->name = name;
   skill->description = description;
   skill->params = params;
+  skill->param_names = std::move(param_names);
   skill->impl = impl;
   return skill;
 }
