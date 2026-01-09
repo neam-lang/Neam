@@ -1,0 +1,22 @@
+knowledge KnowledgeBaseTest {
+  vector_store: "usearch",
+  embedding_model: "nomic-embed-text",
+  chunk_size: 32,
+  chunk_overlap: 8,
+  sources: [
+    { type: "file", path: "./readme.md" }
+  ]
+}
+
+agent Tester {
+  provider: "ollama",
+  model: "qwen2.5:14b",
+  system: "Confirm knowledge base is initialized.",
+  connected_knowledge: [KnowledgeBaseTest]
+}
+
+{
+  emit "Knowledge Base Test Initialized";
+  let answer = Tester.ask("What is Neam?");
+  emit answer;
+}

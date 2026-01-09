@@ -177,6 +177,22 @@ struct SkillDecl
   FunctionDecl impl;
 };
 
+struct KnowledgeSource
+{
+  std::string type;
+  std::string path;
+};
+
+struct KnowledgeDecl
+{
+  std::string name;
+  std::string vector_store;
+  std::string embedding_model;
+  std::size_t chunk_size{0};
+  std::size_t chunk_overlap{0};
+  std::vector<KnowledgeSource> sources;
+};
+
 struct AgentDecl
 {
   std::string name;
@@ -187,13 +203,14 @@ struct AgentDecl
   std::optional<double> temperature;
   std::optional<std::string> system;
   std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> connected_knowledge;
 };
 
 struct Statement
 {
   using Variant =
       std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
-                   FunctionDecl, SkillDecl, AgentDecl>;
+                   FunctionDecl, SkillDecl, KnowledgeDecl, AgentDecl>;
   SourceSpan span;
   Variant node;
 };
