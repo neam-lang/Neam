@@ -1,0 +1,23 @@
+knowledge ResearchDocs {
+  vector_store: "usearch",
+  embedding_model: "nomic-embed-text",
+  chunk_size: 128,
+  chunk_overlap: 32,
+  sources: [
+    { type: "file", path: "./README.md" },
+    { type: "file", path: "./readme.md" }
+  ]
+}
+
+agent Researcher {
+  provider: "ollama",
+  model: "qwen2.5:14b",
+  system: "You are a deep-dive technical researcher.",
+  connected_knowledge: [ResearchDocs]
+}
+
+{
+  emit "Starting Knowledge Query...";
+  let response = Researcher.ask("Summarize how Neam is positioned.");
+  emit response;
+}

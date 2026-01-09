@@ -1,0 +1,22 @@
+knowledge MyWiki {
+  vector_store: "usearch",
+  embedding_model: "nomic-embed-text",
+  chunk_size: 64,
+  chunk_overlap: 16,
+  sources: [
+    { type: "file", path: "./readme.md" }
+  ]
+}
+
+agent Helper {
+  provider: "ollama",
+  model: "qwen2.5:14b",
+  system: "You answer using the provided knowledge context.",
+  connected_knowledge: [MyWiki]
+}
+
+{
+  emit "Starting Knowledge Query...";
+  let answer = Helper.ask("How do I build NeamC?");
+  emit answer;
+}
