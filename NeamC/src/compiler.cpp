@@ -281,6 +281,34 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_short(static_cast<uint16_t>(fn_constant));
           chunk_.write_op(OpCode::OP_DEFINE_SKILL);
         }
+        else if constexpr (std::is_same_v<T, KnowledgeDecl>)
+        {
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, node.vector_store)));
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, node.embedding_model)));
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(node.chunk_size)));
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(node.chunk_overlap)));
+
+          for (const auto& source : node.sources)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "type")));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, source.type)));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "path")));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, source.path)));
+            emit_build_map(chunk_, 2);
+          }
+          emit_build_list(chunk_, node.sources.size());
+          chunk_.write_op(OpCode::OP_DEFINE_KNOWLEDGE);
+        }
         else if constexpr (std::is_same_v<T, AgentDecl>)
         {
           chunk_.write_op(OpCode::OP_CONST);
@@ -339,6 +367,13 @@ void Compiler::emit_statement(const Statement& stmt)
                 static_cast<uint16_t>(emit_string_constant(chunk_, skill_ref.name)));
           }
           emit_build_list(chunk_, node.skills.size());
+          for (const auto& kb_ref : node.connected_knowledge)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(
+                static_cast<uint16_t>(emit_string_constant(chunk_, kb_ref.name)));
+          }
+          emit_build_list(chunk_, node.connected_knowledge.size());
           chunk_.write_op(OpCode::OP_DEFINE_AGENT);
         }
       },

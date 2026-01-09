@@ -2,6 +2,55 @@
 
 Quick examples you can use to exercise the current `neamc` compiler + VM pipeline.
 
+## Knowledge bases (RAG)
+
+Neam supports first-class knowledge bases via the `knowledge` declaration. Knowledge bases ingest
+sources at runtime and expose relevant context to connected agents through `connected_knowledge`.
+
+```neam
+knowledge NeamDocs {
+  vector_store: "usearch",
+  embedding_model: "nomic-embed-text",
+  chunk_size: 128,
+  chunk_overlap: 32,
+  sources: [
+    { type: "file", path: "./readme.md" }
+  ]
+}
+
+agent SupportBot {
+  provider: "ollama",
+  model: "qwen2.5:14b",
+  system: "You answer using the provided knowledge context.",
+  connected_knowledge: [NeamDocs]
+}
+
+{
+  emit "Starting Knowledge Query...";
+  let answer = SupportBot.ask("How do I build NeamC?");
+  emit answer;
+}
+```
+
+### Knowledge configuration fields
+
+* `vector_store`: The embedded vector backend (currently `usearch`).
+* `embedding_model`: The embedding model identifier (used for future provider wiring).
+* `chunk_size`: Sliding window token count per chunk.
+* `chunk_overlap`: Number of overlapping tokens between chunks.
+* `sources`: Array of `{ type, path }` source descriptors.
+
+### Supported source types
+
+* `file`: Ingest local files. Paths can include `*` wildcards.
+* `web`: Fetch and ingest HTML content from a URL.
+
+### Sample programs
+
+* `examples/knowledge_simple.neam`: Basic RAG query pipeline using a local file source.
+* `examples/rag_researcher.neam`: Research-focused agent connected to multiple docs.
+* `tests/knowledge_basic.neam`: Minimal knowledge initialization and query for smoke tests.
+
 ## Simple arithmetic
 
 ```neam

@@ -88,6 +88,13 @@ void free_object(Obj* object)
       std::free(env);
       break;
     }
+    case ObjType::OBJ_KNOWLEDGE:
+    {
+      auto* knowledge = reinterpret_cast<ObjKnowledge*>(object);
+      knowledge->~ObjKnowledge();
+      std::free(knowledge);
+      break;
+    }
   }
 }
 
@@ -199,6 +206,10 @@ void blacken_object(Obj* object, std::vector<Obj*>& gray_stack)
       {
         mark_object_inner(reinterpret_cast<Obj*>(agent->skills), gray_stack);
       }
+      if (agent->connected_knowledge)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(agent->connected_knowledge), gray_stack);
+      }
       if (agent->context)
       {
         mark_object_inner(reinterpret_cast<Obj*>(agent->context), gray_stack);
@@ -209,6 +220,23 @@ void blacken_object(Obj* object, std::vector<Obj*>& gray_stack)
       break;
     case ObjType::OBJ_ENV:
       break;
+    case ObjType::OBJ_KNOWLEDGE:
+    {
+      auto* knowledge = reinterpret_cast<ObjKnowledge*>(object);
+      if (knowledge->name)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(knowledge->name), gray_stack);
+      }
+      if (knowledge->vector_store)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(knowledge->vector_store), gray_stack);
+      }
+      if (knowledge->embedding_model)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(knowledge->embedding_model), gray_stack);
+      }
+      break;
+    }
   }
 }
 }  // namespace

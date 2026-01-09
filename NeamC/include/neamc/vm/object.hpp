@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "neamc/vm/bytecode.hpp"
+#include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/value.hpp"
 
 namespace neamc::vm
@@ -34,7 +35,8 @@ enum class ObjType
   OBJ_SKILL,
   OBJ_AGENT,
   OBJ_CONTEXT,
-  OBJ_ENV
+  OBJ_ENV,
+  OBJ_KNOWLEDGE
 };
 
 struct ObjString : Obj
@@ -98,6 +100,7 @@ struct ObjAgent : Obj
   ObjString* system{nullptr};
   double temperature{0.0};
   ObjList* skills{nullptr};
+  ObjList* connected_knowledge{nullptr};
   ObjContext* context{nullptr};
 };
 
@@ -105,6 +108,17 @@ struct ObjEnv : Obj
 {
   std::unordered_set<std::string> allowed_skills;
   std::unordered_map<std::string, std::string> config;
+};
+
+struct ObjKnowledge : Obj
+{
+  ObjString* name{nullptr};
+  ObjString* vector_store{nullptr};
+  ObjString* embedding_model{nullptr};
+  std::size_t chunk_size{0};
+  std::size_t chunk_overlap{0};
+  std::vector<knowledge::Source> sources;
+  knowledge::VectorStore store{8};
 };
 
 ObjString* allocate_string(char* chars, std::size_t length, uint32_t hash);
@@ -118,8 +132,11 @@ ObjSkill* new_skill(ObjString* name, ObjString* description, ObjMap* params, Obj
 ObjContext* new_context();
 ObjAgent* new_agent(ObjString* name, ObjString* provider, ObjString* model, ObjString* endpoint,
                     ObjString* api_key_env, ObjString* system, double temperature, ObjList* skills,
-                    ObjContext* context);
+                    ObjList* connected_knowledge, ObjContext* context);
 ObjEnv* new_env();
+ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString* embedding_model,
+                            std::size_t chunk_size, std::size_t chunk_overlap,
+                            std::vector<knowledge::Source> sources);
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

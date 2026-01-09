@@ -20,6 +20,7 @@ struct ObjSkill;
 struct ObjAgent;
 struct ObjContext;
 struct ObjEnv;
+struct ObjKnowledge;
 
 enum class ValueType
 {
@@ -53,6 +54,7 @@ struct Value
   static Value Agent(ObjAgent* agent);
   static Value Context(ObjContext* context);
   static Value Env(ObjEnv* env);
+  static Value Knowledge(ObjKnowledge* knowledge);
 
   bool is_nil() const { return type == ValueType::Nil; }
   bool is_bool() const { return type == ValueType::Bool; }
@@ -67,6 +69,7 @@ struct Value
   bool is_agent() const;
   bool is_context() const;
   bool is_env() const;
+  bool is_knowledge() const;
 
   bool as_bool() const;
   double as_number() const;
@@ -83,5 +86,6 @@ ObjSkill* as_skill(const Value& value);
 ObjAgent* as_agent(const Value& value);
 ObjContext* as_context(const Value& value);
 ObjEnv* as_env(const Value& value);
+ObjKnowledge* as_knowledge(const Value& value);
 
 }  // namespace neamc::vm
