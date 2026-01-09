@@ -182,13 +182,25 @@ StmtPtr make_agent_decl(std::string name, std::string provider, std::string mode
                         std::optional<double> temperature,
                         std::optional<std::string> system,
                         std::vector<IdentifierRef> skills,
+                        std::vector<IdentifierRef> connected_knowledge,
                         SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
   stmt->span = span;
   stmt->node = AgentDecl{std::move(name), std::move(provider), std::move(model), std::move(endpoint),
                          std::move(api_key_env), std::move(temperature), std::move(system),
-                         std::move(skills)};
+                         std::move(skills), std::move(connected_knowledge)};
+  return stmt;
+}
+
+StmtPtr make_knowledge_decl(std::string name, std::string vector_store, std::string embedding_model,
+                            std::size_t chunk_size, std::size_t chunk_overlap,
+                            std::vector<KnowledgeSource> sources, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = KnowledgeDecl{std::move(name), std::move(vector_store), std::move(embedding_model),
+                             chunk_size, chunk_overlap, std::move(sources)};
   return stmt;
 }
 }  // namespace
@@ -250,16 +262,23 @@ void Parser::tokenize()
       {"while", TokenType::While}, {"fun", TokenType::Fun},       {"return", TokenType::Return},
       {"emit", TokenType::Emit},   {"true", TokenType::True},     {"false", TokenType::False},
       {"nil", TokenType::Nil},     {"skill", TokenType::Skill},   {"agent", TokenType::Agent},
+      {"knowledge", TokenType::Knowledge},
       {"description", TokenType::Description},
       {"params", TokenType::Params},
       {"impl", TokenType::Impl},
+      {"vector_store", TokenType::VectorStore},
+      {"embedding_model", TokenType::EmbeddingModel},
+      {"chunk_size", TokenType::ChunkSize},
+      {"chunk_overlap", TokenType::ChunkOverlap},
+      {"sources", TokenType::Sources},
       {"provider", TokenType::Provider},
       {"model", TokenType::Model},
       {"endpoint", TokenType::Endpoint},
       {"api_key_env", TokenType::ApiKeyEnv},
       {"temperature", TokenType::Temperature},
       {"system", TokenType::System},
-      {"skills", TokenType::Skills}};
+      {"skills", TokenType::Skills},
+      {"connected_knowledge", TokenType::ConnectedKnowledge}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -462,6 +481,10 @@ StmtPtr Parser::parse_declaration()
   if (match(TokenType::Skill))
   {
     return parse_skill();
+  }
+  if (match(TokenType::Knowledge))
+  {
+    return parse_knowledge();
   }
   if (match(TokenType::Agent))
   {
@@ -687,6 +710,7 @@ StmtPtr Parser::parse_agent()
   std::optional<double> temperature;
   std::optional<std::string> system;
   std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> connected_knowledge;
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -777,6 +801,15 @@ StmtPtr Parser::parse_agent()
       skills = parse_identifier_list();
       continue;
     }
+    if (match(TokenType::ConnectedKnowledge))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after connected_knowledge");
+      }
+      connected_knowledge = parse_identifier_list();
+      continue;
+    }
     error("Unexpected token in agent block");
   }
 
@@ -793,7 +826,121 @@ StmtPtr Parser::parse_agent()
     error("Agent missing model");
   }
   return make_agent_decl(name, *provider, *model, std::move(endpoint), std::move(api_key_env),
-                         std::move(temperature), std::move(system), std::move(skills), span);
+                         std::move(temperature), std::move(system), std::move(skills),
+                         std::move(connected_knowledge), span);
+}
+
+StmtPtr Parser::parse_knowledge()
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected knowledge name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after knowledge name");
+  }
+
+  std::optional<std::string> vector_store;
+  std::optional<std::string> embedding_model;
+  std::optional<std::size_t> chunk_size;
+  std::optional<std::size_t> chunk_overlap;
+  std::vector<KnowledgeSource> sources;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::VectorStore))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after vector_store");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for vector_store");
+      }
+      vector_store = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::EmbeddingModel))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after embedding_model");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for embedding_model");
+      }
+      embedding_model = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::ChunkSize))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after chunk_size");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for chunk_size");
+      }
+      chunk_size = static_cast<std::size_t>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match(TokenType::ChunkOverlap))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after chunk_overlap");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for chunk_overlap");
+      }
+      chunk_overlap = static_cast<std::size_t>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match(TokenType::Sources))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after sources");
+      }
+      sources = parse_knowledge_sources();
+      continue;
+    }
+    error("Unexpected token in knowledge block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated knowledge block");
+  }
+  if (!vector_store.has_value())
+  {
+    error("Knowledge missing vector_store");
+  }
+  if (!embedding_model.has_value())
+  {
+    error("Knowledge missing embedding_model");
+  }
+  if (!chunk_size.has_value())
+  {
+    error("Knowledge missing chunk_size");
+  }
+  if (!chunk_overlap.has_value())
+  {
+    error("Knowledge missing chunk_overlap");
+  }
+  if (sources.empty())
+  {
+    error("Knowledge missing sources");
+  }
+  return make_knowledge_decl(name, *vector_store, *embedding_model, *chunk_size, *chunk_overlap,
+                             std::move(sources), span);
 }
 
 SkillParam Parser::parse_skill_param()
@@ -896,6 +1043,85 @@ std::vector<IdentifierRef> Parser::parse_identifier_list()
     error("Expected ']' after list");
   }
   return values;
+}
+
+std::vector<KnowledgeSource> Parser::parse_knowledge_sources()
+{
+  if (!match(TokenType::LeftBracket))
+  {
+    error("Expected '[' to start sources list");
+  }
+  std::vector<KnowledgeSource> sources;
+  if (!check(TokenType::RightBracket))
+  {
+    do
+    {
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' to start source");
+      }
+      std::optional<std::string> type;
+      std::optional<std::string> path;
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        std::string key;
+        if (match(TokenType::Identifier))
+        {
+          key = previous().lexeme;
+        }
+        else if (match(TokenType::String))
+        {
+          key = previous().lexeme;
+        }
+        else
+        {
+          error("Expected key in source entry");
+        }
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after source key");
+        }
+        if (key == "type")
+        {
+          if (!match(TokenType::String))
+          {
+            error("Expected string literal for source type");
+          }
+          type = previous().lexeme;
+        }
+        else if (key == "path")
+        {
+          if (!match(TokenType::String))
+          {
+            error("Expected string literal for source path");
+          }
+          path = previous().lexeme;
+        }
+        else
+        {
+          error("Unexpected key in source entry");
+        }
+        if (!match(TokenType::Comma))
+        {
+          break;
+        }
+      }
+      if (!match(TokenType::RightBrace))
+      {
+        error("Expected '}' after source entry");
+      }
+      if (!type.has_value() || !path.has_value())
+      {
+        error("Source entry requires type and path");
+      }
+      sources.push_back(KnowledgeSource{std::move(*type), std::move(*path)});
+    } while (match(TokenType::Comma));
+  }
+  if (!match(TokenType::RightBracket))
+  {
+    error("Expected ']' after sources list");
+  }
+  return sources;
 }
 
 StmtPtr Parser::parse_let()

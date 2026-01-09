@@ -114,7 +114,7 @@ ObjContext* new_context()
 
 ObjAgent* new_agent(ObjString* name, ObjString* provider, ObjString* model, ObjString* endpoint,
                     ObjString* api_key_env, ObjString* system, double temperature, ObjList* skills,
-                    ObjContext* context)
+                    ObjList* connected_knowledge, ObjContext* context)
 {
   auto* agent = allocate_object<ObjAgent>(ObjType::OBJ_AGENT);
   agent->name = name;
@@ -125,6 +125,7 @@ ObjAgent* new_agent(ObjString* name, ObjString* provider, ObjString* model, ObjS
   agent->system = system;
   agent->temperature = temperature;
   agent->skills = skills;
+  agent->connected_knowledge = connected_knowledge;
   agent->context = context;
   return agent;
 }
@@ -133,6 +134,20 @@ ObjEnv* new_env()
 {
   auto* env = allocate_object<ObjEnv>(ObjType::OBJ_ENV);
   return env;
+}
+
+ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString* embedding_model,
+                            std::size_t chunk_size, std::size_t chunk_overlap,
+                            std::vector<knowledge::Source> sources)
+{
+  auto* knowledge = allocate_object<ObjKnowledge>(ObjType::OBJ_KNOWLEDGE);
+  knowledge->name = name;
+  knowledge->vector_store = vector_store;
+  knowledge->embedding_model = embedding_model;
+  knowledge->chunk_size = chunk_size;
+  knowledge->chunk_overlap = chunk_overlap;
+  knowledge->sources = std::move(sources);
+  return knowledge;
 }
 
 uint32_t hash_string(const char* key, std::size_t length)
