@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"},
+    "provider": {"type": "string"},
+    "model": {"type": "string"},
+    "endpoint": {"type": "string"},
+    "api_key_env": {"type": "string"},
+    "temperature": {"type": "number"},
+    "system": {"type": "string"},
+    "skills": {"type": "array", "items": {"type": "string"}},
+    "connected_knowledge": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["name", "provider", "model"],
+  "additionalProperties": false
+}

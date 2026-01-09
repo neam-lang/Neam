@@ -17,6 +17,7 @@
 #include "neamc/vm/native.hpp"
 #include "neamc/vm/object.hpp"
 #include "neamc/vm/table.hpp"
+#include "neamc/vm/trace.hpp"
 #include "neamc/vm/value.hpp"
 
 namespace neamc::vm
@@ -46,6 +47,8 @@ public:
     ObjFunction* function = nullptr;
     std::size_t ip = 0;
     std::size_t stack_start = 0;
+    bool is_tool = false;
+    std::string tool_name;
   };
   VirtualMachine();
   ~VirtualMachine();
@@ -86,5 +89,6 @@ private:
   Table globals_{};
   Table interned_strings_{};
   DebugHook debug_hook_{};
+  TraceLogger trace_logger_{};
 };
 }  // namespace neamc::vm
