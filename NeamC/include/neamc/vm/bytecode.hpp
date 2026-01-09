@@ -51,6 +51,7 @@ enum class OpCode : uint8_t
   OP_RETURN,
 
   OP_EMIT,
+  OP_TRACE,
 
   OP_BUILD_LIST,
   OP_BUILD_MAP,

@@ -12,6 +12,8 @@
 #include <variant>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "neamc/vm/value.hpp"
 
 namespace neamc
@@ -165,8 +167,7 @@ struct FunctionDecl
 struct SkillParam
 {
   std::string name;
-  std::string type;
-  std::vector<std::string> enum_values;
+  nlohmann::json schema;
 };
 
 struct SkillDecl
