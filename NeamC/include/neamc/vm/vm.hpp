@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -61,6 +62,7 @@ public:
   Table& globals() { return globals_; }
   Table& strings() { return interned_strings_; }
   ObjEnv* env() const { return env_; }
+  std::unordered_map<std::string, ObjKnowledge*>& knowledge_bases() { return knowledge_bases_; }
 
 private:
   void emit_debug_event(DebugEventType type, std::string label, std::size_t ip,
@@ -79,6 +81,7 @@ private:
   std::vector<Value> gc_roots_{};
   std::vector<Value> emitted_{};
   std::unordered_set<std::string> allowed_skills_{};
+  std::unordered_map<std::string, ObjKnowledge*> knowledge_bases_{};
   ObjEnv* env_{nullptr};
   Table globals_{};
   Table interned_strings_{};

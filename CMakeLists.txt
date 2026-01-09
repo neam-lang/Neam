@@ -20,6 +20,33 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+FetchContent_Declare(
+    usearch
+    URL https://github.com/unum-cloud/usearch/archive/refs/tags/v2.6.0.tar.gz
+)
+FetchContent_Declare(
+    lexbor
+    URL https://github.com/lexbor/lexbor/archive/refs/tags/v2.2.0.tar.gz
+)
+
+FetchContent_GetProperties(usearch)
+if (NOT usearch_POPULATED)
+    FetchContent_Populate(usearch)
+endif ()
+if (NOT TARGET usearch)
+    add_library(usearch INTERFACE)
+    target_include_directories(usearch INTERFACE ${usearch_SOURCE_DIR}/include)
+endif ()
+
+FetchContent_GetProperties(lexbor)
+if (NOT lexbor_POPULATED)
+    FetchContent_Populate(lexbor)
+endif ()
+if (NOT TARGET lexbor)
+    add_library(lexbor INTERFACE)
+    target_include_directories(lexbor INTERFACE ${lexbor_SOURCE_DIR}/source)
+endif ()
+
 find_package(CURL REQUIRED)
 
 add_library(tree_sitter_lib STATIC
@@ -44,6 +71,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/llm/ollama_adapter.cpp
     NeamC/src/vm/llm/openai_adapter.cpp
     NeamC/src/vm/llm/provider_factory.cpp
+    NeamC/src/vm/knowledge.cpp
     NeamC/src/vm/value.cpp
     NeamC/src/vm/bytecode.cpp
     NeamC/src/vm/vm.cpp
@@ -61,10 +89,15 @@ target_link_libraries(neamc_core
         tree_sitter_lib
         CURL::libcurl
         nlohmann_json::nlohmann_json
+        usearch
+        lexbor
 )
 
 add_library(libneam SHARED ${NEAMC_CORE_SOURCES})
-target_link_libraries(libneam PUBLIC tree_sitter_lib CURL::libcurl nlohmann_json::nlohmann_json)
+target_link_libraries(libneam PUBLIC tree_sitter_lib CURL::libcurl nlohmann_json::nlohmann_json
+    usearch
+    lexbor
+)
 target_include_directories(libneam
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include

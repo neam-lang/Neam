@@ -16,6 +16,7 @@
 #include <unordered_map>
 
 #include "neamc/llm/provider_factory.hpp"
+#include "neamc/vm/knowledge.hpp"
 
 namespace neamc::vm
 {
@@ -38,6 +39,48 @@ std::string to_std_string(const ObjString* value)
     return {};
   }
   return std::string(value->chars, value->length);
+}
+
+std::vector<knowledge::Source> parse_sources_list(const Value& value)
+{
+  if (!value.is_list())
+  {
+    throw std::runtime_error("Knowledge sources must be list");
+  }
+  std::vector<knowledge::Source> sources;
+  auto* list = as_list(value);
+  for (const auto& item : list->items)
+  {
+    if (!item.is_map())
+    {
+      throw std::runtime_error("Knowledge source must be map");
+    }
+    auto* map = as_map(item);
+    auto type_it = map->entries.find("type");
+    auto path_it = map->entries.find("path");
+    if (type_it == map->entries.end() || path_it == map->entries.end())
+    {
+      throw std::runtime_error("Knowledge source missing type or path");
+    }
+    sources.push_back(
+        knowledge::Source{to_std_string(type_it->second), to_std_string(path_it->second)});
+  }
+  return sources;
+}
+
+std::string format_rag_context(const std::vector<knowledge::SearchResult>& results)
+{
+  if (results.empty())
+  {
+    return {};
+  }
+  std::ostringstream out;
+  out << "Retrieved context:\n";
+  for (const auto& result : results)
+  {
+    out << "- " << result.chunk.text << "\n";
+  }
+  return out.str();
 }
 
 std::string resolve_env_config(const VirtualMachine& vm, const std::string& key,
@@ -705,6 +748,10 @@ Value VirtualMachine::run(const Bytecode& chunk)
           {
             stack_.push_back(Value::List(agent->skills));
           }
+          else if (key == "connected_knowledge" && agent->connected_knowledge)
+          {
+            stack_.push_back(Value::List(agent->connected_knowledge));
+          }
           else
           {
             throw std::runtime_error("Unknown agent property");
@@ -779,6 +826,37 @@ Value VirtualMachine::run(const Bytecode& chunk)
             if (agent->system)
             {
               messages.push_back({"system", to_std_string(agent->system)});
+            }
+            if (agent->connected_knowledge && !agent->connected_knowledge->items.empty())
+            {
+              std::string combined_context;
+              for (const auto& kb_value : agent->connected_knowledge->items)
+              {
+                const std::string kb_name = to_std_string(kb_value);
+                auto kb_it = knowledge_bases_.find(kb_name);
+                if (kb_it == knowledge_bases_.end())
+                {
+                  continue;
+                }
+                auto* knowledge = kb_it->second;
+                std::cout << "[RAG] Searching KB '" << kb_name << "' for: '" << query << "'\n";
+                auto embedding =
+                    knowledge::embed_text(query, knowledge->store.dimensions());
+                auto results = knowledge->store.search(embedding, 3);
+                if (!results.empty())
+                {
+                  std::cout << "[RAG] Found context: \"" << results.front().chunk.text << "\"\n";
+                }
+                const auto context = format_rag_context(results);
+                if (!context.empty())
+                {
+                  combined_context += context;
+                }
+              }
+              if (!combined_context.empty())
+              {
+                messages.push_back({"system", combined_context});
+              }
             }
             for (const auto& message : agent->context->history)
             {
@@ -1012,8 +1090,46 @@ Value VirtualMachine::run(const Bytecode& chunk)
         globals_.set(name, Value::Skill(skill));
         break;
       }
+      case OpCode::OP_DEFINE_KNOWLEDGE:
+      {
+        Value sources_value = pop();
+        Value chunk_overlap_value = pop();
+        Value chunk_size_value = pop();
+        Value embedding_model_value = pop();
+        Value vector_store_value = pop();
+        Value name_value = pop();
+
+        if (!embedding_model_value.is_string() || !vector_store_value.is_string() ||
+            !chunk_size_value.is_number() || !chunk_overlap_value.is_number())
+        {
+          throw std::runtime_error("Knowledge definition has invalid types");
+        }
+
+        auto* name = as_string(name_value);
+        auto* vector_store = as_string(vector_store_value);
+        auto* embedding_model = as_string(embedding_model_value);
+        const std::size_t chunk_size = static_cast<std::size_t>(chunk_size_value.as_number());
+        const std::size_t chunk_overlap =
+            static_cast<std::size_t>(chunk_overlap_value.as_number());
+
+        auto sources = parse_sources_list(sources_value);
+        auto* knowledge_obj =
+            new_knowledge(name, vector_store, embedding_model, chunk_size, chunk_overlap,
+                          std::move(sources));
+        knowledge::Ingester ingester(knowledge_obj->store, knowledge_obj->chunk_size,
+                                     knowledge_obj->chunk_overlap,
+                                     to_std_string(knowledge_obj->embedding_model));
+        for (const auto& source : knowledge_obj->sources)
+        {
+          ingester.ingest(source);
+        }
+        globals_.set(name, Value::Knowledge(knowledge_obj));
+        knowledge_bases_[to_std_string(name)] = knowledge_obj;
+        break;
+      }
       case OpCode::OP_DEFINE_AGENT:
       {
+        Value knowledge_value = pop();
         Value skills_value = pop();
         Value system_value = pop();
         Value temperature_value = pop();
@@ -1023,9 +1139,9 @@ Value VirtualMachine::run(const Bytecode& chunk)
         Value provider_value = pop();
         Value name_value = pop();
 
-        if (!skills_value.is_list())
+        if (!skills_value.is_list() || !knowledge_value.is_list())
         {
-          throw std::runtime_error("Agent skills must be list");
+          throw std::runtime_error("Agent lists must be list");
         }
 
         auto* name = as_string(name_value);
@@ -1037,10 +1153,11 @@ Value VirtualMachine::run(const Bytecode& chunk)
         double temperature = temperature_value.is_nil() ? 0.0 : temperature_value.as_number();
 
         auto* skills = as_list(skills_value);
+        auto* connected_knowledge = as_list(knowledge_value);
         auto* context = new_context();
         auto* agent =
             new_agent(name, provider, model, endpoint, api_key_env, system, temperature, skills,
-                      context);
+                      connected_knowledge, context);
         globals_.set(name, Value::Agent(agent));
         break;
       }

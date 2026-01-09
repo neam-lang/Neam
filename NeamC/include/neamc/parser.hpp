@@ -53,11 +53,17 @@ enum class TokenType
   Fun,
   Return,
   Emit,
+  Knowledge,
   Skill,
   Agent,
   Description,
   Params,
   Impl,
+  VectorStore,
+  EmbeddingModel,
+  ChunkSize,
+  ChunkOverlap,
+  Sources,
   Provider,
   Model,
   Endpoint,
@@ -65,6 +71,7 @@ enum class TokenType
   Temperature,
   System,
   Skills,
+  ConnectedKnowledge,
   True,
   False,
   Nil,
@@ -105,6 +112,7 @@ private:
   StmtPtr parse_emit();
   StmtPtr parse_function();
   StmtPtr parse_skill();
+  StmtPtr parse_knowledge();
   StmtPtr parse_agent();
   StmtPtr parse_let();
   StmtPtr parse_block();
@@ -113,6 +121,7 @@ private:
   SkillParam parse_skill_param();
   std::vector<SkillParam> parse_skill_params();
   std::vector<IdentifierRef> parse_identifier_list();
+  std::vector<KnowledgeSource> parse_knowledge_sources();
   ExprPtr parse_expression();
   ExprPtr parse_assignment();
   ExprPtr parse_equality();

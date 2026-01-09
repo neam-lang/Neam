@@ -84,6 +84,11 @@ Value Value::Env(ObjEnv* env)
   return Value::ObjVal(reinterpret_cast<Obj*>(env));
 }
 
+Value Value::Knowledge(ObjKnowledge* knowledge)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(knowledge));
+}
+
 bool Value::as_bool() const
 {
   if (!is_bool())
@@ -154,6 +159,11 @@ bool Value::is_context() const
 bool Value::is_env() const
 {
   return is_obj_type(*this, ObjType::OBJ_ENV);
+}
+
+bool Value::is_knowledge() const
+{
+  return is_obj_type(*this, ObjType::OBJ_KNOWLEDGE);
 }
 
 bool is_obj_type(const Value& value, ObjType type)
@@ -240,5 +250,14 @@ ObjEnv* as_env(const Value& value)
     throw std::runtime_error("Expected env object");
   }
   return reinterpret_cast<ObjEnv*>(value.as.obj);
+}
+
+ObjKnowledge* as_knowledge(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_KNOWLEDGE))
+  {
+    throw std::runtime_error("Expected knowledge object");
+  }
+  return reinterpret_cast<ObjKnowledge*>(value.as.obj);
 }
 }  // namespace neamc::vm
