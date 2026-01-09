@@ -324,11 +324,16 @@ void Server::publish_diagnostics(const std::string& uri, const DocumentState& st
   else
   {
     std::unordered_set<std::string> skills;
+    std::unordered_set<std::string> knowledge_bases;
     for (const auto& stmt : state.program.statements)
     {
       if (const auto* skill = std::get_if<SkillDecl>(&stmt->node))
       {
         skills.insert(skill->name);
+      }
+      if (const auto* knowledge = std::get_if<KnowledgeDecl>(&stmt->node))
+      {
+        knowledge_bases.insert(knowledge->name);
       }
     }
     for (const auto& stmt : state.program.statements)
@@ -348,6 +353,21 @@ void Server::publish_diagnostics(const std::string& uri, const DocumentState& st
                  {"severity", 1},
                  {"source", "neam-lsp"},
                  {"message", "Undefined skill: " + skill_ref.name}});
+          }
+        }
+        for (const auto& kb_ref : agent->connected_knowledge)
+        {
+          if (knowledge_bases.count(kb_ref.name) == 0)
+          {
+            const std::size_t length = kb_ref.span.length > 0 ? kb_ref.span.length : 1;
+            diagnostics.push_back(
+                {{"range",
+                  {{"start", {{"line", kb_ref.span.line}, {"character", kb_ref.span.column}}},
+                   {"end", {{"line", kb_ref.span.line},
+                            {"character", kb_ref.span.column + length}}}}},
+                 {"severity", 1},
+                 {"source", "neam-lsp"},
+                 {"message", "Undefined knowledge base: " + kb_ref.name}});
           }
         }
       }
