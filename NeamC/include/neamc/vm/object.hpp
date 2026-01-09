@@ -77,6 +77,7 @@ struct ObjSkill : Obj
   ObjString* name{nullptr};
   ObjString* description{nullptr};
   ObjMap* params{nullptr};
+  std::vector<std::string> param_names;
   ObjFunction* impl{nullptr};
 };
 
@@ -128,7 +129,8 @@ ObjFunction* new_function();
 ObjNative* new_native(ObjString* name, int arity, NativeFn function);
 ObjList* new_list(std::vector<Value> items);
 ObjMap* new_map(std::unordered_map<std::string, Value> entries);
-ObjSkill* new_skill(ObjString* name, ObjString* description, ObjMap* params, ObjFunction* impl);
+ObjSkill* new_skill(ObjString* name, ObjString* description, ObjMap* params,
+                    std::vector<std::string> param_names, ObjFunction* impl);
 ObjContext* new_context();
 ObjAgent* new_agent(ObjString* name, ObjString* provider, ObjString* model, ObjString* endpoint,
                     ObjString* api_key_env, ObjString* system, double temperature, ObjList* skills,

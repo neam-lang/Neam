@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -959,44 +960,95 @@ SkillParam Parser::parse_skill_param()
     error("Expected type name for param");
   }
   const auto type = previous().lexeme;
-  std::vector<std::string> enum_values;
+  auto schema_type = type;
+  if (type == "bool")
+  {
+    schema_type = "boolean";
+  }
+  else if (type == "map")
+  {
+    schema_type = "object";
+  }
+  else if (type == "list")
+  {
+    schema_type = "array";
+  }
+  nlohmann::json schema;
+  schema["type"] = schema_type;
 
   if (match(TokenType::LeftParen))
   {
-    if (!match(TokenType::Identifier) || previous().lexeme != "enum")
+    bool first = true;
+    while (!check(TokenType::RightParen) && !is_at_end())
     {
-      error("Expected 'enum' in param type annotation");
-    }
-    if (!match(TokenType::Equal))
-    {
-      error("Expected '=' after enum");
-    }
-    if (!match(TokenType::LeftBracket))
-    {
-      error("Expected '[' after enum=");
-    }
-    if (!check(TokenType::RightBracket))
-    {
-      do
+      if (!first)
       {
-        if (!match(TokenType::String))
+        if (!match(TokenType::Comma))
         {
-          error("Expected string literal in enum list");
+          error("Expected ',' between param annotations");
         }
-        enum_values.push_back(previous().lexeme);
-      } while (match(TokenType::Comma));
-    }
-    if (!match(TokenType::RightBracket))
-    {
-      error("Expected ']' after enum list");
+      }
+      first = false;
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected annotation key");
+      }
+      const auto key = previous().lexeme;
+      if (!match(TokenType::Equal))
+      {
+        error("Expected '=' after annotation key");
+      }
+      if (key == "enum")
+      {
+        if (!match(TokenType::LeftBracket))
+        {
+          error("Expected '[' after enum=");
+        }
+        nlohmann::json values = nlohmann::json::array();
+        if (!check(TokenType::RightBracket))
+        {
+          do
+          {
+            if (!match(TokenType::String))
+            {
+              error("Expected string literal in enum list");
+            }
+            values.push_back(previous().lexeme);
+          } while (match(TokenType::Comma));
+        }
+        if (!match(TokenType::RightBracket))
+        {
+          error("Expected ']' after enum list");
+        }
+        schema["enum"] = std::move(values);
+      }
+      else if (key == "sensitive")
+      {
+        if (match(TokenType::True))
+        {
+          schema["sensitive"] = true;
+        }
+        else if (match(TokenType::False))
+        {
+          schema["sensitive"] = false;
+        }
+        else
+        {
+          error("Expected true or false for sensitive");
+        }
+      }
+      else
+      {
+        error("Unsupported param annotation");
+      }
     }
     if (!match(TokenType::RightParen))
     {
-      error("Expected ')' after enum spec");
+      error("Expected ')' after param annotations");
     }
   }
 
-  return SkillParam{name, type, std::move(enum_values)};
+  return SkillParam{name, std::move(schema)};
 }
 
 std::vector<SkillParam> Parser::parse_skill_params()
