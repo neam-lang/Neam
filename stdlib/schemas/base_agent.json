@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"},
+    "model": {"type": "string"},
+    "temperature": {"type": "number"}
+  },
+  "required": ["name", "model"]
+}

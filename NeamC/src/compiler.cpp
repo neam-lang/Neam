@@ -5,6 +5,7 @@
 #include "neamc/compiler.hpp"
 
 #include <limits>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <utility>
 
@@ -58,6 +59,52 @@ void emit_build_map(vm::Chunk& chunk, std::size_t count)
   }
   chunk.write_op(OpCode::OP_BUILD_MAP);
   chunk.write_byte(static_cast<uint8_t>(count));
+}
+
+void emit_json_value(vm::Chunk& chunk, const nlohmann::json& value)
+{
+  if (value.is_object())
+  {
+    for (const auto& entry : value.items())
+    {
+      chunk.write_op(OpCode::OP_CONST);
+      chunk.write_short(static_cast<uint16_t>(emit_string_constant(chunk, entry.key())));
+      emit_json_value(chunk, entry.value());
+    }
+    emit_build_map(chunk, value.size());
+    return;
+  }
+  if (value.is_array())
+  {
+    for (const auto& item : value)
+    {
+      emit_json_value(chunk, item);
+    }
+    emit_build_list(chunk, value.size());
+    return;
+  }
+  if (value.is_string())
+  {
+    chunk.write_op(OpCode::OP_CONST);
+    chunk.write_short(static_cast<uint16_t>(emit_string_constant(chunk, value.get<std::string>())));
+    return;
+  }
+  if (value.is_boolean())
+  {
+    chunk.write_op(value.get<bool>() ? OpCode::OP_TRUE : OpCode::OP_FALSE);
+    return;
+  }
+  if (value.is_number())
+  {
+    chunk.emit_constant(vm::Value::Number(value.get<double>()));
+    return;
+  }
+  if (value.is_null())
+  {
+    chunk.write_op(OpCode::OP_NIL);
+    return;
+  }
+  throw std::runtime_error("Unsupported JSON schema value");
 }
 }  // namespace
 
@@ -254,26 +301,14 @@ void Compiler::emit_statement(const Statement& stmt)
           {
             chunk_.write_op(OpCode::OP_CONST);
             chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, param.name)));
-            chunk_.write_op(OpCode::OP_CONST);
-            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "type")));
-            chunk_.write_op(OpCode::OP_CONST);
-            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, param.type)));
+          }
+          emit_build_list(chunk_, node.params.size());
 
-            std::size_t param_field_count = 1;
-            if (!param.enum_values.empty())
-            {
-              chunk_.write_op(OpCode::OP_CONST);
-              chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "enum")));
-              for (const auto& enum_value : param.enum_values)
-              {
-                chunk_.write_op(OpCode::OP_CONST);
-                chunk_.write_short(
-                    static_cast<uint16_t>(emit_string_constant(chunk_, enum_value)));
-              }
-              emit_build_list(chunk_, param.enum_values.size());
-              ++param_field_count;
-            }
-            emit_build_map(chunk_, param_field_count);
+          for (const auto& param : node.params)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, param.name)));
+            emit_json_value(chunk_, param.schema);
           }
 
           emit_build_map(chunk_, node.params.size());
