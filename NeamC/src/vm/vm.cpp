@@ -519,6 +519,8 @@ std::string opcode_name(OpCode op)
 VirtualMachine::VirtualMachine()
 {
   current_vm = this;
+  input_ = &std::cin;
+  output_ = &std::cout;
   globals_.clear();
   interned_strings_.clear();
   register_core_natives(*this);
@@ -681,6 +683,60 @@ Value VirtualMachine::concatenate(const Value& lhs, const Value& rhs)
 }
 
 Value VirtualMachine::run(const Bytecode& chunk)
+{
+  return run_internal(chunk);
+}
+
+Value VirtualMachine::run(const Bytecode& chunk, std::istream* input, std::ostream* output)
+{
+  std::istream* previous_input = input_;
+  std::ostream* previous_output = output_;
+  if (input)
+  {
+    input_ = input;
+  }
+  if (output)
+  {
+    output_ = output;
+  }
+  try
+  {
+    Value result = run_internal(chunk);
+    input_ = previous_input;
+    output_ = previous_output;
+    return result;
+  }
+  catch (...)
+  {
+    input_ = previous_input;
+    output_ = previous_output;
+    throw;
+  }
+}
+
+void VirtualMachine::set_io(std::istream* input, std::ostream* output)
+{
+  if (input)
+  {
+    input_ = input;
+  }
+  if (output)
+  {
+    output_ = output;
+  }
+}
+
+std::istream& VirtualMachine::input_stream() const
+{
+  return *input_;
+}
+
+std::ostream& VirtualMachine::output_stream() const
+{
+  return *output_;
+}
+
+Value VirtualMachine::run_internal(const Bytecode& chunk)
 {
   stack_.clear();
   frames_.clear();
@@ -1083,13 +1139,15 @@ Value VirtualMachine::run(const Bytecode& chunk)
                   continue;
                 }
                 auto* knowledge = kb_it->second;
-                std::cout << "[RAG] Searching KB '" << kb_name << "' for: '" << query << "'\n";
+                output_stream() << "[RAG] Searching KB '" << kb_name << "' for: '" << query
+                                << "'\n";
                 auto embedding =
                     knowledge::embed_text(query, knowledge->store.dimensions());
                 auto results = knowledge->store.search(embedding, 3);
                 if (!results.empty())
                 {
-                  std::cout << "[RAG] Found context: \"" << results.front().chunk.text << "\"\n";
+                  output_stream() << "[RAG] Found context: \"" << results.front().chunk.text
+                                  << "\"\n";
                 }
                 const auto context = format_rag_context(results);
                 if (!context.empty())
