@@ -9,75 +9,30 @@
       "type": "string",
       "minLength": 1
     },
-    "version": {
+    "provider": {
       "type": "string",
-      "pattern": "^v?\\d+\\.\\d+\\.\\d+([.-][0-9A-Za-z.-]+)?$"
-    },
-    "description": {
-      "type": "string"
+      "minLength": 1
     },
     "model": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "provider": {"type": "string"},
-        "name": {"type": "string"},
-        "temperature": {"type": "number", "minimum": 0, "maximum": 2},
-        "top_p": {"type": "number", "minimum": 0, "maximum": 1},
-        "max_tokens": {"type": "integer", "minimum": 1}
-      },
-      "required": ["provider", "name"]
+      "type": "string",
+      "minLength": 1
     },
-    "capabilities": {
-      "type": "array",
-      "items": {"type": "string"},
-      "uniqueItems": true
+    "temperature": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 2.0
+    },
+    "system": {
+      "type": "string"
     },
     "tools": {
       "type": "array",
-      "items": {"$ref": "#/definitions/tool"}
-    },
-    "context": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "role": {"type": "string"},
-        "goal": {"type": "string"},
-        "plan": {"type": "string"},
-        "policy": {"type": "string"}
-      }
-    },
-    "memory": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "working": {"type": "integer", "minimum": 0},
-        "episodic": {"type": "integer", "minimum": 0},
-        "semantic": {"type": "integer", "minimum": 0}
-      }
-    },
-    "policies": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "allow_network": {"type": "boolean"},
-        "allow_filesystem": {"type": "boolean"},
-        "approval_required": {"type": "boolean"}
-      }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
     }
   },
-  "required": ["name", "model"],
-  "definitions": {
-    "tool": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "name": {"type": "string"},
-        "type": {"type": "string"},
-        "timeout_ms": {"type": "integer", "minimum": 0},
-        "description": {"type": "string"}
-      },
-      "required": ["name", "type"]
-    }
-  }
+  "required": ["name", "provider", "model"]
 }
