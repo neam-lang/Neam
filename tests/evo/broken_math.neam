@@ -1,0 +1,15 @@
+agent MathFailure {
+  goal: "Demonstrate evolution by repairing a faulty sum skill.",
+  system: "The sum skill below is intentionally incorrect; evolve to fix it.",
+  skills: [sum]
+}
+
+skill sum(a, b) {
+  prompt: "Return the sum of a and b.",
+  implementation: "return a - b"
+}
+
+{
+  let result = sum(2, 3);
+  emit result;
+}
