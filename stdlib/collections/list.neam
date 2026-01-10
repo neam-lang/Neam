@@ -1,0 +1,21 @@
+// List<T> helpers
+
+fun list_push(list, value) {
+  return list.push(value);
+}
+
+fun list_pop(list) {
+  return list.pop();
+}
+
+fun list_map(list, func) {
+  return list.map(func);
+}
+
+fun list_filter(list, func) {
+  return list.filter(func);
+}
+
+fun list_fold(list, initial, func) {
+  return list.fold(initial, func);
+}

@@ -9,6 +9,7 @@
 #include <stdexcept>
 
 #include "neamc/llm/http_client.hpp"
+#include "neamc/vm/async/executor.hpp"
 
 namespace neamc::llm
 {
@@ -112,6 +113,11 @@ public:
         build_url(config_.endpoint, "/api/generate"), payload.dump(),
         {"Content-Type: application/json"});
     return extract_response_text(nlohmann::json::parse(response));
+  }
+
+  vm::async::Future<std::string> complete_async(const std::string& prompt) override
+  {
+    return vm::async::Executor::global().submit([this, prompt]() { return complete(prompt); });
   }
 
   std::string chat(const std::vector<Message>& messages) override

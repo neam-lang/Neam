@@ -1,0 +1,30 @@
+// Result<T, E> helpers
+
+fun Result_ok(value) {
+  return { ok: true, value: value };
+}
+
+fun Result_err(error) {
+  return { ok: false, error: error };
+}
+
+fun Result_map(result, func) {
+  if (result.ok) {
+    return Result_ok(func(result.value));
+  }
+  return result;
+}
+
+fun Result_map_err(result, func) {
+  if (!result.ok) {
+    return Result_err(func(result.error));
+  }
+  return result;
+}
+
+fun Result_and_then(result, func) {
+  if (result.ok) {
+    return func(result.value);
+  }
+  return result;
+}

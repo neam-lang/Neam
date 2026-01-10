@@ -13,11 +13,13 @@
 #include <iostream>
 #include <nlohmann/json-schema.hpp>
 #include <nlohmann/json.hpp>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 
 #include "neamc/llm/provider_factory.hpp"
+#include "neamc/vm/async/future.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/schema.hpp"
 
@@ -42,6 +44,30 @@ std::string to_std_string(const ObjString* value)
     return {};
   }
   return std::string(value->chars, value->length);
+}
+
+std::string value_to_string(const Value& value)
+{
+  if (value.is_string())
+  {
+    auto* str = as_string(value);
+    return std::string(str->chars, str->length);
+  }
+  if (value.is_number())
+  {
+    std::ostringstream out;
+    out << value.as_number();
+    return out.str();
+  }
+  if (value.is_bool())
+  {
+    return value.as_bool() ? "true" : "false";
+  }
+  if (value.is_nil())
+  {
+    return "nil";
+  }
+  return "<object>";
 }
 
 std::vector<knowledge::Source> parse_sources_list(const Value& value)
@@ -495,6 +521,8 @@ std::string opcode_name(OpCode op)
       return "OP_GET_PROPERTY";
     case OpCode::OP_INVOKE:
       return "OP_INVOKE";
+    case OpCode::OP_AWAIT:
+      return "OP_AWAIT";
     case OpCode::OP_RETURN:
       return "OP_RETURN";
     case OpCode::OP_EMIT:
@@ -1083,6 +1111,23 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
           args[arg_count - 1 - i] = pop();
         }
         Value receiver = pop();
+        auto call_native = [this](const Value& callable, int count,
+                                  Value* call_args) -> Value {
+          if (!is_obj_type(callable, ObjType::OBJ_NATIVE))
+          {
+            throw std::runtime_error("Callable must be native function for list operation");
+          }
+          auto* native = as_native(callable);
+          if (native->arity >= 0 && native->arity != count)
+          {
+            throw std::runtime_error("Argument count mismatch for native call");
+          }
+          if (!native->function)
+          {
+            throw std::runtime_error("Unbound native function");
+          }
+          return native->function(*this, count, call_args);
+        };
         if (is_obj_type(receiver, ObjType::OBJ_AGENT))
         {
           auto* agent = as_agent(receiver);
@@ -1332,10 +1377,241 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
             throw std::runtime_error("Unknown env method");
           }
         }
+        else if (is_obj_type(receiver, ObjType::OBJ_LIST))
+        {
+          auto* list = as_list(receiver);
+          if (method == "push")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("list.push expects 1 argument");
+            }
+            list->items.push_back(args[0]);
+            stack_.push_back(Value::List(list));
+          }
+          else if (method == "pop")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("list.pop expects no arguments");
+            }
+            if (list->items.empty())
+            {
+              stack_.push_back(Value::Nil());
+            }
+            else
+            {
+              Value value = list->items.back();
+              list->items.pop_back();
+              stack_.push_back(std::move(value));
+            }
+          }
+          else if (method == "map")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("list.map expects 1 argument");
+            }
+            std::vector<Value> items;
+            items.reserve(list->items.size());
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {item};
+              items.push_back(call_native(args[0], 1, call_args));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "filter")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("list.filter expects 1 argument");
+            }
+            std::vector<Value> items;
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {item};
+              Value result = call_native(args[0], 1, call_args);
+              if (is_truthy(result))
+              {
+                items.push_back(item);
+              }
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "fold")
+          {
+            if (arg_count != 2)
+            {
+              throw std::runtime_error("list.fold expects 2 arguments");
+            }
+            Value acc = args[0];
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {acc, item};
+              acc = call_native(args[1], 2, call_args);
+            }
+            stack_.push_back(std::move(acc));
+          }
+          else
+          {
+            throw std::runtime_error("Unknown list method");
+          }
+        }
+        else if (is_obj_type(receiver, ObjType::OBJ_MAP))
+        {
+          auto* map = as_map(receiver);
+          if (method == "get")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("map.get expects 1 argument");
+            }
+            std::string key = to_std_string(args[0]);
+            auto it = map->entries.find(key);
+            if (it == map->entries.end())
+            {
+              stack_.push_back(Value::Nil());
+            }
+            else
+            {
+              stack_.push_back(it->second);
+            }
+          }
+          else if (method == "insert")
+          {
+            if (arg_count != 2)
+            {
+              throw std::runtime_error("map.insert expects 2 arguments");
+            }
+            std::string key = to_std_string(args[0]);
+            map->entries[key] = args[1];
+            stack_.push_back(Value::Map(map));
+          }
+          else if (method == "keys")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("map.keys expects no arguments");
+            }
+            std::vector<Value> items;
+            items.reserve(map->entries.size());
+            for (const auto& entry : map->entries)
+            {
+              items.push_back(Value::String(entry.first.c_str(), entry.first.size()));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else
+          {
+            throw std::runtime_error("Unknown map method");
+          }
+        }
+        else if (is_obj_type(receiver, ObjType::OBJ_STRING))
+        {
+          auto* str = as_string(receiver);
+          const std::string base(str->chars, str->length);
+          if (method == "split")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("string.split expects 1 argument");
+            }
+            const std::string delimiter = to_std_string(args[0]);
+            std::vector<Value> parts;
+            if (delimiter.empty())
+            {
+              parts.reserve(base.size());
+              for (char c : base)
+              {
+                parts.push_back(Value::String(&c, 1));
+              }
+            }
+            else
+            {
+              std::size_t start = 0;
+              while (start <= base.size())
+              {
+                const auto pos = base.find(delimiter, start);
+                const auto len = (pos == std::string::npos) ? base.size() - start : pos - start;
+                const std::string piece = base.substr(start, len);
+                parts.push_back(Value::String(piece.c_str(), piece.size()));
+                if (pos == std::string::npos)
+                {
+                  break;
+                }
+                start = pos + delimiter.size();
+              }
+            }
+            stack_.push_back(Value::List(new_list(std::move(parts))));
+          }
+          else if (method == "join")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("string.join expects 1 argument");
+            }
+            if (!args[0].is_list())
+            {
+              throw std::runtime_error("string.join expects list argument");
+            }
+            auto* list = as_list(args[0]);
+            std::ostringstream out;
+            for (std::size_t i = 0; i < list->items.size(); ++i)
+            {
+              out << value_to_string(list->items[i]);
+              if (i + 1 < list->items.size())
+              {
+                out << base;
+              }
+            }
+            const std::string joined = out.str();
+            stack_.push_back(Value::String(joined.c_str(), joined.size()));
+          }
+          else if (method == "replace")
+          {
+            if (arg_count != 2)
+            {
+              throw std::runtime_error("string.replace expects 2 arguments");
+            }
+            const std::string pattern = to_std_string(args[0]);
+            const std::string replacement = to_std_string(args[1]);
+            try
+            {
+              std::regex re(pattern);
+              const std::string replaced = std::regex_replace(base, re, replacement);
+              stack_.push_back(Value::String(replaced.c_str(), replaced.size()));
+            }
+            catch (const std::regex_error& ex)
+            {
+              throw std::runtime_error(std::string("Invalid regex: ") + ex.what());
+            }
+          }
+          else
+          {
+            throw std::runtime_error("Unknown string method");
+          }
+        }
         else
         {
           throw std::runtime_error("Invoke on non-object");
         }
+        break;
+      }
+      case OpCode::OP_AWAIT:
+      {
+        Value future_value = pop();
+        if (!future_value.is_future())
+        {
+          throw std::runtime_error("await expects Future value");
+        }
+        auto* future = as_future(future_value);
+        if (!future->future)
+        {
+          throw std::runtime_error("Future has no state");
+        }
+        Value result = future->future->wait();
+        stack_.push_back(std::move(result));
         break;
       }
       case OpCode::OP_BUILD_LIST:

@@ -1,0 +1,9 @@
+// Async file helpers
+
+fun read_string(path) {
+  return file_read_string(path);
+}
+
+fun write_string(path, content) {
+  return file_write_string(path, content);
+}
