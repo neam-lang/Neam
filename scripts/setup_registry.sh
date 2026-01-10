@@ -13,6 +13,13 @@ mkdir -p "${registry_dir}/agents" \
   "${registry_dir}/schemas" \
   "${traces_dir}"
 
+chmod 755 "${registry_root}" "${registry_dir}" \
+  "${registry_dir}/agents" \
+  "${registry_dir}/packages" \
+  "${registry_dir}/receipts" \
+  "${registry_dir}/schemas"
+chmod 700 "${traces_dir}"
+
 if [[ ! -f "${config_file}" ]]; then
   cat <<'CONFIG' > "${config_file}"
 {
