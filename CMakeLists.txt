@@ -156,6 +156,12 @@ add_executable(neam
 target_link_libraries(neam PRIVATE neamc_core)
 target_link_libraries(neam PRIVATE nlohmann_json_schema_validator)
 
+add_executable(neam-gym
+    NeamC/src/tools/neam_gym.cpp
+)
+target_link_libraries(neam-gym PRIVATE neamc_core)
+target_link_libraries(neam-gym PRIVATE nlohmann_json_schema_validator)
+
 add_executable(neam-cli
     NeamC/src/neam_cli.cpp
 )
