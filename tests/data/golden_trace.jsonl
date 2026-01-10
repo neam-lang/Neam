@@ -1,2 +1,8 @@
-{"type":"START","run_id":"test-run","timestamp":"2026-01-01T00:00:00Z"}
-{"type":"END","run_id":"test-run","status":"success"}
+{"type":"START","run_id":"test-run","timestamp":"2026-01-01T00:00:00Z","agent":"neam.test.agent"}
+{"type":"CONFIG","run_id":"test-run","schema":"neam://schemas/base_agent.json","model":{"provider":"local","name":"neam-llm","temperature":0.2}}
+{"type":"MODEL_CALL","run_id":"test-run","call_id":"model-1","prompt":"Summarize system state."}
+{"type":"MODEL_RESPONSE","run_id":"test-run","call_id":"model-1","output":"System ready."}
+{"type":"TOOL_CALL","run_id":"test-run","tool":"TerminalTool","call_id":"tool-1","input":"echo ready"}
+{"type":"TOOL_RESULT","run_id":"test-run","call_id":"tool-1","status":"success","output":"ready"}
+{"type":"MEMORY_WRITE","run_id":"test-run","tier":"episodic","content":"Startup check complete."}
+{"type":"END","run_id":"test-run","status":"success","timestamp":"2026-01-01T00:00:05Z"}
