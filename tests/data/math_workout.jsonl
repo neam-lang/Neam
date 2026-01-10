@@ -1,0 +1,2 @@
+{"id": "t1", "input": "What is 2 + 2?", "expected": "4", "grader": "exact_match"}
+{"id": "t2", "input": "Calculate 5 + 5", "expected": "10", "grader": "exact_match"}
