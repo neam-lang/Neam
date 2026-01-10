@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iosfwd>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -53,6 +54,10 @@ public:
   VirtualMachine();
   ~VirtualMachine();
   Value run(const Bytecode& chunk);
+  Value run(const Bytecode& chunk, std::istream* input, std::ostream* output);
+  void set_io(std::istream* input, std::ostream* output);
+  std::istream& input_stream() const;
+  std::ostream& output_stream() const;
   void define_native(const std::string& name, int arity, NativeFn function);
   void set_debug_hook(DebugHook hook) { debug_hook_ = std::move(hook); }
   void push_root(Value value);
@@ -70,6 +75,7 @@ public:
 private:
   void emit_debug_event(DebugEventType type, std::string label, std::size_t ip,
                         std::string payload);
+  Value run_internal(const Bytecode& chunk);
   Value pop();
   Value& peek();
   Value& peek_offset(std::size_t distance);
@@ -90,5 +96,7 @@ private:
   Table interned_strings_{};
   DebugHook debug_hook_{};
   TraceLogger trace_logger_{};
+  std::istream* input_{nullptr};
+  std::ostream* output_{nullptr};
 };
 }  // namespace neamc::vm

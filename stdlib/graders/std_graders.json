@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "graders": {
+    "exact_match": {
+      "description": "String equality after case normalization.",
+      "type": "string_equality",
+      "case_normalized": true
+    },
+    "contains": {
+      "description": "Expected output appears as a substring of actual output.",
+      "type": "substring"
+    },
+    "regex": {
+      "description": "Expected output is treated as a regular expression.",
+      "type": "regex"
+    }
+  }
+}

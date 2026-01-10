@@ -1,0 +1,2 @@
+{"id": "m1", "input": "Calculate 5 + 5", "expected": "10", "grader": "contains"}
+{"id": "m2", "input": "What is 10 * 10?", "expected": "100", "grader": "contains"}
