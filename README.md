@@ -185,6 +185,34 @@ Additional domain workflows:
 - **Ingestion for RAG/GraphRAG**: `neam ingest --profile vec-dev` to run
   VectorIngest, or `neam ingest --profile graph-dev` for GraphIngest.
 
+## Self-Evolution Workflow
+
+Neam supports a self-evolution loop that allows an agent to rewrite its own
+implementation when guided by an evaluation dataset. The core command is:
+
+```bash
+neam evolve <agent> --dataset <data>
+```
+
+This flow is designed to be **Test-Driven Evolution**, where a Gym suite defines
+the expected behavior and an Optimizer proposes edits until the Gym score
+reaches 100%. The compiler/runtime perform the evolution mechanics, while this
+repository documents the required interfaces and test data for that workflow.
+
+## Governance & Registry
+
+Neam packages are published through a governed workflow:
+
+```bash
+neam publish
+```
+
+The "One Hundred Percent" rule applies: an agent cannot be published unless it
+passes authentication, which requires a Gym certificate with `pass_rate: 1.0`.
+The root repository does not implement this logic (the C++ toolchain does); it
+defines the documentation, rules, and registry interface the compiler must
+adhere to.
+
 ## Status
 
 This is a working draft focused on installer and documentation scaffolding.
