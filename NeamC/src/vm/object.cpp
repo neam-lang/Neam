@@ -152,6 +152,21 @@ ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString*
   return knowledge;
 }
 
+ObjOption* new_option(bool has_value, Value value)
+{
+  auto* option = allocate_object<ObjOption>(ObjType::OBJ_OPTION);
+  option->has_value = has_value;
+  option->value = std::move(value);
+  return option;
+}
+
+ObjFuture* new_future(std::shared_ptr<async::Future<Value>> future)
+{
+  auto* obj_future = allocate_object<ObjFuture>(ObjType::OBJ_FUTURE);
+  obj_future->future = std::move(future);
+  return obj_future;
+}
+
 uint32_t hash_string(const char* key, std::size_t length)
 {
   constexpr uint32_t fnv_offset = 2166136261u;

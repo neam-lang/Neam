@@ -1,0 +1,9 @@
+// JSON helpers
+
+fun json_parse_text(text) {
+  return json_parse(text);
+}
+
+fun json_stringify_value(value) {
+  return json_stringify(value);
+}

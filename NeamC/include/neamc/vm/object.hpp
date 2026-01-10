@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -14,6 +15,12 @@
 #include "neamc/vm/bytecode.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/value.hpp"
+
+namespace neamc::vm::async
+{
+template <typename T>
+class Future;
+}
 
 namespace neamc::vm
 {
@@ -36,7 +43,9 @@ enum class ObjType
   OBJ_AGENT,
   OBJ_CONTEXT,
   OBJ_ENV,
-  OBJ_KNOWLEDGE
+  OBJ_KNOWLEDGE,
+  OBJ_OPTION,
+  OBJ_FUTURE
 };
 
 struct ObjString : Obj
@@ -122,6 +131,17 @@ struct ObjKnowledge : Obj
   knowledge::VectorStore store{8};
 };
 
+struct ObjOption : Obj
+{
+  bool has_value{false};
+  Value value{Value::Nil()};
+};
+
+struct ObjFuture : Obj
+{
+  std::shared_ptr<async::Future<Value>> future;
+};
+
 ObjString* allocate_string(char* chars, std::size_t length, uint32_t hash);
 ObjString* copy_string(const char* chars, std::size_t length);
 ObjString* take_string(char* chars, std::size_t length);
@@ -139,6 +159,8 @@ ObjEnv* new_env();
 ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString* embedding_model,
                             std::size_t chunk_size, std::size_t chunk_overlap,
                             std::vector<knowledge::Source> sources);
+ObjOption* new_option(bool has_value, Value value);
+ObjFuture* new_future(std::shared_ptr<async::Future<Value>> future);
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

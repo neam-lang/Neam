@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "neamc/vm/object.hpp"
+#include "neamc/vm/async/future.hpp"
 #include "neamc/vm/table.hpp"
 #include "neamc/vm/vm.hpp"
 
@@ -93,6 +94,20 @@ void free_object(Obj* object)
       auto* knowledge = reinterpret_cast<ObjKnowledge*>(object);
       knowledge->~ObjKnowledge();
       std::free(knowledge);
+      break;
+    }
+    case ObjType::OBJ_OPTION:
+    {
+      auto* option = reinterpret_cast<ObjOption*>(object);
+      option->~ObjOption();
+      std::free(option);
+      break;
+    }
+    case ObjType::OBJ_FUTURE:
+    {
+      auto* future = reinterpret_cast<ObjFuture*>(object);
+      future->~ObjFuture();
+      std::free(future);
       break;
     }
   }
@@ -234,6 +249,28 @@ void blacken_object(Obj* object, std::vector<Obj*>& gray_stack)
       if (knowledge->embedding_model)
       {
         mark_object_inner(reinterpret_cast<Obj*>(knowledge->embedding_model), gray_stack);
+      }
+      break;
+    }
+    case ObjType::OBJ_OPTION:
+    {
+      auto* option = reinterpret_cast<ObjOption*>(object);
+      if (option->has_value)
+      {
+        mark_value(option->value);
+      }
+      break;
+    }
+    case ObjType::OBJ_FUTURE:
+    {
+      auto* future = reinterpret_cast<ObjFuture*>(object);
+      if (future->future)
+      {
+        auto value = future->future->try_get();
+        if (value.has_value())
+        {
+          mark_value(*value);
+        }
       }
       break;
     }
