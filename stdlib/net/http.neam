@@ -1,0 +1,5 @@
+// Async HTTP helpers
+
+fun get(url) {
+  return http_get(url);
+}

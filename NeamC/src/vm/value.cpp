@@ -89,6 +89,16 @@ Value Value::Knowledge(ObjKnowledge* knowledge)
   return Value::ObjVal(reinterpret_cast<Obj*>(knowledge));
 }
 
+Value Value::Option(ObjOption* option)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(option));
+}
+
+Value Value::Future(ObjFuture* future)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(future));
+}
+
 bool Value::as_bool() const
 {
   if (!is_bool())
@@ -164,6 +174,16 @@ bool Value::is_env() const
 bool Value::is_knowledge() const
 {
   return is_obj_type(*this, ObjType::OBJ_KNOWLEDGE);
+}
+
+bool Value::is_option() const
+{
+  return is_obj_type(*this, ObjType::OBJ_OPTION);
+}
+
+bool Value::is_future() const
+{
+  return is_obj_type(*this, ObjType::OBJ_FUTURE);
 }
 
 bool is_obj_type(const Value& value, ObjType type)
@@ -259,5 +279,23 @@ ObjKnowledge* as_knowledge(const Value& value)
     throw std::runtime_error("Expected knowledge object");
   }
   return reinterpret_cast<ObjKnowledge*>(value.as.obj);
+}
+
+ObjOption* as_option(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_OPTION))
+  {
+    throw std::runtime_error("Expected option object");
+  }
+  return reinterpret_cast<ObjOption*>(value.as.obj);
+}
+
+ObjFuture* as_future(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_FUTURE))
+  {
+    throw std::runtime_error("Expected future object");
+  }
+  return reinterpret_cast<ObjFuture*>(value.as.obj);
 }
 }  // namespace neamc::vm

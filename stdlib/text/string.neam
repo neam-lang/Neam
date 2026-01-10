@@ -1,0 +1,13 @@
+// String helpers
+
+fun string_split(text, delimiter) {
+  return text.split(delimiter);
+}
+
+fun string_join(separator, items) {
+  return separator.join(items);
+}
+
+fun string_replace(text, pattern, replacement) {
+  return text.replace(pattern, replacement);
+}

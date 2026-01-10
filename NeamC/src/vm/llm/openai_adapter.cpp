@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "neamc/llm/http_client.hpp"
+#include "neamc/vm/async/executor.hpp"
 
 namespace neamc::llm
 {
@@ -67,6 +68,11 @@ public:
     std::vector<Message> messages;
     messages.push_back({"user", prompt});
     return chat(messages);
+  }
+
+  vm::async::Future<std::string> complete_async(const std::string& prompt) override
+  {
+    return vm::async::Executor::global().submit([this, prompt]() { return complete(prompt); });
   }
 
   std::string chat(const std::vector<Message>& messages) override

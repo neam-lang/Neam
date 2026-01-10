@@ -1,0 +1,27 @@
+// Option<T> helpers
+
+fun Option_some(value) {
+  return { kind: "Some", value: value };
+}
+
+fun Option_none() {
+  return { kind: "None" };
+}
+
+fun Option_is_some(option) {
+  return option.kind == "Some";
+}
+
+fun Option_map(option, func) {
+  if (option.kind == "Some") {
+    return Option_some(func(option.value));
+  }
+  return option;
+}
+
+fun Option_unwrap(option) {
+  if (option.kind == "Some") {
+    return option.value;
+  }
+  return nil;
+}
