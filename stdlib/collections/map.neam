@@ -1,0 +1,13 @@
+// Map<K, V> helpers
+
+fun map_get(map, key) {
+  return map.get(key);
+}
+
+fun map_insert(map, key, value) {
+  return map.insert(key, value);
+}
+
+fun map_keys(map) {
+  return map.keys();
+}

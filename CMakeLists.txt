@@ -59,6 +59,16 @@ FetchContent_Declare(
     URL https://github.com/lexbor/lexbor/archive/refs/tags/v2.2.0.tar.gz
 )
 
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz
+)
+
+FetchContent_Declare(
+    benchmark
+    URL https://github.com/google/benchmark/archive/refs/tags/v1.8.3.tar.gz
+)
+
 FetchContent_GetProperties(usearch)
 if (NOT usearch_POPULATED)
     FetchContent_Populate(usearch)
@@ -75,6 +85,11 @@ endif ()
 if (NOT TARGET lexbor)
     add_library(lexbor INTERFACE)
     target_include_directories(lexbor INTERFACE ${lexbor_SOURCE_DIR}/source)
+endif ()
+
+FetchContent_MakeAvailable(googletest benchmark)
+if (TARGET benchmark)
+    set_target_properties(benchmark PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif ()
 
 find_package(CURL REQUIRED)
@@ -103,6 +118,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/llm/provider_factory.cpp
     NeamC/src/vm/knowledge.cpp
     NeamC/src/vm/value.cpp
+    NeamC/src/vm/runtime_type.cpp
     NeamC/src/vm/bytecode.cpp
     NeamC/src/vm/vm.cpp
     NeamC/src/vm/trace.cpp
@@ -195,6 +211,17 @@ add_executable(compiler_test
 target_link_libraries(compiler_test PRIVATE neamc_core)
 target_link_libraries(compiler_test PRIVATE nlohmann_json_schema_validator)
 add_test(NAME compiler_test COMMAND compiler_test)
+
+add_executable(async_unit_test
+    tests/unit/async_test.cpp
+)
+target_link_libraries(async_unit_test PRIVATE neamc_core gtest_main)
+add_test(NAME async_unit_test COMMAND async_unit_test)
+
+add_executable(vm_benchmark
+    tests/benchmark/vm_benchmark.cpp
+)
+target_link_libraries(vm_benchmark PRIVATE neamc_core benchmark::benchmark)
 if (TARGET nlohmann_json_schema_validator)
     set(NEAM_JSON_SCHEMA_TARGET nlohmann_json_schema_validator)
 elseif (TARGET nlohmann_json_schema_validator::nlohmann_json_schema_validator)

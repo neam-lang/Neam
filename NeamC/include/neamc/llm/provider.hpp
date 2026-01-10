@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "neamc/vm/async/future.hpp"
+
 namespace neamc::llm
 {
 struct Message
@@ -30,6 +32,7 @@ class LLMProvider
 public:
   virtual ~LLMProvider() = default;
   virtual std::string complete(const std::string& prompt) = 0;
+  virtual vm::async::Future<std::string> complete_async(const std::string& prompt) = 0;
   virtual std::string chat(const std::vector<Message>& messages) = 0;
 };
 }  // namespace neamc::llm
