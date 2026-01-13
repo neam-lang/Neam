@@ -122,6 +122,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/bytecode.cpp
     NeamC/src/vm/vm.cpp
     NeamC/src/vm/trace.cpp
+    NeamC/src/runtime/executor.cpp
 )
 
 add_library(neamc_core STATIC ${NEAMC_CORE_SOURCES})
@@ -217,6 +218,24 @@ add_executable(async_unit_test
 )
 target_link_libraries(async_unit_test PRIVATE neamc_core gtest_main)
 add_test(NAME async_unit_test COMMAND async_unit_test)
+
+add_executable(runtime_executor_test
+    tests/runtime/executor_test.cpp
+)
+target_link_libraries(runtime_executor_test PRIVATE neamc_core gtest_main)
+add_test(NAME runtime_executor_test COMMAND runtime_executor_test)
+
+add_executable(stdlib_list_test
+    tests/stdlib/list_test.cpp
+)
+target_link_libraries(stdlib_list_test PRIVATE neamc_core gtest_main)
+add_test(NAME stdlib_list_test COMMAND stdlib_list_test)
+
+add_executable(stdlib_map_test
+    tests/stdlib/map_test.cpp
+)
+target_link_libraries(stdlib_map_test PRIVATE neamc_core gtest_main)
+add_test(NAME stdlib_map_test COMMAND stdlib_map_test)
 
 add_executable(vm_benchmark
     tests/benchmark/vm_benchmark.cpp
