@@ -99,21 +99,33 @@ struct GetExpr
   std::string name;
 };
 
+struct IndexExpr
+{
+  ExprPtr base;
+  ExprPtr index;
+};
+
 struct ListExpr
 {
   std::vector<ExprPtr> elements;
 };
 
+struct MapEntry
+{
+  ExprPtr key;
+  ExprPtr value;
+};
+
 struct MapExpr
 {
-  std::vector<std::pair<std::string, ExprPtr>> entries;
+  std::vector<MapEntry> entries;
 };
 
 struct Expression
 {
   using Variant =
       std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr,
-                   GetExpr, ListExpr, MapExpr>;
+                   GetExpr, IndexExpr, ListExpr, MapExpr>;
   SourceSpan span;
   Variant node;
 };

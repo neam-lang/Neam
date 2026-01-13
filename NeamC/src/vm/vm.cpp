@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <cstdlib>
@@ -519,6 +520,8 @@ std::string opcode_name(OpCode op)
       return "OP_CALL_NATIVE";
     case OpCode::OP_GET_PROPERTY:
       return "OP_GET_PROPERTY";
+    case OpCode::OP_GET_INDEX:
+      return "OP_GET_INDEX";
     case OpCode::OP_INVOKE:
       return "OP_INVOKE";
     case OpCode::OP_AWAIT:
@@ -1088,6 +1091,47 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
         else
         {
           throw std::runtime_error("Property access on non-object");
+        }
+        break;
+      }
+      case OpCode::OP_GET_INDEX:
+      {
+        Value index_value = pop();
+        Value base_value = pop();
+        if (is_obj_type(base_value, ObjType::OBJ_LIST))
+        {
+          if (!index_value.is_number())
+          {
+            throw std::runtime_error("List index must be a number");
+          }
+          const double raw_index = index_value.as_number();
+          const double floored = std::floor(raw_index);
+          if (raw_index < 0 || floored != raw_index)
+          {
+            throw std::runtime_error("List index must be a non-negative integer");
+          }
+          const std::size_t index = static_cast<std::size_t>(floored);
+          auto* list = as_list(base_value);
+          if (index >= list->items.size())
+          {
+            throw std::runtime_error("List index out of range");
+          }
+          stack_.push_back(list->items[index]);
+        }
+        else if (is_obj_type(base_value, ObjType::OBJ_MAP))
+        {
+          const std::string key = to_std_string(index_value);
+          auto* map = as_map(base_value);
+          auto it = map->entries.find(key);
+          if (it == map->entries.end())
+          {
+            throw std::runtime_error("Missing map key");
+          }
+          stack_.push_back(it->second);
+        }
+        else
+        {
+          throw std::runtime_error("Indexing is only supported on lists and maps");
         }
         break;
       }
