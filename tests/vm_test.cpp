@@ -85,6 +85,19 @@ int main()
     assert(emitted[1].as_number() == 42.0);
   }
 
+  // List and map literals with indexing
+  {
+    Pipeline pipeline;
+    auto unit = pipeline.compile(
+        "let values = [1, 2, 3,]; let key = \"two\"; let map = {key: 2, \"three\": 3,};"
+        "return values[1] + map[\"three\"];",
+        {});
+    VirtualMachine vm;
+    const auto result = vm.run(unit.chunk);
+    assert(result.is_number());
+    assert(result.as_number() == 5.0);
+  }
+
   // Skills and agents should compile and expose agent methods
   {
     Pipeline pipeline;

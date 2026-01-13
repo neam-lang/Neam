@@ -552,6 +552,12 @@ void Compiler::emit_expression(const Expression& expr)
           chunk_.write_op(OpCode::OP_GET_PROPERTY);
           chunk_.write_short(static_cast<uint16_t>(name_constant));
         }
+        else if constexpr (std::is_same_v<T, IndexExpr>)
+        {
+          emit_expression(*node.base);
+          emit_expression(*node.index);
+          chunk_.write_op(OpCode::OP_GET_INDEX);
+        }
         else if constexpr (std::is_same_v<T, ListExpr>)
         {
           for (const auto& element : node.elements)
@@ -564,11 +570,8 @@ void Compiler::emit_expression(const Expression& expr)
         {
           for (const auto& entry : node.entries)
           {
-            const auto key_constant =
-                chunk_.add_constant(vm::Value::String(entry.first.c_str(), entry.first.size()));
-            chunk_.write_op(OpCode::OP_CONST);
-            chunk_.write_short(static_cast<uint16_t>(key_constant));
-            emit_expression(*entry.second);
+            emit_expression(*entry.key);
+            emit_expression(*entry.value);
           }
           emit_build_map(chunk_, node.entries.size());
         }
