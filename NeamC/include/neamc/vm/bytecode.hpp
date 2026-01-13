@@ -47,6 +47,7 @@ enum class OpCode : uint8_t
   OP_CALL,
   OP_CALL_NATIVE,
   OP_GET_PROPERTY,
+  OP_GET_INDEX,
   OP_INVOKE,
   OP_AWAIT,
   OP_RETURN,

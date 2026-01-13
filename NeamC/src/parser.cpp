@@ -87,6 +87,14 @@ ExprPtr make_get(ExprPtr object, std::string name, SourceSpan span)
   return expr;
 }
 
+ExprPtr make_index(ExprPtr base, ExprPtr index, SourceSpan span)
+{
+  auto expr = std::make_unique<Expression>();
+  expr->span = span;
+  expr->node = IndexExpr{std::move(base), std::move(index)};
+  return expr;
+}
+
 ExprPtr make_list(std::vector<ExprPtr> elements, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
@@ -95,7 +103,7 @@ ExprPtr make_list(std::vector<ExprPtr> elements, SourceSpan span)
   return expr;
 }
 
-ExprPtr make_map(std::vector<std::pair<std::string, ExprPtr>> entries, SourceSpan span)
+ExprPtr make_map(std::vector<MapEntry> entries, SourceSpan span)
 {
   auto expr = std::make_unique<Expression>();
   expr->span = span;
@@ -1398,6 +1406,17 @@ ExprPtr Parser::parse_call()
       expr = make_get(std::move(expr), previous().lexeme, span);
       continue;
     }
+    if (match(TokenType::LeftBracket))
+    {
+      auto index = parse_expression();
+      if (!match(TokenType::RightBracket))
+      {
+        error("Expected ']' after index expression");
+      }
+      auto span = merge_span(expr->span, span_from_token(previous()));
+      expr = make_index(std::move(expr), std::move(index), span);
+      continue;
+    }
     break;
   }
   return expr;
@@ -1438,10 +1457,18 @@ ExprPtr Parser::parse_primary()
     std::vector<ExprPtr> elements;
     if (!check(TokenType::RightBracket))
     {
-      do
+      while (true)
       {
         elements.push_back(parse_expression());
-      } while (match(TokenType::Comma));
+        if (!match(TokenType::Comma))
+        {
+          break;
+        }
+        if (check(TokenType::RightBracket))
+        {
+          break;
+        }
+      }
     }
     if (!match(TokenType::RightBracket))
     {
@@ -1453,31 +1480,27 @@ ExprPtr Parser::parse_primary()
   if (match(TokenType::LeftBrace))
   {
     SourceSpan span = span_from_token(previous());
-    std::vector<std::pair<std::string, ExprPtr>> entries;
+    std::vector<MapEntry> entries;
     if (!check(TokenType::RightBrace))
     {
-      do
+      while (true)
       {
-        std::string key;
-        if (match(TokenType::Identifier))
-        {
-          key = previous().lexeme;
-        }
-        else if (match(TokenType::String))
-        {
-          key = previous().lexeme;
-        }
-        else
-        {
-          error("Expected identifier or string key in map literal");
-        }
+        auto key = parse_expression();
         if (!match(TokenType::Colon))
         {
           error("Expected ':' after map key");
         }
         auto value = parse_expression();
-        entries.emplace_back(std::move(key), std::move(value));
-      } while (match(TokenType::Comma));
+        entries.push_back(MapEntry{std::move(key), std::move(value)});
+        if (!match(TokenType::Comma))
+        {
+          break;
+        }
+        if (check(TokenType::RightBrace))
+        {
+          break;
+        }
+      }
     }
     if (!match(TokenType::RightBrace))
     {
