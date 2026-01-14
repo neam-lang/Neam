@@ -1497,6 +1497,133 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
             }
             stack_.push_back(std::move(acc));
           }
+          else if (method == "len")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("list.len expects no arguments");
+            }
+            stack_.push_back(Value::Number(static_cast<double>(list->items.size())));
+          }
+          else if (method == "get")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("list.get expects 1 argument");
+            }
+            if (!args[0].is_number())
+            {
+              throw std::runtime_error("list.get expects numeric index");
+            }
+            const auto index = static_cast<int64_t>(args[0].as_number());
+            if (index < 0 || static_cast<std::size_t>(index) >= list->items.size())
+            {
+              stack_.push_back(Value::Nil());
+            }
+            else
+            {
+              stack_.push_back(list->items[static_cast<std::size_t>(index)]);
+            }
+          }
+          else if (method == "set")
+          {
+            if (arg_count != 2)
+            {
+              throw std::runtime_error("list.set expects 2 arguments");
+            }
+            if (!args[0].is_number())
+            {
+              throw std::runtime_error("list.set expects numeric index");
+            }
+            const auto index = static_cast<int64_t>(args[0].as_number());
+            if (index < 0 || static_cast<std::size_t>(index) >= list->items.size())
+            {
+              throw std::runtime_error("list.set index out of range");
+            }
+            list->items[static_cast<std::size_t>(index)] = args[1];
+            stack_.push_back(Value::List(list));
+          }
+          else if (method == "concat")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("list.concat expects 1 argument");
+            }
+            if (!args[0].is_list())
+            {
+              throw std::runtime_error("list.concat expects list");
+            }
+            auto* other = as_list(args[0]);
+            std::vector<Value> items = list->items;
+            items.insert(items.end(), other->items.begin(), other->items.end());
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "reverse")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("list.reverse expects no arguments");
+            }
+            std::reverse(list->items.begin(), list->items.end());
+            stack_.push_back(Value::List(list));
+          }
+          else if (method == "sort")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("list.sort expects no arguments");
+            }
+            if (!list->items.empty())
+            {
+              const bool all_numbers =
+                  std::all_of(list->items.begin(), list->items.end(),
+                              [](const Value& value) { return value.is_number(); });
+              const bool all_strings =
+                  std::all_of(list->items.begin(), list->items.end(),
+                              [](const Value& value) { return value.is_string(); });
+              if (!all_numbers && !all_strings)
+              {
+                throw std::runtime_error("list.sort expects all numbers or all strings");
+              }
+              if (all_numbers)
+              {
+                std::sort(list->items.begin(), list->items.end(),
+                          [](const Value& a, const Value& b) {
+                            return a.as_number() < b.as_number();
+                          });
+              }
+              else
+              {
+                std::sort(list->items.begin(), list->items.end(),
+                          [](const Value& a, const Value& b) {
+                            auto* left = as_string(a);
+                            auto* right = as_string(b);
+                            const std::string lhs(left->chars, left->length);
+                            const std::string rhs(right->chars, right->length);
+                            return lhs < rhs;
+                          });
+              }
+            }
+            stack_.push_back(Value::List(list));
+          }
+          else if (method == "find")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("list.find expects 1 argument");
+            }
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {item};
+              Value result = call_native(args[0], 1, call_args);
+              if (is_truthy(result))
+              {
+                stack_.push_back(item);
+                return;
+              }
+            }
+            stack_.push_back(Value::Nil());
+          }
           else
           {
             throw std::runtime_error("Unknown list method");
@@ -1543,6 +1670,82 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
             for (const auto& entry : map->entries)
             {
               items.push_back(Value::String(entry.first.c_str(), entry.first.size()));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "values")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("map.values expects no arguments");
+            }
+            std::vector<Value> items;
+            items.reserve(map->entries.size());
+            for (const auto& entry : map->entries)
+            {
+              items.push_back(entry.second);
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "contains")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("map.contains expects 1 argument");
+            }
+            std::string key = to_std_string(args[0]);
+            stack_.push_back(Value::Bool(map->entries.find(key) != map->entries.end()));
+          }
+          else if (method == "remove")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("map.remove expects 1 argument");
+            }
+            std::string key = to_std_string(args[0]);
+            auto it = map->entries.find(key);
+            if (it == map->entries.end())
+            {
+              stack_.push_back(Value::Nil());
+            }
+            else
+            {
+              Value value = it->second;
+              map->entries.erase(it);
+              stack_.push_back(std::move(value));
+            }
+          }
+          else if (method == "size")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("map.size expects no arguments");
+            }
+            stack_.push_back(Value::Number(static_cast<double>(map->entries.size())));
+          }
+          else if (method == "clear")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("map.clear expects no arguments");
+            }
+            map->entries.clear();
+            stack_.push_back(Value::Map(map));
+          }
+          else if (method == "entries")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("map.entries expects no arguments");
+            }
+            std::vector<Value> items;
+            items.reserve(map->entries.size());
+            for (const auto& entry : map->entries)
+            {
+              std::unordered_map<std::string, Value> out_entry;
+              out_entry.emplace("key", Value::String(entry.first.c_str(), entry.first.size()));
+              out_entry.emplace("value", entry.second);
+              items.push_back(Value::Map(new_map(std::move(out_entry))));
             }
             stack_.push_back(Value::List(new_list(std::move(items))));
           }
@@ -1629,6 +1832,109 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
             catch (const std::regex_error& ex)
             {
               throw std::runtime_error(std::string("Invalid regex: ") + ex.what());
+            }
+          }
+          else if (method == "trim")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("string.trim expects no arguments");
+            }
+            const auto is_space = [](unsigned char c) { return std::isspace(c); };
+            std::size_t start = 0;
+            std::size_t end = base.size();
+            while (start < end && is_space(static_cast<unsigned char>(base[start])))
+            {
+              ++start;
+            }
+            while (end > start && is_space(static_cast<unsigned char>(base[end - 1])))
+            {
+              --end;
+            }
+            const std::string trimmed = base.substr(start, end - start);
+            stack_.push_back(Value::String(trimmed.c_str(), trimmed.size()));
+          }
+          else if (method == "to_upper")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("string.to_upper expects no arguments");
+            }
+            std::string out = base;
+            for (char& c : out)
+            {
+              c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            }
+            stack_.push_back(Value::String(out.c_str(), out.size()));
+          }
+          else if (method == "to_lower")
+          {
+            if (arg_count != 0)
+            {
+              throw std::runtime_error("string.to_lower expects no arguments");
+            }
+            std::string out = base;
+            for (char& c : out)
+            {
+              c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+            stack_.push_back(Value::String(out.c_str(), out.size()));
+          }
+          else if (method == "starts_with")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("string.starts_with expects 1 argument");
+            }
+            const std::string prefix = to_std_string(args[0]);
+            stack_.push_back(Value::Bool(base.rfind(prefix, 0) == 0));
+          }
+          else if (method == "ends_with")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("string.ends_with expects 1 argument");
+            }
+            const std::string suffix = to_std_string(args[0]);
+            if (suffix.size() > base.size())
+            {
+              stack_.push_back(Value::Bool(false));
+            }
+            else
+            {
+              const bool matches = base.compare(base.size() - suffix.size(), suffix.size(), suffix) == 0;
+              stack_.push_back(Value::Bool(matches));
+            }
+          }
+          else if (method == "contains")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("string.contains expects 1 argument");
+            }
+            const std::string needle = to_std_string(args[0]);
+            stack_.push_back(Value::Bool(base.find(needle) != std::string::npos));
+          }
+          else if (method == "substring")
+          {
+            if (arg_count != 2)
+            {
+              throw std::runtime_error("string.substring expects 2 arguments");
+            }
+            if (!args[0].is_number() || !args[1].is_number())
+            {
+              throw std::runtime_error("string.substring expects numeric arguments");
+            }
+            const auto start = static_cast<std::size_t>(std::max(0.0, args[0].as_number()));
+            const auto length = static_cast<std::size_t>(std::max(0.0, args[1].as_number()));
+            if (start >= base.size())
+            {
+              stack_.push_back(Value::String("", 0));
+            }
+            else
+            {
+              const std::string slice = base.substr(start, length);
+              stack_.push_back(Value::String(slice.c_str(), slice.size()));
             }
           }
           else
