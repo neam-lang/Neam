@@ -106,6 +106,9 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/compiler.cpp
     NeamC/src/pipeline.cpp
     NeamC/src/package/manifest.cpp
+    NeamC/src/module/resolver.cpp
+    NeamC/src/module/graph.cpp
+    NeamC/src/module/visibility.cpp
     NeamC/src/lsp/server.cpp
     NeamC/src/vm/memory.cpp
     NeamC/src/vm/object.cpp
