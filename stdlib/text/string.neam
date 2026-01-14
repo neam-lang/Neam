@@ -1,13 +1,54 @@
-// String helpers
+module std.text.string;
 
-fun string_split(text, delimiter) {
+pub fun split(text, delimiter) {
   return text.split(delimiter);
 }
 
-fun string_join(separator, items) {
-  return separator.join(items);
+pub fun join(separator, items) {
+  return items.join(separator);
 }
 
-fun string_replace(text, pattern, replacement) {
+pub fun replace(text, pattern, replacement) {
   return text.replace(pattern, replacement);
+}
+
+pub fun trim(text) {
+  return text.trim();
+}
+
+pub fun to_upper(text) {
+  return text.to_upper();
+}
+
+pub fun to_lower(text) {
+  return text.to_lower();
+}
+
+pub fun starts_with(text, prefix) {
+  return text.starts_with(prefix);
+}
+
+pub fun ends_with(text, suffix) {
+  return text.ends_with(suffix);
+}
+
+pub fun contains(text, needle) {
+  return text.contains(needle);
+}
+
+pub fun substring(text, start, length) {
+  return text.substring(start, length);
+}
+
+// Legacy aliases
+pub fun string_split(text, delimiter) {
+  return split(text, delimiter);
+}
+
+pub fun string_join(separator, items) {
+  return join(separator, items);
+}
+
+pub fun string_replace(text, pattern, replacement) {
+  return replace(text, pattern, replacement);
 }

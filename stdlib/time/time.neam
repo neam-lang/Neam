@@ -1,0 +1,45 @@
+module std.time;
+
+pub fun now() {
+  return time_now();
+}
+
+pub fun now_millis() {
+  return time_now_millis();
+}
+
+pub fun now_micros() {
+  return time_now_micros();
+}
+
+pub fun duration_from_secs(secs) {
+  return secs * 1000;
+}
+
+pub fun duration_from_millis(ms) {
+  return ms;
+}
+
+pub fun duration_to_millis(duration) {
+  return duration;
+}
+
+pub fun format_datetime(instant, format) {
+  return time_format(instant, format);
+}
+
+pub fun parse_datetime(text, format) {
+  return time_parse(text, format);
+}
+
+pub fun sleep(duration) {
+  return time_sleep(duration);
+}
+
+pub fun elapsed(start) {
+  return time_now_millis() - start;
+}
+
+pub fun add_duration(instant, duration) {
+  return instant + duration;
+}

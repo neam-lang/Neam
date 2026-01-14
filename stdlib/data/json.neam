@@ -1,9 +1,18 @@
-// JSON helpers
+module std.data.json;
 
-fun json_parse_text(text) {
+pub fun parse(text) {
   return json_parse(text);
 }
 
-fun json_stringify_value(value) {
+pub fun stringify(value) {
   return json_stringify(value);
+}
+
+// Legacy aliases
+pub fun json_parse_text(text) {
+  return parse(text);
+}
+
+pub fun json_stringify_value(value) {
+  return stringify(value);
 }

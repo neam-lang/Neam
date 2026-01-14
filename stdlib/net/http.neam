@@ -1,5 +1,25 @@
-// Async HTTP helpers
+module std.net.http;
 
-fun get(url) {
+pub fun get(url) {
   return http_get(url);
+}
+
+pub fun request(method, url, body, headers) {
+  return http_request(method, url, body, headers);
+}
+
+pub fun post(url, body, headers) {
+  return request("POST", url, body, headers);
+}
+
+pub fun put(url, body, headers) {
+  return request("PUT", url, body, headers);
+}
+
+pub fun patch(url, body, headers) {
+  return request("PATCH", url, body, headers);
+}
+
+pub fun delete(url, headers) {
+  return request("DELETE", url, nil, headers);
 }

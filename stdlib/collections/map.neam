@@ -1,13 +1,52 @@
 // Map<K, V> helpers
 
-fun map_get(map, key) {
+module std.collections.map;
+
+pub fun get(map, key) {
   return map.get(key);
 }
 
-fun map_insert(map, key, value) {
+pub fun insert(map, key, value) {
   return map.insert(key, value);
 }
 
-fun map_keys(map) {
+pub fun keys(map) {
   return map.keys();
+}
+
+pub fun values(map) {
+  return map.values();
+}
+
+pub fun contains(map, key) {
+  return map.contains(key);
+}
+
+pub fun remove(map, key) {
+  return map.remove(key);
+}
+
+pub fun size(map) {
+  return map.size();
+}
+
+pub fun clear(map) {
+  return map.clear();
+}
+
+pub fun entries(map) {
+  return map.entries();
+}
+
+// Legacy aliases
+pub fun map_get(map, key) {
+  return get(map, key);
+}
+
+pub fun map_insert(map, key, value) {
+  return insert(map, key, value);
+}
+
+pub fun map_keys(map) {
+  return keys(map);
 }
