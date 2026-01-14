@@ -1,37 +1,39 @@
 // Testing helpers
 
-fun expect_eq(left, right) {
+module std.testing;
+
+pub fun expect_eq(left, right) {
   assert_eq(left, right);
 }
 
-fun expect_ne(left, right) {
+pub fun expect_ne(left, right) {
   assert_ne(left, right);
 }
 
-fun expect_true(value) {
+pub fun expect_true(value) {
   assert_true(value);
 }
 
-fun expect_false(value) {
+pub fun expect_false(value) {
   assert_false(value);
 }
 
-fun expect_some(value) {
+pub fun expect_some(value) {
   assert_some(value);
 }
 
-fun expect_none(value) {
+pub fun expect_none(value) {
   assert_none(value);
 }
 
-fun expect_ok(value) {
+pub fun expect_ok(value) {
   assert_ok(value);
 }
 
-fun expect_err(value) {
+pub fun expect_err(value) {
   assert_err(value);
 }
 
-fun expect_throws(value) {
+pub fun expect_throws(value) {
   assert_throws(value);
 }

@@ -1,0 +1,49 @@
+module std.async;
+
+pub fun resolve(value) {
+  return future_resolve(value);
+}
+
+pub fun reject(error) {
+  return future_reject(error);
+}
+
+pub fun all(futures) {
+  return future_all(futures);
+}
+
+pub fun race(futures) {
+  return future_race(futures);
+}
+
+pub fun any(futures) {
+  return future_race(futures);
+}
+
+pub fun delay(ms) {
+  return future_delay(ms);
+}
+
+pub fun promise_new() {
+  panic("promise_new is not implemented yet");
+}
+
+pub fun promise_resolve(promise, value) {
+  panic("promise_resolve is not implemented yet");
+}
+
+pub fun promise_reject(promise, error) {
+  panic("promise_reject is not implemented yet");
+}
+
+pub fun channel_new() {
+  panic("channel_new is not implemented yet");
+}
+
+pub fun channel_send(channel, value) {
+  panic("channel_send is not implemented yet");
+}
+
+pub fun channel_receive(channel) {
+  panic("channel_receive is not implemented yet");
+}

@@ -1,27 +1,75 @@
 // Option<T> helpers
 
-fun Option_some(value) {
+module std.core.option;
+
+pub fun some(value) {
   return { kind: "Some", value: value };
 }
 
-fun Option_none() {
+pub fun none() {
   return { kind: "None" };
 }
 
-fun Option_is_some(option) {
+pub fun is_some(option) {
   return option.kind == "Some";
 }
 
-fun Option_map(option, func) {
+pub fun is_none(option) {
+  return option.kind == "None";
+}
+
+pub fun map(option, func) {
   if (option.kind == "Some") {
-    return Option_some(func(option.value));
+    return some(func(option.value));
   }
   return option;
 }
 
-fun Option_unwrap(option) {
+pub fun unwrap(option) {
   if (option.kind == "Some") {
     return option.value;
   }
   return nil;
+}
+
+pub fun unwrap_or(option, fallback) {
+  if (option.kind == "Some") {
+    return option.value;
+  }
+  return fallback;
+}
+
+pub fun and_then(option, func) {
+  if (option.kind == "Some") {
+    return func(option.value);
+  }
+  return option;
+}
+
+pub fun or_else(option, func) {
+  if (option.kind == "Some") {
+    return option;
+  }
+  return func();
+}
+
+// Legacy aliases
+pub fun Option_some(value) {
+  return some(value);
+}
+
+pub fun Option_none() {
+  return none();
+}
+
+pub fun Option_is_some(option) {
+  return is_some(option);
+}
+
+pub fun Option_map(option, func) {
+  return map(option, func);
+}
+
+pub fun Option_unwrap(option) {
+  return unwrap(option);
 }
