@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -121,11 +122,27 @@ struct MapExpr
   std::vector<MapEntry> entries;
 };
 
+struct TypeExpression
+{
+  std::string name;
+};
+
+struct FileOpenExpr
+{
+  ExprPtr path;
+  std::string mode;
+};
+
+struct PathLiteralExpr
+{
+  std::string path;
+};
+
 struct Expression
 {
   using Variant =
       std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr,
-                   GetExpr, IndexExpr, ListExpr, MapExpr>;
+                   GetExpr, IndexExpr, ListExpr, MapExpr, FileOpenExpr, PathLiteralExpr>;
   SourceSpan span;
   Variant node;
 };
@@ -167,6 +184,63 @@ struct WhileStmt
 struct ReturnStmt
 {
   ExprPtr value;
+};
+
+struct AssertStmt
+{
+  enum class Kind
+  {
+    kEq,
+    kNe,
+    kTrue,
+    kFalse,
+    kSome,
+    kNone,
+    kOk,
+    kErr,
+    kThrows
+  };
+  Kind kind;
+  ExprPtr left;
+  ExprPtr right;
+  std::unique_ptr<TypeExpression> exception_type;
+};
+
+struct TestAttribute
+{
+  enum class Kind
+  {
+    kIgnore,
+    kShouldPanic,
+    kTimeout,
+    kAsync
+  };
+  Kind kind;
+  std::optional<std::string> panic_message;
+  std::optional<int64_t> timeout_ms;
+};
+
+struct TestDecl
+{
+  std::string name;
+  std::vector<TestAttribute> attributes;
+  std::unique_ptr<BlockStmt> body;
+};
+
+struct TestSuiteDecl
+{
+  std::string name;
+  std::vector<std::unique_ptr<TestDecl>> tests;
+  std::vector<std::unique_ptr<TestSuiteDecl>> nested_suites;
+  std::unique_ptr<BlockStmt> before_each;
+  std::unique_ptr<BlockStmt> after_each;
+};
+
+struct WithStmt
+{
+  ExprPtr resource;
+  std::string binding_name;
+  std::unique_ptr<BlockStmt> body;
 };
 
 struct FunctionDecl
@@ -223,7 +297,8 @@ struct Statement
 {
   using Variant =
       std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
-                   FunctionDecl, SkillDecl, KnowledgeDecl, AgentDecl>;
+                   AssertStmt, WithStmt, TestDecl, TestSuiteDecl, FunctionDecl, SkillDecl,
+                   KnowledgeDecl, AgentDecl>;
   SourceSpan span;
   Variant node;
 };
