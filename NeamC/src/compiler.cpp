@@ -231,6 +231,21 @@ void Compiler::emit_statement(const Statement& stmt)
             locals_.push_back(Local{node.name, scope_depth_});
           }
         }
+        else if constexpr (std::is_same_v<T, ConstDecl>)
+        {
+          emit_expression(*node.value);
+          if (scope_depth_ == 0)
+          {
+            const auto name_constant =
+                chunk_.add_constant(vm::Value::String(node.name.c_str(), node.name.size()));
+            chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+            chunk_.write_short(static_cast<uint16_t>(name_constant));
+          }
+          else
+          {
+            locals_.push_back(Local{node.name, scope_depth_});
+          }
+        }
         else if constexpr (std::is_same_v<T, IfStmt>)
         {
           emit_expression(*node.condition);
@@ -352,6 +367,22 @@ void Compiler::emit_statement(const Statement& stmt)
           (void)node;
         }
         else if constexpr (std::is_same_v<T, TestSuiteDecl>)
+        {
+          (void)node;
+        }
+        else if constexpr (std::is_same_v<T, ModuleDecl>)
+        {
+          (void)node;
+        }
+        else if constexpr (std::is_same_v<T, ImportDecl>)
+        {
+          (void)node;
+        }
+        else if constexpr (std::is_same_v<T, TypeAlias>)
+        {
+          (void)node;
+        }
+        else if constexpr (std::is_same_v<T, DocComment>)
         {
           (void)node;
         }
@@ -675,6 +706,60 @@ void Compiler::emit_expression(const Expression& expr)
         else if constexpr (std::is_same_v<T, PathLiteralExpr>)
         {
           chunk_.emit_constant(vm::Value::String(node.path.c_str(), node.path.size()));
+        }
+        else if constexpr (std::is_same_v<T, TryExpr>)
+        {
+          emit_expression(*node.expr);
+          chunk_.write_op(OpCode::OP_DUP);
+          chunk_.write_op(OpCode::OP_GET_PROPERTY);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, "ok")));
+          const auto error_jump = emit_jump(chunk_, OpCode::OP_JUMP_IF_FALSE);
+          chunk_.write_op(OpCode::OP_POP);
+          chunk_.write_op(OpCode::OP_GET_PROPERTY);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, "value")));
+          const auto done_jump = emit_jump(chunk_, OpCode::OP_JUMP);
+          patch_jump(chunk_, error_jump);
+          chunk_.write_op(OpCode::OP_POP);
+          chunk_.write_op(OpCode::OP_RETURN);
+          patch_jump(chunk_, done_jump);
+        }
+        else if constexpr (std::is_same_v<T, PanicExpr>)
+        {
+          chunk_.write_op(OpCode::OP_GET_GLOBAL);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, "panic")));
+          emit_expression(*node.message);
+          chunk_.write_op(OpCode::OP_CALL_NATIVE);
+          chunk_.write_byte(1);
+        }
+        else if constexpr (std::is_same_v<T, CatchPanicExpr>)
+        {
+          emit_expression(*node.closure);
+        }
+        else if constexpr (std::is_same_v<T, ContextExpr>)
+        {
+          chunk_.write_op(OpCode::OP_GET_GLOBAL);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, "context")));
+          emit_expression(*node.expr);
+          emit_expression(*node.message);
+          chunk_.write_op(OpCode::OP_CALL_NATIVE);
+          chunk_.write_byte(2);
+        }
+        else if constexpr (std::is_same_v<T, WithContextExpr>)
+        {
+          chunk_.write_op(OpCode::OP_GET_GLOBAL);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, "with_context")));
+          emit_expression(*node.expr);
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, node.key)));
+          emit_expression(*node.value);
+          chunk_.write_op(OpCode::OP_CALL_NATIVE);
+          chunk_.write_byte(3);
         }
       },
       expr.node);
