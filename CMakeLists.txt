@@ -123,6 +123,16 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/vm.cpp
     NeamC/src/vm/trace.cpp
     NeamC/src/runtime/executor.cpp
+    NeamC/src/types/type_repr.cpp
+    NeamC/src/types/constraints.cpp
+    NeamC/src/types/unification.cpp
+    NeamC/src/types/environment.cpp
+    NeamC/src/types/inferencer.cpp
+    NeamC/src/testing/assertions.cpp
+    NeamC/src/testing/framework.cpp
+    NeamC/src/testing/coverage.cpp
+    NeamC/src/io/filesystem.cpp
+    NeamC/src/io/temp.cpp
 )
 
 add_library(neamc_core STATIC ${NEAMC_CORE_SOURCES})
@@ -241,6 +251,24 @@ add_executable(vm_benchmark
     tests/benchmark/vm_benchmark.cpp
 )
 target_link_libraries(vm_benchmark PRIVATE neamc_core benchmark::benchmark)
+
+add_executable(type_unification_test
+    tests/types/unification_test.cpp
+)
+target_link_libraries(type_unification_test PRIVATE neamc_core gtest_main)
+add_test(NAME type_unification_test COMMAND type_unification_test)
+
+add_executable(test_framework_test
+    tests/testing/framework_test.cpp
+)
+target_link_libraries(test_framework_test PRIVATE neamc_core gtest_main)
+add_test(NAME test_framework_test COMMAND test_framework_test)
+
+add_executable(io_file_test
+    tests/io/file_test.cpp
+)
+target_link_libraries(io_file_test PRIVATE neamc_core gtest_main)
+add_test(NAME io_file_test COMMAND io_file_test)
 if (TARGET nlohmann_json_schema_validator)
     set(NEAM_JSON_SCHEMA_TARGET nlohmann_json_schema_validator)
 elseif (TARGET nlohmann_json_schema_validator::nlohmann_json_schema_validator)
