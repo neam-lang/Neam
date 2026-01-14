@@ -7,3 +7,27 @@ fun read_string(path) {
 fun write_string(path, content) {
   return file_write_string(path, content);
 }
+
+fun read_bytes(path) {
+  return file_read_bytes(path);
+}
+
+fun write_bytes(path, bytes) {
+  return file_write_bytes(path, bytes);
+}
+
+fun exists(path) {
+  return file_exists(path);
+}
+
+fun remove(path) {
+  return file_remove(path);
+}
+
+fun copy(from, to) {
+  return file_copy(from, to);
+}
+
+fun rename(from, to) {
+  return file_rename(from, to);
+}

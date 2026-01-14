@@ -167,6 +167,39 @@ StmtPtr make_return_stmt(ExprPtr value, SourceSpan span)
   return stmt;
 }
 
+StmtPtr make_assert_stmt(AssertStmt assert_stmt, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = std::move(assert_stmt);
+  return stmt;
+}
+
+StmtPtr make_with_stmt(ExprPtr resource, std::string name, std::unique_ptr<BlockStmt> body,
+                       SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = WithStmt{std::move(resource), std::move(name), std::move(body)};
+  return stmt;
+}
+
+StmtPtr make_test_decl_stmt(TestDecl decl, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr make_test_suite_stmt(TestSuiteDecl decl, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
 StmtPtr make_function_decl(std::string name, std::vector<std::string> params, StmtPtr body,
                            SourceSpan span)
 {
@@ -267,10 +300,39 @@ bool Parser::match(TokenType type)
 void Parser::tokenize()
 {
   static const std::unordered_map<std::string, TokenType> kKeywords = {
-      {"let", TokenType::Let},     {"if", TokenType::If},         {"else", TokenType::Else},
-      {"while", TokenType::While}, {"fun", TokenType::Fun},       {"return", TokenType::Return},
-      {"emit", TokenType::Emit},   {"true", TokenType::True},     {"false", TokenType::False},
-      {"nil", TokenType::Nil},     {"skill", TokenType::Skill},   {"agent", TokenType::Agent},
+      {"let", TokenType::Let},
+      {"if", TokenType::If},
+      {"else", TokenType::Else},
+      {"while", TokenType::While},
+      {"fun", TokenType::Fun},
+      {"return", TokenType::Return},
+      {"emit", TokenType::Emit},
+      {"test", TokenType::Test},
+      {"suite", TokenType::Suite},
+      {"with", TokenType::With},
+      {"as", TokenType::As},
+      {"before_each", TokenType::BeforeEach},
+      {"after_each", TokenType::AfterEach},
+      {"before_all", TokenType::BeforeAll},
+      {"after_all", TokenType::AfterAll},
+      {"assert_eq", TokenType::AssertEq},
+      {"assert_ne", TokenType::AssertNe},
+      {"assert_true", TokenType::AssertTrue},
+      {"assert_false", TokenType::AssertFalse},
+      {"assert_some", TokenType::AssertSome},
+      {"assert_none", TokenType::AssertNone},
+      {"assert_ok", TokenType::AssertOk},
+      {"assert_err", TokenType::AssertErr},
+      {"assert_throws", TokenType::AssertThrows},
+      {"ignore", TokenType::Ignore},
+      {"async", TokenType::Async},
+      {"should_panic", TokenType::ShouldPanic},
+      {"timeout", TokenType::Timeout},
+      {"true", TokenType::True},
+      {"false", TokenType::False},
+      {"nil", TokenType::Nil},
+      {"skill", TokenType::Skill},
+      {"agent", TokenType::Agent},
       {"knowledge", TokenType::Knowledge},
       {"description", TokenType::Description},
       {"params", TokenType::Params},
@@ -324,6 +386,9 @@ void Parser::tokenize()
         continue;
       case ':':
         add(TokenType::Colon);
+        continue;
+      case '#':
+        add(TokenType::Hash);
         continue;
       case '.':
         add(TokenType::Dot);
@@ -434,6 +499,24 @@ void Parser::tokenize()
       continue;
     }
 
+    if (c == 'p' && i + 1 < source_.size() && source_[i + 1] == '"')
+    {
+      std::size_t start = i + 2;
+      i += 2;
+      while (i < source_.size() && source_[i] != '"')
+      {
+        ++i;
+      }
+      if (i >= source_.size())
+      {
+        error("Unterminated path literal");
+      }
+      const auto value = source_.substr(start, i - start);
+      tokens_.push_back(Token{TokenType::PathLiteral, value, start});
+      ++i;
+      continue;
+    }
+
     if (std::isalpha(static_cast<unsigned char>(c)) || c == '_')
     {
       std::size_t start = i;
@@ -487,6 +570,14 @@ void Parser::tokenize()
 
 StmtPtr Parser::parse_declaration()
 {
+  if (check(TokenType::Hash) || check(TokenType::Test))
+  {
+    return parse_test_decl_statement();
+  }
+  if (match(TokenType::Suite))
+  {
+    return parse_test_suite_statement();
+  }
   if (match(TokenType::Skill))
   {
     return parse_skill();
@@ -527,6 +618,16 @@ StmtPtr Parser::parse_statement()
   if (match(TokenType::Emit))
   {
     return parse_emit();
+  }
+  if (match(TokenType::With))
+  {
+    return parse_with_statement();
+  }
+  if (match(TokenType::AssertEq) || match(TokenType::AssertNe) || match(TokenType::AssertTrue) ||
+      match(TokenType::AssertFalse) || match(TokenType::AssertSome) || match(TokenType::AssertNone) ||
+      match(TokenType::AssertOk) || match(TokenType::AssertErr) || match(TokenType::AssertThrows))
+  {
+    return parse_assert_statement(previous().type);
   }
   if (match(TokenType::LeftBrace))
   {
@@ -837,6 +938,285 @@ StmtPtr Parser::parse_agent()
   return make_agent_decl(name, *provider, *model, std::move(endpoint), std::move(api_key_env),
                          std::move(temperature), std::move(system), std::move(skills),
                          std::move(connected_knowledge), span);
+}
+
+StmtPtr Parser::parse_test_decl_statement()
+{
+  auto attributes = parse_test_attributes();
+  if (!match(TokenType::Test))
+  {
+    error("Expected 'test' after attributes");
+  }
+  SourceSpan span = span_from_token(previous());
+  auto decl = parse_test_decl_node(std::move(attributes));
+  return make_test_decl_stmt(std::move(*decl), span);
+}
+
+StmtPtr Parser::parse_test_suite_statement()
+{
+  SourceSpan span = span_from_token(previous());
+  auto suite = parse_test_suite_node();
+  return make_test_suite_stmt(std::move(*suite), span);
+}
+
+StmtPtr Parser::parse_with_statement()
+{
+  SourceSpan span = span_from_token(previous());
+  auto resource = parse_expression();
+  if (!match(TokenType::As))
+  {
+    error("Expected 'as' in with statement");
+  }
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected identifier after 'as'");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after with binding");
+  }
+  auto body = std::make_unique<BlockStmt>(parse_block_node());
+  return make_with_stmt(std::move(resource), name, std::move(body), span);
+}
+
+StmtPtr Parser::parse_assert_statement(TokenType type)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::LeftParen))
+  {
+    error("Expected '(' after assert");
+  }
+
+  AssertStmt assert_stmt;
+  assert_stmt.right = nullptr;
+  assert_stmt.exception_type = nullptr;
+  switch (type)
+  {
+    case TokenType::AssertEq:
+      assert_stmt.kind = AssertStmt::Kind::kEq;
+      break;
+    case TokenType::AssertNe:
+      assert_stmt.kind = AssertStmt::Kind::kNe;
+      break;
+    case TokenType::AssertTrue:
+      assert_stmt.kind = AssertStmt::Kind::kTrue;
+      break;
+    case TokenType::AssertFalse:
+      assert_stmt.kind = AssertStmt::Kind::kFalse;
+      break;
+    case TokenType::AssertSome:
+      assert_stmt.kind = AssertStmt::Kind::kSome;
+      break;
+    case TokenType::AssertNone:
+      assert_stmt.kind = AssertStmt::Kind::kNone;
+      break;
+    case TokenType::AssertOk:
+      assert_stmt.kind = AssertStmt::Kind::kOk;
+      break;
+    case TokenType::AssertErr:
+      assert_stmt.kind = AssertStmt::Kind::kErr;
+      break;
+    case TokenType::AssertThrows:
+      assert_stmt.kind = AssertStmt::Kind::kThrows;
+      break;
+    default:
+      error("Unsupported assert statement");
+  }
+
+  assert_stmt.left = parse_expression();
+
+  if (assert_stmt.kind == AssertStmt::Kind::kEq || assert_stmt.kind == AssertStmt::Kind::kNe)
+  {
+    if (!match(TokenType::Comma))
+    {
+      error("Expected ',' in assert statement");
+    }
+    assert_stmt.right = parse_expression();
+  }
+  else if (assert_stmt.kind == AssertStmt::Kind::kThrows)
+  {
+    if (match(TokenType::Comma))
+    {
+      assert_stmt.exception_type = parse_type_expression();
+    }
+  }
+
+  if (!match(TokenType::RightParen))
+  {
+    error("Expected ')' after assert");
+  }
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after assert");
+  }
+  return make_assert_stmt(std::move(assert_stmt), span);
+}
+
+TestAttribute Parser::parse_test_attribute()
+{
+  if (!match(TokenType::LeftBracket))
+  {
+    error("Expected '[' after '#'");
+  }
+  TestAttribute attribute;
+  if (match(TokenType::Ignore))
+  {
+    attribute.kind = TestAttribute::Kind::kIgnore;
+  }
+  else if (match(TokenType::Async))
+  {
+    attribute.kind = TestAttribute::Kind::kAsync;
+  }
+  else if (match(TokenType::ShouldPanic))
+  {
+    attribute.kind = TestAttribute::Kind::kShouldPanic;
+    if (match(TokenType::LeftParen))
+    {
+      if (!match(TokenType::String))
+      {
+        error("Expected panic message string");
+      }
+      attribute.panic_message = previous().lexeme;
+      if (!match(TokenType::RightParen))
+      {
+        error("Expected ')' after panic message");
+      }
+    }
+  }
+  else if (match(TokenType::Timeout))
+  {
+    attribute.kind = TestAttribute::Kind::kTimeout;
+    if (!match(TokenType::LeftParen))
+    {
+      error("Expected '(' after timeout");
+    }
+    if (!match(TokenType::Number))
+    {
+      error("Expected timeout milliseconds");
+    }
+    attribute.timeout_ms = static_cast<int64_t>(std::strtod(previous().lexeme.c_str(), nullptr));
+    if (!match(TokenType::RightParen))
+    {
+      error("Expected ')' after timeout");
+    }
+  }
+  else
+  {
+    error("Unknown test attribute");
+  }
+
+  if (!match(TokenType::RightBracket))
+  {
+    error("Expected ']' after test attribute");
+  }
+  return attribute;
+}
+
+std::vector<TestAttribute> Parser::parse_test_attributes()
+{
+  std::vector<TestAttribute> attributes;
+  while (match(TokenType::Hash))
+  {
+    attributes.push_back(parse_test_attribute());
+  }
+  return attributes;
+}
+
+std::unique_ptr<TestDecl> Parser::parse_test_decl_node(std::vector<TestAttribute> attributes)
+{
+  if (!match(TokenType::String))
+  {
+    error("Expected string literal for test name");
+  }
+  auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' to start test body");
+  }
+  auto body = std::make_unique<BlockStmt>(parse_block_node());
+  auto decl = std::make_unique<TestDecl>();
+  decl->name = std::move(name);
+  decl->attributes = std::move(attributes);
+  decl->body = std::move(body);
+  return decl;
+}
+
+std::unique_ptr<TestSuiteDecl> Parser::parse_test_suite_node()
+{
+  if (!match(TokenType::String))
+  {
+    error("Expected string literal for suite name");
+  }
+  auto suite = std::make_unique<TestSuiteDecl>();
+  suite->name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' to start suite");
+  }
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::BeforeAll))
+    {
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' after before_all");
+      }
+      suite->before_all = std::make_unique<BlockStmt>(parse_block_node());
+      continue;
+    }
+    if (match(TokenType::AfterAll))
+    {
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' after after_all");
+      }
+      suite->after_all = std::make_unique<BlockStmt>(parse_block_node());
+      continue;
+    }
+    if (match(TokenType::BeforeEach))
+    {
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' after before_each");
+      }
+      suite->before_each = std::make_unique<BlockStmt>(parse_block_node());
+      continue;
+    }
+    if (match(TokenType::AfterEach))
+    {
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' after after_each");
+      }
+      suite->after_each = std::make_unique<BlockStmt>(parse_block_node());
+      continue;
+    }
+
+    if (check(TokenType::Hash) || check(TokenType::Test))
+    {
+      auto attributes = parse_test_attributes();
+      if (!match(TokenType::Test))
+      {
+        error("Expected 'test' in suite");
+      }
+      suite->tests.push_back(parse_test_decl_node(std::move(attributes)));
+      continue;
+    }
+
+    if (match(TokenType::Suite))
+    {
+      suite->nested_suites.push_back(parse_test_suite_node());
+      continue;
+    }
+
+    error("Unexpected token in test suite");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated test suite");
+  }
+  return suite;
 }
 
 StmtPtr Parser::parse_knowledge()
@@ -1208,6 +1588,12 @@ StmtPtr Parser::parse_let()
 StmtPtr Parser::parse_block()
 {
   SourceSpan span = span_from_token(previous());
+  auto block = parse_block_node();
+  return make_block_stmt(std::move(block.statements), span);
+}
+
+BlockStmt Parser::parse_block_node()
+{
   std::vector<StmtPtr> statements;
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -1217,7 +1603,7 @@ StmtPtr Parser::parse_block()
   {
     error("Unterminated block");
   }
-  return make_block_stmt(std::move(statements), span);
+  return BlockStmt{std::move(statements)};
 }
 
 StmtPtr Parser::parse_if()
@@ -1393,7 +1779,58 @@ ExprPtr Parser::parse_call()
         error("Expected ')' after arguments");
       }
       auto span = merge_span(expr->span, span_from_token(previous()));
-      expr = make_call(std::move(expr), std::move(args), span);
+      bool handled = false;
+      if (const auto* get_expr = std::get_if<GetExpr>(&expr->node))
+      {
+        if (const auto* ident = std::get_if<IdentifierExpr>(&get_expr->object->node))
+        {
+          if (ident->name == "File" && (get_expr->name == "open" || get_expr->name == "create"))
+          {
+            if (args.empty())
+            {
+              error("File open requires a path");
+            }
+            if (args.size() > 2)
+            {
+              error("File open accepts at most two arguments");
+            }
+            auto file_expr = std::make_unique<Expression>();
+            file_expr->span = span;
+            std::string mode;
+            if (args.size() == 2)
+            {
+              if (const auto* mode_ident = std::get_if<IdentifierExpr>(&args[1]->node))
+              {
+                mode = mode_ident->name;
+              }
+              else if (const auto* mode_literal = std::get_if<LiteralExpr>(&args[1]->node))
+              {
+                if (!mode_literal->value.is_string())
+                {
+                  error("File mode must be an identifier or string");
+                }
+                auto* str = vm::as_string(mode_literal->value);
+                mode = std::string(str->chars, str->length);
+              }
+              else
+              {
+                error("File mode must be an identifier or string");
+              }
+            }
+            else
+            {
+              mode = get_expr->name == "create" ? "Create" : "Read";
+            }
+            file_expr->node = FileOpenExpr{std::move(args[0]), std::move(mode)};
+            expr = std::move(file_expr);
+            handled = true;
+          }
+        }
+      }
+      if (!handled)
+      {
+        expr = make_call(std::move(expr), std::move(args), span);
+      }
       continue;
     }
     if (match(TokenType::Dot))
@@ -1434,6 +1871,13 @@ ExprPtr Parser::parse_primary()
     return make_literal(
         vm::Value::String(previous().lexeme.c_str(), previous().lexeme.size()),
         span_from_token(previous()));
+  }
+  if (match(TokenType::PathLiteral))
+  {
+    auto expr = std::make_unique<Expression>();
+    expr->span = span_from_token(previous());
+    expr->node = PathLiteralExpr{previous().lexeme};
+    return expr;
   }
   if (match(TokenType::True))
   {
@@ -1519,6 +1963,17 @@ ExprPtr Parser::parse_primary()
     return expr;
   }
   error("Unexpected token");
+}
+
+std::unique_ptr<TypeExpression> Parser::parse_type_expression()
+{
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected type name");
+  }
+  auto type = std::make_unique<TypeExpression>();
+  type->name = previous().lexeme;
+  return type;
 }
 
 Program Parser::parse()
