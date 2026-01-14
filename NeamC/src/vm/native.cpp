@@ -5,6 +5,8 @@
 #include "neamc/vm/native.hpp"
 
 #include <chrono>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -22,6 +24,8 @@ namespace neamc::vm
 {
 namespace
 {
+namespace fs = std::filesystem;
+
 std::string to_std_string(const Value& value)
 {
   if (!value.is_string())
@@ -30,6 +34,53 @@ std::string to_std_string(const Value& value)
   }
   auto* str = as_string(value);
   return std::string(str->chars, str->length);
+}
+
+bool values_equal(const Value& lhs, const Value& rhs)
+{
+  if (lhs.type != rhs.type)
+  {
+    return false;
+  }
+  switch (lhs.type)
+  {
+    case ValueType::Nil:
+      return true;
+    case ValueType::Bool:
+      return lhs.as_bool() == rhs.as_bool();
+    case ValueType::Number:
+      return lhs.as_number() == rhs.as_number();
+    case ValueType::Obj:
+      if (is_obj_type(lhs, ObjType::OBJ_STRING) && is_obj_type(rhs, ObjType::OBJ_STRING))
+      {
+        auto* a = as_string(lhs);
+        auto* b = as_string(rhs);
+        if (a->length != b->length)
+        {
+          return false;
+        }
+        return std::memcmp(a->chars, b->chars, a->length) == 0;
+      }
+      return lhs.as_obj() == rhs.as_obj();
+  }
+  return false;
+}
+
+bool is_truthy(const Value& value)
+{
+  if (value.is_nil())
+  {
+    return false;
+  }
+  if (value.is_bool())
+  {
+    return value.as_bool();
+  }
+  if (value.is_number())
+  {
+    return value.as_number() != 0.0;
+  }
+  return true;
 }
 
 Value make_result_ok(Value value)
@@ -53,6 +104,66 @@ Value make_ready_future_value(Value value)
   auto future = async::make_ready_future(std::move(value));
   auto shared_future = std::make_shared<async::Future<Value>>(std::move(future));
   return Value::Future(new_future(std::move(shared_future)));
+}
+
+Value make_result_bool(bool value)
+{
+  return Value::Bool(value);
+}
+
+std::vector<uint8_t> list_to_bytes(const Value& value)
+{
+  if (!value.is_list())
+  {
+    throw std::runtime_error("Expected list of bytes");
+  }
+  auto* list = as_list(value);
+  std::vector<uint8_t> bytes;
+  bytes.reserve(list->items.size());
+  for (const auto& item : list->items)
+  {
+    if (!item.is_number())
+    {
+      throw std::runtime_error("Byte list must contain numbers");
+    }
+    const double num = item.as_number();
+    if (num < 0.0 || num > 255.0)
+    {
+      throw std::runtime_error("Byte value out of range");
+    }
+    bytes.push_back(static_cast<uint8_t>(num));
+  }
+  return bytes;
+}
+
+Value bytes_to_list(const std::vector<uint8_t>& bytes)
+{
+  std::vector<Value> items;
+  items.reserve(bytes.size());
+  for (auto byte : bytes)
+  {
+    items.push_back(Value::Number(static_cast<double>(byte)));
+  }
+  return Value::List(new_list(std::move(items)));
+}
+
+bool result_ok(const Value& value)
+{
+  if (!value.is_map())
+  {
+    return false;
+  }
+  auto* map = as_map(value);
+  auto it = map->entries.find("ok");
+  if (it == map->entries.end())
+  {
+    return false;
+  }
+  if (!it->second.is_bool())
+  {
+    return false;
+  }
+  return it->second.as_bool();
 }
 
 struct CurlGlobal
@@ -362,6 +473,246 @@ Value file_write_string_native(VirtualMachine&, int arg_count, Value* args)
   return make_ready_future_value(make_result_ok(Value::Nil()));
 }
 
+Value file_read_bytes_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("file_read_bytes expects 1 argument");
+  }
+  const std::string path = to_std_string(args[0]);
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+  {
+    return make_ready_future_value(make_result_err("Failed to open file"));
+  }
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                             std::istreambuf_iterator<char>());
+  return make_ready_future_value(make_result_ok(bytes_to_list(bytes)));
+}
+
+Value file_write_bytes_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 2)
+  {
+    throw std::runtime_error("file_write_bytes expects 2 arguments");
+  }
+  const std::string path = to_std_string(args[0]);
+  std::vector<uint8_t> bytes = list_to_bytes(args[1]);
+  std::ofstream out(path, std::ios::binary);
+  if (!out)
+  {
+    return make_ready_future_value(make_result_err("Failed to open file for writing"));
+  }
+  out.write(reinterpret_cast<const char*>(bytes.data()),
+            static_cast<std::streamsize>(bytes.size()));
+  if (!out)
+  {
+    return make_ready_future_value(make_result_err("Failed to write file"));
+  }
+  return make_ready_future_value(make_result_ok(Value::Nil()));
+}
+
+Value file_exists_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("file_exists expects 1 argument");
+  }
+  const std::string path = to_std_string(args[0]);
+  return make_result_bool(fs::exists(fs::path(path)));
+}
+
+Value file_remove_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("file_remove expects 1 argument");
+  }
+  const std::string path = to_std_string(args[0]);
+  std::error_code ec;
+  fs::remove(fs::path(path), ec);
+  if (ec)
+  {
+    return make_ready_future_value(make_result_err("Failed to remove file"));
+  }
+  return make_ready_future_value(make_result_ok(Value::Nil()));
+}
+
+Value file_copy_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 2)
+  {
+    throw std::runtime_error("file_copy expects 2 arguments");
+  }
+  const std::string from = to_std_string(args[0]);
+  const std::string to = to_std_string(args[1]);
+  std::error_code ec;
+  fs::copy_file(fs::path(from), fs::path(to), fs::copy_options::overwrite_existing, ec);
+  if (ec)
+  {
+    return make_ready_future_value(make_result_err("Failed to copy file"));
+  }
+  return make_ready_future_value(make_result_ok(Value::Nil()));
+}
+
+Value file_rename_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 2)
+  {
+    throw std::runtime_error("file_rename expects 2 arguments");
+  }
+  const std::string from = to_std_string(args[0]);
+  const std::string to = to_std_string(args[1]);
+  std::error_code ec;
+  fs::rename(fs::path(from), fs::path(to), ec);
+  if (ec)
+  {
+    return make_ready_future_value(make_result_err("Failed to rename file"));
+  }
+  return make_ready_future_value(make_result_ok(Value::Nil()));
+}
+
+Value file_open_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 2)
+  {
+    throw std::runtime_error("file_open expects 2 arguments");
+  }
+  const std::string path = to_std_string(args[0]);
+  const std::string mode = to_std_string(args[1]);
+  std::unordered_map<std::string, Value> entries;
+  entries.emplace("path", Value::String(path.c_str(), path.size()));
+  entries.emplace("mode", Value::String(mode.c_str(), mode.size()));
+  return Value::Map(new_map(std::move(entries)));
+}
+
+Value assert_eq_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 2)
+  {
+    throw std::runtime_error("assert_eq expects 2 arguments");
+  }
+  if (!values_equal(args[0], args[1]))
+  {
+    throw std::runtime_error("Assertion failed: values are not equal");
+  }
+  return Value::Nil();
+}
+
+Value assert_ne_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 2)
+  {
+    throw std::runtime_error("assert_ne expects 2 arguments");
+  }
+  if (values_equal(args[0], args[1]))
+  {
+    throw std::runtime_error("Assertion failed: values are equal");
+  }
+  return Value::Nil();
+}
+
+Value assert_true_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("assert_true expects 1 argument");
+  }
+  if (!is_truthy(args[0]))
+  {
+    throw std::runtime_error("Assertion failed: expected true");
+  }
+  return Value::Nil();
+}
+
+Value assert_false_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("assert_false expects 1 argument");
+  }
+  if (is_truthy(args[0]))
+  {
+    throw std::runtime_error("Assertion failed: expected false");
+  }
+  return Value::Nil();
+}
+
+Value assert_some_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("assert_some expects 1 argument");
+  }
+  if (!is_obj_type(args[0], ObjType::OBJ_OPTION))
+  {
+    throw std::runtime_error("assert_some expects Option");
+  }
+  auto* opt = as_option(args[0]);
+  if (!opt->has_value)
+  {
+    throw std::runtime_error("Assertion failed: expected Some");
+  }
+  return Value::Nil();
+}
+
+Value assert_none_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("assert_none expects 1 argument");
+  }
+  if (!is_obj_type(args[0], ObjType::OBJ_OPTION))
+  {
+    throw std::runtime_error("assert_none expects Option");
+  }
+  auto* opt = as_option(args[0]);
+  if (opt->has_value)
+  {
+    throw std::runtime_error("Assertion failed: expected None");
+  }
+  return Value::Nil();
+}
+
+Value assert_ok_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("assert_ok expects 1 argument");
+  }
+  if (!result_ok(args[0]))
+  {
+    throw std::runtime_error("Assertion failed: expected Ok");
+  }
+  return Value::Nil();
+}
+
+Value assert_err_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("assert_err expects 1 argument");
+  }
+  if (result_ok(args[0]))
+  {
+    throw std::runtime_error("Assertion failed: expected Err");
+  }
+  return Value::Nil();
+}
+
+Value assert_throws_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count < 1 || arg_count > 2)
+  {
+    throw std::runtime_error("assert_throws expects 1 or 2 arguments");
+  }
+  if (result_ok(args[0]))
+  {
+    throw std::runtime_error("Assertion failed: expected error");
+  }
+  return Value::Nil();
+}
+
 Value http_get_native(VirtualMachine&, int arg_count, Value* args)
 {
   if (arg_count != 1)
@@ -403,8 +754,24 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("typeof", 1, typeof_native);
   vm.define_native("json_parse", 1, json_parse_native);
   vm.define_native("json_stringify", 1, json_stringify_native);
+  vm.define_native("assert_eq", 2, assert_eq_native);
+  vm.define_native("assert_ne", 2, assert_ne_native);
+  vm.define_native("assert_true", 1, assert_true_native);
+  vm.define_native("assert_false", 1, assert_false_native);
+  vm.define_native("assert_some", 1, assert_some_native);
+  vm.define_native("assert_none", 1, assert_none_native);
+  vm.define_native("assert_ok", 1, assert_ok_native);
+  vm.define_native("assert_err", 1, assert_err_native);
+  vm.define_native("assert_throws", -1, assert_throws_native);
   vm.define_native("file_read_string", 1, file_read_string_native);
   vm.define_native("file_write_string", 2, file_write_string_native);
+  vm.define_native("file_read_bytes", 1, file_read_bytes_native);
+  vm.define_native("file_write_bytes", 2, file_write_bytes_native);
+  vm.define_native("file_exists", 1, file_exists_native);
+  vm.define_native("file_remove", 1, file_remove_native);
+  vm.define_native("file_copy", 2, file_copy_native);
+  vm.define_native("file_rename", 2, file_rename_native);
+  vm.define_native("file_open", 2, file_open_native);
   vm.define_native("http_get", 1, http_get_native);
 }
 }  // namespace neamc::vm
