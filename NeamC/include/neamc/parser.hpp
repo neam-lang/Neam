@@ -30,6 +30,7 @@ enum class TokenType
   Dot,
   LeftBracket,
   RightBracket,
+  Question,
 
   // One or two character tokens.
   Bang,
@@ -55,6 +56,16 @@ enum class TokenType
   Fun,
   Return,
   Emit,
+  Module,
+  Import,
+  Use,
+  Pub,
+  Crate,
+  Super,
+  Const,
+  Type,
+  Panic,
+  CatchPanic,
   Test,
   Suite,
   With,
@@ -98,6 +109,7 @@ enum class TokenType
   True,
   False,
   Nil,
+  DocComment,
 
   Eof
 };
@@ -133,10 +145,15 @@ private:
   StmtPtr parse_declaration();
   StmtPtr parse_return();
   StmtPtr parse_emit();
-  StmtPtr parse_function();
-  StmtPtr parse_skill();
-  StmtPtr parse_knowledge();
-  StmtPtr parse_agent();
+  StmtPtr parse_function(const Visibility& visibility);
+  StmtPtr parse_skill(const Visibility& visibility);
+  StmtPtr parse_knowledge(const Visibility& visibility);
+  StmtPtr parse_agent(const Visibility& visibility);
+  StmtPtr parse_module_decl();
+  StmtPtr parse_import_decl(const Visibility& visibility, bool is_reexport);
+  StmtPtr parse_const_decl(const Visibility& visibility);
+  StmtPtr parse_type_alias(const Visibility& visibility);
+  StmtPtr parse_doc_comment(Token first_token);
   StmtPtr parse_test_decl_statement();
   StmtPtr parse_test_suite_statement();
   StmtPtr parse_with_statement();
@@ -154,6 +171,9 @@ private:
   std::vector<SkillParam> parse_skill_params();
   std::vector<IdentifierRef> parse_identifier_list();
   std::vector<KnowledgeSource> parse_knowledge_sources();
+  Visibility parse_visibility();
+  std::vector<std::string> parse_module_path();
+  std::vector<std::string> parse_import_items();
   ExprPtr parse_expression();
   ExprPtr parse_assignment();
   ExprPtr parse_equality();

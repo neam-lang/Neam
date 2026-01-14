@@ -19,6 +19,8 @@
 
 namespace neamc
 {
+inline constexpr char kAstVersion[] = "2.0.0";
+
 struct SourceSpan
 {
   std::size_t position = 0;
@@ -58,6 +60,20 @@ struct Statement;
 
 using ExprPtr = std::unique_ptr<Expression>;
 using StmtPtr = std::unique_ptr<Statement>;
+
+struct Visibility
+{
+  enum class Level
+  {
+    kPrivate,
+    kPublic,
+    kCrate,
+    kSuper
+  };
+
+  Level level{Level::kPrivate};
+  SourceSpan span{};
+};
 
 struct LiteralExpr
 {
@@ -138,13 +154,57 @@ struct PathLiteralExpr
   std::string path;
 };
 
+struct TryExpr
+{
+  ExprPtr expr;
+};
+
+struct PanicExpr
+{
+  ExprPtr message;
+};
+
+struct CatchPanicExpr
+{
+  ExprPtr closure;
+};
+
+struct ContextExpr
+{
+  ExprPtr expr;
+  ExprPtr message;
+};
+
+struct WithContextExpr
+{
+  ExprPtr expr;
+  std::string key;
+  ExprPtr value;
+};
+
 struct Expression
 {
   using Variant =
       std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr,
-                   GetExpr, IndexExpr, ListExpr, MapExpr, FileOpenExpr, PathLiteralExpr>;
+                   GetExpr, IndexExpr, ListExpr, MapExpr, FileOpenExpr, PathLiteralExpr, TryExpr,
+                   PanicExpr, CatchPanicExpr, ContextExpr, WithContextExpr>;
   SourceSpan span;
   Variant node;
+};
+
+struct ModuleDecl
+{
+  std::vector<std::string> path;
+};
+
+struct ImportDecl
+{
+  Visibility visibility;
+  std::vector<std::string> path;
+  std::optional<std::string> alias;
+  std::vector<std::string> items;
+  bool is_wildcard{false};
+  bool is_reexport{false};
 };
 
 struct ExpressionStmt
@@ -247,6 +307,7 @@ struct WithStmt
 
 struct FunctionDecl
 {
+  Visibility visibility;
   std::string name;
   std::vector<std::string> parameters;
   StmtPtr body;  // always a BlockStmt
@@ -260,6 +321,7 @@ struct SkillParam
 
 struct SkillDecl
 {
+  Visibility visibility;
   std::string name;
   std::string description;
   std::vector<SkillParam> params;
@@ -274,6 +336,7 @@ struct KnowledgeSource
 
 struct KnowledgeDecl
 {
+  Visibility visibility;
   std::string name;
   std::string vector_store;
   std::string embedding_model;
@@ -284,6 +347,7 @@ struct KnowledgeDecl
 
 struct AgentDecl
 {
+  Visibility visibility;
   std::string name;
   std::string provider;
   std::string model;
@@ -295,12 +359,34 @@ struct AgentDecl
   std::vector<IdentifierRef> connected_knowledge;
 };
 
+struct ConstDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::unique_ptr<TypeExpression> type;
+  ExprPtr value;
+};
+
+struct TypeAlias
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> type_params;
+  std::unique_ptr<TypeExpression> type;
+};
+
+struct DocComment
+{
+  std::string content;
+};
+
 struct Statement
 {
   using Variant =
       std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
                    AssertStmt, WithStmt, TestDecl, TestSuiteDecl, FunctionDecl, SkillDecl,
-                   KnowledgeDecl, AgentDecl>;
+                   KnowledgeDecl, AgentDecl, ModuleDecl, ImportDecl, ConstDecl, TypeAlias,
+                   DocComment>;
   SourceSpan span;
   Variant node;
 };

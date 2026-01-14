@@ -36,6 +36,30 @@ std::string to_std_string(const Value& value)
   return std::string(str->chars, str->length);
 }
 
+std::string value_to_string(const Value& value)
+{
+  if (value.is_string())
+  {
+    auto* str = as_string(value);
+    return std::string(str->chars, str->length);
+  }
+  if (value.is_number())
+  {
+    std::ostringstream out;
+    out << value.as_number();
+    return out.str();
+  }
+  if (value.is_bool())
+  {
+    return value.as_bool() ? "true" : "false";
+  }
+  if (value.is_nil())
+  {
+    return "nil";
+  }
+  return "<object>";
+}
+
 bool values_equal(const Value& lhs, const Value& rhs)
 {
   if (lhs.type != rhs.type)
@@ -164,6 +188,20 @@ bool result_ok(const Value& value)
     return false;
   }
   return it->second.as_bool();
+}
+
+std::string result_error_message(const Value& value)
+{
+  if (value.is_map())
+  {
+    auto* map = as_map(value);
+    auto it = map->entries.find("error");
+    if (it != map->entries.end())
+    {
+      return value_to_string(it->second);
+    }
+  }
+  return value_to_string(value);
 }
 
 struct CurlGlobal
@@ -586,6 +624,55 @@ Value file_open_native(VirtualMachine&, int arg_count, Value* args)
   return Value::Map(new_map(std::move(entries)));
 }
 
+Value panic_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 1)
+  {
+    throw std::runtime_error("panic expects 1 argument");
+  }
+  const std::string message = value_to_string(args[0]);
+  throw std::runtime_error("panic: " + message);
+}
+
+Value context_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 2)
+  {
+    throw std::runtime_error("context expects 2 arguments");
+  }
+  const Value& result = args[0];
+  const std::string message = value_to_string(args[1]);
+  if (result_ok(result))
+  {
+    return result;
+  }
+  const std::string error = result_error_message(result);
+  if (error.empty())
+  {
+    return make_result_err(message);
+  }
+  return make_result_err(message + ": " + error);
+}
+
+Value with_context_native(VirtualMachine&, int arg_count, Value* args)
+{
+  if (arg_count != 3)
+  {
+    throw std::runtime_error("with_context expects 3 arguments");
+  }
+  const Value& result = args[0];
+  if (result_ok(result))
+  {
+    return result;
+  }
+  const std::string key = value_to_string(args[1]);
+  const std::string value = value_to_string(args[2]);
+  const std::string error = result_error_message(result);
+  std::string message = error.empty() ? "error" : error;
+  message += " [" + key + "=" + value + "]";
+  return make_result_err(message);
+}
+
 Value assert_eq_native(VirtualMachine&, int arg_count, Value* args)
 {
   if (arg_count != 2)
@@ -772,6 +859,9 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("file_copy", 2, file_copy_native);
   vm.define_native("file_rename", 2, file_rename_native);
   vm.define_native("file_open", 2, file_open_native);
+  vm.define_native("panic", 1, panic_native);
+  vm.define_native("context", 2, context_native);
+  vm.define_native("with_context", 3, with_context_native);
   vm.define_native("http_get", 1, http_get_native);
 }
 }  // namespace neamc::vm

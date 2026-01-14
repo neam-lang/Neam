@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
+#include "neamc/vm/object.hpp"
 namespace neamc
 {
 namespace
@@ -29,6 +30,23 @@ SourceSpan merge_span(const SourceSpan& start, const SourceSpan& end)
     merged.length = end_pos - start.position;
   }
   return merged;
+}
+
+std::optional<std::string> extract_string_key(const Expression& expr)
+{
+  if (const auto* literal = std::get_if<LiteralExpr>(&expr.node))
+  {
+    if (literal->value.is_string())
+    {
+      auto* str = vm::as_string(literal->value);
+      return std::string(str->chars, str->length);
+    }
+  }
+  if (const auto* ident = std::get_if<IdentifierExpr>(&expr.node))
+  {
+    return ident->name;
+  }
+  return std::nullopt;
 }
 
 ExprPtr make_literal(vm::Value value, SourceSpan span)
@@ -109,6 +127,46 @@ ExprPtr make_map(std::vector<MapEntry> entries, SourceSpan span)
   expr->span = span;
   expr->node = MapExpr{std::move(entries)};
   return expr;
+}
+
+ExprPtr make_try_expr(ExprPtr expr, SourceSpan span)
+{
+  auto node = std::make_unique<Expression>();
+  node->span = span;
+  node->node = TryExpr{std::move(expr)};
+  return node;
+}
+
+ExprPtr make_panic_expr(ExprPtr message, SourceSpan span)
+{
+  auto node = std::make_unique<Expression>();
+  node->span = span;
+  node->node = PanicExpr{std::move(message)};
+  return node;
+}
+
+ExprPtr make_catch_panic_expr(ExprPtr closure, SourceSpan span)
+{
+  auto node = std::make_unique<Expression>();
+  node->span = span;
+  node->node = CatchPanicExpr{std::move(closure)};
+  return node;
+}
+
+ExprPtr make_context_expr(ExprPtr expr, ExprPtr message, SourceSpan span)
+{
+  auto node = std::make_unique<Expression>();
+  node->span = span;
+  node->node = ContextExpr{std::move(expr), std::move(message)};
+  return node;
+}
+
+ExprPtr make_with_context_expr(ExprPtr expr, std::string key, ExprPtr value, SourceSpan span)
+{
+  auto node = std::make_unique<Expression>();
+  node->span = span;
+  node->node = WithContextExpr{std::move(expr), std::move(key), std::move(value)};
+  return node;
 }
 
 StmtPtr make_expression_stmt(ExprPtr expression, SourceSpan span)
@@ -200,25 +258,28 @@ StmtPtr make_test_suite_stmt(TestSuiteDecl decl, SourceSpan span)
   return stmt;
 }
 
-StmtPtr make_function_decl(std::string name, std::vector<std::string> params, StmtPtr body,
-                           SourceSpan span)
+StmtPtr make_function_decl(Visibility visibility, std::string name, std::vector<std::string> params,
+                           StmtPtr body, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
   stmt->span = span;
-  stmt->node = FunctionDecl{std::move(name), std::move(params), std::move(body)};
+  stmt->node = FunctionDecl{std::move(visibility), std::move(name), std::move(params),
+                            std::move(body)};
   return stmt;
 }
 
-StmtPtr make_skill_decl(std::string name, std::string description, std::vector<SkillParam> params,
-                        FunctionDecl impl, SourceSpan span)
+StmtPtr make_skill_decl(Visibility visibility, std::string name, std::string description,
+                        std::vector<SkillParam> params, FunctionDecl impl, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
   stmt->span = span;
-  stmt->node = SkillDecl{std::move(name), std::move(description), std::move(params), std::move(impl)};
+  stmt->node = SkillDecl{std::move(visibility), std::move(name), std::move(description),
+                         std::move(params), std::move(impl)};
   return stmt;
 }
 
-StmtPtr make_agent_decl(std::string name, std::string provider, std::string model,
+StmtPtr make_agent_decl(Visibility visibility, std::string name, std::string provider,
+                        std::string model,
                         std::optional<std::string> endpoint,
                         std::optional<std::string> api_key_env,
                         std::optional<double> temperature,
@@ -229,20 +290,70 @@ StmtPtr make_agent_decl(std::string name, std::string provider, std::string mode
 {
   auto stmt = std::make_unique<Statement>();
   stmt->span = span;
-  stmt->node = AgentDecl{std::move(name), std::move(provider), std::move(model), std::move(endpoint),
-                         std::move(api_key_env), std::move(temperature), std::move(system),
-                         std::move(skills), std::move(connected_knowledge)};
+  stmt->node = AgentDecl{std::move(visibility), std::move(name), std::move(provider),
+                         std::move(model), std::move(endpoint), std::move(api_key_env),
+                         std::move(temperature), std::move(system), std::move(skills),
+                         std::move(connected_knowledge)};
   return stmt;
 }
 
-StmtPtr make_knowledge_decl(std::string name, std::string vector_store, std::string embedding_model,
+StmtPtr make_knowledge_decl(Visibility visibility, std::string name, std::string vector_store,
+                            std::string embedding_model,
                             std::size_t chunk_size, std::size_t chunk_overlap,
                             std::vector<KnowledgeSource> sources, SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
   stmt->span = span;
-  stmt->node = KnowledgeDecl{std::move(name), std::move(vector_store), std::move(embedding_model),
-                             chunk_size, chunk_overlap, std::move(sources)};
+  stmt->node = KnowledgeDecl{std::move(visibility), std::move(name), std::move(vector_store),
+                             std::move(embedding_model), chunk_size, chunk_overlap,
+                             std::move(sources)};
+  return stmt;
+}
+
+StmtPtr make_module_decl(std::vector<std::string> path, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ModuleDecl{std::move(path)};
+  return stmt;
+}
+
+StmtPtr make_import_decl(Visibility visibility, std::vector<std::string> path,
+                         std::optional<std::string> alias, std::vector<std::string> items,
+                         bool is_wildcard, bool is_reexport, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ImportDecl{std::move(visibility), std::move(path), std::move(alias),
+                          std::move(items), is_wildcard, is_reexport};
+  return stmt;
+}
+
+StmtPtr make_const_decl(Visibility visibility, std::string name,
+                        std::unique_ptr<TypeExpression> type, ExprPtr value, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node =
+      ConstDecl{std::move(visibility), std::move(name), std::move(type), std::move(value)};
+  return stmt;
+}
+
+StmtPtr make_type_alias(Visibility visibility, std::string name, std::vector<std::string> params,
+                        std::unique_ptr<TypeExpression> type, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node =
+      TypeAlias{std::move(visibility), std::move(name), std::move(params), std::move(type)};
+  return stmt;
+}
+
+StmtPtr make_doc_comment(std::string content, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = DocComment{std::move(content)};
   return stmt;
 }
 }  // namespace
@@ -307,6 +418,16 @@ void Parser::tokenize()
       {"fun", TokenType::Fun},
       {"return", TokenType::Return},
       {"emit", TokenType::Emit},
+      {"module", TokenType::Module},
+      {"import", TokenType::Import},
+      {"use", TokenType::Use},
+      {"pub", TokenType::Pub},
+      {"crate", TokenType::Crate},
+      {"super", TokenType::Super},
+      {"const", TokenType::Const},
+      {"type", TokenType::Type},
+      {"panic", TokenType::Panic},
+      {"catch_panic", TokenType::CatchPanic},
       {"test", TokenType::Test},
       {"suite", TokenType::Suite},
       {"with", TokenType::With},
@@ -399,6 +520,9 @@ void Parser::tokenize()
       case ']':
         add(TokenType::RightBracket);
         continue;
+      case '?':
+        add(TokenType::Question);
+        continue;
       case '+':
         add(TokenType::Plus);
         continue;
@@ -409,6 +533,18 @@ void Parser::tokenize()
         add(TokenType::Star);
         continue;
       case '/':
+        if (i + 2 < source_.size() && source_[i + 1] == '/' && source_[i + 2] == '/')
+        {
+          const std::size_t start = i + 3;
+          i += 3;
+          while (i < source_.size() && source_[i] != '\n')
+          {
+            ++i;
+          }
+          const auto value = source_.substr(start, i - start);
+          tokens_.push_back(Token{TokenType::DocComment, value, start});
+          continue;
+        }
         if (i + 1 < source_.size() && source_[i + 1] == '/')
         {
           while (i < source_.size() && source_[i] != '\n')
@@ -570,6 +706,39 @@ void Parser::tokenize()
 
 StmtPtr Parser::parse_declaration()
 {
+  if (match(TokenType::DocComment))
+  {
+    return parse_doc_comment(previous());
+  }
+  if (match(TokenType::Module))
+  {
+    return parse_module_decl();
+  }
+  if (match(TokenType::Import))
+  {
+    return parse_import_decl(Visibility{}, false);
+  }
+
+  Visibility visibility;
+  bool has_visibility = false;
+  if (check(TokenType::Pub))
+  {
+    visibility = parse_visibility();
+    has_visibility = true;
+  }
+
+  if (has_visibility && match(TokenType::Use))
+  {
+    return parse_import_decl(visibility, true);
+  }
+  if (match(TokenType::Const))
+  {
+    return parse_const_decl(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Type))
+  {
+    return parse_type_alias(has_visibility ? visibility : Visibility{});
+  }
   if (check(TokenType::Hash) || check(TokenType::Test))
   {
     return parse_test_decl_statement();
@@ -580,23 +749,27 @@ StmtPtr Parser::parse_declaration()
   }
   if (match(TokenType::Skill))
   {
-    return parse_skill();
+    return parse_skill(has_visibility ? visibility : Visibility{});
   }
   if (match(TokenType::Knowledge))
   {
-    return parse_knowledge();
+    return parse_knowledge(has_visibility ? visibility : Visibility{});
   }
   if (match(TokenType::Agent))
   {
-    return parse_agent();
+    return parse_agent(has_visibility ? visibility : Visibility{});
   }
   if (match(TokenType::Fun))
   {
-    return parse_function();
+    return parse_function(has_visibility ? visibility : Visibility{});
   }
   if (match(TokenType::Let))
   {
     return parse_let();
+  }
+  if (has_visibility)
+  {
+    error("Visibility modifier must be applied to a declaration");
   }
   return parse_statement();
 }
@@ -674,7 +847,122 @@ StmtPtr Parser::parse_emit()
   return make_emit_stmt(std::move(value), span);
 }
 
-StmtPtr Parser::parse_function()
+StmtPtr Parser::parse_module_decl()
+{
+  SourceSpan span = span_from_token(previous());
+  auto path = parse_module_path();
+  span = merge_span(span, span_from_token(previous()));
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after module declaration");
+  }
+  return make_module_decl(std::move(path), span);
+}
+
+StmtPtr Parser::parse_import_decl(const Visibility& visibility, bool is_reexport)
+{
+  SourceSpan span = span_from_token(previous());
+  auto path = parse_module_path();
+  std::vector<std::string> items;
+  bool is_wildcard = false;
+
+  if (match(TokenType::Dot))
+  {
+    if (match(TokenType::Star))
+    {
+      is_wildcard = true;
+    }
+    else if (match(TokenType::LeftBrace))
+    {
+      items = parse_import_items();
+      if (!match(TokenType::RightBrace))
+      {
+        error("Expected '}' after import list");
+      }
+    }
+    else
+    {
+      error("Expected '*' or '{' after '.' in import");
+    }
+  }
+
+  std::optional<std::string> alias;
+  if (match(TokenType::As))
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected identifier after 'as'");
+    }
+    alias = previous().lexeme;
+  }
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after import");
+  }
+  return make_import_decl(visibility, std::move(path), std::move(alias), std::move(items),
+                          is_wildcard, is_reexport, span);
+}
+
+StmtPtr Parser::parse_const_decl(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected constant name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::Colon))
+  {
+    error("Expected ':' after constant name");
+  }
+  auto type = parse_type_expression();
+  if (!match(TokenType::Equal))
+  {
+    error("Expected '=' after constant type");
+  }
+  auto value = parse_expression();
+  span = merge_span(span, value->span);
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after constant declaration");
+  }
+  return make_const_decl(visibility, name, std::move(type), std::move(value), span);
+}
+
+StmtPtr Parser::parse_type_alias(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected type alias name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::Equal))
+  {
+    error("Expected '=' after type alias name");
+  }
+  auto type = parse_type_expression();
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after type alias");
+  }
+  return make_type_alias(visibility, name, {}, std::move(type), span);
+}
+
+StmtPtr Parser::parse_doc_comment(Token first_token)
+{
+  SourceSpan span = span_from_token(first_token);
+  std::string content = first_token.lexeme;
+  while (match(TokenType::DocComment))
+  {
+    content.append("\n");
+    content.append(previous().lexeme);
+    span = merge_span(span, span_from_token(previous()));
+  }
+  return make_doc_comment(std::move(content), span);
+}
+
+StmtPtr Parser::parse_function(const Visibility& visibility)
 {
   SourceSpan span = span_from_token(previous());
   if (!match(TokenType::Identifier))
@@ -707,10 +995,10 @@ StmtPtr Parser::parse_function()
     error("Expected function body");
   }
   auto body = parse_block();
-  return make_function_decl(name, std::move(params), std::move(body), span);
+  return make_function_decl(visibility, name, std::move(params), std::move(body), span);
 }
 
-StmtPtr Parser::parse_skill()
+StmtPtr Parser::parse_skill(const Visibility& visibility)
 {
   SourceSpan span = span_from_token(previous());
   if (!match(TokenType::Identifier))
@@ -778,7 +1066,8 @@ StmtPtr Parser::parse_skill()
         error("Expected impl body");
       }
       auto body = parse_block();
-      impl = FunctionDecl{name + ".impl", std::move(impl_params), std::move(body)};
+      impl =
+          FunctionDecl{visibility, name + ".impl", std::move(impl_params), std::move(body)};
       continue;
     }
 
@@ -797,10 +1086,10 @@ StmtPtr Parser::parse_skill()
   {
     error("Skill missing impl");
   }
-  return make_skill_decl(name, *description, std::move(params), std::move(*impl), span);
+  return make_skill_decl(visibility, name, *description, std::move(params), std::move(*impl), span);
 }
 
-StmtPtr Parser::parse_agent()
+StmtPtr Parser::parse_agent(const Visibility& visibility)
 {
   SourceSpan span = span_from_token(previous());
   if (!match(TokenType::Identifier))
@@ -935,9 +1224,9 @@ StmtPtr Parser::parse_agent()
   {
     error("Agent missing model");
   }
-  return make_agent_decl(name, *provider, *model, std::move(endpoint), std::move(api_key_env),
-                         std::move(temperature), std::move(system), std::move(skills),
-                         std::move(connected_knowledge), span);
+  return make_agent_decl(visibility, name, *provider, *model, std::move(endpoint),
+                         std::move(api_key_env), std::move(temperature), std::move(system),
+                         std::move(skills), std::move(connected_knowledge), span);
 }
 
 StmtPtr Parser::parse_test_decl_statement()
@@ -1219,7 +1508,7 @@ std::unique_ptr<TestSuiteDecl> Parser::parse_test_suite_node()
   return suite;
 }
 
-StmtPtr Parser::parse_knowledge()
+StmtPtr Parser::parse_knowledge(const Visibility& visibility)
 {
   SourceSpan span = span_from_token(previous());
   if (!match(TokenType::Identifier))
@@ -1328,8 +1617,8 @@ StmtPtr Parser::parse_knowledge()
   {
     error("Knowledge missing sources");
   }
-  return make_knowledge_decl(name, *vector_store, *embedding_model, *chunk_size, *chunk_overlap,
-                             std::move(sources), span);
+  return make_knowledge_decl(visibility, name, *vector_store, *embedding_model, *chunk_size,
+                             *chunk_overlap, std::move(sources), span);
 }
 
 SkillParam Parser::parse_skill_param()
@@ -1483,6 +1772,83 @@ std::vector<IdentifierRef> Parser::parse_identifier_list()
     error("Expected ']' after list");
   }
   return values;
+}
+
+Visibility Parser::parse_visibility()
+{
+  if (!match(TokenType::Pub))
+  {
+    error("Expected visibility modifier");
+  }
+  Visibility visibility;
+  visibility.span = span_from_token(previous());
+  visibility.level = Visibility::Level::kPublic;
+
+  if (match(TokenType::LeftParen))
+  {
+    if (match(TokenType::Crate))
+    {
+      visibility.level = Visibility::Level::kCrate;
+    }
+    else if (match(TokenType::Super))
+    {
+      visibility.level = Visibility::Level::kSuper;
+    }
+    else
+    {
+      error("Expected 'crate' or 'super' in visibility modifier");
+    }
+    if (!match(TokenType::RightParen))
+    {
+      error("Expected ')' after visibility modifier");
+    }
+  }
+  return visibility;
+}
+
+std::vector<std::string> Parser::parse_module_path()
+{
+  std::vector<std::string> path;
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected module path");
+  }
+  path.push_back(previous().lexeme);
+  while (check(TokenType::Dot))
+  {
+    if (current_ + 1 < tokens_.size())
+    {
+      const auto next_type = tokens_[current_ + 1].type;
+      if (next_type == TokenType::Star || next_type == TokenType::LeftBrace)
+      {
+        break;
+      }
+    }
+    advance();
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected identifier in module path");
+    }
+    path.push_back(previous().lexeme);
+  }
+  return path;
+}
+
+std::vector<std::string> Parser::parse_import_items()
+{
+  std::vector<std::string> items;
+  if (!check(TokenType::RightBrace))
+  {
+    do
+    {
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected identifier in import list");
+      }
+      items.push_back(previous().lexeme);
+    } while (match(TokenType::Comma));
+  }
+  return items;
 }
 
 std::vector<KnowledgeSource> Parser::parse_knowledge_sources()
@@ -1829,6 +2195,37 @@ ExprPtr Parser::parse_call()
       }
       if (!handled)
       {
+        if (auto* get_expr = std::get_if<GetExpr>(&expr->node))
+        {
+          if (get_expr->name == "context")
+          {
+            if (args.size() != 1)
+            {
+              error("context expects a single message argument");
+            }
+            expr =
+                make_context_expr(std::move(get_expr->object), std::move(args[0]), span);
+            handled = true;
+          }
+          else if (get_expr->name == "with_context")
+          {
+            if (args.size() != 2)
+            {
+              error("with_context expects a key and value");
+            }
+            const auto key = extract_string_key(*args[0]);
+            if (!key.has_value())
+            {
+              error("with_context key must be a string literal or identifier");
+            }
+            expr = make_with_context_expr(std::move(get_expr->object), *key, std::move(args[1]),
+                                          span);
+            handled = true;
+          }
+        }
+      }
+      if (!handled)
+      {
         expr = make_call(std::move(expr), std::move(args), span);
       }
       continue;
@@ -1854,6 +2251,12 @@ ExprPtr Parser::parse_call()
       expr = make_index(std::move(expr), std::move(index), span);
       continue;
     }
+    if (match(TokenType::Question))
+    {
+      auto span = merge_span(expr->span, span_from_token(previous()));
+      expr = make_try_expr(std::move(expr), span);
+      continue;
+    }
     break;
   }
   return expr;
@@ -1861,6 +2264,40 @@ ExprPtr Parser::parse_call()
 
 ExprPtr Parser::parse_primary()
 {
+  if (match(TokenType::Panic))
+  {
+    SourceSpan span = span_from_token(previous());
+    if (!match(TokenType::Bang))
+    {
+      error("Expected '!' after panic");
+    }
+    if (!match(TokenType::LeftParen))
+    {
+      error("Expected '(' after panic!");
+    }
+    auto message = parse_expression();
+    if (!match(TokenType::RightParen))
+    {
+      error("Expected ')' after panic message");
+    }
+    span = merge_span(span, span_from_token(previous()));
+    return make_panic_expr(std::move(message), span);
+  }
+  if (match(TokenType::CatchPanic))
+  {
+    SourceSpan span = span_from_token(previous());
+    if (!match(TokenType::LeftParen))
+    {
+      error("Expected '(' after catch_panic");
+    }
+    auto closure = parse_expression();
+    if (!match(TokenType::RightParen))
+    {
+      error("Expected ')' after catch_panic");
+    }
+    span = merge_span(span, span_from_token(previous()));
+    return make_catch_panic_expr(std::move(closure), span);
+  }
   if (match(TokenType::Number))
   {
     const double value = std::strtod(previous().lexeme.c_str(), nullptr);
