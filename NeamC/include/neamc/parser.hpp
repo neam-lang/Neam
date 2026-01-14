@@ -22,6 +22,7 @@ enum class TokenType
   Comma,
   Semicolon,
   Colon,
+  Hash,
   Minus,
   Plus,
   Slash,
@@ -44,6 +45,7 @@ enum class TokenType
   Identifier,
   String,
   Number,
+  PathLiteral,
 
   // Keywords.
   Let,
@@ -53,6 +55,27 @@ enum class TokenType
   Fun,
   Return,
   Emit,
+  Test,
+  Suite,
+  With,
+  As,
+  BeforeEach,
+  AfterEach,
+  BeforeAll,
+  AfterAll,
+  AssertEq,
+  AssertNe,
+  AssertTrue,
+  AssertFalse,
+  AssertSome,
+  AssertNone,
+  AssertOk,
+  AssertErr,
+  AssertThrows,
+  Ignore,
+  Async,
+  ShouldPanic,
+  Timeout,
   Knowledge,
   Skill,
   Agent,
@@ -114,10 +137,19 @@ private:
   StmtPtr parse_skill();
   StmtPtr parse_knowledge();
   StmtPtr parse_agent();
+  StmtPtr parse_test_decl_statement();
+  StmtPtr parse_test_suite_statement();
+  StmtPtr parse_with_statement();
+  StmtPtr parse_assert_statement(TokenType type);
   StmtPtr parse_let();
   StmtPtr parse_block();
+  BlockStmt parse_block_node();
   StmtPtr parse_if();
   StmtPtr parse_while();
+  TestAttribute parse_test_attribute();
+  std::vector<TestAttribute> parse_test_attributes();
+  std::unique_ptr<TestDecl> parse_test_decl_node(std::vector<TestAttribute> attributes);
+  std::unique_ptr<TestSuiteDecl> parse_test_suite_node();
   SkillParam parse_skill_param();
   std::vector<SkillParam> parse_skill_params();
   std::vector<IdentifierRef> parse_identifier_list();
@@ -131,6 +163,7 @@ private:
   ExprPtr parse_unary();
   ExprPtr parse_call();
   ExprPtr parse_primary();
+  std::unique_ptr<TypeExpression> parse_type_expression();
 
   std::string source_;
   std::vector<Token> tokens_{};
