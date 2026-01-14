@@ -232,8 +232,10 @@ struct TestSuiteDecl
   std::string name;
   std::vector<std::unique_ptr<TestDecl>> tests;
   std::vector<std::unique_ptr<TestSuiteDecl>> nested_suites;
+  std::unique_ptr<BlockStmt> before_all;
   std::unique_ptr<BlockStmt> before_each;
   std::unique_ptr<BlockStmt> after_each;
+  std::unique_ptr<BlockStmt> after_all;
 };
 
 struct WithStmt

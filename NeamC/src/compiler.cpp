@@ -270,6 +270,91 @@ void Compiler::emit_statement(const Statement& stmt)
           emit_expression(*node.value);
           chunk_.write_op(OpCode::OP_RETURN);
         }
+        else if constexpr (std::is_same_v<T, AssertStmt>)
+        {
+          std::string name;
+          switch (node.kind)
+          {
+            case AssertStmt::Kind::kEq:
+              name = "assert_eq";
+              break;
+            case AssertStmt::Kind::kNe:
+              name = "assert_ne";
+              break;
+            case AssertStmt::Kind::kTrue:
+              name = "assert_true";
+              break;
+            case AssertStmt::Kind::kFalse:
+              name = "assert_false";
+              break;
+            case AssertStmt::Kind::kSome:
+              name = "assert_some";
+              break;
+            case AssertStmt::Kind::kNone:
+              name = "assert_none";
+              break;
+            case AssertStmt::Kind::kOk:
+              name = "assert_ok";
+              break;
+            case AssertStmt::Kind::kErr:
+              name = "assert_err";
+              break;
+            case AssertStmt::Kind::kThrows:
+              name = "assert_throws";
+              break;
+          }
+          chunk_.write_op(OpCode::OP_GET_GLOBAL);
+          chunk_.write_short(
+              static_cast<uint16_t>(chunk_.add_constant(vm::Value::String(name.c_str(), name.size()))));
+          emit_expression(*node.left);
+          uint8_t arg_count = 1;
+          if (node.right)
+          {
+            emit_expression(*node.right);
+            arg_count++;
+          }
+          if (node.exception_type)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                chunk_.add_constant(vm::Value::String(node.exception_type->name.c_str(),
+                                                     node.exception_type->name.size()))));
+            arg_count++;
+          }
+          chunk_.write_op(OpCode::OP_CALL_NATIVE);
+          chunk_.write_byte(arg_count);
+          chunk_.write_op(OpCode::OP_POP);
+        }
+        else if constexpr (std::is_same_v<T, WithStmt>)
+        {
+          begin_scope();
+          emit_expression(*node.resource);
+          locals_.push_back(Local{node.binding_name, scope_depth_});
+          for (const auto& stmt : node.body->statements)
+          {
+            emit_statement(*stmt);
+          }
+          const auto slot = resolve_local(node.binding_name);
+          if (slot >= 0)
+          {
+            chunk_.write_op(OpCode::OP_GET_LOCAL);
+            chunk_.write_short(static_cast<uint16_t>(slot));
+            chunk_.write_op(OpCode::OP_INVOKE);
+            chunk_.write_short(static_cast<uint16_t>(
+                chunk_.add_constant(vm::Value::String("close", 5))));
+            chunk_.write_byte(0);
+            chunk_.write_op(OpCode::OP_POP);
+          }
+          end_scope();
+        }
+        else if constexpr (std::is_same_v<T, TestDecl>)
+        {
+          (void)node;
+        }
+        else if constexpr (std::is_same_v<T, TestSuiteDecl>)
+        {
+          (void)node;
+        }
         else if constexpr (std::is_same_v<T, FunctionDecl>)
         {
           auto fn_value = compile_function(node);
@@ -574,6 +659,22 @@ void Compiler::emit_expression(const Expression& expr)
             emit_expression(*entry.value);
           }
           emit_build_map(chunk_, node.entries.size());
+        }
+        else if constexpr (std::is_same_v<T, FileOpenExpr>)
+        {
+          chunk_.write_op(OpCode::OP_GET_GLOBAL);
+          chunk_.write_short(static_cast<uint16_t>(
+              chunk_.add_constant(vm::Value::String("file_open", 9))));
+          emit_expression(*node.path);
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(
+              chunk_.add_constant(vm::Value::String(node.mode.c_str(), node.mode.size()))));
+          chunk_.write_op(OpCode::OP_CALL_NATIVE);
+          chunk_.write_byte(2);
+        }
+        else if constexpr (std::is_same_v<T, PathLiteralExpr>)
+        {
+          chunk_.emit_constant(vm::Value::String(node.path.c_str(), node.path.size()));
         }
       },
       expr.node);
