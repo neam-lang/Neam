@@ -1,0 +1,115 @@
+module std.math;
+
+pub const PI = 3.141592653589793;
+pub const E = 2.718281828459045;
+pub const TAU = 6.283185307179586;
+
+pub fun abs(x) {
+  return math_abs(x);
+}
+
+pub fun floor(x) {
+  return math_floor(x);
+}
+
+pub fun ceil(x) {
+  return math_ceil(x);
+}
+
+pub fun round(x) {
+  return math_round(x);
+}
+
+pub fun min(a, b) {
+  return math_min(a, b);
+}
+
+pub fun max(a, b) {
+  return math_max(a, b);
+}
+
+pub fun clamp(x, min_value, max_value) {
+  return math_clamp(x, min_value, max_value);
+}
+
+pub fun sin(x) {
+  return math_sin(x);
+}
+
+pub fun cos(x) {
+  return math_cos(x);
+}
+
+pub fun tan(x) {
+  return math_tan(x);
+}
+
+pub fun asin(x) {
+  return math_asin(x);
+}
+
+pub fun acos(x) {
+  return math_acos(x);
+}
+
+pub fun atan(x) {
+  return math_atan(x);
+}
+
+pub fun atan2(y, x) {
+  return math_atan2(y, x);
+}
+
+pub fun pow(base, exp) {
+  return math_pow(base, exp);
+}
+
+pub fun sqrt(x) {
+  return math_sqrt(x);
+}
+
+pub fun cbrt(x) {
+  return math_cbrt(x);
+}
+
+pub fun log(x) {
+  return math_log(x);
+}
+
+pub fun log10(x) {
+  return math_log10(x);
+}
+
+pub fun exp(x) {
+  return math_exp(x);
+}
+
+pub fun random() {
+  return math_random();
+}
+
+pub fun random_int(min_value, max_value) {
+  return math_random_int(min_value, max_value);
+}
+
+pub fun random_choice(items) {
+  let count = items.len();
+  if (count == 0) {
+    return nil;
+  }
+  let idx = random_int(0, count - 1);
+  return items[idx];
+}
+
+pub fun random_shuffle(items) {
+  let out = items.concat([]);
+  let i = out.len() - 1;
+  while (i > 0) {
+    let j = random_int(0, i);
+    let temp = out[i];
+    out = out.set(i, out[j]);
+    out = out.set(j, temp);
+    i = i - 1;
+  }
+  return out;
+}

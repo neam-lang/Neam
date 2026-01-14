@@ -1,30 +1,82 @@
 // Result<T, E> helpers
 
-fun Result_ok(value) {
+module std.core.result;
+
+pub fun ok(value) {
   return { ok: true, value: value };
 }
 
-fun Result_err(error) {
+pub fun err(error) {
   return { ok: false, error: error };
 }
 
-fun Result_map(result, func) {
+pub fun is_ok(result) {
+  return result.ok;
+}
+
+pub fun is_err(result) {
+  return !result.ok;
+}
+
+pub fun map(result, func) {
   if (result.ok) {
-    return Result_ok(func(result.value));
+    return ok(func(result.value));
   }
   return result;
 }
 
-fun Result_map_err(result, func) {
+pub fun map_err(result, func) {
   if (!result.ok) {
-    return Result_err(func(result.error));
+    return err(func(result.error));
   }
   return result;
 }
 
-fun Result_and_then(result, func) {
+pub fun and_then(result, func) {
   if (result.ok) {
     return func(result.value);
   }
   return result;
+}
+
+pub fun unwrap(result) {
+  if (result.ok) {
+    return result.value;
+  }
+  return nil;
+}
+
+pub fun unwrap_err(result) {
+  if (!result.ok) {
+    return result.error;
+  }
+  return nil;
+}
+
+pub fun or_else(result, func) {
+  if (result.ok) {
+    return result;
+  }
+  return func(result.error);
+}
+
+// Legacy aliases
+pub fun Result_ok(value) {
+  return ok(value);
+}
+
+pub fun Result_err(error) {
+  return err(error);
+}
+
+pub fun Result_map(result, func) {
+  return map(result, func);
+}
+
+pub fun Result_map_err(result, func) {
+  return map_err(result, func);
+}
+
+pub fun Result_and_then(result, func) {
+  return and_then(result, func);
 }

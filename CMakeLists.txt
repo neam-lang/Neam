@@ -93,6 +93,7 @@ if (TARGET benchmark)
 endif ()
 
 find_package(CURL REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 add_library(tree_sitter_lib STATIC
     ${tree_sitter_SOURCE_DIR}/lib/src/lib.c
@@ -149,6 +150,7 @@ target_link_libraries(neamc_core
     PUBLIC
         tree_sitter_lib
         CURL::libcurl
+        OpenSSL::Crypto
         nlohmann_json::nlohmann_json
         nlohmann_json_schema_validator
         usearch
@@ -162,6 +164,7 @@ endif ()
 add_library(libneam SHARED ${NEAMC_CORE_SOURCES})
 target_link_libraries(libneam PUBLIC tree_sitter_lib CURL::libcurl nlohmann_json::nlohmann_json
     nlohmann_json_schema_validator
+    OpenSSL::Crypto
     usearch
     lexbor
     miniz
