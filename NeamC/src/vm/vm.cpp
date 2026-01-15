@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <cstdlib>
@@ -71,6 +72,186 @@ std::string value_to_string(const Value& value)
   return "<object>";
 }
 
+bool match_key(const ObjString* key, const std::string& name)
+{
+  return key && key->length == name.size() &&
+         std::memcmp(key->chars, name.data(), key->length) == 0;
+}
+
+const Value* find_global_value(const Table& table, const std::string& name)
+{
+  for (const auto& entry : table.entries())
+  {
+    if (match_key(entry.key, name))
+    {
+      return &entry.value;
+    }
+  }
+  return nullptr;
+}
+
+std::string map_string_value(const ObjMap* map, const std::string& key)
+{
+  if (!map)
+  {
+    return {};
+  }
+  auto it = map->entries.find(key);
+  if (it == map->entries.end())
+  {
+    return {};
+  }
+  if (it->second.is_string())
+  {
+    return to_std_string(it->second);
+  }
+  if (it->second.is_bool())
+  {
+    return it->second.as_bool() ? "true" : "false";
+  }
+  if (it->second.is_number())
+  {
+    return value_to_string(it->second);
+  }
+  return {};
+}
+
+double map_number_value(const ObjMap* map, const std::string& key)
+{
+  if (!map)
+  {
+    return 0.0;
+  }
+  auto it = map->entries.find(key);
+  if (it == map->entries.end() || !it->second.is_number())
+  {
+    return 0.0;
+  }
+  return it->second.as_number();
+}
+
+bool map_bool_value(const ObjMap* map, const std::string& key, bool fallback = false)
+{
+  if (!map)
+  {
+    return fallback;
+  }
+  auto it = map->entries.find(key);
+  if (it == map->entries.end())
+  {
+    return fallback;
+  }
+  if (it->second.is_bool())
+  {
+    return it->second.as_bool();
+  }
+  if (it->second.is_string())
+  {
+    const auto value = to_std_string(it->second);
+    if (value == "true")
+    {
+      return true;
+    }
+    if (value == "false")
+    {
+      return false;
+    }
+  }
+  return fallback;
+}
+
+int64_t current_time_ms()
+{
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+bool matches_pattern(const std::string& pattern, const std::string& required)
+{
+  if (pattern == required)
+  {
+    return true;
+  }
+  if (!pattern.empty() && pattern.back() == '*')
+  {
+    const auto prefix = pattern.substr(0, pattern.size() - 1);
+    return required.rfind(prefix, 0) == 0;
+  }
+  return false;
+}
+
+struct ReActResponse
+{
+  std::string thought;
+  std::string action;
+  std::vector<std::string> action_args;
+  std::string final_answer;
+  bool is_complete{false};
+};
+
+std::string trim_copy(std::string value)
+{
+  auto start = value.find_first_not_of(" \t\r\n");
+  auto end = value.find_last_not_of(" \t\r\n");
+  if (start == std::string::npos || end == std::string::npos)
+  {
+    return {};
+  }
+  return value.substr(start, end - start + 1);
+}
+
+ReActResponse parse_react_response(const std::string& response)
+{
+  ReActResponse state;
+  const auto finish_pos = response.find("FINISH:");
+  if (finish_pos != std::string::npos)
+  {
+    state.is_complete = true;
+    state.final_answer = trim_copy(response.substr(finish_pos + 7));
+    return state;
+  }
+
+  const auto thought_pos = response.find("THOUGHT:");
+  if (thought_pos != std::string::npos)
+  {
+    const auto end_pos = response.find('\n', thought_pos);
+    state.thought = trim_copy(response.substr(thought_pos + 8, end_pos - thought_pos - 8));
+  }
+
+  const auto action_pos = response.find("ACTION:");
+  if (action_pos != std::string::npos)
+  {
+    const auto end_pos = response.find('\n', action_pos);
+    const auto line =
+        response.substr(action_pos + 7, end_pos == std::string::npos ? std::string::npos
+                                                                     : end_pos - action_pos - 7);
+    const auto action_line = trim_copy(line);
+    const auto paren_pos = action_line.find('(');
+    if (paren_pos != std::string::npos)
+    {
+      state.action = trim_copy(action_line.substr(0, paren_pos));
+      const auto close_pos = action_line.find(')', paren_pos);
+      if (close_pos != std::string::npos)
+      {
+        const auto args_str =
+            action_line.substr(paren_pos + 1, close_pos - paren_pos - 1);
+        std::stringstream arg_stream(args_str);
+        std::string arg;
+        while (std::getline(arg_stream, arg, ','))
+        {
+          state.action_args.push_back(trim_copy(arg));
+        }
+      }
+    }
+    else
+    {
+      state.action = action_line;
+    }
+  }
+  return state;
+}
+
 std::vector<knowledge::Source> parse_sources_list(const Value& value)
 {
   if (!value.is_list())
@@ -96,6 +277,25 @@ std::vector<knowledge::Source> parse_sources_list(const Value& value)
         knowledge::Source{to_std_string(type_it->second), to_std_string(path_it->second)});
   }
   return sources;
+}
+
+std::vector<std::string> list_to_strings(const Value& value)
+{
+  if (!value.is_list())
+  {
+    return {};
+  }
+  std::vector<std::string> result;
+  auto* list = as_list(value);
+  result.reserve(list->items.size());
+  for (const auto& item : list->items)
+  {
+    if (item.is_string())
+    {
+      result.push_back(to_std_string(item));
+    }
+  }
+  return result;
 }
 
 std::string format_rag_context(const std::vector<knowledge::SearchResult>& results)
@@ -542,8 +742,45 @@ std::string opcode_name(OpCode op)
       return "OP_DEFINE_KNOWLEDGE";
     case OpCode::OP_DEFINE_AGENT:
       return "OP_DEFINE_AGENT";
+    case OpCode::OP_GRANT:
+      return "OP_GRANT";
+    case OpCode::OP_CHECKPOINT:
+      return "OP_CHECKPOINT";
+    case OpCode::OP_REWIND:
+      return "OP_REWIND";
   }
   return "OP_UNKNOWN";
+}
+
+bool VirtualMachine::BudgetTracker::is_exhausted() const
+{
+  const int64_t now_ms = current_time_ms();
+  if (limits.max_wall_time_ms > 0.0 && elapsed_ms(now_ms) >= limits.max_wall_time_ms)
+  {
+    return true;
+  }
+  if (limits.max_tokens > 0.0 && used_tokens >= limits.max_tokens)
+  {
+    return true;
+  }
+  if (limits.max_api_calls > 0.0 && used_api_calls >= limits.max_api_calls)
+  {
+    return true;
+  }
+  if (limits.max_cost > 0.0 && used_cost >= limits.max_cost)
+  {
+    return true;
+  }
+  return false;
+}
+
+int64_t VirtualMachine::BudgetTracker::elapsed_ms(int64_t now_ms) const
+{
+  if (start_time_ms <= 0)
+  {
+    return 0;
+  }
+  return now_ms - start_time_ms;
 }
 }  // namespace
 
@@ -775,6 +1012,11 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
   trace_logger_.start_run();
   trace_logger_.log_start();
   frames_.push_back(CallFrame{&chunk, nullptr, 0, 0});
+  return run_frames(0);
+}
+
+Value VirtualMachine::run_frames(std::size_t target_frame_count)
+{
   const bool trace = std::getenv("NEAM_TRACE") != nullptr;
 
   while (!frames_.empty())
@@ -1186,7 +1428,139 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
             {
               agent->context = new_context();
             }
+
+            const std::string agent_name = to_std_string(agent->name);
+            const auto extension_it = agent_extensions_.find(agent_name);
+            const AgentExtension extension =
+                extension_it == agent_extensions_.end() ? AgentExtension{} : extension_it->second;
+
+            auto get_budget_definition = [&](const std::string& name) -> BudgetDefinition {
+              auto it = budgets_.find(name);
+              if (it != budgets_.end())
+              {
+                return it->second;
+              }
+              BudgetDefinition def;
+              if (const Value* budget_value = find_global_value(globals_, name))
+              {
+                if (budget_value->is_map())
+                {
+                  auto* map = as_map(*budget_value);
+                  def.max_tokens = map_number_value(map, "max_tokens");
+                  def.max_api_calls = map_number_value(map, "max_api_calls");
+                  def.max_wall_time_ms = map_number_value(map, "max_wall_time");
+                  if (def.max_wall_time_ms <= 0.0)
+                  {
+                    def.max_wall_time_ms = map_number_value(map, "max_wall_time_ms");
+                  }
+                  def.max_cost = map_number_value(map, "max_cost");
+                }
+              }
+              budgets_[name] = def;
+              return def;
+            };
+
+            auto get_budget_tracker = [&](const std::string& name) -> BudgetTracker& {
+              auto it = budget_trackers_.find(name);
+              if (it == budget_trackers_.end())
+              {
+                BudgetTracker tracker;
+                tracker.limits = get_budget_definition(name);
+                tracker.start_time_ms = current_time_ms();
+                auto [inserted_it, _] = budget_trackers_.emplace(name, tracker);
+                return inserted_it->second;
+              }
+              if (it->second.start_time_ms == 0)
+              {
+                it->second.start_time_ms = current_time_ms();
+              }
+              return it->second;
+            };
+
+            auto has_capability = [&](const std::string& entity,
+                                      const std::string& required) -> bool {
+              auto cap_it = entity_capabilities_.find(entity);
+              if (cap_it == entity_capabilities_.end())
+              {
+                return false;
+              }
+              for (const auto& pattern : cap_it->second)
+              {
+                if (matches_pattern(pattern, required))
+                {
+                  return true;
+                }
+              }
+              return false;
+            };
+
+            bool capability_ok = true;
+            for (const auto& required : extension.required_capabilities)
+            {
+              if (!has_capability(agent_name, required))
+              {
+                capability_ok = false;
+                break;
+              }
+            }
+            if (!capability_ok)
+            {
+              const std::string message = "Missing capability for agent request";
+              stack_.push_back(Value::String(message.c_str(), message.size()));
+              break;
+            }
+
+            if (!extension.memory.empty())
+            {
+              auto& store = memory_stores_[extension.memory];
+              store.events.push_back(
+                  MemoryEvent{current_time_ms(), "user", query, agent_name});
+            }
+
             agent->context->history.push_back({"user", query});
+
+            auto resolve_env_value = [&](const ObjMap* env_map,
+                                         const std::string& key) -> std::string {
+              if (!env_map)
+              {
+                return {};
+              }
+              auto it = env_map->entries.find(key);
+              if (it == env_map->entries.end())
+              {
+                return {};
+              }
+              if (it->second.is_map())
+              {
+                auto* inner = as_map(it->second);
+                const auto env_var = map_string_value(inner, "env_var");
+                if (!env_var.empty())
+                {
+                  if (const char* env_value = std::getenv(env_var.c_str()))
+                  {
+                    return std::string(env_value);
+                  }
+                }
+              }
+              if (it->second.is_string() || it->second.is_bool() || it->second.is_number())
+              {
+                return value_to_string(it->second);
+              }
+              return {};
+            };
+
+            const ObjMap* env_map = nullptr;
+            if (!extension.env.empty())
+            {
+              if (const Value* env_value = find_global_value(globals_, extension.env))
+              {
+                if (env_value->is_map())
+                {
+                  env_map = as_map(*env_value);
+                }
+              }
+            }
+
             llm::ProviderConfig config;
             config.model = to_std_string(agent->model);
             config.endpoint = to_std_string(agent->endpoint);
@@ -1195,6 +1569,36 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
             config.default_host =
                 resolve_env_config(*this, "ollama_host", "NEAM_OLLAMA_HOST",
                                    "http://localhost:11434");
+
+            std::string provider_name = to_std_string(agent->provider);
+            if (env_map)
+            {
+              const auto env_provider = resolve_env_value(env_map, "provider");
+              const auto env_model = resolve_env_value(env_map, "model");
+              const auto env_endpoint = resolve_env_value(env_map, "endpoint");
+              const auto env_api_key = resolve_env_value(env_map, "api_key");
+              const auto env_temperature = resolve_env_value(env_map, "temperature");
+              if (!env_provider.empty())
+              {
+                provider_name = env_provider;
+              }
+              if (!env_model.empty())
+              {
+                config.model = env_model;
+              }
+              if (!env_endpoint.empty())
+              {
+                config.endpoint = env_endpoint;
+              }
+              if (!env_api_key.empty())
+              {
+                config.api_key = env_api_key;
+              }
+              if (!env_temperature.empty())
+              {
+                config.temperature = std::strtod(env_temperature.c_str(), nullptr);
+              }
+            }
 
             if (!config.api_key.empty())
             {
@@ -1208,64 +1612,423 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
               }
             }
 
-            const std::string provider_name = to_std_string(agent->provider);
             auto provider = llm::create_provider(provider_name, config);
 
-            std::vector<llm::Message> messages;
-            if (agent->system)
-            {
-              messages.push_back({"system", to_std_string(agent->system)});
-            }
-            if (agent->connected_knowledge && !agent->connected_knowledge->items.empty())
-            {
-              std::string combined_context;
-              for (const auto& kb_value : agent->connected_knowledge->items)
+            auto get_guard_def = [&](const std::string& name) -> GuardDef* {
+              auto it = guards_.find(name);
+              if (it != guards_.end())
               {
-                const std::string kb_name = to_std_string(kb_value);
-                auto kb_it = knowledge_bases_.find(kb_name);
-                if (kb_it == knowledge_bases_.end())
+                return &it->second;
+              }
+              const Value* guard_value = find_global_value(globals_, name);
+              if (!guard_value || !guard_value->is_map())
+              {
+                return nullptr;
+              }
+              GuardDef def;
+              auto* map = as_map(*guard_value);
+              def.description = map_string_value(map, "description");
+              auto handler_it = map->entries.find("handlers");
+              if (handler_it != map->entries.end() && handler_it->second.is_list())
+              {
+                auto* handler_list = as_list(handler_it->second);
+                for (const auto& handler_value : handler_list->items)
+                {
+                  if (!handler_value.is_map())
+                  {
+                    continue;
+                  }
+                  auto* handler_map = as_map(handler_value);
+                  GuardHandlerDef handler_def;
+                  handler_def.type = map_string_value(handler_map, "type");
+                  if (auto params_it = handler_map->entries.find("params");
+                      params_it != handler_map->entries.end())
+                  {
+                    handler_def.parameters = list_to_strings(params_it->second);
+                  }
+                  auto impl_it = handler_map->entries.find("impl");
+                  if (impl_it != handler_map->entries.end() &&
+                      is_obj_type(impl_it->second, ObjType::OBJ_FUNCTION))
+                  {
+                    handler_def.impl = as_function(impl_it->second);
+                    def.handlers.push_back(handler_def);
+                  }
+                }
+              }
+              auto [inserted_it, _] = guards_.emplace(name, std::move(def));
+              return &inserted_it->second;
+            };
+
+            auto get_guardchain_def = [&](const std::string& name) -> GuardChainDef* {
+              auto it = guardchains_.find(name);
+              if (it != guardchains_.end())
+              {
+                return &it->second;
+              }
+              const Value* chain_value = find_global_value(globals_, name);
+              if (!chain_value || !chain_value->is_map())
+              {
+                return nullptr;
+              }
+              GuardChainDef chain;
+              auto* map = as_map(*chain_value);
+              auto guard_it = map->entries.find("guards");
+              if (guard_it != map->entries.end())
+              {
+                chain.guards = list_to_strings(guard_it->second);
+              }
+              auto [inserted_it, _] = guardchains_.emplace(name, std::move(chain));
+              return &inserted_it->second;
+            };
+
+            auto run_guard_chain =
+                [&](const std::vector<std::string>& chains,
+                    const std::string& handler_type, std::string& value) -> bool {
+              for (const auto& chain_name : chains)
+              {
+                auto* chain = get_guardchain_def(chain_name);
+                if (!chain)
                 {
                   continue;
                 }
-                auto* knowledge = kb_it->second;
-                output_stream() << "[RAG] Searching KB '" << kb_name << "' for: '" << query
-                                << "'\n";
-                auto embedding =
-                    knowledge::embed_text(query, knowledge->store.dimensions());
-                auto results = knowledge->store.search(embedding, 3);
-                if (!results.empty())
+                for (const auto& guard_name : chain->guards)
                 {
-                  output_stream() << "[RAG] Found context: \"" << results.front().chunk.text
-                                  << "\"\n";
-                }
-                const auto context = format_rag_context(results);
-                if (!context.empty())
-                {
-                  combined_context += context;
+                  auto* guard = get_guard_def(guard_name);
+                  if (!guard)
+                  {
+                    continue;
+                  }
+                  for (const auto& handler : guard->handlers)
+                  {
+                    if (handler.type != handler_type || !handler.impl)
+                    {
+                      continue;
+                    }
+                    std::vector<Value> handler_args;
+                    if (!handler.parameters.empty())
+                    {
+                      handler_args.push_back(
+                          Value::String(value.c_str(), value.size()));
+                    }
+                    Value result =
+                        call_function(handler.impl, handler_args, false, guard_name);
+                    if (result.is_string())
+                    {
+                      const auto output = to_std_string(result);
+                      if (output == "block")
+                      {
+                        return false;
+                      }
+                      value = output;
+                    }
+                  }
                 }
               }
-              if (!combined_context.empty())
+              return true;
+            };
+
+            auto get_tool_def = [&](const std::string& name) -> ToolDef* {
+              auto it = tools_.find(name);
+              if (it != tools_.end())
               {
-                messages.push_back({"system", combined_context});
+                return &it->second;
+              }
+              const Value* tool_value = find_global_value(globals_, name);
+              if (!tool_value || !tool_value->is_map())
+              {
+                return nullptr;
+              }
+              ToolDef tool;
+              auto* map = as_map(*tool_value);
+              tool.description = map_string_value(map, "description");
+              if (auto cap_it = map->entries.find("capabilities");
+                  cap_it != map->entries.end())
+              {
+                tool.capabilities = list_to_strings(cap_it->second);
+              }
+              if (auto guard_it = map->entries.find("guards");
+                  guard_it != map->entries.end())
+              {
+                tool.guards = list_to_strings(guard_it->second);
+              }
+              if (auto cost_it = map->entries.find("budget_costs");
+                  cost_it != map->entries.end() && cost_it->second.is_map())
+              {
+                auto* cost_map = as_map(cost_it->second);
+                for (const auto& entry : cost_map->entries)
+                {
+                  if (entry.second.is_number())
+                  {
+                    tool.budget_costs[entry.first] = entry.second.as_number();
+                  }
+                }
+              }
+              if (auto impl_it = map->entries.find("impl"); impl_it != map->entries.end())
+              {
+                if (is_obj_type(impl_it->second, ObjType::OBJ_FUNCTION))
+                {
+                  tool.impl = as_function(impl_it->second);
+                }
+              }
+              auto [inserted_it, _] = tools_.emplace(name, std::move(tool));
+              return &inserted_it->second;
+            };
+
+            auto consume_budget = [&](const std::string& budget_name,
+                                      const std::string& resource,
+                                      double amount) -> bool {
+              if (budget_name.empty())
+              {
+                return true;
+              }
+              auto& tracker = get_budget_tracker(budget_name);
+              if (resource == "tokens")
+              {
+                tracker.used_tokens += amount;
+              }
+              else if (resource == "api_calls")
+              {
+                tracker.used_api_calls += amount;
+              }
+              else if (resource == "cost")
+              {
+                tracker.used_cost += amount;
+              }
+              return !tracker.is_exhausted();
+            };
+
+            auto run_tool = [&](const std::string& tool_name,
+                                const std::vector<std::string>& arg_texts) -> std::string {
+              ToolDef* tool = get_tool_def(tool_name);
+              if (!tool || !tool->impl)
+              {
+                return "Unknown tool: " + tool_name;
+              }
+
+              for (const auto& required : tool->capabilities)
+              {
+                if (!has_capability(agent_name, required))
+                {
+                  return "Missing capability: " + required;
+                }
+              }
+
+              for (const auto& cost : tool->budget_costs)
+              {
+                if (!consume_budget(extension.budget, cost.first, cost.second))
+                {
+                  return "Budget exhausted for: " + cost.first;
+                }
+              }
+
+              std::string input_payload;
+              for (std::size_t i = 0; i < arg_texts.size(); ++i)
+              {
+                if (i > 0)
+                {
+                  input_payload += ",";
+                }
+                input_payload += arg_texts[i];
+              }
+
+              std::string guard_input = input_payload;
+              if (!run_guard_chain(tool->guards, "on_tool_input", guard_input))
+              {
+                return "Request blocked by guard policy.";
+              }
+
+              std::vector<Value> tool_args;
+              tool_args.reserve(arg_texts.size());
+              for (const auto& arg : arg_texts)
+              {
+                tool_args.push_back(Value::String(arg.c_str(), arg.size()));
+              }
+              Value result = call_function(tool->impl, tool_args, true, tool_name);
+              std::string output = value_to_string(result);
+
+              if (!run_guard_chain(tool->guards, "on_tool_output", output))
+              {
+                return "Response blocked by guard policy.";
+              }
+              return output;
+            };
+
+            auto run_llm = [&](const std::vector<llm::Message>& messages) -> std::string {
+              std::ostringstream preview;
+              preview << "provider=" << provider_name << "\n";
+              preview << "model=" << config.model << "\n";
+              for (const auto& message : messages)
+              {
+                preview << "[" << message.role << "] " << message.content << "\n";
+              }
+              emit_debug_event(DebugEventType::BeforeAgentAsk, "agent.ask", frame.ip - 1,
+                               preview.str());
+
+              if (!extension.budget.empty())
+              {
+                auto& tracker = get_budget_tracker(extension.budget);
+                if (tracker.is_exhausted())
+                {
+                  return "Budget exhausted: " + extension.budget;
+                }
+                tracker.used_api_calls += 1.0;
+              }
+
+              const auto response_text = provider->chat(messages);
+              if (!extension.budget.empty())
+              {
+                auto& tracker = get_budget_tracker(extension.budget);
+                const double token_estimate =
+                    std::max(1.0, static_cast<double>(response_text.size()) / 4.0);
+                tracker.used_tokens += token_estimate;
+              }
+              return response_text;
+            };
+
+            auto build_messages = [&](const std::string& system_prompt,
+                                      const std::string& user_prompt) {
+              std::vector<llm::Message> messages;
+              if (!system_prompt.empty())
+              {
+                messages.push_back({"system", system_prompt});
+              }
+              if (agent->connected_knowledge && !agent->connected_knowledge->items.empty())
+              {
+                std::string combined_context;
+                for (const auto& kb_value : agent->connected_knowledge->items)
+                {
+                  const std::string kb_name = to_std_string(kb_value);
+                  auto kb_it = knowledge_bases_.find(kb_name);
+                  if (kb_it == knowledge_bases_.end())
+                  {
+                    continue;
+                  }
+                  auto* knowledge = kb_it->second;
+                  output_stream() << "[RAG] Searching KB '" << kb_name << "' for: '" << user_prompt
+                                  << "'\n";
+                  auto embedding =
+                      knowledge::embed_text(user_prompt, knowledge->store.dimensions());
+                  auto results = knowledge->store.search(embedding, 3);
+                  if (!results.empty())
+                  {
+                    output_stream() << "[RAG] Found context: \"" << results.front().chunk.text
+                                    << "\"\n";
+                  }
+                  const auto context = format_rag_context(results);
+                  if (!context.empty())
+                  {
+                    combined_context += context;
+                  }
+                }
+                if (!combined_context.empty())
+                {
+                  messages.push_back({"system", combined_context});
+                }
+              }
+              for (const auto& message : agent->context->history)
+              {
+                messages.push_back({message.role, message.content});
+              }
+              messages.push_back({"user", user_prompt});
+              return messages;
+            };
+
+            std::string plan_pattern;
+            if (!extension.plan.empty())
+            {
+              if (const Value* plan_value = find_global_value(globals_, extension.plan))
+              {
+                if (plan_value->is_map())
+                {
+                  plan_pattern = map_string_value(as_map(*plan_value), "pattern");
+                }
               }
             }
-            for (const auto& message : agent->context->history)
+            std::string plan_pattern_lower = plan_pattern;
+            std::transform(plan_pattern_lower.begin(), plan_pattern_lower.end(),
+                           plan_pattern_lower.begin(), [](unsigned char c) {
+                             return static_cast<char>(std::tolower(c));
+                           });
+
+            std::string final_response;
+            if (plan_pattern_lower == "react")
             {
-              messages.push_back({message.role, message.content});
+              const int max_steps = 10;
+              std::string observation = query;
+              for (int step = 0; step < max_steps; ++step)
+              {
+                std::string system_prompt = agent->system ? to_std_string(agent->system) : "";
+                system_prompt += "\n\nYou are operating in ReAct mode. Format:\n";
+                system_prompt += "THOUGHT: <analysis>\nACTION: <action>(<args>)\n";
+                system_prompt += "or FINISH: <answer> when complete.";
+
+                std::string user_prompt = "Observation: " + observation;
+                if (!run_guard_chain(extension.guardchains, "on_tool_input", user_prompt))
+                {
+                  final_response = "Request blocked by guard policy.";
+                  break;
+                }
+
+                const auto response_text = run_llm(build_messages(system_prompt, user_prompt));
+                trace_logger_.log_llm_output(agent_name, response_text);
+                const auto react_state = parse_react_response(response_text);
+                if (react_state.is_complete)
+                {
+                  final_response = react_state.final_answer;
+                  if (!run_guard_chain(extension.guardchains, "on_tool_output", final_response))
+                  {
+                    final_response = "Response blocked by guard policy.";
+                  }
+                  break;
+                }
+                if (!react_state.action.empty())
+                {
+                  const std::string action_result =
+                      run_tool(react_state.action, react_state.action_args);
+                  observation =
+                      "Action: " + react_state.action + "\nResult: " + action_result;
+                  agent->context->history.push_back(
+                      {"tool", observation});
+                }
+                else
+                {
+                  observation = response_text;
+                }
+              }
+              if (final_response.empty())
+              {
+                final_response = "Max steps reached without completion.";
+              }
             }
-            std::ostringstream preview;
-            preview << "provider=" << provider_name << "\n";
-            preview << "model=" << config.model << "\n";
-            for (const auto& message : messages)
+            else
             {
-              preview << "[" << message.role << "] " << message.content << "\n";
+              std::string user_prompt = query;
+              if (!run_guard_chain(extension.guardchains, "on_tool_input", user_prompt))
+              {
+                final_response = "Request blocked by guard policy.";
+              }
+              else
+              {
+                const auto response_text = run_llm(build_messages(
+                    agent->system ? to_std_string(agent->system) : "", user_prompt));
+                final_response = response_text;
+                if (!run_guard_chain(extension.guardchains, "on_tool_output", final_response))
+                {
+                  final_response = "Response blocked by guard policy.";
+                }
+              }
             }
-            emit_debug_event(DebugEventType::BeforeAgentAsk, "agent.ask", frame.ip - 1,
-                             preview.str());
-            const auto response_text = provider->chat(messages);
-            agent->context->history.push_back({"assistant", response_text});
-            trace_logger_.log_llm_output(to_std_string(agent->name), response_text);
-            stack_.push_back(Value::String(response_text.c_str(), response_text.size()));
+
+            agent->context->history.push_back({"assistant", final_response});
+            if (!extension.memory.empty())
+            {
+              auto& store = memory_stores_[extension.memory];
+              store.events.push_back(
+                  MemoryEvent{current_time_ms(), "assistant", final_response, agent_name});
+            }
+            trace_logger_.log_llm_output(agent_name, final_response);
+            stack_.push_back(
+                Value::String(final_response.c_str(), final_response.size()));
           }
           else if (method == "reset")
           {
@@ -2070,6 +2833,14 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
       }
       case OpCode::OP_DEFINE_AGENT:
       {
+        Value connector_value = pop();
+        Value plan_value = pop();
+        Value world_model_value = pop();
+        Value memory_value = pop();
+        Value env_value = pop();
+        Value budget_value = pop();
+        Value guardchains_value = pop();
+        Value required_caps_value = pop();
         Value knowledge_value = pop();
         Value skills_value = pop();
         Value system_value = pop();
@@ -2080,7 +2851,8 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
         Value provider_value = pop();
         Value name_value = pop();
 
-        if (!skills_value.is_list() || !knowledge_value.is_list())
+        if (!skills_value.is_list() || !knowledge_value.is_list() ||
+            !required_caps_value.is_list() || !guardchains_value.is_list())
         {
           throw std::runtime_error("Agent lists must be list");
         }
@@ -2100,6 +2872,41 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
             new_agent(name, provider, model, endpoint, api_key_env, system, temperature, skills,
                       connected_knowledge, context);
         globals_.set(name, Value::Agent(agent));
+
+        AgentExtension extension;
+        for (const auto& cap : as_list(required_caps_value)->items)
+        {
+          extension.required_capabilities.push_back(to_std_string(cap));
+        }
+        for (const auto& guard : as_list(guardchains_value)->items)
+        {
+          extension.guardchains.push_back(to_std_string(guard));
+        }
+        if (budget_value.is_string())
+        {
+          extension.budget = to_std_string(budget_value);
+        }
+        if (env_value.is_string())
+        {
+          extension.env = to_std_string(env_value);
+        }
+        if (memory_value.is_string())
+        {
+          extension.memory = to_std_string(memory_value);
+        }
+        if (world_model_value.is_string())
+        {
+          extension.world_model = to_std_string(world_model_value);
+        }
+        if (plan_value.is_string())
+        {
+          extension.plan = to_std_string(plan_value);
+        }
+        if (connector_value.is_string())
+        {
+          extension.connector = to_std_string(connector_value);
+        }
+        agent_extensions_[to_std_string(name)] = std::move(extension);
         break;
       }
       case OpCode::OP_EMIT:
@@ -2142,12 +2949,83 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
         {
           trace_logger_.log_tool_result(tool_name, value_to_json(result));
         }
-        if (frames_.empty())
+        if (frames_.size() <= target_frame_count)
         {
-          trace_logger_.log_end();
+          if (target_frame_count == 0)
+          {
+            trace_logger_.log_end();
+          }
           return result;
         }
-        stack_.push_back(std::move(result));
+        stack_.push_back(result);
+        break;
+      }
+      case OpCode::OP_GRANT:
+      {
+        Value target_value = pop();
+        Value capability_value = pop();
+        const std::string target = to_std_string(target_value);
+        const std::string capability_name = to_std_string(capability_value);
+        std::string pattern = capability_name;
+        if (const Value* capability_def = find_global_value(globals_, capability_name))
+        {
+          if (capability_def->is_map())
+          {
+            auto* map = as_map(*capability_def);
+            const auto defined_pattern = map_string_value(map, "pattern");
+            if (!defined_pattern.empty())
+            {
+              pattern = defined_pattern;
+            }
+          }
+        }
+        entity_capabilities_[target].insert(pattern);
+        break;
+      }
+      case OpCode::OP_CHECKPOINT:
+      {
+        Value label_value = pop();
+        std::string label;
+        if (label_value.is_string())
+        {
+          label = to_std_string(label_value);
+        }
+        auto& store = memory_stores_["global"];
+        store.checkpoints.push_back(store.events.size());
+        if (!label.empty())
+        {
+          store.labeled_checkpoints[label] = store.events.size();
+        }
+        break;
+      }
+      case OpCode::OP_REWIND:
+      {
+        Value target_value = pop();
+        auto& store = memory_stores_["global"];
+        if (target_value.is_string())
+        {
+          const auto label = to_std_string(target_value);
+          auto it = store.labeled_checkpoints.find(label);
+          if (it != store.labeled_checkpoints.end())
+          {
+            store.events.resize(it->second);
+          }
+          break;
+        }
+        if (target_value.is_number())
+        {
+          const auto index = static_cast<std::size_t>(target_value.as_number());
+          if (index <= store.events.size())
+          {
+            store.events.resize(index);
+          }
+          break;
+        }
+        if (!store.checkpoints.empty())
+        {
+          store.events.resize(store.checkpoints.back());
+          store.checkpoints.pop_back();
+        }
         break;
       }
       default:
@@ -2156,6 +3034,25 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
   }
 
   return Value::Nil();
+}
+
+Value VirtualMachine::call_function(ObjFunction* fn, const std::vector<Value>& args, bool is_tool,
+                                    const std::string& tool_name)
+{
+  if (!fn)
+  {
+    return Value::Nil();
+  }
+  const std::size_t target_frame_count = frames_.size();
+  const std::size_t stack_start = stack_.size();
+  for (const auto& arg : args)
+  {
+    stack_.push_back(arg);
+  }
+  frames_.push_back(CallFrame{&fn->chunk, fn, 0, stack_start});
+  frames_.back().is_tool = is_tool;
+  frames_.back().tool_name = tool_name;
+  return run_frames(target_frame_count);
 }
 
 void VirtualMachine::push_root(Value value)

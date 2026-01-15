@@ -59,7 +59,10 @@ enum class OpCode : uint8_t
   OP_BUILD_MAP,
   OP_DEFINE_SKILL,
   OP_DEFINE_KNOWLEDGE,
-  OP_DEFINE_AGENT
+  OP_DEFINE_AGENT,
+  OP_GRANT,
+  OP_CHECKPOINT,
+  OP_REWIND
 };
 
 class Bytecode
