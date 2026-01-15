@@ -27,6 +27,9 @@ private:
   };
 
   vm::Value compile_function(const FunctionDecl& decl);
+  vm::Value compile_block_function(const std::string& name,
+                                   const std::vector<std::string>& parameters,
+                                   const BlockStmt& body);
   void begin_scope();
   void end_scope();
   int resolve_local(const std::string& name) const;

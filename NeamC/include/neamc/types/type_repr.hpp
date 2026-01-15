@@ -93,10 +93,18 @@ struct ConstrainedType
                                                  std::vector<std::string> bounds);
 };
 
+enum class Linearity
+{
+  kUnrestricted,
+  kAffine,
+  kLinear
+};
+
 struct TypeScheme
 {
   std::vector<std::shared_ptr<TypeVariable>> quantified;
   Type body;
+  Linearity linearity{Linearity::kUnrestricted};
 
   Type instantiate() const;
   static TypeScheme generalize(Type t, const TypeEnvironment& env);

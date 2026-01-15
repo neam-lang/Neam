@@ -31,6 +31,7 @@ enum class TokenType
   LeftBracket,
   RightBracket,
   Question,
+  Dollar,
 
   // One or two character tokens.
   Bang,
@@ -106,6 +107,32 @@ enum class TokenType
   System,
   Skills,
   ConnectedKnowledge,
+  Budget,
+  Guard,
+  GuardChain,
+  Capability,
+  Grant,
+  Tool,
+  Memory,
+  Checkpoint,
+  Rewind,
+  Env,
+  Connector,
+  WorldModel,
+  Plan,
+  Subagent,
+  Requires,
+  Guards,
+  BudgetCost,
+  Capabilities,
+  Returns,
+  OnObservation,
+  OnAction,
+  OnToolInput,
+  OnToolOutput,
+  OnToolCall,
+  OnResult,
+  To,
   True,
   False,
   Nil,
@@ -149,6 +176,17 @@ private:
   StmtPtr parse_skill(const Visibility& visibility);
   StmtPtr parse_knowledge(const Visibility& visibility);
   StmtPtr parse_agent(const Visibility& visibility);
+  StmtPtr parse_budget(const Visibility& visibility);
+  StmtPtr parse_guard(const Visibility& visibility);
+  StmtPtr parse_guardchain(const Visibility& visibility);
+  StmtPtr parse_capability(const Visibility& visibility);
+  StmtPtr parse_tool(const Visibility& visibility);
+  StmtPtr parse_memory(const Visibility& visibility);
+  StmtPtr parse_env(const Visibility& visibility);
+  StmtPtr parse_connector(const Visibility& visibility);
+  StmtPtr parse_world_model(const Visibility& visibility);
+  StmtPtr parse_plan(const Visibility& visibility);
+  StmtPtr parse_subagent(const Visibility& visibility);
   StmtPtr parse_module_decl();
   StmtPtr parse_import_decl(const Visibility& visibility, bool is_reexport);
   StmtPtr parse_const_decl(const Visibility& visibility);
@@ -158,6 +196,9 @@ private:
   StmtPtr parse_test_suite_statement();
   StmtPtr parse_with_statement();
   StmtPtr parse_assert_statement(TokenType type);
+  StmtPtr parse_grant_statement();
+  StmtPtr parse_checkpoint_statement();
+  StmtPtr parse_rewind_statement();
   StmtPtr parse_let();
   StmtPtr parse_block();
   BlockStmt parse_block_node();
@@ -168,9 +209,13 @@ private:
   std::unique_ptr<TestDecl> parse_test_decl_node(std::vector<TestAttribute> attributes);
   std::unique_ptr<TestSuiteDecl> parse_test_suite_node();
   SkillParam parse_skill_param();
+  ToolParam parse_tool_param();
+  BudgetCost parse_budget_cost();
+  std::unique_ptr<GuardHandler> parse_guard_handler();
   std::vector<SkillParam> parse_skill_params();
   std::vector<IdentifierRef> parse_identifier_list();
   std::vector<KnowledgeSource> parse_knowledge_sources();
+  BudgetDimension parse_budget_dimension();
   Visibility parse_visibility();
   std::vector<std::string> parse_module_path();
   std::vector<std::string> parse_import_items();
