@@ -345,6 +345,179 @@ struct KnowledgeDecl
   std::vector<KnowledgeSource> sources;
 };
 
+struct BudgetDimension
+{
+  std::string name;
+  double value{0.0};
+  std::string unit;
+};
+
+struct BudgetDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<BudgetDimension> dimensions;
+};
+
+struct GuardHandler
+{
+  enum class Type
+  {
+    kOnObservation,
+    kOnAction,
+    kOnToolInput,
+    kOnToolOutput,
+    kOnToolCall,
+    kOnResult
+  };
+
+  Type type{Type::kOnObservation};
+  std::vector<std::string> parameters;
+  std::unique_ptr<TypeExpression> return_type;
+  std::unique_ptr<BlockStmt> body;
+};
+
+struct GuardDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string description;
+  std::vector<std::unique_ptr<GuardHandler>> handlers;
+};
+
+struct GuardChainDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<IdentifierRef> guards;
+};
+
+struct CapabilityDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string pattern;
+};
+
+struct ToolParam
+{
+  std::string name;
+  std::unique_ptr<TypeExpression> type_expr;
+  ExprPtr default_value;
+  bool has_default{false};
+};
+
+struct BudgetCost
+{
+  std::string resource;
+  double amount{0.0};
+};
+
+struct ToolImpl
+{
+  std::vector<std::string> parameters;
+  std::unique_ptr<BlockStmt> body;
+};
+
+struct ToolDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string description;
+  std::vector<IdentifierRef> capabilities;
+  std::vector<ToolParam> params;
+  std::unique_ptr<TypeExpression> returns_type;
+  std::vector<BudgetCost> budget_costs;
+  std::vector<IdentifierRef> guards;
+  std::unique_ptr<ToolImpl> impl;
+};
+
+struct MemoryConfig
+{
+  std::string key;
+  std::string value;
+};
+
+struct MemoryDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string backend;
+  std::string retention;
+  int max_events{10000};
+  int snapshot_interval{100};
+};
+
+struct CheckpointStmt
+{
+  std::string label;
+};
+
+struct RewindStmt
+{
+  ExprPtr target;
+};
+
+struct EnvConfig
+{
+  std::string key;
+  std::string value;
+  bool is_env_var{false};
+  std::string env_var_name;
+};
+
+struct EnvDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<EnvConfig> configs;
+};
+
+struct ConnectorDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string protocol;
+  std::string endpoint;
+  std::string contract;
+  std::string auth;
+};
+
+struct WorldModelDecl
+{
+  Visibility visibility;
+  std::string name;
+  int tier{0};
+  std::string state_schema;
+  int update_frequency{1};
+};
+
+struct PlanDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string pattern;
+  int max_depth{5};
+  bool backtrack{true};
+  std::string pruning;
+};
+
+struct SubagentDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string base_agent;
+  double budget_share{0.5};
+  bool capability_inherit{true};
+  bool isolation{false};
+};
+
+struct GrantStmt
+{
+  IdentifierRef capability;
+  IdentifierRef target;
+};
+
 struct AgentDecl
 {
   Visibility visibility;
@@ -357,6 +530,14 @@ struct AgentDecl
   std::optional<std::string> system;
   std::vector<IdentifierRef> skills;
   std::vector<IdentifierRef> connected_knowledge;
+  std::vector<IdentifierRef> required_capabilities;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+  std::optional<IdentifierRef> memory;
+  std::optional<IdentifierRef> world_model;
+  std::optional<IdentifierRef> plan;
+  std::optional<IdentifierRef> connector;
 };
 
 struct ConstDecl
@@ -385,8 +566,10 @@ struct Statement
   using Variant =
       std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
                    AssertStmt, WithStmt, TestDecl, TestSuiteDecl, FunctionDecl, SkillDecl,
-                   KnowledgeDecl, AgentDecl, ModuleDecl, ImportDecl, ConstDecl, TypeAlias,
-                   DocComment>;
+                   KnowledgeDecl, BudgetDecl, GuardDecl, GuardChainDecl, CapabilityDecl,
+                   ToolDecl, MemoryDecl, EnvDecl, ConnectorDecl, WorldModelDecl, PlanDecl,
+                   SubagentDecl, AgentDecl, ModuleDecl, ImportDecl, ConstDecl, TypeAlias,
+                   DocComment, GrantStmt, CheckpointStmt, RewindStmt>;
   SourceSpan span;
   Variant node;
 };

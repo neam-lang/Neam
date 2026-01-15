@@ -286,6 +286,14 @@ StmtPtr make_agent_decl(Visibility visibility, std::string name, std::string pro
                         std::optional<std::string> system,
                         std::vector<IdentifierRef> skills,
                         std::vector<IdentifierRef> connected_knowledge,
+                        std::vector<IdentifierRef> required_capabilities,
+                        std::vector<IdentifierRef> guardchains,
+                        std::optional<IdentifierRef> budget,
+                        std::optional<IdentifierRef> env,
+                        std::optional<IdentifierRef> memory,
+                        std::optional<IdentifierRef> world_model,
+                        std::optional<IdentifierRef> plan,
+                        std::optional<IdentifierRef> connector,
                         SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
@@ -293,7 +301,10 @@ StmtPtr make_agent_decl(Visibility visibility, std::string name, std::string pro
   stmt->node = AgentDecl{std::move(visibility), std::move(name), std::move(provider),
                          std::move(model), std::move(endpoint), std::move(api_key_env),
                          std::move(temperature), std::move(system), std::move(skills),
-                         std::move(connected_knowledge)};
+                         std::move(connected_knowledge), std::move(required_capabilities),
+                         std::move(guardchains), std::move(budget), std::move(env),
+                         std::move(memory), std::move(world_model), std::move(plan),
+                         std::move(connector)};
   return stmt;
 }
 
@@ -307,6 +318,145 @@ StmtPtr make_knowledge_decl(Visibility visibility, std::string name, std::string
   stmt->node = KnowledgeDecl{std::move(visibility), std::move(name), std::move(vector_store),
                              std::move(embedding_model), chunk_size, chunk_overlap,
                              std::move(sources)};
+  return stmt;
+}
+
+StmtPtr make_budget_decl(Visibility visibility, std::string name,
+                         std::vector<BudgetDimension> dimensions, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = BudgetDecl{std::move(visibility), std::move(name), std::move(dimensions)};
+  return stmt;
+}
+
+StmtPtr make_guard_decl(Visibility visibility, std::string name, std::string description,
+                        std::vector<std::unique_ptr<GuardHandler>> handlers, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = GuardDecl{std::move(visibility), std::move(name), std::move(description),
+                         std::move(handlers)};
+  return stmt;
+}
+
+StmtPtr make_guardchain_decl(Visibility visibility, std::string name,
+                             std::vector<IdentifierRef> guards, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = GuardChainDecl{std::move(visibility), std::move(name), std::move(guards)};
+  return stmt;
+}
+
+StmtPtr make_capability_decl(Visibility visibility, std::string name, std::string pattern,
+                             SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = CapabilityDecl{std::move(visibility), std::move(name), std::move(pattern)};
+  return stmt;
+}
+
+StmtPtr make_tool_decl(Visibility visibility, std::string name, std::string description,
+                       std::vector<IdentifierRef> capabilities, std::vector<ToolParam> params,
+                       std::unique_ptr<TypeExpression> returns_type,
+                       std::vector<BudgetCost> budget_costs,
+                       std::vector<IdentifierRef> guards, std::unique_ptr<ToolImpl> impl,
+                       SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ToolDecl{std::move(visibility), std::move(name), std::move(description),
+                        std::move(capabilities), std::move(params), std::move(returns_type),
+                        std::move(budget_costs), std::move(guards), std::move(impl)};
+  return stmt;
+}
+
+StmtPtr make_memory_decl(Visibility visibility, std::string name, std::string backend,
+                         std::string retention, int max_events, int snapshot_interval,
+                         SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = MemoryDecl{std::move(visibility), std::move(name), std::move(backend),
+                          std::move(retention), max_events, snapshot_interval};
+  return stmt;
+}
+
+StmtPtr make_env_decl(Visibility visibility, std::string name, std::vector<EnvConfig> configs,
+                      SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = EnvDecl{std::move(visibility), std::move(name), std::move(configs)};
+  return stmt;
+}
+
+StmtPtr make_connector_decl(Visibility visibility, std::string name, std::string protocol,
+                            std::string endpoint, std::string contract, std::string auth,
+                            SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node =
+      ConnectorDecl{std::move(visibility), std::move(name), std::move(protocol),
+                    std::move(endpoint), std::move(contract), std::move(auth)};
+  return stmt;
+}
+
+StmtPtr make_world_model_decl(Visibility visibility, std::string name, int tier,
+                              std::string state_schema, int update_frequency, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = WorldModelDecl{std::move(visibility), std::move(name), tier,
+                              std::move(state_schema), update_frequency};
+  return stmt;
+}
+
+StmtPtr make_plan_decl(Visibility visibility, std::string name, std::string pattern,
+                       int max_depth, bool backtrack, std::string pruning, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = PlanDecl{std::move(visibility), std::move(name), std::move(pattern), max_depth,
+                        backtrack, std::move(pruning)};
+  return stmt;
+}
+
+StmtPtr make_subagent_decl(Visibility visibility, std::string name, std::string base_agent,
+                           double budget_share, bool capability_inherit, bool isolation,
+                           SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = SubagentDecl{std::move(visibility), std::move(name), std::move(base_agent),
+                            budget_share, capability_inherit, isolation};
+  return stmt;
+}
+
+StmtPtr make_grant_stmt(IdentifierRef capability, IdentifierRef target, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = GrantStmt{std::move(capability), std::move(target)};
+  return stmt;
+}
+
+StmtPtr make_checkpoint_stmt(std::string label, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = CheckpointStmt{std::move(label)};
+  return stmt;
+}
+
+StmtPtr make_rewind_stmt(ExprPtr target, SourceSpan span)
+{
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = RewindStmt{std::move(target)};
   return stmt;
 }
 
@@ -470,7 +620,33 @@ void Parser::tokenize()
       {"temperature", TokenType::Temperature},
       {"system", TokenType::System},
       {"skills", TokenType::Skills},
-      {"connected_knowledge", TokenType::ConnectedKnowledge}};
+      {"connected_knowledge", TokenType::ConnectedKnowledge},
+      {"budget", TokenType::Budget},
+      {"guard", TokenType::Guard},
+      {"guardchain", TokenType::GuardChain},
+      {"capability", TokenType::Capability},
+      {"grant", TokenType::Grant},
+      {"tool", TokenType::Tool},
+      {"memory", TokenType::Memory},
+      {"checkpoint", TokenType::Checkpoint},
+      {"rewind", TokenType::Rewind},
+      {"env", TokenType::Env},
+      {"connector", TokenType::Connector},
+      {"world_model", TokenType::WorldModel},
+      {"plan", TokenType::Plan},
+      {"subagent", TokenType::Subagent},
+      {"requires", TokenType::Requires},
+      {"guards", TokenType::Guards},
+      {"budget_cost", TokenType::BudgetCost},
+      {"capabilities", TokenType::Capabilities},
+      {"returns", TokenType::Returns},
+      {"on_observation", TokenType::OnObservation},
+      {"on_action", TokenType::OnAction},
+      {"on_tool_input", TokenType::OnToolInput},
+      {"on_tool_output", TokenType::OnToolOutput},
+      {"on_tool_call", TokenType::OnToolCall},
+      {"on_result", TokenType::OnResult},
+      {"to", TokenType::To}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -522,6 +698,9 @@ void Parser::tokenize()
         continue;
       case '?':
         add(TokenType::Question);
+        continue;
+      case '$':
+        add(TokenType::Dollar);
         continue;
       case '+':
         add(TokenType::Plus);
@@ -751,6 +930,50 @@ StmtPtr Parser::parse_declaration()
   {
     return parse_skill(has_visibility ? visibility : Visibility{});
   }
+  if (match(TokenType::Budget))
+  {
+    return parse_budget(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Guard))
+  {
+    return parse_guard(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::GuardChain))
+  {
+    return parse_guardchain(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Capability))
+  {
+    return parse_capability(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Tool))
+  {
+    return parse_tool(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Memory))
+  {
+    return parse_memory(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Env))
+  {
+    return parse_env(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Connector))
+  {
+    return parse_connector(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::WorldModel))
+  {
+    return parse_world_model(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Plan))
+  {
+    return parse_plan(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Subagent))
+  {
+    return parse_subagent(has_visibility ? visibility : Visibility{});
+  }
   if (match(TokenType::Knowledge))
   {
     return parse_knowledge(has_visibility ? visibility : Visibility{});
@@ -791,6 +1014,18 @@ StmtPtr Parser::parse_statement()
   if (match(TokenType::Emit))
   {
     return parse_emit();
+  }
+  if (match(TokenType::Grant))
+  {
+    return parse_grant_statement();
+  }
+  if (match(TokenType::Checkpoint))
+  {
+    return parse_checkpoint_statement();
+  }
+  if (match(TokenType::Rewind))
+  {
+    return parse_rewind_statement();
   }
   if (match(TokenType::With))
   {
@@ -1110,6 +1345,14 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
   std::optional<std::string> system;
   std::vector<IdentifierRef> skills;
   std::vector<IdentifierRef> connected_knowledge;
+  std::vector<IdentifierRef> required_capabilities;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+  std::optional<IdentifierRef> memory;
+  std::optional<IdentifierRef> world_model;
+  std::optional<IdentifierRef> plan;
+  std::optional<IdentifierRef> connector;
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -1209,6 +1452,102 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
       connected_knowledge = parse_identifier_list();
       continue;
     }
+    if (match(TokenType::Requires))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after requires");
+      }
+      required_capabilities = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::Guards))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after guards");
+      }
+      guardchains = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::Budget))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after budget");
+      }
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected budget identifier");
+      }
+      budget = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::Env))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after env");
+      }
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected env identifier");
+      }
+      env = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::Memory))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after memory");
+      }
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected memory identifier");
+      }
+      memory = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::WorldModel))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after world_model");
+      }
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected world_model identifier");
+      }
+      world_model = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::Plan))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after plan");
+      }
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected plan identifier");
+      }
+      plan = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::Connector))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after connector");
+      }
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected connector identifier");
+      }
+      connector = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
     error("Unexpected token in agent block");
   }
 
@@ -1226,7 +1565,720 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
   }
   return make_agent_decl(visibility, name, *provider, *model, std::move(endpoint),
                          std::move(api_key_env), std::move(temperature), std::move(system),
-                         std::move(skills), std::move(connected_knowledge), span);
+                         std::move(skills), std::move(connected_knowledge),
+                         std::move(required_capabilities), std::move(guardchains),
+                         std::move(budget), std::move(env), std::move(memory),
+                         std::move(world_model), std::move(plan), std::move(connector), span);
+}
+
+StmtPtr Parser::parse_budget(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected budget name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after budget name");
+  }
+
+  std::vector<BudgetDimension> dimensions;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    dimensions.push_back(parse_budget_dimension());
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated budget block");
+  }
+  return make_budget_decl(visibility, name, std::move(dimensions), span);
+}
+
+StmtPtr Parser::parse_guard(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected guard name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after guard name");
+  }
+
+  std::string description;
+  std::vector<std::unique_ptr<GuardHandler>> handlers;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Description))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after description");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for description");
+      }
+      description = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::OnObservation) || match(TokenType::OnAction) ||
+        match(TokenType::OnToolInput) || match(TokenType::OnToolOutput) ||
+        match(TokenType::OnToolCall) || match(TokenType::OnResult))
+    {
+      handlers.push_back(parse_guard_handler());
+      continue;
+    }
+    error("Unexpected token in guard block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated guard block");
+  }
+  return make_guard_decl(visibility, name, std::move(description), std::move(handlers), span);
+}
+
+StmtPtr Parser::parse_guardchain(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected guardchain name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::Equal))
+  {
+    error("Expected '=' after guardchain name");
+  }
+  auto guards = parse_identifier_list();
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after guardchain declaration");
+  }
+  return make_guardchain_decl(visibility, name, std::move(guards), span);
+}
+
+StmtPtr Parser::parse_capability(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected capability name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::Equal))
+  {
+    error("Expected '=' after capability name");
+  }
+  if (!match(TokenType::Identifier) || previous().lexeme != "cap")
+  {
+    error("Expected cap(...) expression");
+  }
+  if (!match(TokenType::LeftParen))
+  {
+    error("Expected '(' after cap");
+  }
+  if (!match(TokenType::String))
+  {
+    error("Expected string literal for capability pattern");
+  }
+  const auto pattern = previous().lexeme;
+  if (!match(TokenType::RightParen))
+  {
+    error("Expected ')' after capability pattern");
+  }
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after capability declaration");
+  }
+  return make_capability_decl(visibility, name, pattern, span);
+}
+
+StmtPtr Parser::parse_tool(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected tool name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after tool name");
+  }
+
+  std::string description;
+  std::vector<IdentifierRef> capabilities;
+  std::vector<ToolParam> params;
+  std::unique_ptr<TypeExpression> returns_type;
+  std::vector<BudgetCost> budget_costs;
+  std::vector<IdentifierRef> guards;
+  std::unique_ptr<ToolImpl> impl;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Description))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after description");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for description");
+      }
+      description = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Capabilities))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after capabilities");
+      }
+      capabilities = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::Params))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after params");
+      }
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' to start tool params");
+      }
+      if (!check(TokenType::RightBrace))
+      {
+        do
+        {
+          params.push_back(parse_tool_param());
+        } while (match(TokenType::Comma));
+      }
+      if (!match(TokenType::RightBrace))
+      {
+        error("Expected '}' after tool params");
+      }
+      continue;
+    }
+    if (match(TokenType::Returns))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after returns");
+      }
+      returns_type = parse_type_expression();
+      continue;
+    }
+    if (match(TokenType::BudgetCost))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after budget_cost");
+      }
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' after budget_cost");
+      }
+      if (!check(TokenType::RightBrace))
+      {
+        do
+        {
+          budget_costs.push_back(parse_budget_cost());
+        } while (match(TokenType::Comma));
+      }
+      if (!match(TokenType::RightBrace))
+      {
+        error("Expected '}' after budget_cost");
+      }
+      continue;
+    }
+    if (match(TokenType::Guards))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after guards");
+      }
+      guards = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::Impl))
+    {
+      if (!match(TokenType::LeftParen))
+      {
+        error("Expected '(' after impl");
+      }
+      auto impl_node = std::make_unique<ToolImpl>();
+      if (!check(TokenType::RightParen))
+      {
+        do
+        {
+          if (!match(TokenType::Identifier))
+          {
+            error("Expected identifier in tool impl params");
+          }
+          impl_node->parameters.push_back(previous().lexeme);
+        } while (match(TokenType::Comma));
+      }
+      if (!match(TokenType::RightParen))
+      {
+        error("Expected ')' after impl params");
+      }
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' after impl params");
+      }
+      impl_node->body = std::make_unique<BlockStmt>(parse_block_node());
+      impl = std::move(impl_node);
+      continue;
+    }
+    error("Unexpected token in tool block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated tool block");
+  }
+  if (!impl)
+  {
+    error("Tool missing impl");
+  }
+  return make_tool_decl(visibility, name, std::move(description), std::move(capabilities),
+                        std::move(params), std::move(returns_type), std::move(budget_costs),
+                        std::move(guards), std::move(impl), span);
+}
+
+StmtPtr Parser::parse_memory(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected memory name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after memory name");
+  }
+
+  std::string backend;
+  std::string retention;
+  int max_events = 10000;
+  int snapshot_interval = 100;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected memory config key");
+    }
+    const auto key = previous().lexeme;
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after memory config key");
+    }
+    if (key == "backend" || key == "retention")
+    {
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for memory config");
+      }
+      if (key == "backend")
+      {
+        backend = previous().lexeme;
+      }
+      else
+      {
+        retention = previous().lexeme;
+      }
+    }
+    else if (key == "max_events" || key == "snapshot_interval")
+    {
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for memory config");
+      }
+      const int value = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      if (key == "max_events")
+      {
+        max_events = value;
+      }
+      else
+      {
+        snapshot_interval = value;
+      }
+    }
+    else
+    {
+      error("Unknown memory config key");
+    }
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated memory block");
+  }
+  return make_memory_decl(visibility, name, std::move(backend), std::move(retention), max_events,
+                          snapshot_interval, span);
+}
+
+StmtPtr Parser::parse_env(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected env name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after env name");
+  }
+
+  std::vector<EnvConfig> configs;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected env config key");
+    }
+    const auto key = previous().lexeme;
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after env config key");
+    }
+
+    EnvConfig config;
+    config.key = key;
+    if (match(TokenType::String))
+    {
+      config.value = previous().lexeme;
+    }
+    else if (match(TokenType::True) || match(TokenType::False))
+    {
+      config.value = previous().type == TokenType::True ? "true" : "false";
+    }
+    else if (match(TokenType::Env))
+    {
+      if (!match(TokenType::LeftParen))
+      {
+        error("Expected '(' after env");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for env var");
+      }
+      config.is_env_var = true;
+      config.env_var_name = previous().lexeme;
+      if (!match(TokenType::RightParen))
+      {
+        error("Expected ')' after env var");
+      }
+    }
+    else
+    {
+      error("Expected env config value");
+    }
+    configs.push_back(std::move(config));
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated env block");
+  }
+  return make_env_decl(visibility, name, std::move(configs), span);
+}
+
+StmtPtr Parser::parse_connector(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected connector name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after connector name");
+  }
+
+  std::string protocol;
+  std::string endpoint;
+  std::string contract;
+  std::string auth;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected connector config key");
+    }
+    const auto key = previous().lexeme;
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after connector config key");
+    }
+    if (!match(TokenType::String))
+    {
+      error("Expected string literal for connector config");
+    }
+    const auto value = previous().lexeme;
+    if (key == "protocol")
+    {
+      protocol = value;
+    }
+    else if (key == "endpoint")
+    {
+      endpoint = value;
+    }
+    else if (key == "contract")
+    {
+      contract = value;
+    }
+    else if (key == "auth")
+    {
+      auth = value;
+    }
+    else
+    {
+      error("Unknown connector config key");
+    }
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated connector block");
+  }
+  return make_connector_decl(visibility, name, std::move(protocol), std::move(endpoint),
+                             std::move(contract), std::move(auth), span);
+}
+
+StmtPtr Parser::parse_world_model(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected world_model name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after world_model name");
+  }
+
+  int tier = 0;
+  std::string state_schema;
+  int update_frequency = 1;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected world_model config key");
+    }
+    const auto key = previous().lexeme;
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after world_model config key");
+    }
+    if (key == "tier" || key == "update_frequency")
+    {
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for world_model config");
+      }
+      const int value = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      if (key == "tier")
+      {
+        tier = value;
+      }
+      else
+      {
+        update_frequency = value;
+      }
+    }
+    else if (key == "state_schema")
+    {
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for world_model config");
+      }
+      state_schema = previous().lexeme;
+    }
+    else
+    {
+      error("Unknown world_model config key");
+    }
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated world_model block");
+  }
+  return make_world_model_decl(visibility, name, tier, std::move(state_schema), update_frequency,
+                               span);
+}
+
+StmtPtr Parser::parse_plan(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected plan name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after plan name");
+  }
+
+  std::string pattern;
+  int max_depth = 5;
+  bool backtrack = true;
+  std::string pruning;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected plan config key");
+    }
+    const auto key = previous().lexeme;
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after plan config key");
+    }
+    if (key == "pattern" || key == "pruning")
+    {
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for plan config");
+      }
+      if (key == "pattern")
+      {
+        pattern = previous().lexeme;
+      }
+      else
+      {
+        pruning = previous().lexeme;
+      }
+    }
+    else if (key == "max_depth")
+    {
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for plan config");
+      }
+      max_depth = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+    }
+    else if (key == "backtrack")
+    {
+      if (match(TokenType::True) || match(TokenType::False))
+      {
+        backtrack = previous().type == TokenType::True;
+      }
+      else
+      {
+        error("Expected boolean literal for plan config");
+      }
+    }
+    else
+    {
+      error("Unknown plan config key");
+    }
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated plan block");
+  }
+  return make_plan_decl(visibility, name, std::move(pattern), max_depth, backtrack,
+                        std::move(pruning), span);
+}
+
+StmtPtr Parser::parse_subagent(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected subagent name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after subagent name");
+  }
+
+  std::string base_agent;
+  double budget_share = 0.5;
+  bool capability_inherit = true;
+  bool isolation = false;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected subagent config key");
+    }
+    const auto key = previous().lexeme;
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after subagent config key");
+    }
+    if (key == "base_agent")
+    {
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected identifier for base_agent");
+      }
+      base_agent = previous().lexeme;
+    }
+    else if (key == "budget_share")
+    {
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for budget_share");
+      }
+      budget_share = std::strtod(previous().lexeme.c_str(), nullptr);
+    }
+    else if (key == "capability_inherit" || key == "isolation")
+    {
+      if (match(TokenType::True) || match(TokenType::False))
+      {
+        const bool value = previous().type == TokenType::True;
+        if (key == "capability_inherit")
+        {
+          capability_inherit = value;
+        }
+        else
+        {
+          isolation = value;
+        }
+      }
+      else
+      {
+        error("Expected boolean literal for subagent config");
+      }
+    }
+    else
+    {
+      error("Unknown subagent config key");
+    }
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated subagent block");
+  }
+  return make_subagent_decl(visibility, name, std::move(base_agent), budget_share,
+                            capability_inherit, isolation, span);
 }
 
 StmtPtr Parser::parse_test_decl_statement()
@@ -1340,6 +2392,60 @@ StmtPtr Parser::parse_assert_statement(TokenType type)
     error("Expected ';' after assert");
   }
   return make_assert_stmt(std::move(assert_stmt), span);
+}
+
+StmtPtr Parser::parse_grant_statement()
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected capability identifier after grant");
+  }
+  IdentifierRef capability{previous().lexeme, span_from_token(previous())};
+  if (!match(TokenType::To))
+  {
+    error("Expected 'to' after grant capability");
+  }
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected target identifier after grant");
+  }
+  IdentifierRef target{previous().lexeme, span_from_token(previous())};
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after grant statement");
+  }
+  return make_grant_stmt(std::move(capability), std::move(target), span);
+}
+
+StmtPtr Parser::parse_checkpoint_statement()
+{
+  SourceSpan span = span_from_token(previous());
+  std::string label;
+  if (match(TokenType::String))
+  {
+    label = previous().lexeme;
+  }
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after checkpoint statement");
+  }
+  return make_checkpoint_stmt(std::move(label), span);
+}
+
+StmtPtr Parser::parse_rewind_statement()
+{
+  SourceSpan span = span_from_token(previous());
+  ExprPtr target;
+  if (match(TokenType::To))
+  {
+    target = parse_expression();
+  }
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after rewind statement");
+  }
+  return make_rewind_stmt(std::move(target), span);
 }
 
 TestAttribute Parser::parse_test_attribute()
@@ -1728,6 +2834,111 @@ SkillParam Parser::parse_skill_param()
   return SkillParam{name, std::move(schema)};
 }
 
+ToolParam Parser::parse_tool_param()
+{
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected parameter name");
+  }
+  ToolParam param;
+  param.name = previous().lexeme;
+  if (!match(TokenType::Colon))
+  {
+    error("Expected ':' after parameter name");
+  }
+  param.type_expr = parse_type_expression();
+  if (match(TokenType::Equal))
+  {
+    param.default_value = parse_expression();
+    param.has_default = true;
+  }
+  return param;
+}
+
+BudgetCost Parser::parse_budget_cost()
+{
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected budget cost key");
+  }
+  BudgetCost cost;
+  cost.resource = previous().lexeme;
+  if (!match(TokenType::Colon))
+  {
+    error("Expected ':' after budget cost key");
+  }
+  if (!match(TokenType::Number))
+  {
+    error("Expected number literal for budget cost");
+  }
+  cost.amount = std::strtod(previous().lexeme.c_str(), nullptr);
+  return cost;
+}
+
+std::unique_ptr<GuardHandler> Parser::parse_guard_handler()
+{
+  auto handler = std::make_unique<GuardHandler>();
+  switch (previous().type)
+  {
+    case TokenType::OnObservation:
+      handler->type = GuardHandler::Type::kOnObservation;
+      break;
+    case TokenType::OnAction:
+      handler->type = GuardHandler::Type::kOnAction;
+      break;
+    case TokenType::OnToolInput:
+      handler->type = GuardHandler::Type::kOnToolInput;
+      break;
+    case TokenType::OnToolOutput:
+      handler->type = GuardHandler::Type::kOnToolOutput;
+      break;
+    case TokenType::OnToolCall:
+      handler->type = GuardHandler::Type::kOnToolCall;
+      break;
+    case TokenType::OnResult:
+      handler->type = GuardHandler::Type::kOnResult;
+      break;
+    default:
+      error("Unknown guard handler type");
+  }
+
+  if (!match(TokenType::LeftParen))
+  {
+    error("Expected '(' after guard handler type");
+  }
+  if (!check(TokenType::RightParen))
+  {
+    do
+    {
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected parameter name in guard handler");
+      }
+      handler->parameters.push_back(previous().lexeme);
+    } while (match(TokenType::Comma));
+  }
+  if (!match(TokenType::RightParen))
+  {
+    error("Expected ')' after guard handler params");
+  }
+
+  if (match(TokenType::Minus))
+  {
+    if (!match(TokenType::Greater))
+    {
+      error("Expected '>' after '-' in guard handler return type");
+    }
+    handler->return_type = parse_type_expression();
+  }
+
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' to start guard handler body");
+  }
+  handler->body = std::make_unique<BlockStmt>(parse_block_node());
+  return handler;
+}
+
 std::vector<SkillParam> Parser::parse_skill_params()
 {
   if (!match(TokenType::LeftBrace))
@@ -1772,6 +2983,52 @@ std::vector<IdentifierRef> Parser::parse_identifier_list()
     error("Expected ']' after list");
   }
   return values;
+}
+
+BudgetDimension Parser::parse_budget_dimension()
+{
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected budget dimension name");
+  }
+  BudgetDimension dimension;
+  dimension.name = previous().lexeme;
+  if (!match(TokenType::Colon))
+  {
+    error("Expected ':' after budget dimension name");
+  }
+
+  if (match(TokenType::Dollar))
+  {
+    if (!match(TokenType::Number))
+    {
+      error("Expected number after '$' in budget value");
+    }
+    dimension.value = std::strtod(previous().lexeme.c_str(), nullptr);
+    dimension.unit = "$";
+    return dimension;
+  }
+
+  if (!match(TokenType::Number))
+  {
+    error("Expected number for budget value");
+  }
+  const auto number_token = previous();
+  dimension.value = std::strtod(number_token.lexeme.c_str(), nullptr);
+  if (check(TokenType::Identifier) && peek().line == number_token.line)
+  {
+    advance();
+    const auto unit = previous().lexeme;
+    if (unit == "s" || unit == "ms" || unit == "min" || unit == "h")
+    {
+      dimension.unit = unit;
+    }
+    else
+    {
+      error("Unknown budget unit");
+    }
+  }
+  return dimension;
 }
 
 Visibility Parser::parse_visibility()
