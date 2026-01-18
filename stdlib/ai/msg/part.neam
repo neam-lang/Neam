@@ -1,0 +1,15 @@
+// Part helpers for messages
+
+module std.ai.msg.part;
+
+pub fun text(text) {
+  return { kind: "Text", text: text };
+}
+
+pub fun image(image) {
+  return { kind: "Image", image: image };
+}
+
+pub fun audio(frame) {
+  return { kind: "Audio", audio: frame };
+}

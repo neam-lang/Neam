@@ -1,0 +1,35 @@
+// Voice budget helpers
+
+module std.voice.budget;
+
+pub fun budget(max_turn_time_ms, max_tokens, max_cost_cents, max_conversation_time_ms) {
+  return {
+    max_turn_time_ms: max_turn_time_ms,
+    max_tokens: max_tokens,
+    max_cost_cents: max_cost_cents,
+    max_conversation_time_ms: max_conversation_time_ms
+  };
+}
+
+pub fun default_budget() {
+  return budget(60000, 4096, 100, 300000);
+}
+
+pub fun unlimited() {
+  return budget(nil, nil, nil, nil);
+}
+
+pub fun with_time(budget, ms) {
+  budget.max_turn_time_ms = ms;
+  return budget;
+}
+
+pub fun with_tokens(budget, n) {
+  budget.max_tokens = n;
+  return budget;
+}
+
+pub fun with_cost(budget, cents) {
+  budget.max_cost_cents = cents;
+  return budget;
+}

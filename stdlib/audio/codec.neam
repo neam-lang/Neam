@@ -1,0 +1,35 @@
+// Audio codec helpers
+
+module std.audio.codec;
+
+pub fun wav_read(path) {
+  return audio_wav_read(path);
+}
+
+pub fun wav_read_bytes(data) {
+  return audio_wav_read_bytes(data);
+}
+
+pub fun wav_write(stream, path) {
+  return audio_wav_write(stream, path);
+}
+
+pub fun wav_to_bytes(stream) {
+  return audio_wav_to_bytes(stream);
+}
+
+pub fun pcm_read(data, format) {
+  return audio_pcm_read(data, format);
+}
+
+pub fun pcm_write(stream) {
+  return audio_pcm_write(stream);
+}
+
+pub fun opus_encode(stream, bitrate) {
+  return audio_opus_encode(stream, bitrate);
+}
+
+pub fun opus_decode(data_stream, format) {
+  return audio_opus_decode(data_stream, format);
+}

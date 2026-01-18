@@ -1,0 +1,27 @@
+// Provider routing helpers
+
+module std.ai.router;
+
+pub fun router_new(providers) {
+  return { providers: providers, fallback: nil, load_balance: nil };
+}
+
+pub fun with_fallback(router, fallback) {
+  router.fallback = fallback;
+  return router;
+}
+
+pub fun with_load_balance(router, policy) {
+  router.load_balance = policy;
+  return router;
+}
+
+pub fun route(router, request) {
+  if (router == nil) {
+    panic("router is nil");
+  }
+  if (router.providers == nil) {
+    panic("router has no providers");
+  }
+  return router.providers;
+}

@@ -1,0 +1,29 @@
+// Audio level meter
+
+module std.audio.meter;
+
+pub fun level_meter(window_ms, peak_hold_ms) {
+  return { window_ms: window_ms, peak_hold_ms: peak_hold_ms, last: nil };
+}
+
+pub fun process(meter, frame) {
+  let rms_value = rms(frame);
+  let peak_value = peak(frame);
+  return {
+    rms_db: rms_value,
+    peak_db: peak_value,
+    is_clipping: peak_value >= 1.0
+  };
+}
+
+pub fun rms(frame) {
+  return audio_rms(frame);
+}
+
+pub fun peak(frame) {
+  return audio_peak(frame);
+}
+
+pub fun detect_clipping(frame, threshold) {
+  return audio_detect_clipping(frame, threshold);
+}

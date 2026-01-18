@@ -1,0 +1,15 @@
+// Message schema helpers
+
+module std.ai.msg.message;
+
+pub fun message(role, parts) {
+  return { role: role, parts: parts };
+}
+
+pub fun with_part(message, part) {
+  if (message.parts == nil) {
+    message.parts = [];
+  }
+  message.parts.push(part);
+  return message;
+}

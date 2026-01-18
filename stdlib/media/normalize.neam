@@ -1,0 +1,11 @@
+// Cross-format media utilities
+
+module std.media.normalize;
+
+pub fun image(image, format) {
+  return media_image_normalize(image, format);
+}
+
+pub fun audio(audio, format) {
+  return media_audio_normalize(audio, format);
+}

@@ -1,0 +1,31 @@
+// Audio processing traits
+
+module std.audio.traits;
+
+pub fun noise_suppression_level_off() {
+  return "Off";
+}
+
+pub fun noise_suppression_level_low() {
+  return "Low";
+}
+
+pub fun noise_suppression_level_medium() {
+  return "Medium";
+}
+
+pub fun noise_suppression_level_high() {
+  return "High";
+}
+
+pub fun noise_suppression_level_aggressive() {
+  return "Aggressive";
+}
+
+pub fun pipeline(stages) {
+  return { stages: stages };
+}
+
+pub fun pipeline_process(pipeline, frame) {
+  panic("pipeline_process is not implemented yet");
+}

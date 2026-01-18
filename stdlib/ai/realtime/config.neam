@@ -1,0 +1,18 @@
+// Realtime session config helpers
+
+module std.ai.realtime.config;
+
+pub fun config(model, system_prompt, tools, voice, modalities, turn_detection) {
+  return {
+    model: model,
+    system_prompt: system_prompt,
+    tools: tools,
+    voice: voice,
+    modalities: modalities,
+    turn_detection: turn_detection
+  };
+}
+
+pub fun turn_detection(mode, threshold, silence_ms) {
+  return { mode: mode, threshold: threshold, silence_ms: silence_ms };
+}

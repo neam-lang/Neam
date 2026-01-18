@@ -1,0 +1,19 @@
+// Streaming model events
+
+module std.ai.events;
+
+pub fun token(text, is_final) {
+  return { kind: "Token", text: text, is_final: is_final };
+}
+
+pub fun audio_chunk(frame, transcript) {
+  return { kind: "AudioChunk", frame: frame, transcript: transcript };
+}
+
+pub fun tool_call(name, arguments) {
+  return { kind: "ToolCall", name: name, arguments: arguments };
+}
+
+pub fun complete(reason) {
+  return { kind: "Complete", reason: reason };
+}
