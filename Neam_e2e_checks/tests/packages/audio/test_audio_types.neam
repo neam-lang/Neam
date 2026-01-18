@@ -1,0 +1,21 @@
+// Audio types unit tests
+
+use std.audio.types;
+
+test "sample_format_f32 returns object" {
+  let fmt = types.sample_format_f32();
+  assert_eq(fmt.kind, "F32");
+}
+
+test "channels_mono returns correct count" {
+  let ch = types.channels_mono();
+  assert_eq(ch.kind, "Mono");
+  assert_eq(ch.count, 1);
+}
+
+test "audio_frame has required fields" {
+  let frame = types.audio_frame([], 16000, types.channels_mono(), types.timestamp(0, 0), 20.0);
+  assert(frame.samples != nil);
+  assert(frame.sample_rate == 16000);
+  assert(frame.duration_ms == 20.0);
+}

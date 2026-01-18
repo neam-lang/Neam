@@ -1,5 +1,3 @@
-// Promotion gates and validators
-
 module std.trust.gates;
 
 pub fun promote(untrusted, validator) {

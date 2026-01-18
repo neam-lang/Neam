@@ -1,0 +1,24 @@
+// Voice agent unit tests
+
+use std.voice.agent;
+use std.voice.budget;
+
+test "builder creates agent with defaults" {
+  let b = agent.builder("test-agent");
+  assert_eq(b.name, "test-agent");
+  assert(b.stt == nil);
+  assert(b.tts == nil);
+}
+
+test "with_stt sets stt provider" {
+  let mock_stt = { name: "mock" };
+  let b = agent.builder("test");
+  let b2 = agent.with_stt(b, mock_stt);
+  assert_eq(b2.stt.name, "mock");
+}
+
+test "budget default has correct values" {
+  let b = budget.default_budget();
+  assert_eq(b.max_turn_time_ms, 60000);
+  assert_eq(b.max_tokens, 4096);
+}

@@ -25,19 +25,19 @@ pub fun phrase_boost(phrase, boost) {
 }
 
 pub fun endpointing_mode_aggressive() {
-  return "Aggressive";
+  return { kind: "Aggressive" };
 }
 
 pub fun endpointing_mode_normal() {
-  return "Normal";
+  return { kind: "Normal" };
 }
 
 pub fun endpointing_mode_conservative() {
-  return "Conservative";
+  return { kind: "Conservative" };
 }
 
 pub fun endpointing_mode_manual() {
-  return "Manual";
+  return { kind: "Manual" };
 }
 
 pub fun event_partial(text, confidence, time_range, is_final) {
