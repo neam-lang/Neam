@@ -35,19 +35,19 @@ pub fun channels_surround(count) {
 }
 
 pub fun sample_format_f32() {
-  return "F32";
+  return { kind: "F32" };
 }
 
 pub fun sample_format_i16() {
-  return "I16";
+  return { kind: "I16" };
 }
 
 pub fun sample_format_i32() {
-  return "I32";
+  return { kind: "I32" };
 }
 
 pub fun sample_format_u8() {
-  return "U8";
+  return { kind: "U8" };
 }
 
 pub fun timestamp(epoch_ms, sample_offset) {

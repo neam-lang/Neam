@@ -1,6 +1,39 @@
-// Realtime provider session helpers
-
 module std.realtime.session;
+
+pub fun modality_text() {
+  return { kind: "Text" };
+}
+
+pub fun modality_audio() {
+  return { kind: "Audio" };
+}
+
+pub fun turn_detection_mode_server_vad() {
+  return { kind: "ServerVad" };
+}
+
+pub fun turn_detection_mode_client_vad() {
+  return { kind: "ClientVad" };
+}
+
+pub fun turn_detection_mode_manual() {
+  return { kind: "Manual" };
+}
+
+pub fun turn_detection_config(mode, threshold, silence_ms) {
+  return { mode: mode, threshold: threshold, silence_ms: silence_ms };
+}
+
+pub fun config(model, system_prompt, tools, voice, modalities, turn_detection) {
+  return {
+    model: model,
+    system_prompt: system_prompt,
+    tools: tools,
+    voice: voice,
+    modalities: modalities,
+    turn_detection: turn_detection
+  };
+}
 
 pub fun session(id, provider, state) {
   return { id: id, provider: provider, state: state };
@@ -53,39 +86,4 @@ pub fun close(provider) {
     panic("provider missing close");
   }
   return provider.close();
-}
-
-pub fun config(model, system_prompt, tools, voice, modalities, turn_detection) {
-  return {
-    model: model,
-    system_prompt: system_prompt,
-    tools: tools,
-    voice: voice,
-    modalities: modalities,
-    turn_detection: turn_detection
-  };
-}
-
-pub fun modality_text() {
-  return { kind: "Text" };
-}
-
-pub fun modality_audio() {
-  return { kind: "Audio" };
-}
-
-pub fun turn_detection_config(mode, threshold, silence_ms) {
-  return { mode: mode, threshold: threshold, silence_ms: silence_ms };
-}
-
-pub fun turn_detection_mode_server_vad() {
-  return { kind: "ServerVad" };
-}
-
-pub fun turn_detection_mode_client_vad() {
-  return { kind: "ClientVad" };
-}
-
-pub fun turn_detection_mode_manual() {
-  return { kind: "Manual" };
 }
