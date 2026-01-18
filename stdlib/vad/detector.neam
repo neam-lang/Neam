@@ -3,31 +3,31 @@
 module std.vad.detector;
 
 pub fun sensitivity_low() {
-  return "Low";
+  return { kind: "Low" };
 }
 
 pub fun sensitivity_medium() {
-  return "Medium";
+  return { kind: "Medium" };
 }
 
 pub fun sensitivity_high() {
-  return "High";
+  return { kind: "High" };
 }
 
 pub fun speech_state_silence() {
-  return "Silence";
+  return { kind: "Silence" };
 }
 
 pub fun speech_state_start() {
-  return "SpeechStart";
+  return { kind: "SpeechStart" };
 }
 
 pub fun speech_state_speech() {
-  return "Speech";
+  return { kind: "Speech" };
 }
 
 pub fun speech_state_end() {
-  return "SpeechEnd";
+  return { kind: "SpeechEnd" };
 }
 
 pub fun vad_default() {

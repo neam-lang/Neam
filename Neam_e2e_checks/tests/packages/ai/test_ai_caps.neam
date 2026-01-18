@@ -1,0 +1,26 @@
+// AI capabilities unit tests
+
+use std.ai.caps;
+
+test "modality constants return objects" {
+  assert_eq(caps.modality_text().kind, "Text");
+  assert_eq(caps.modality_audio().kind, "Audio");
+  assert_eq(caps.modality_image().kind, "Image");
+  assert_eq(caps.modality_video().kind, "Video");
+}
+
+test "validate_request rejects nil request" {
+  let result = caps.validate_request(nil, {});
+  assert_eq(result.ok, false);
+  assert_eq(result.error, "request is nil");
+}
+
+test "validate_request rejects nil caps" {
+  let result = caps.validate_request({}, nil);
+  assert_eq(result.ok, false);
+  assert_eq(result.error, "caps is nil");
+}
+
+test "supports_audio_output returns false for nil" {
+  assert_eq(caps.supports_audio_output(nil), false);
+}
