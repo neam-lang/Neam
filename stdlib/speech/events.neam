@@ -1,0 +1,11 @@
+// Shared speech events
+
+module std.speech.events;
+
+pub fun transcript_event(kind, payload) {
+  return { kind: kind, payload: payload };
+}
+
+pub fun audio_event(kind, payload) {
+  return { kind: kind, payload: payload };
+}

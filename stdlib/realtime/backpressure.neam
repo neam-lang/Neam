@@ -1,0 +1,41 @@
+// Backpressure controller helpers
+
+module std.realtime.backpressure;
+
+pub fun strategy_drop_oldest() {
+  return { kind: "DropOldest" };
+}
+
+pub fun strategy_drop_newest() {
+  return { kind: "DropNewest" };
+}
+
+pub fun strategy_block() {
+  return { kind: "Block" };
+}
+
+pub fun strategy_adaptive(target_latency_ms) {
+  return { kind: "Adaptive", target_latency_ms: target_latency_ms };
+}
+
+pub fun controller(strategy, buffer_size, high_watermark, low_watermark) {
+  return {
+    strategy: strategy,
+    buffer_size: buffer_size,
+    high_watermark: high_watermark,
+    low_watermark: low_watermark,
+    stats: { frames_dropped: 0, frames_delayed: 0, avg_buffer_size: 0.0, max_buffer_size: 0 }
+  };
+}
+
+pub fun should_send(controller) {
+  return realtime_backpressure_should_send(controller);
+}
+
+pub fun buffer_pressure(controller) {
+  return realtime_backpressure_pressure(controller);
+}
+
+pub fun stats(controller) {
+  return controller.stats;
+}

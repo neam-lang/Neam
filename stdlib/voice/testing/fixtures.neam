@@ -1,0 +1,63 @@
+// Voice test fixtures
+
+module std.voice.testing.fixtures;
+
+pub fun silence(duration_ms, format) {
+  return voice_fixture_silence(duration_ms, format);
+}
+
+pub fun tone(freq_hz, duration_ms, format) {
+  return voice_fixture_tone(freq_hz, duration_ms, format);
+}
+
+pub fun noise(duration_ms, level_db, format) {
+  return voice_fixture_noise(duration_ms, level_db, format);
+}
+
+pub fun load(name) {
+  return voice_fixture_load(name);
+}
+
+pub fun test_phrase_hello() {
+  return "Hello";
+}
+
+pub fun test_phrase_goodbye() {
+  return "Goodbye";
+}
+
+pub fun test_phrase_yes() {
+  return "Yes";
+}
+
+pub fun test_phrase_no() {
+  return "No";
+}
+
+pub fun test_phrase_thank_you() {
+  return "ThankYou";
+}
+
+pub fun test_phrase_custom(text) {
+  return text;
+}
+
+pub fun transcript_simple_greeting() {
+  return "Hello, how can I help you today?";
+}
+
+pub fun transcript_question() {
+  return "What is the status of my order?";
+}
+
+pub fun transcript_long_paragraph() {
+  return "This is a longer paragraph fixture for transcript testing.";
+}
+
+pub fun transcript_with_numbers() {
+  return "My order number is 123456.";
+}
+
+pub fun transcript_with_pii() {
+  return "My SSN is 123-45-6789.";
+}

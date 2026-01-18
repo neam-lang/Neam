@@ -1,0 +1,102 @@
+// Text-to-speech interfaces
+
+module std.speech.tts;
+
+pub fun tts_config(voice, language, speed, pitch, volume, style, output_format) {
+  return {
+    voice: voice,
+    language: language,
+    speed: speed,
+    pitch: pitch,
+    volume: volume,
+    style: style,
+    output_format: output_format
+  };
+}
+
+pub fun voice(id, name, language, gender, styles, sample_rate) {
+  return {
+    id: id,
+    name: name,
+    language: language,
+    gender: gender,
+    styles: styles,
+    sample_rate: sample_rate
+  };
+}
+
+pub fun gender_male() {
+  return "Male";
+}
+
+pub fun gender_female() {
+  return "Female";
+}
+
+pub fun gender_neutral() {
+  return "Neutral";
+}
+
+pub fun event_audio_chunk(frame) {
+  return { kind: "AudioChunk", frame: frame };
+}
+
+pub fun event_started(text_length) {
+  return { kind: "Started", text_length: text_length };
+}
+
+pub fun event_word_boundary(word, text_offset, audio_offset_ms) {
+  return { kind: "WordBoundary", word: word, text_offset: text_offset, audio_offset_ms: audio_offset_ms };
+}
+
+pub fun event_viseme(viseme_id, audio_offset_ms, duration_ms) {
+  return { kind: "Viseme", viseme_id: viseme_id, audio_offset_ms: audio_offset_ms, duration_ms: duration_ms };
+}
+
+pub fun event_finished(total_duration_ms) {
+  return { kind: "Finished", total_duration_ms: total_duration_ms };
+}
+
+pub fun event_error(code, message) {
+  return { kind: "Error", code: code, message: message };
+}
+
+pub fun provider(name) {
+  return speech_tts_provider(name);
+}
+
+pub fun providers() {
+  return speech_tts_providers();
+}
+
+pub fun speakable_markup(segments) {
+  return { segments: segments };
+}
+
+pub fun segment_text(text) {
+  return { kind: "Text", text: text };
+}
+
+pub fun segment_break(time_ms) {
+  return { kind: "Break", time_ms: time_ms };
+}
+
+pub fun segment_emphasis(level, text) {
+  return { kind: "Emphasis", level: level, text: text };
+}
+
+pub fun segment_prosody(rate, pitch, text) {
+  return { kind: "Prosody", rate: rate, pitch: pitch, text: text };
+}
+
+pub fun segment_say_as(interpret_as, text) {
+  return { kind: "SayAs", interpret_as: interpret_as, text: text };
+}
+
+pub fun segment_phoneme(alphabet, ph, text) {
+  return { kind: "Phoneme", alphabet: alphabet, ph: ph, text: text };
+}
+
+pub fun markup_to_ssml(markup) {
+  return speech_markup_to_ssml(markup);
+}

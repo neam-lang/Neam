@@ -1,0 +1,47 @@
+// Transcript helpers
+
+module std.voice.transcript;
+
+pub fun transcript(turns, started_at, ended_at) {
+  return { turns: turns, started_at: started_at, ended_at: ended_at };
+}
+
+pub fun transcript_turn(speaker, segments, tool_calls) {
+  return { speaker: speaker, segments: segments, tool_calls: tool_calls };
+}
+
+pub fun transcript_segment(text, start_ms, end_ms, confidence, words) {
+  return { text: text, start_ms: start_ms, end_ms: end_ms, confidence: confidence, words: words };
+}
+
+pub fun transcript_word(text, start_ms, end_ms, confidence) {
+  return { text: text, start_ms: start_ms, end_ms: end_ms, confidence: confidence };
+}
+
+pub fun tool_call_record(tool, args, result, start_ms, end_ms) {
+  return { tool: tool, args: args, result: result, start_ms: start_ms, end_ms: end_ms };
+}
+
+pub fun to_text(transcript) {
+  return voice_transcript_to_text(transcript);
+}
+
+pub fun to_srt(transcript) {
+  return voice_transcript_to_srt(transcript);
+}
+
+pub fun to_vtt(transcript) {
+  return voice_transcript_to_vtt(transcript);
+}
+
+pub fun to_json(transcript) {
+  return voice_transcript_to_json(transcript);
+}
+
+pub fun search(transcript, query) {
+  return voice_transcript_search(transcript, query);
+}
+
+pub fun at_time(transcript, ms) {
+  return voice_transcript_at_time(transcript, ms);
+}

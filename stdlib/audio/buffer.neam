@@ -1,0 +1,73 @@
+// Audio buffering structures
+
+module std.audio.buffer;
+
+pub fun ring_buffer(capacity_ms, format) {
+  return { capacity_ms: capacity_ms, format: format, items: [] };
+}
+
+pub fun ring_push(buffer, frame) {
+  if (buffer.items == nil) {
+    buffer.items = [];
+  }
+  buffer.items.push(frame);
+  return { ok: true, value: true };
+}
+
+pub fun ring_pop(buffer) {
+  if (buffer.items == nil) {
+    return nil;
+  }
+  return buffer.items.pop();
+}
+
+pub fun ring_peek(buffer) {
+  if (buffer.items == nil || buffer.items.len() == 0) {
+    return nil;
+  }
+  return buffer.items[0];
+}
+
+pub fun ring_available(buffer) {
+  if (buffer.items == nil) {
+    return 0;
+  }
+  return buffer.items.len();
+}
+
+pub fun ring_clear(buffer) {
+  buffer.items = [];
+  return buffer;
+}
+
+pub fun jitter_buffer(target_delay_ms, max_delay_ms, min_delay_ms, adaptive) {
+  return {
+    target_delay_ms: target_delay_ms,
+    max_delay_ms: max_delay_ms,
+    min_delay_ms: min_delay_ms,
+    adaptive: adaptive,
+    queue: []
+  };
+}
+
+pub fun jitter_push(buffer, frame, sequence) {
+  buffer.queue.push({ frame: frame, sequence: sequence });
+  return { ok: true, value: true };
+}
+
+pub fun jitter_pop(buffer) {
+  if (buffer.queue == nil || buffer.queue.len() == 0) {
+    return nil;
+  }
+  let item = buffer.queue.pop();
+  return item.frame;
+}
+
+pub fun jitter_stats(buffer) {
+  return {
+    current_delay_ms: buffer.target_delay_ms,
+    packet_loss_rate: 0.0,
+    late_packets: 0,
+    reordered_packets: 0
+  };
+}

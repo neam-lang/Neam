@@ -1,0 +1,19 @@
+// Speech state helpers
+
+module std.vad.state;
+
+pub fun silence() {
+  return "Silence";
+}
+
+pub fun speech_start() {
+  return "SpeechStart";
+}
+
+pub fun speech() {
+  return "Speech";
+}
+
+pub fun speech_end() {
+  return "SpeechEnd";
+}

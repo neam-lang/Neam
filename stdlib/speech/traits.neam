@@ -1,0 +1,17 @@
+// Provider interface helpers
+
+module std.speech.traits;
+
+pub fun stt_transcribe(provider, stream) {
+  if (provider == nil || provider.transcribe == nil) {
+    panic("stt provider missing transcribe");
+  }
+  return provider.transcribe(stream);
+}
+
+pub fun tts_synthesize(provider, text) {
+  if (provider == nil || provider.synthesize == nil) {
+    panic("tts provider missing synthesize");
+  }
+  return provider.synthesize(text);
+}

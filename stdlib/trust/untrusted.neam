@@ -1,0 +1,14 @@
+// Untrusted wrapper helpers
+
+module std.trust.untrusted;
+
+pub fun wrap(value, source) {
+  return { value: value, source: source, trusted: false };
+}
+
+pub fun value(untrusted) {
+  if (untrusted == nil) {
+    return nil;
+  }
+  return untrusted.value;
+}

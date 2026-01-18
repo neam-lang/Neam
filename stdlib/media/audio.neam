@@ -1,0 +1,15 @@
+// Audio loading and normalization
+
+module std.media.audio;
+
+pub fun load(path) {
+  return media_audio_load(path);
+}
+
+pub fun normalize(audio, format) {
+  return media_audio_normalize(audio, format);
+}
+
+pub fun resample(audio, sample_rate) {
+  return media_audio_resample(audio, sample_rate);
+}

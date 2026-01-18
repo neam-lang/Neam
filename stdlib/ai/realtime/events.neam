@@ -1,0 +1,31 @@
+// Realtime session events
+
+module std.ai.realtime.events;
+
+pub fun connected(session_id) {
+  return { kind: "Connected", session_id: session_id };
+}
+
+pub fun token(text, is_final) {
+  return { kind: "Token", text: text, is_final: is_final };
+}
+
+pub fun audio_chunk(frame, transcript) {
+  return { kind: "AudioChunk", frame: frame, transcript: transcript };
+}
+
+pub fun tool_call(call_id, name, arguments) {
+  return { kind: "ToolCall", id: call_id, name: name, arguments: arguments };
+}
+
+pub fun turn_complete(transcript, tool_calls) {
+  return { kind: "TurnComplete", transcript: transcript, tool_calls: tool_calls };
+}
+
+pub fun error(code, message) {
+  return { kind: "Error", code: code, message: message };
+}
+
+pub fun disconnected(reason) {
+  return { kind: "Disconnected", reason: reason };
+}
