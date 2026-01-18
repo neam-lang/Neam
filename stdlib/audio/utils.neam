@@ -1,0 +1,27 @@
+// Audio stream utilities
+
+module std.audio.utils;
+
+pub fun resample(stream, sample_rate) {
+  return audio_resample_stream(stream, sample_rate);
+}
+
+pub fun frame(stream, ms) {
+  return audio_frame_stream(stream, ms);
+}
+
+pub fun chunk(stream, samples) {
+  return audio_chunk_stream(stream, samples);
+}
+
+pub fun mix(streams) {
+  return audio_mix_streams(streams);
+}
+
+pub fun gain(stream, db) {
+  return audio_gain_stream(stream, db);
+}
+
+pub fun tee(stream, count) {
+  return audio_tee_stream(stream, count);
+}

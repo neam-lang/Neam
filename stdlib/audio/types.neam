@@ -1,0 +1,78 @@
+// Audio core types
+
+module std.audio.types;
+
+pub fun sample_rate_8k() {
+  return 8000;
+}
+
+pub fun sample_rate_16k() {
+  return 16000;
+}
+
+pub fun sample_rate_22k() {
+  return 22050;
+}
+
+pub fun sample_rate_44k() {
+  return 44100;
+}
+
+pub fun sample_rate_48k() {
+  return 48000;
+}
+
+pub fun channels_mono() {
+  return { kind: "Mono", count: 1 };
+}
+
+pub fun channels_stereo() {
+  return { kind: "Stereo", count: 2 };
+}
+
+pub fun channels_surround(count) {
+  return { kind: "Surround", count: count };
+}
+
+pub fun sample_format_f32() {
+  return "F32";
+}
+
+pub fun sample_format_i16() {
+  return "I16";
+}
+
+pub fun sample_format_i32() {
+  return "I32";
+}
+
+pub fun sample_format_u8() {
+  return "U8";
+}
+
+pub fun timestamp(epoch_ms, sample_offset) {
+  return { epoch_ms: epoch_ms, sample_offset: sample_offset };
+}
+
+pub fun audio_frame(samples, sample_rate, channels, timestamp, duration_ms) {
+  return {
+    samples: samples,
+    sample_rate: sample_rate,
+    channels: channels,
+    timestamp: timestamp,
+    duration_ms: duration_ms
+  };
+}
+
+pub fun clock(start_time, sample_rate, drift_ppm) {
+  return { start_time: start_time, sample_rate: sample_rate, drift_ppm: drift_ppm };
+}
+
+pub fun audio_format(sample_rate, channels, sample_format, frame_size_ms) {
+  return {
+    sample_rate: sample_rate,
+    channels: channels,
+    sample_format: sample_format,
+    frame_size_ms: frame_size_ms
+  };
+}

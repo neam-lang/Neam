@@ -1,0 +1,79 @@
+// Turn management helpers
+
+module std.voice.turn;
+
+pub fun cancel_mode_immediate() {
+  return "Immediate";
+}
+
+pub fun cancel_mode_word_boundary() {
+  return "WordBoundary";
+}
+
+pub fun cancel_mode_sentence() {
+  return "Sentence";
+}
+
+pub fun policy_barge_in(min_user_speech_ms, cancel_mode) {
+  return { kind: "BargeIn", min_user_speech_ms: min_user_speech_ms, cancel_mode: cancel_mode };
+}
+
+pub fun policy_push_to_talk() {
+  return { kind: "PushToTalk" };
+}
+
+pub fun policy_wake_word(phrase, sensitivity) {
+  return { kind: "WakeWord", phrase: phrase, sensitivity: sensitivity };
+}
+
+pub fun policy_strict_turns() {
+  return { kind: "StrictTurns" };
+}
+
+pub fun policy_duplex(duck_on_user_speech) {
+  return { kind: "Duplex", duck_on_user_speech: duck_on_user_speech };
+}
+
+pub fun floor_state_free() {
+  return "Free";
+}
+
+pub fun floor_state_user() {
+  return "UserHasFloor";
+}
+
+pub fun floor_state_agent() {
+  return "AgentHasFloor";
+}
+
+pub fun floor_state_contested() {
+  return "Contested";
+}
+
+pub fun manager(policy) {
+  return { policy: policy, current_speaker: nil, floor_state: floor_state_free() };
+}
+
+pub fun request_floor(manager, speaker) {
+  return voice_request_floor(manager, speaker);
+}
+
+pub fun release_floor(manager, speaker) {
+  return voice_release_floor(manager, speaker);
+}
+
+pub fun handle_barge_in(manager) {
+  return voice_handle_barge_in(manager);
+}
+
+pub fun barge_in_action_ignore() {
+  return "Ignore";
+}
+
+pub fun barge_in_action_cancel() {
+  return "Cancel";
+}
+
+pub fun barge_in_action_queue() {
+  return "Queue";
+}

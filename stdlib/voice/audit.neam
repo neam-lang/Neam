@@ -1,0 +1,52 @@
+// Audit log helpers
+
+module std.voice.audit;
+
+pub fun audit_log() {
+  return { entries: [] };
+}
+
+pub fun append(log, entry) {
+  log.entries.push(entry);
+  return log;
+}
+
+pub fun export(log) {
+  return log.entries;
+}
+
+pub fun to_json(log) {
+  return voice_audit_to_json(log);
+}
+
+pub fun entry_session_started(session_id, timestamp, user_id) {
+  return { kind: "SessionStarted", session_id: session_id, timestamp: timestamp, user_id: user_id };
+}
+
+pub fun entry_consent_recorded(granted, timestamp) {
+  return { kind: "ConsentRecorded", granted: granted, timestamp: timestamp };
+}
+
+pub fun entry_user_spoke(timestamp, duration_ms, transcript_hash) {
+  return { kind: "UserSpoke", timestamp: timestamp, duration_ms: duration_ms, transcript_hash: transcript_hash };
+}
+
+pub fun entry_agent_spoke(timestamp, duration_ms, text_hash) {
+  return { kind: "AgentSpoke", timestamp: timestamp, duration_ms: duration_ms, text_hash: text_hash };
+}
+
+pub fun entry_tool_invoked(tool, timestamp, args_hash, result_hash) {
+  return { kind: "ToolInvoked", tool: tool, timestamp: timestamp, args_hash: args_hash, result_hash: result_hash };
+}
+
+pub fun entry_data_accessed(resource, timestamp, user_id) {
+  return { kind: "DataAccessed", resource: resource, timestamp: timestamp, user_id: user_id };
+}
+
+pub fun entry_policy_violation(policy, timestamp, action_taken) {
+  return { kind: "PolicyViolation", policy: policy, timestamp: timestamp, action_taken: action_taken };
+}
+
+pub fun entry_session_ended(timestamp, reason, total_duration_ms) {
+  return { kind: "SessionEnded", timestamp: timestamp, reason: reason, total_duration_ms: total_duration_ms };
+}

@@ -1,0 +1,15 @@
+// Role helpers
+
+module std.ai.msg.role;
+
+pub fun system() {
+  return "System";
+}
+
+pub fun user() {
+  return "User";
+}
+
+pub fun assistant() {
+  return "Assistant";
+}

@@ -1,0 +1,55 @@
+// Voice activity detection
+
+module std.vad.detector;
+
+pub fun sensitivity_low() {
+  return "Low";
+}
+
+pub fun sensitivity_medium() {
+  return "Medium";
+}
+
+pub fun sensitivity_high() {
+  return "High";
+}
+
+pub fun speech_state_silence() {
+  return "Silence";
+}
+
+pub fun speech_state_start() {
+  return "SpeechStart";
+}
+
+pub fun speech_state_speech() {
+  return "Speech";
+}
+
+pub fun speech_state_end() {
+  return "SpeechEnd";
+}
+
+pub fun vad_default() {
+  return { sensitivity: sensitivity_medium(), frame_duration_ms: 20 };
+}
+
+pub fun vad_new(sensitivity) {
+  return { sensitivity: sensitivity, frame_duration_ms: 20 };
+}
+
+pub fun detect(vad, frame) {
+  return vad_detect_frame(vad, frame);
+}
+
+pub fun process(vad, stream) {
+  return vad_process_stream(vad, stream);
+}
+
+pub fun reset(vad) {
+  return vad_reset(vad);
+}
+
+pub fun event(state, timestamp, confidence, energy_db) {
+  return { state: state, timestamp: timestamp, confidence: confidence, energy_db: energy_db };
+}

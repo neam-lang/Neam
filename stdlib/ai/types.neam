@@ -1,0 +1,38 @@
+// Core AI message/types helpers
+
+module std.ai.types;
+
+pub fun message(role, parts) {
+  return { role: role, parts: parts };
+}
+
+pub fun part_text(text) {
+  return { kind: "Text", text: text };
+}
+
+pub fun part_image(image) {
+  return { kind: "Image", image: image };
+}
+
+pub fun part_audio(frame) {
+  return { kind: "Audio", audio: frame };
+}
+
+pub fun model_event(kind, payload) {
+  return { kind: kind, payload: payload };
+}
+
+pub fun model_caps(input_modalities, output_modalities, max_context_tokens, max_output_tokens, features, rate_limits) {
+  return {
+    input_modalities: input_modalities,
+    output_modalities: output_modalities,
+    max_context_tokens: max_context_tokens,
+    max_output_tokens: max_output_tokens,
+    features: features,
+    rate_limits: rate_limits
+  };
+}
+
+pub fun rate_limits(requests_per_min, tokens_per_min) {
+  return { requests_per_min: requests_per_min, tokens_per_min: tokens_per_min };
+}

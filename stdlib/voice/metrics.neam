@@ -1,0 +1,52 @@
+// Voice metrics helpers
+
+module std.voice.metrics;
+
+pub fun metrics(session_id) {
+  return { session_id: session_id, measurements: [] };
+}
+
+pub fun record(metrics, measurement) {
+  metrics.measurements.push(measurement);
+  return metrics;
+}
+
+pub fun summary(metrics) {
+  return voice_metrics_summary(metrics);
+}
+
+pub fun export_prometheus(metrics) {
+  return voice_metrics_export_prometheus(metrics);
+}
+
+pub fun export_json(metrics) {
+  return voice_metrics_export_json(metrics);
+}
+
+pub fun measurement_turn_latency(turn_id, total_ms, stt_ms, llm_ms, tts_ms) {
+  return { kind: "TurnLatency", turn_id: turn_id, total_ms: total_ms, stt_ms: stt_ms, llm_ms: llm_ms, tts_ms: tts_ms };
+}
+
+pub fun measurement_stt_latency(partial_to_final_ms, first_word_ms) {
+  return { kind: "SttLatency", partial_to_final_ms: partial_to_final_ms, first_word_ms: first_word_ms };
+}
+
+pub fun measurement_tts_latency(time_to_first_audio_ms, total_synthesis_ms) {
+  return { kind: "TtsLatency", time_to_first_audio_ms: time_to_first_audio_ms, total_synthesis_ms: total_synthesis_ms };
+}
+
+pub fun measurement_barge_in(timestamp, agent_spoken_ms) {
+  return { kind: "BargeIn", timestamp: timestamp, agent_spoken_ms: agent_spoken_ms };
+}
+
+pub fun measurement_vad_metric(false_starts, false_ends, correct_detections) {
+  return { kind: "VadMetric", false_starts: false_starts, false_ends: false_ends, correct_detections: correct_detections };
+}
+
+pub fun measurement_audio_quality(dropped_frames, jitter_ms, packet_loss_percent) {
+  return { kind: "AudioQuality", dropped_frames: dropped_frames, jitter_ms: jitter_ms, packet_loss_percent: packet_loss_percent };
+}
+
+pub fun measurement_cost(stt_cost_cents, tts_cost_cents, llm_cost_cents, total_cost_cents) {
+  return { kind: "Cost", stt_cost_cents: stt_cost_cents, tts_cost_cents: tts_cost_cents, llm_cost_cents: llm_cost_cents, total_cost_cents: total_cost_cents };
+}

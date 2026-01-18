@@ -1,0 +1,60 @@
+// Playback queue helpers
+
+module std.voice.playback;
+
+pub fun queue() {
+  return { items: [], current: nil, state: playback_state_idle() };
+}
+
+pub fun playback_item(id, audio, priority, interruptible, on_complete) {
+  return { id: id, audio: audio, priority: priority, interruptible: interruptible, on_complete: on_complete };
+}
+
+pub fun playback_state_idle() {
+  return "Idle";
+}
+
+pub fun playback_state_playing(item_id, position_ms) {
+  return { kind: "Playing", item_id: item_id, position_ms: position_ms };
+}
+
+pub fun playback_state_paused(item_id, position_ms) {
+  return { kind: "Paused", item_id: item_id, position_ms: position_ms };
+}
+
+pub fun enqueue(queue, item) {
+  queue.items.push(item);
+  return queue;
+}
+
+pub fun enqueue_priority(queue, item) {
+  queue.items.unshift(item);
+  return queue;
+}
+
+pub fun cancel_current(queue) {
+  return voice_playback_cancel_current(queue);
+}
+
+pub fun cancel(queue, item_id) {
+  return voice_playback_cancel(queue, item_id);
+}
+
+pub fun clear(queue) {
+  queue.items = [];
+  queue.current = nil;
+  queue.state = playback_state_idle();
+  return queue;
+}
+
+pub fun pause(queue) {
+  return voice_playback_pause(queue);
+}
+
+pub fun resume(queue) {
+  return voice_playback_resume(queue);
+}
+
+pub fun state(queue) {
+  return queue.state;
+}
