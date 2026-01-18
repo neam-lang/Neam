@@ -1,0 +1,51 @@
+// Voice test assertions
+
+module std.voice.testing.assertions;
+
+pub fun assert_transcript_eq(result, expected) {
+  return voice_assert_transcript_eq(result, expected);
+}
+
+pub fun assert_transcript_contains(result, substring) {
+  return voice_assert_transcript_contains(result, substring);
+}
+
+pub fun assert_transcript_matches(result, regex) {
+  return voice_assert_transcript_matches(result, regex);
+}
+
+pub fun assert_called_tool(result, tool) {
+  return voice_assert_called_tool(result, tool);
+}
+
+pub fun assert_called_tool_with(result, tool, expected_args) {
+  return voice_assert_called_tool_with(result, tool, expected_args);
+}
+
+pub fun assert_called_tools_in_order(result, tools) {
+  return voice_assert_called_tools_in_order(result, tools);
+}
+
+pub fun assert_response_time_under(result, ms) {
+  return voice_assert_response_time_under(result, ms);
+}
+
+pub fun assert_first_word_under(result, ms) {
+  return voice_assert_first_word_under(result, ms);
+}
+
+pub fun assert_audio_duration_between(result, min_ms, max_ms) {
+  return voice_assert_audio_duration_between(result, min_ms, max_ms);
+}
+
+pub fun assert_no_silence_longer_than(result, ms) {
+  return voice_assert_no_silence_longer_than(result, ms);
+}
+
+pub fun assert_barge_in_handled(result) {
+  return voice_assert_barge_in_handled(result);
+}
+
+pub fun assert_no_errors(result) {
+  return voice_assert_no_errors(result);
+}

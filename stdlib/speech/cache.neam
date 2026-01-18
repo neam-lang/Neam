@@ -1,0 +1,35 @@
+// Speech caching helpers
+
+module std.speech.cache;
+
+pub fun tts_cache_put(key, audio) {
+  return speech_tts_cache_put(key, audio);
+}
+
+pub fun tts_cache_get(key) {
+  return speech_tts_cache_get(key);
+}
+
+pub fun tts_cache_has(key) {
+  return speech_tts_cache_has(key);
+}
+
+pub fun tts_cache_clear() {
+  return speech_tts_cache_clear();
+}
+
+pub fun tts_cache_set_max_size(bytes) {
+  return speech_tts_cache_set_max_size(bytes);
+}
+
+pub fun tts_cache_key(text_hash, voice_id, speed, pitch) {
+  return { text_hash: text_hash, voice_id: voice_id, speed: speed, pitch: pitch };
+}
+
+pub fun stt_cache_put(audio_hash, transcript) {
+  return speech_stt_cache_put(audio_hash, transcript);
+}
+
+pub fun stt_cache_get(audio_hash) {
+  return speech_stt_cache_get(audio_hash);
+}

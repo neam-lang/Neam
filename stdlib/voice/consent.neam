@@ -1,0 +1,25 @@
+// Consent helpers
+
+module std.voice.consent;
+
+pub fun require_consent(tts, sink, prompt) {
+  return voice_require_consent(tts, sink, prompt);
+}
+
+pub fun has_consent(session) {
+  return voice_has_consent(session);
+}
+
+pub fun record_consent(session, granted) {
+  return voice_record_consent(session, granted);
+}
+
+pub fun consent_record(session_id, timestamp, granted, prompt_played, user_response) {
+  return {
+    session_id: session_id,
+    timestamp: timestamp,
+    granted: granted,
+    prompt_played: prompt_played,
+    user_response: user_response
+  };
+}

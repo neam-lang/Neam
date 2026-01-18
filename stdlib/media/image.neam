@@ -1,0 +1,15 @@
+// Image loading and normalization
+
+module std.media.image;
+
+pub fun load(path) {
+  return media_image_load(path);
+}
+
+pub fun resize(image, width, height) {
+  return media_image_resize(image, width, height);
+}
+
+pub fun normalize(image, format) {
+  return media_image_normalize(image, format);
+}

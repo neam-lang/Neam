@@ -1,0 +1,45 @@
+// Realtime session trait helpers
+
+module std.ai.realtime.session;
+
+pub fun session_connect(provider, config) {
+  if (provider == nil || provider.connect == nil) {
+    panic("provider does not support realtime connect");
+  }
+  return provider.connect(config);
+}
+
+pub fun session_send_audio(session, frame) {
+  if (session == nil || session.send_audio == nil) {
+    panic("session does not support send_audio");
+  }
+  return session.send_audio(frame);
+}
+
+pub fun session_send_text(session, text) {
+  if (session == nil || session.send_text == nil) {
+    panic("session does not support send_text");
+  }
+  return session.send_text(text);
+}
+
+pub fun session_events(session) {
+  if (session == nil || session.events == nil) {
+    panic("session does not support events");
+  }
+  return session.events();
+}
+
+pub fun session_interrupt(session) {
+  if (session == nil || session.interrupt == nil) {
+    panic("session does not support interrupt");
+  }
+  return session.interrupt();
+}
+
+pub fun session_close(session) {
+  if (session == nil || session.close == nil) {
+    panic("session does not support close");
+  }
+  return session.close();
+}

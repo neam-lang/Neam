@@ -1,0 +1,64 @@
+// Voice simulator helpers
+
+module std.voice.testing.simulator;
+
+pub fun simulator(agent) {
+  return { agent: agent, inputs: [], outputs: nil };
+}
+
+pub fun input(simulator, input) {
+  simulator.inputs.push(input);
+  return simulator;
+}
+
+pub fun run(simulator) {
+  return voice_simulator_run(simulator);
+}
+
+pub fun input_audio_file(path) {
+  return { kind: "AudioFile", path: path };
+}
+
+pub fun input_audio_stream(stream) {
+  return { kind: "Audio", stream: stream };
+}
+
+pub fun input_transcript(text) {
+  return { kind: "Transcript", text: text };
+}
+
+pub fun input_timed_transcripts(items) {
+  return { kind: "TimedTranscripts", items: items };
+}
+
+pub fun input_barge_in(at_ms) {
+  return { kind: "BargeIn", at_ms: at_ms };
+}
+
+pub fun input_silence(duration_ms) {
+  return { kind: "Silence", duration_ms: duration_ms };
+}
+
+pub fun output(agent_responses, tool_calls, audio_duration_ms, metrics) {
+  return { agent_responses: agent_responses, tool_calls: tool_calls, audio_duration_ms: audio_duration_ms, metrics: metrics };
+}
+
+pub fun assert_response_contains(output, substring) {
+  return voice_sim_assert_response_contains(output, substring);
+}
+
+pub fun assert_tool_called(output, tool) {
+  return voice_sim_assert_tool_called(output, tool);
+}
+
+pub fun assert_tool_called_with(output, tool, args) {
+  return voice_sim_assert_tool_called_with(output, tool, args);
+}
+
+pub fun assert_no_tool_called(output, tool) {
+  return voice_sim_assert_no_tool_called(output, tool);
+}
+
+pub fun assert_latency_under(output, ms) {
+  return voice_sim_assert_latency_under(output, ms);
+}

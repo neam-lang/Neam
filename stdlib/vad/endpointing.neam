@@ -1,0 +1,86 @@
+// Endpointing policy
+
+module std.vad.endpointing;
+
+pub fun filler_tolerance_strict() {
+  return "Strict";
+}
+
+pub fun filler_tolerance_normal() {
+  return "Normal";
+}
+
+pub fun filler_tolerance_permissive() {
+  return "Permissive";
+}
+
+pub fun policy_default() {
+  return {
+    silence_threshold_ms: 700,
+    min_speech_ms: 250,
+    max_turn_ms: nil,
+    semantic_endpointing: false,
+    filler_tolerance: filler_tolerance_normal()
+  };
+}
+
+pub fun policy_aggressive() {
+  let policy = policy_default();
+  policy.silence_threshold_ms = 300;
+  policy.min_speech_ms = 150;
+  return policy;
+}
+
+pub fun policy_conservative() {
+  let policy = policy_default();
+  policy.silence_threshold_ms = 900;
+  policy.min_speech_ms = 400;
+  return policy;
+}
+
+pub fun with_silence_ms(policy, ms) {
+  policy.silence_threshold_ms = ms;
+  return policy;
+}
+
+pub fun with_max_turn_ms(policy, ms) {
+  policy.max_turn_ms = ms;
+  return policy;
+}
+
+pub fun with_semantic(policy, enabled) {
+  policy.semantic_endpointing = enabled;
+  return policy;
+}
+
+pub fun endpoint_state_listening() {
+  return { kind: "Listening" };
+}
+
+pub fun endpoint_state_in_speech(start, duration_ms) {
+  return { kind: "InSpeech", start: start, duration_ms: duration_ms };
+}
+
+pub fun endpoint_state_in_silence(start, speech_duration_ms) {
+  return { kind: "InSilence", start: start, speech_duration_ms: speech_duration_ms };
+}
+
+pub fun endpoint_state_endpoint(turn_duration_ms) {
+  return { kind: "Endpoint", turn_duration_ms: turn_duration_ms };
+}
+
+pub fun detector(policy) {
+  return { policy: policy, state: endpoint_state_listening() };
+}
+
+pub fun process(detector, vad_event, transcript) {
+  return vad_endpoint_process(detector, vad_event, transcript);
+}
+
+pub fun force_endpoint(detector) {
+  return vad_endpoint_force(detector);
+}
+
+pub fun reset(detector) {
+  return vad_endpoint_reset(detector);
+}

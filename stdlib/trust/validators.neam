@@ -1,0 +1,14 @@
+// Built-in validators
+
+module std.trust.validators;
+
+pub fun allow_all(untrusted) {
+  return { ok: true, value: "allow_all" };
+}
+
+pub fun require_non_empty(untrusted) {
+  if (untrusted == nil || untrusted.value == nil || untrusted.value == "") {
+    return { ok: false, error: "value is empty" };
+  }
+  return { ok: true, value: "non_empty" };
+}

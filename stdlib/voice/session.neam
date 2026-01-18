@@ -1,0 +1,159 @@
+// Voice session state
+
+module std.voice.session;
+
+pub fun session(id, agent, started_at) {
+  return {
+    id: id,
+    agent: agent,
+    state: session_state_idle(),
+    history: [],
+    metrics: nil,
+    started_at: started_at
+  };
+}
+
+pub fun session_state_idle() {
+  return "Idle";
+}
+
+pub fun session_state_listening() {
+  return "Listening";
+}
+
+pub fun session_state_processing() {
+  return "Processing";
+}
+
+pub fun session_state_speaking() {
+  return "Speaking";
+}
+
+pub fun session_state_tool_executing(tool) {
+  return { kind: "ToolExecuting", tool: tool };
+}
+
+pub fun session_state_ended(reason) {
+  return { kind: "Ended", reason: reason };
+}
+
+pub fun end_reason_user() {
+  return "UserEnded";
+}
+
+pub fun end_reason_agent() {
+  return "AgentEnded";
+}
+
+pub fun end_reason_budget() {
+  return "BudgetExceeded";
+}
+
+pub fun end_reason_timeout() {
+  return "Timeout";
+}
+
+pub fun end_reason_error(error) {
+  return { kind: "Error", error: error };
+}
+
+pub fun state(session) {
+  return session.state;
+}
+
+pub fun end(session) {
+  return voice_session_end(session);
+}
+
+pub fun interrupt(session) {
+  return voice_session_interrupt(session);
+}
+
+pub fun history(session) {
+  return session.history;
+}
+
+pub fun metrics(session) {
+  return session.metrics;
+}
+
+pub fun events(session) {
+  return voice_session_events(session);
+}
+
+pub fun transcript(session) {
+  return voice_session_transcript(session);
+}
+
+pub fun turn(speaker, text, audio_duration_ms, started_at, ended_at, tool_calls) {
+  return {
+    speaker: speaker,
+    text: text,
+    audio_duration_ms: audio_duration_ms,
+    started_at: started_at,
+    ended_at: ended_at,
+    tool_calls: tool_calls
+  };
+}
+
+pub fun speaker_user() {
+  return "User";
+}
+
+pub fun speaker_agent() {
+  return "Agent";
+}
+
+pub fun speaker_system() {
+  return "System";
+}
+
+pub fun session_metrics(total_turns, user_speaking_time_ms, agent_speaking_time_ms, total_latency_ms, avg_turn_latency_ms, barge_in_count, tool_call_count, tokens_used, estimated_cost_cents) {
+  return {
+    total_turns: total_turns,
+    user_speaking_time_ms: user_speaking_time_ms,
+    agent_speaking_time_ms: agent_speaking_time_ms,
+    total_latency_ms: total_latency_ms,
+    avg_turn_latency_ms: avg_turn_latency_ms,
+    barge_in_count: barge_in_count,
+    tool_call_count: tool_call_count,
+    tokens_used: tokens_used,
+    estimated_cost_cents: estimated_cost_cents
+  };
+}
+
+pub fun event_state_changed(from, to) {
+  return { kind: "StateChanged", from: from, to: to };
+}
+
+pub fun event_turn_started(speaker) {
+  return { kind: "TurnStarted", speaker: speaker };
+}
+
+pub fun event_turn_ended(turn) {
+  return { kind: "TurnEnded", turn: turn };
+}
+
+pub fun event_partial_transcript(text) {
+  return { kind: "PartialTranscript", text: text };
+}
+
+pub fun event_tool_call_started(tool, args) {
+  return { kind: "ToolCallStarted", tool: tool, args: args };
+}
+
+pub fun event_tool_call_ended(tool, result) {
+  return { kind: "ToolCallEnded", tool: tool, result: result };
+}
+
+pub fun event_barge_in(at) {
+  return { kind: "BargeIn", at: at };
+}
+
+pub fun event_budget_warning(remaining_percent) {
+  return { kind: "BudgetWarning", remaining_percent: remaining_percent };
+}
+
+pub fun event_error(error) {
+  return { kind: "Error", error: error };
+}
