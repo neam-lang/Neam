@@ -1,5 +1,3 @@
-// Model capabilities validation helpers
-
 module std.ai.caps;
 
 pub fun modality_text() {

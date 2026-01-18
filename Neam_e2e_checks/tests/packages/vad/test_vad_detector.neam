@@ -1,0 +1,20 @@
+// VAD detector unit tests
+
+use std.vad.detector;
+
+test "sensitivity returns object" {
+  let low = detector.sensitivity_low();
+  assert_eq(low.kind, "Low");
+
+  let med = detector.sensitivity_medium();
+  assert_eq(med.kind, "Medium");
+
+  let high = detector.sensitivity_high();
+  assert_eq(high.kind, "High");
+}
+
+test "vad_default has medium sensitivity" {
+  let vad = detector.vad_default();
+  assert_eq(vad.sensitivity.kind, "Medium");
+  assert_eq(vad.frame_duration_ms, 20);
+}

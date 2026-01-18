@@ -1,0 +1,21 @@
+// Cross-codebase compatibility tests
+// These tests verify that NeamC and Neam produce identical outputs
+
+test "audio types are compatible" {
+  // Both should produce { kind: "F32" }
+  let neamc_fmt = neamc.std.audio.types.sample_format_f32();
+  let neam_fmt = neam.std.audio.types.sample_format_f32();
+  assert_eq(neamc_fmt, neam_fmt);
+}
+
+test "vad sensitivity is compatible" {
+  let neamc_sens = neamc.std.vad.detector.sensitivity_low();
+  let neam_sens = neam.std.vad.detector.sensitivity_low();
+  assert_eq(neamc_sens, neam_sens);
+}
+
+test "voice agent builder is compatible" {
+  let neamc_builder = neamc.std.voice.agent.builder("test");
+  let neam_builder = neam.std.voice.agent.builder("test");
+  assert_eq(neamc_builder.name, neam_builder.name);
+}
