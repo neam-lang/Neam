@@ -1,0 +1,74 @@
+// Advanced agent shared utilities
+
+module std.agents.advanced.base;
+
+// === Result helpers ===
+
+pub fun ok(value) { return { ok: true, value: value }; }
+pub fun err(error) { return { ok: false, error: error }; }
+
+// === Base agent state ===
+
+pub fun agent_state_idle() { return { kind: "Idle" }; }
+pub fun agent_state_running() { return { kind: "Running" }; }
+pub fun agent_state_completed() { return { kind: "Completed" }; }
+pub fun agent_state_error(message) { return { kind: "Error", message: message }; }
+
+// === Observability ===
+
+pub fun trace_span(name) {
+  return {
+    name: name,
+    started_at: now(),
+    ended_at: nil,
+    duration_ms: nil,
+    attributes: {},
+    events: []
+  };
+}
+
+pub fun with_span_attribute(span, key, value) {
+  span.attributes[key] = value;
+  return span;
+}
+
+pub fun add_span_event(span, name, data) {
+  push(span.events, { name: name, data: data, timestamp: now() });
+  return span;
+}
+
+pub fun end_span(span) {
+  span.ended_at = now();
+  span.duration_ms = span.ended_at - span.started_at;
+  return span;
+}
+
+// === Metrics ===
+
+pub fun metrics() {
+  return {
+    invocations: 0,
+    success_count: 0,
+    error_count: 0,
+    total_duration_ms: 0,
+    avg_duration_ms: 0,
+    tokens_used: 0,
+    cost_usd: 0.0
+  };
+}
+
+pub fun update_metrics(metrics_obj, result, duration_ms, tokens, cost) {
+  metrics_obj.invocations = metrics_obj.invocations + 1;
+  metrics_obj.total_duration_ms = metrics_obj.total_duration_ms + duration_ms;
+  metrics_obj.avg_duration_ms = metrics_obj.total_duration_ms / metrics_obj.invocations;
+  metrics_obj.tokens_used = metrics_obj.tokens_used + tokens;
+  metrics_obj.cost_usd = metrics_obj.cost_usd + cost;
+
+  if (result.ok) {
+    metrics_obj.success_count = metrics_obj.success_count + 1;
+  } else {
+    metrics_obj.error_count = metrics_obj.error_count + 1;
+  }
+
+  return metrics_obj;
+}

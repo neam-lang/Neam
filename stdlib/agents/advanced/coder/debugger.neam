@@ -1,0 +1,238 @@
+// Debugging and error fixing functionality
+
+module std.agents.advanced.coder.debugger;
+
+use std.agents.advanced.coder.config;
+
+// Debug request
+pub fun debug_request(code, error_message, language) {
+  return {
+    code: code,
+    error_message: error_message,
+    language: language,
+    stack_trace: nil,
+    context: {}
+  };
+}
+
+pub fun with_stack_trace(req, trace) {
+  req.stack_trace = trace;
+  return req;
+}
+
+pub fun with_debug_context(req, ctx) {
+  req.context = ctx;
+  return req;
+}
+
+// Debug result
+pub fun debug_result(fixed_code, explanation, changes) {
+  return {
+    fixed_code: fixed_code,
+    explanation: explanation,
+    changes: changes,
+    confidence: 0.0
+  };
+}
+
+// Analyze and fix error
+pub fun fix_error(llm, request) {
+  let analysis = analyze_error(llm, request);
+  if (!analysis.ok) {
+    return analysis;
+  }
+
+  let fix = generate_fix(llm, request, analysis.value);
+  if (!fix.ok) {
+    return fix;
+  }
+
+  return {
+    ok: true,
+    value: debug_result(
+      fix.value.code,
+      analysis.value.explanation,
+      fix.value.changes
+    )
+  };
+}
+
+// Analyze error without fixing
+pub fun analyze_error(llm, request) {
+  let prompt = "Analyze the following " + request.language.kind + " error:\n\n" +
+               "Error: " + request.error_message + "\n\n";
+
+  if (request.stack_trace != nil) {
+    prompt = prompt + "Stack trace:\n" + request.stack_trace + "\n\n";
+  }
+
+  prompt = prompt + "Code:\n```\n" + request.code + "\n```\n\n" +
+           "Explain the root cause and suggest a fix:";
+
+  let response = llm.generate(prompt);
+
+  return {
+    ok: true,
+    value: {
+      error_type: classify_error(request.error_message),
+      root_cause: extract_root_cause(response),
+      explanation: response,
+      suggested_fix: extract_suggested_fix(response)
+    }
+  };
+}
+
+// Generate fix for analyzed error
+pub fun generate_fix(llm, request, analysis) {
+  let prompt = "Fix the following " + request.language.kind + " code.\n\n" +
+               "Error: " + request.error_message + "\n" +
+               "Root cause: " + analysis.root_cause + "\n\n" +
+               "Code:\n```\n" + request.code + "\n```\n\n" +
+               "Provide the fixed code:";
+
+  let response = llm.generate(prompt);
+  let fixed = extract_code_block(response);
+
+  let changes = compute_diff(request.code, fixed);
+
+  return {
+    ok: true,
+    value: {
+      code: fixed,
+      changes: changes
+    }
+  };
+}
+
+// Debug with breakpoints (conceptual)
+pub fun debug_with_trace(llm, code, inputs, language) {
+  let prompt = "Trace the execution of this " + language.kind + " code step by step.\n\n" +
+               "Code:\n```\n" + code + "\n```\n\n" +
+               "Inputs: " + json_encode(inputs) + "\n\n" +
+               "Show variable values at each step:";
+
+  let response = llm.generate(prompt);
+
+  return {
+    ok: true,
+    value: {
+      trace: parse_execution_trace(response),
+      final_state: extract_final_state(response)
+    }
+  };
+}
+
+// Find potential bugs
+pub fun find_bugs(llm, code, language) {
+  let prompt = "Analyze this " + language.kind + " code for potential bugs:\n\n" +
+               "```\n" + code + "\n```\n\n" +
+               "List all potential issues with severity (high/medium/low):";
+
+  let response = llm.generate(prompt);
+  let bugs = parse_bug_list(response);
+
+  return {
+    ok: true,
+    value: {
+      bugs: bugs,
+      total_count: len(bugs),
+      high_severity: count_by_severity(bugs, "high"),
+      medium_severity: count_by_severity(bugs, "medium"),
+      low_severity: count_by_severity(bugs, "low")
+    }
+  };
+}
+
+// Helper functions
+fun classify_error(message) {
+  let lower = lowercase(message);
+  if (contains(lower, "syntax")) { return "SyntaxError"; }
+  if (contains(lower, "type")) { return "TypeError"; }
+  if (contains(lower, "reference")) { return "ReferenceError"; }
+  if (contains(lower, "null") || contains(lower, "undefined")) { return "NullError"; }
+  if (contains(lower, "index") || contains(lower, "range")) { return "IndexError"; }
+  return "UnknownError";
+}
+
+fun extract_root_cause(response) {
+  let lines = split(response, "\n");
+  for (line in lines) {
+    if (contains(lowercase(line), "root cause") || contains(lowercase(line), "because")) {
+      return trim(line);
+    }
+  }
+  return lines[0];
+}
+
+fun extract_suggested_fix(response) {
+  let lines = split(response, "\n");
+  for (line in lines) {
+    if (contains(lowercase(line), "fix") || contains(lowercase(line), "solution")) {
+      return trim(line);
+    }
+  }
+  return "";
+}
+
+fun compute_diff(original, fixed) {
+  let orig_lines = split(original, "\n");
+  let fixed_lines = split(fixed, "\n");
+  let changes = [];
+
+  let max_len = max(len(orig_lines), len(fixed_lines));
+  for (let i = 0; i < max_len; i = i + 1) {
+    let orig = i < len(orig_lines) ? orig_lines[i] : nil;
+    let fix = i < len(fixed_lines) ? fixed_lines[i] : nil;
+
+    if (orig != fix) {
+      push(changes, { line: i + 1, original: orig, fixed: fix });
+    }
+  }
+
+  return changes;
+}
+
+fun parse_execution_trace(response) {
+  return split(response, "\n");
+}
+
+fun extract_final_state(response) {
+  return {};
+}
+
+fun parse_bug_list(response) {
+  let bugs = [];
+  let lines = split(response, "\n");
+
+  for (line in lines) {
+    let lower = lowercase(line);
+    let severity = "low";
+    if (contains(lower, "high")) { severity = "high"; }
+    else if (contains(lower, "medium")) { severity = "medium"; }
+
+    if (len(trim(line)) > 10) {
+      push(bugs, { description: trim(line), severity: severity });
+    }
+  }
+
+  return bugs;
+}
+
+fun count_by_severity(bugs, severity) {
+  let count = 0;
+  for (bug in bugs) {
+    if (bug.severity == severity) {
+      count = count + 1;
+    }
+  }
+  return count;
+}
+
+fun extract_code_block(text) {
+  let start = index_of(text, "```");
+  if (start < 0) { return trim(text); }
+  let code_start = index_of(text, "\n", start) + 1;
+  let end = index_of(text, "```", code_start);
+  if (end < 0) { return trim(substring(text, code_start, len(text))); }
+  return trim(substring(text, code_start, end));
+}

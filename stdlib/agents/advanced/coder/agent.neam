@@ -1,0 +1,225 @@
+// Coder Agent main implementation
+
+module std.agents.advanced.coder.agent;
+
+use std.agents.advanced.coder.config;
+use std.agents.advanced.coder.generator;
+use std.agents.advanced.coder.debugger;
+use std.agents.advanced.coder.tester;
+use std.agents.advanced.coder.reviewer;
+
+// Coder agent builder
+pub fun coder_builder(llm) {
+  return {
+    llm: llm,
+    language: config.language_typescript(),
+    repo_context: nil,
+    test_framework: config.test_framework_jest(),
+    quality_settings: config.quality_settings_default(),
+    auto_test: true,
+    auto_review: true,
+    max_iterations: 5
+  };
+}
+
+pub fun with_language(builder, language) {
+  builder.language = language;
+  return builder;
+}
+
+pub fun with_repo_context(builder, context) {
+  builder.repo_context = context;
+  return builder;
+}
+
+pub fun with_test_framework(builder, framework) {
+  builder.test_framework = framework;
+  return builder;
+}
+
+pub fun with_quality_settings(builder, settings) {
+  builder.quality_settings = settings;
+  return builder;
+}
+
+pub fun with_auto_test(builder, enabled) {
+  builder.auto_test = enabled;
+  return builder;
+}
+
+pub fun with_auto_review(builder, enabled) {
+  builder.auto_review = enabled;
+  return builder;
+}
+
+pub fun with_max_iterations(builder, max) {
+  builder.max_iterations = max;
+  return builder;
+}
+
+// Build the coder agent
+pub fun build_coder_agent(builder) {
+  if (builder.llm == nil) {
+    return { ok: false, error: config.coder_error("CONFIG", "LLM is required", nil) };
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: "CoderAgent",
+      llm: builder.llm,
+      language: builder.language,
+      repo_context: builder.repo_context,
+      test_framework: builder.test_framework,
+      quality_settings: builder.quality_settings,
+      auto_test: builder.auto_test,
+      auto_review: builder.auto_review,
+      max_iterations: builder.max_iterations
+    }
+  };
+}
+
+// Main coding task - generate, test, review in one call
+pub fun code(agent, task_description) {
+  let result = {
+    task: task_description,
+    iterations: [],
+    final_code: nil,
+    tests: nil,
+    review: nil,
+    success: false
+  };
+
+  let gen_request = generator.generation_request(task_description, agent.language);
+  if (agent.repo_context != nil) {
+    gen_request = generator.with_context_files(gen_request, get_context_files(agent.repo_context));
+  }
+
+  let generated = generator.generate_code(agent.llm, gen_request);
+  if (!generated.ok) {
+    return { ok: false, error: generated.error };
+  }
+
+  result.final_code = generated.value.code;
+  push(result.iterations, { type: "generate", result: generated.value });
+
+  if (agent.auto_test) {
+    let test_req = tester.test_request(result.final_code, agent.language, agent.test_framework);
+    let tests = tester.generate_tests(agent.llm, test_req);
+
+    if (tests.ok) {
+      result.tests = tests.value;
+      push(result.iterations, { type: "test", result: tests.value });
+    }
+  }
+
+  if (agent.auto_review) {
+    let review_req = reviewer.review_request(result.final_code, agent.language);
+    let review = reviewer.review_code(agent.llm, review_req);
+
+    if (review.ok) {
+      result.review = review.value;
+      push(result.iterations, { type: "review", result: review.value });
+
+      if (!review.value.passed && len(result.iterations) < agent.max_iterations) {
+        let fixed = fix_review_issues(agent, result.final_code, review.value);
+        if (fixed.ok) {
+          result.final_code = fixed.value;
+          push(result.iterations, { type: "fix", result: fixed.value });
+        }
+      }
+    }
+  }
+
+  result.success = true;
+  return { ok: true, value: result };
+}
+
+// Debug and fix code
+pub fun debug(agent, code, error_message) {
+  let request = debugger.debug_request(code, error_message, agent.language);
+  return debugger.fix_error(agent.llm, request);
+}
+
+// Generate code only
+pub fun generate(agent, description) {
+  let request = generator.generation_request(description, agent.language);
+  return generator.generate_code(agent.llm, request);
+}
+
+// Generate tests only
+pub fun test(agent, code) {
+  let request = tester.test_request(code, agent.language, agent.test_framework);
+  return tester.generate_tests(agent.llm, request);
+}
+
+// Review code only
+pub fun review(agent, code) {
+  let request = reviewer.review_request(code, agent.language);
+  return reviewer.review_code(agent.llm, request);
+}
+
+// Refactor code
+pub fun refactor(agent, code, refactor_type) {
+  return generator.refactor_code(agent.llm, code, refactor_type, agent.language);
+}
+
+// Complete code at position
+pub fun complete(agent, code, cursor_position) {
+  return generator.complete_code(agent.llm, code, cursor_position, agent.language);
+}
+
+// Edit code with instructions
+pub fun edit(agent, code, instructions) {
+  return generator.edit_code(agent.llm, code, instructions, agent.language);
+}
+
+// Find bugs in code
+pub fun find_bugs(agent, code) {
+  return debugger.find_bugs(agent.llm, code, agent.language);
+}
+
+// Security review
+pub fun security_check(agent, code) {
+  return reviewer.security_review(agent.llm, code, agent.language);
+}
+
+// Helper functions
+fun get_context_files(repo_context) {
+  if (repo_context == nil || repo_context.file_tree == nil) {
+    return [];
+  }
+
+  let files = [];
+  for (file in repo_context.file_tree) {
+    if (is_relevant_file(file, repo_context.language)) {
+      push(files, { path: file.path, content: file.content });
+    }
+  }
+
+  return take(files, 5);
+}
+
+fun is_relevant_file(file, language) {
+  for (ext in language.extensions) {
+    if (ends_with(file.path, ext)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+fun fix_review_issues(agent, code, review) {
+  let issues = "";
+  for (comment in review.comments) {
+    if (comment.severity == "high" || comment.severity == "critical") {
+      issues = issues + "- " + comment.message + "\n";
+    }
+  }
+
+  if (len(issues) == 0) {
+    return { ok: true, value: code };
+  }
+
+  return generator.edit_code(agent.llm, code, "Fix these issues:\n" + issues, agent.language);
+}

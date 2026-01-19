@@ -1,0 +1,76 @@
+// Voice agent configuration types
+
+module std.agents.advanced.voice.config;
+
+// Voice engines
+pub fun engine_deepgram() { return { kind: "Deepgram", supports_streaming: true }; }
+pub fun engine_whisper() { return { kind: "Whisper", supports_streaming: false }; }
+pub fun engine_azure() { return { kind: "AzureSpeech", supports_streaming: true }; }
+pub fun engine_google() { return { kind: "GoogleSpeech", supports_streaming: true }; }
+
+// TTS engines
+pub fun tts_elevenlabs() { return { kind: "ElevenLabs", voices: [] }; }
+pub fun tts_cartesia() { return { kind: "Cartesia", voices: [] }; }
+pub fun tts_azure() { return { kind: "AzureTTS", voices: [] }; }
+pub fun tts_openai() { return { kind: "OpenAI", voices: ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] }; }
+
+// Languages
+pub fun lang_en_us() { return { code: "en-US", name: "English (US)" }; }
+pub fun lang_en_gb() { return { code: "en-GB", name: "English (UK)" }; }
+pub fun lang_es() { return { code: "es-ES", name: "Spanish" }; }
+pub fun lang_fr() { return { code: "fr-FR", name: "French" }; }
+pub fun lang_de() { return { code: "de-DE", name: "German" }; }
+pub fun lang_ja() { return { code: "ja-JP", name: "Japanese" }; }
+pub fun lang_zh() { return { code: "zh-CN", name: "Chinese" }; }
+
+// Voice settings
+pub fun voice_settings_default() {
+  return {
+    speed: 1.0,
+    pitch: 1.0,
+    volume: 1.0,
+    stability: 0.75,
+    similarity_boost: 0.75
+  };
+}
+
+// Emotion types
+pub fun emotion_neutral() { return { kind: "Neutral", intensity: 0.0 }; }
+pub fun emotion_happy() { return { kind: "Happy", intensity: 0.0 }; }
+pub fun emotion_sad() { return { kind: "Sad", intensity: 0.0 }; }
+pub fun emotion_angry() { return { kind: "Angry", intensity: 0.0 }; }
+pub fun emotion_fearful() { return { kind: "Fearful", intensity: 0.0 }; }
+pub fun emotion_surprised() { return { kind: "Surprised", intensity: 0.0 }; }
+
+pub fun with_intensity(emotion, intensity) {
+  emotion.intensity = intensity;
+  return emotion;
+}
+
+// Conversation state
+pub fun conversation_state() {
+  return {
+    turns: [],
+    context: {},
+    current_intent: nil,
+    entities: {},
+    sentiment: emotion_neutral()
+  };
+}
+
+// Error types
+pub fun voice_error(code, message, detail) {
+  return { kind: "VoiceError", code: code, message: message, detail: detail };
+}
+
+pub fun transcription_error(message) {
+  return voice_error("TRANSCRIPTION", message, nil);
+}
+
+pub fun synthesis_error(message) {
+  return voice_error("SYNTHESIS", message, nil);
+}
+
+pub fun dialogue_error(message) {
+  return voice_error("DIALOGUE", message, nil);
+}

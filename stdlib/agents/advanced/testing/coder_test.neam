@@ -1,0 +1,34 @@
+// Coder agent tests
+
+module std.agents.advanced.testing.coder_test;
+
+use std.agents.advanced.coder.agent;
+use std.agents.advanced.coder.config;
+use std.agents.special.testing.mocks;
+
+pub fun test_coder_build_and_generate() {
+  let llm = mocks.mock_llm([
+    { pattern: "Generate", response: "```ts\nexport const value = 1;\n```" }
+  ]);
+
+  let builder = agent.coder_builder(llm);
+  let built = agent.build_coder_agent(builder);
+  if (!built.ok) { return false; }
+
+  let result = agent.generate(built.value, "Generate a constant");
+  return result.ok && contains(result.value.code, "value");
+}
+
+pub fun test_coder_debug_flow() {
+  let llm = mocks.mock_llm([
+    { pattern: "Analyze", response: "Root cause: missing semicolon." },
+    { pattern: "Fix", response: "```ts\nexport const value = 1;\n```" }
+  ]);
+
+  let builder = agent.coder_builder(llm);
+  let built = agent.build_coder_agent(builder);
+  if (!built.ok) { return false; }
+
+  let fixed = agent.debug(built.value, "export const value = 1", "syntax error");
+  return fixed.ok && contains(fixed.value.fixed_code, "value");
+}

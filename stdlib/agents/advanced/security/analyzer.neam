@@ -1,0 +1,62 @@
+module std.agents.advanced.security.analyzer;
+
+use std.agents.advanced.security.config;
+
+pub fun log_analyzer(llm) {
+  return {
+    llm: llm,
+    parsers: {},
+    indicator_patterns: []
+  };
+}
+
+pub fun add_parser(analyzer, source, parser) {
+  analyzer.parsers[source] = parser;
+  return analyzer;
+}
+
+pub fun add_indicator_pattern(analyzer, pattern) {
+  push(analyzer.indicator_patterns, pattern);
+  return analyzer;
+}
+
+pub fun analyze_logs(analyzer, logs) {
+  let findings = [];
+
+  for (entry in logs) {
+    let parsed = parse_entry(analyzer, entry);
+    let indicators = detect_indicators(analyzer, entry);
+    if (len(indicators) > 0) {
+      push(findings, { entry: parsed, indicators: indicators });
+    }
+  }
+
+  return { ok: true, value: { findings: findings, count: len(findings) } };
+}
+
+pub fun summarize_findings(analyzer, findings) {
+  if (len(findings) == 0) {
+    return { ok: true, value: "No notable indicators found." };
+  }
+
+  let prompt = "Summarize these security log findings:\n\n" + json_encode(findings);
+  return { ok: true, value: trim(analyzer.llm.generate(prompt)) };
+}
+
+fun parse_entry(analyzer, entry) {
+  let parser = analyzer.parsers[entry.source];
+  if (parser != nil) {
+    return parser(entry);
+  }
+  return entry;
+}
+
+fun detect_indicators(analyzer, entry) {
+  let indicators = [];
+  for (pattern in analyzer.indicator_patterns) {
+    if (regex_match(entry.raw, pattern)) {
+      push(indicators, pattern);
+    }
+  }
+  return indicators;
+}
