@@ -1,0 +1,25 @@
+// Security audit logging utilities
+
+module std.agents.prompts.security.audit;
+
+use std.time;
+
+pub fun audit_log() {
+  return { events: [] };
+}
+
+pub fun log_event(log, event_type, details) {
+  let entry = { type: event_type, details: details, timestamp: time.now() };
+  push(log.events, entry);
+  return entry;
+}
+
+pub fun report(log, since) {
+  let items = [];
+  for (event in log.events) {
+    if (since == nil || event.timestamp >= since) {
+      push(items, event);
+    }
+  }
+  return { ok: true, value: { total: len(items), events: items } };
+}

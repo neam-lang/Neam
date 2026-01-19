@@ -1,0 +1,26 @@
+// Integration tests for prompt loading
+
+module std.agents.prompts.testing.integration_test;
+
+use std.testing;
+use std.agents.prompts.integration.loader;
+use std.agents.prompts.versioning.registry;
+
+pub fun run() {
+  let reg = registry.prompt_registry();
+  let config = {
+    system_prompt: { source: "inline", path_or_name: "System", version_or_label: nil },
+    user_prompt_template: { source: "inline", path_or_name: "User: {{ user_input }}", version_or_label: nil },
+    few_shot_examples: nil,
+    output_schema: nil,
+    guardrails: nil
+  };
+
+  let loaded = loader.load_agent_prompts(config, reg, nil);
+  testing.expect_ok(loaded);
+
+  let rendered = loader.render_user_prompt(loaded.value, "Hello", {});
+  testing.expect_ok(rendered);
+
+  return true;
+}

@@ -1,0 +1,91 @@
+// Validation engine for prompts
+
+module std.agents.prompts.validation.validator;
+
+use std.data.json;
+use std.agents.prompts.storage.yaml;
+
+pub fun validate_output(output, assertions) {
+  let results = [];
+  let passed = true;
+
+  for (assertion in assertions) {
+    let result = evaluate_assertion(output, assertion);
+    push(results, result);
+    if (!result.passed) { passed = false; }
+  }
+
+  return { ok: true, value: { passed: passed, results: results } };
+}
+
+pub fun evaluate_assertion(output, assertion) {
+  let type = assertion.type;
+
+  if (type == "contains") {
+    return { type: type, passed: contains(output, assertion.value), reason: assertion.value };
+  }
+  if (type == "not_contains") {
+    return { type: type, passed: !contains(output, assertion.value), reason: assertion.value };
+  }
+  if (type == "equals") {
+    return { type: type, passed: output == assertion.value, reason: assertion.value };
+  }
+  if (type == "starts_with") {
+    return { type: type, passed: starts_with(output, assertion.value), reason: assertion.value };
+  }
+  if (type == "ends_with") {
+    return { type: type, passed: ends_with(output, assertion.value), reason: assertion.value };
+  }
+  if (type == "regex") {
+    let match = regex_match(output, assertion.value);
+    return { type: type, passed: len(match) > 0, reason: assertion.value };
+  }
+  if (type == "is_json") {
+    let parsed = json.parse(output);
+    return { type: type, passed: parsed != nil, reason: "json" };
+  }
+  if (type == "is_yaml") {
+    let parsed = yaml.parse(output);
+    return { type: type, passed: parsed.ok, reason: "yaml" };
+  }
+  if (type == "matches_schema") {
+    return validate_schema(output, assertion.value);
+  }
+  if (type == "min_length") {
+    return { type: type, passed: len(output) >= assertion.value, reason: "min_length" };
+  }
+  if (type == "max_length") {
+    return { type: type, passed: len(output) <= assertion.value, reason: "max_length" };
+  }
+  if (type == "no_pii") {
+    let match = regex_match(output, "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
+    return { type: type, passed: len(match) == 0, reason: "pii" };
+  }
+  if (type == "no_toxicity") {
+    let toxic = regex_match(output, "(?i)\\b(hate|kill|violent)\\b");
+    return { type: type, passed: len(toxic) == 0, reason: "toxicity" };
+  }
+  if (type == "no_harmful") {
+    let harmful = regex_match(output, "(?i)\\b(hack|exploit|malware)\\b");
+    return { type: type, passed: len(harmful) == 0, reason: "harmful" };
+  }
+
+  return { type: type, passed: true, reason: "unchecked" };
+}
+
+fun validate_schema(output, schema) {
+  let parsed = json.parse(output);
+  if (parsed == nil) {
+    return { type: "matches_schema", passed: false, reason: "invalid_json" };
+  }
+
+  if (schema.type == "object" && schema.properties != nil) {
+    for (key in keys(schema.properties)) {
+      if (parsed[key] == nil) {
+        return { type: "matches_schema", passed: false, reason: "missing_property:" + key };
+      }
+    }
+  }
+
+  return { type: "matches_schema", passed: true, reason: "schema" };
+}

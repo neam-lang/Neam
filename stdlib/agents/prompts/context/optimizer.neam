@@ -1,0 +1,128 @@
+// Context optimization strategies
+
+module std.agents.prompts.context.optimizer;
+
+pub fun create_optimizer(strategy, token_counter, preserve_patterns) {
+  return { strategy: strategy, token_counter: token_counter, preserve_patterns: preserve_patterns != nil ? preserve_patterns : [] };
+}
+
+pub fun optimize_context(optimizer, messages, target_tokens) {
+  let strategy = optimizer.strategy;
+
+  if (strategy.kind == "SlidingWindow") {
+    return { ok: true, value: sliding_window(messages, strategy.window_size, optimizer.preserve_patterns) };
+  }
+
+  if (strategy.kind == "Summarization") {
+    return { ok: true, value: sliding_window(messages, 10, optimizer.preserve_patterns) };
+  }
+
+  if (strategy.kind == "Relevance") {
+    return { ok: true, value: filter_relevance(messages, strategy.query, strategy.top_k, optimizer.preserve_patterns) };
+  }
+
+  return { ok: true, value: messages };
+}
+
+pub fun create_checkpoint(optimizer, context) {
+  return { strategy: optimizer.strategy, context: context, created_at: now() };
+}
+
+pub fun restore_checkpoint(checkpoint) {
+  return checkpoint.context;
+}
+
+pub fun sliding_window_strategy(window_size) {
+  return { kind: "SlidingWindow", window_size: window_size };
+}
+
+pub fun summarization_strategy(summary_threshold) {
+  return { kind: "Summarization", summary_threshold: summary_threshold };
+}
+
+pub fun relevance_strategy(query, top_k) {
+  return { kind: "Relevance", query: query, top_k: top_k };
+}
+
+fun sliding_window(messages, window_size, preserve_patterns) {
+  let preserved = preserve_messages(messages, preserve_patterns);
+  let remaining = take_last(messages, window_size);
+  return unique_messages(preserved + remaining);
+}
+
+fun filter_relevance(messages, query, top_k, preserve_patterns) {
+  let preserved = preserve_messages(messages, preserve_patterns);
+  let scored = [];
+  for (message in messages) {
+    let score = relevance_score(message.content, query);
+    push(scored, { score: score, message: message });
+  }
+  scored = sort_by_score(scored);
+
+  let selected = [];
+  let i = 0;
+  while (i < len(scored) && i < top_k) {
+    push(selected, scored[i].message);
+    i = i + 1;
+  }
+
+  return unique_messages(preserved + selected);
+}
+
+fun preserve_messages(messages, patterns) {
+  let preserved = [];
+  for (message in messages) {
+    if (message.role == "system") {
+      push(preserved, message);
+      continue;
+    }
+    for (pattern in patterns) {
+      if (contains(message.content, pattern)) {
+        push(preserved, message);
+        break;
+      }
+    }
+  }
+  return preserved;
+}
+
+fun relevance_score(text, query) {
+  if (contains(text, query)) { return 1; }
+  return 0;
+}
+
+fun sort_by_score(items) {
+  let sorted = items;
+  let i = 0;
+  while (i < len(sorted)) {
+    let j = i + 1;
+    while (j < len(sorted)) {
+      if (sorted[j].score > sorted[i].score) {
+        let temp = sorted[i];
+        sorted[i] = sorted[j];
+        sorted[j] = temp;
+      }
+      j = j + 1;
+    }
+    i = i + 1;
+  }
+  return sorted;
+}
+
+fun unique_messages(messages) {
+  let seen = {};
+  let result = [];
+  for (message in messages) {
+    let key = message.role + "|" + message.content;
+    if (seen[key] == nil) {
+      seen[key] = true;
+      push(result, message);
+    }
+  }
+  return result;
+}
+
+fun take_last(list, n) {
+  if (len(list) <= n) { return list; }
+  return slice(list, len(list) - n, len(list));
+}

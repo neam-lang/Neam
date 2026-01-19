@@ -1,0 +1,22 @@
+// Unit tests for prompt modules
+
+module std.agents.prompts.testing.prompt_test;
+
+use std.testing;
+use std.agents.prompts.versioning.local;
+use std.agents.prompts.validation.assertions;
+use std.agents.prompts.validation.validator;
+
+pub fun run() {
+  let repo = local.prompt_repository();
+  let created = local.create_version(repo, "support", "Hello", "init");
+  testing.expect_ok(created);
+
+  let versions = local.list_versions(repo, "support");
+  testing.expect_eq(len(versions.value), 1);
+
+  let result = validator.validate_output("Hello world", [assertions.contains("world")]);
+  testing.expect_true(result.value.passed);
+
+  return true;
+}
