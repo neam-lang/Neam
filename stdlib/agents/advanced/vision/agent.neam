@@ -1,0 +1,66 @@
+// Vision agent implementation
+
+module std.agents.advanced.vision.agent;
+
+use std.agents.advanced.vision.config;
+use std.agents.advanced.vision.recognizer;
+use std.agents.advanced.vision.parser;
+
+pub fun vision_builder(llm) {
+  return { llm: llm, ocr_engine: config.ocr_tesseract(), enable_object_detection: true };
+}
+
+pub fun with_ocr_engine(builder, engine) { builder.ocr_engine = engine; return builder; }
+pub fun with_object_detection(builder, enabled) { builder.enable_object_detection = enabled; return builder; }
+
+pub fun build_vision_agent(builder) {
+  if (builder.llm == nil) {
+    return { ok: false, error: config.vision_error("CONFIG", "LLM is required") };
+  }
+
+  let rec = recognizer.image_recognizer(builder.llm);
+  rec = recognizer.with_ocr_engine(rec, builder.ocr_engine);
+
+  return {
+    ok: true,
+    value: {
+      kind: "VisionAgent",
+      llm: builder.llm,
+      recognizer: rec,
+      parser: parser.document_parser(builder.llm),
+      enable_object_detection: builder.enable_object_detection
+    }
+  };
+}
+
+pub fun analyze_image(agent, image_data) {
+  let description = recognizer.describe_image(agent.recognizer, image_data);
+  let text = recognizer.recognize_text(agent.recognizer, image_data);
+  let objects = agent.enable_object_detection
+    ? recognizer.detect_objects(agent.recognizer, image_data)
+    : { ok: true, value: [] };
+
+  return {
+    ok: true,
+    value: {
+      description: description.value,
+      text: text.value,
+      objects: objects.value
+    }
+  };
+}
+
+pub fun parse_document(agent, image_data, doc_type) {
+  return parser.parse_document(agent.parser, image_data, doc_type);
+}
+
+pub fun extract_data(agent, image_data, schema) {
+  let prompt = "Extract data from this image according to schema: " + json_encode(schema);
+  let response = agent.llm.analyze_image(image_data, prompt);
+
+  return { ok: true, value: json_decode(response) };
+}
+
+pub fun classify(agent, image_data, categories) {
+  return recognizer.classify_image(agent.recognizer, image_data, categories);
+}

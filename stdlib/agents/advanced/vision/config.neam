@@ -1,0 +1,32 @@
+// Vision agent configuration
+
+module std.agents.advanced.vision.config;
+
+// Image formats
+pub fun format_png() { return { kind: "PNG", mime: "image/png" }; }
+pub fun format_jpeg() { return { kind: "JPEG", mime: "image/jpeg" }; }
+pub fun format_pdf() { return { kind: "PDF", mime: "application/pdf" }; }
+pub fun format_webp() { return { kind: "WebP", mime: "image/webp" }; }
+
+// OCR engines
+pub fun ocr_tesseract() { return { kind: "Tesseract", languages: ["eng"] }; }
+pub fun ocr_azure() { return { kind: "AzureOCR", languages: ["en"] }; }
+pub fun ocr_google() { return { kind: "GoogleVision", languages: ["en"] }; }
+
+// Model types
+pub fun model_classification() { return { kind: "Classification" }; }
+pub fun model_detection() { return { kind: "ObjectDetection" }; }
+pub fun model_segmentation() { return { kind: "Segmentation" }; }
+
+// Bounding box
+pub fun bounding_box(x, y, width, height) {
+  return { x: x, y: y, width: width, height: height };
+}
+
+// Detection result
+pub fun detection(label, confidence, bbox) {
+  return { label: label, confidence: confidence, bbox: bbox };
+}
+
+// Error types
+pub fun vision_error(code, message) { return { kind: "VisionError", code: code, message: message }; }

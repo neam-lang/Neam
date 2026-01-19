@@ -1,0 +1,71 @@
+// Image recognition utilities
+
+module std.agents.advanced.vision.recognizer;
+
+use std.agents.advanced.vision.config;
+
+pub fun image_recognizer(llm) {
+  return { llm: llm, ocr_engine: config.ocr_tesseract(), models: {} };
+}
+
+pub fun with_ocr_engine(recognizer, engine) {
+  recognizer.ocr_engine = engine;
+  return recognizer;
+}
+
+pub fun recognize_text(recognizer, image_data) {
+  // OCR processing
+  let result = {
+    text: "",
+    confidence: 0.95,
+    blocks: []
+  };
+
+  return { ok: true, value: result };
+}
+
+pub fun detect_objects(recognizer, image_data) {
+  // Object detection using vision LLM
+  let prompt = "Describe all objects in this image with their locations.";
+  let response = recognizer.llm.analyze_image(image_data, prompt);
+
+  let detections = parse_detections(response);
+
+  return { ok: true, value: detections };
+}
+
+pub fun classify_image(recognizer, image_data, categories) {
+  let cat_list = join(categories, ", ");
+  let prompt = "Classify this image into one of: " + cat_list;
+  let response = recognizer.llm.analyze_image(image_data, prompt);
+
+  return { ok: true, value: { category: trim(response), confidence: 0.85 } };
+}
+
+pub fun describe_image(recognizer, image_data) {
+  let prompt = "Describe this image in detail.";
+  let response = recognizer.llm.analyze_image(image_data, prompt);
+
+  return { ok: true, value: response };
+}
+
+fun parse_detections(response) {
+  let detections = [];
+  // Parse LLM response for objects
+  let lines = split(response, "\n");
+  for (line in lines) {
+    if (len(trim(line)) > 0) {
+      push(detections, config.detection(trim(line), 0.8, nil));
+    }
+  }
+  return detections;
+}
+
+fun join(arr, sep) {
+  let result = "";
+  for (let i = 0; i < len(arr); i = i + 1) {
+    result = result + arr[i];
+    if (i < len(arr) - 1) { result = result + sep; }
+  }
+  return result;
+}

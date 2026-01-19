@@ -1,0 +1,28 @@
+// Document agent configuration
+
+module std.agents.advanced.document.config;
+
+// Document types
+pub fun doc_contract() { return { kind: "Contract" }; }
+pub fun doc_policy() { return { kind: "Policy" }; }
+pub fun doc_agreement() { return { kind: "Agreement" }; }
+pub fun doc_invoice() { return { kind: "Invoice" }; }
+
+// Compliance frameworks
+pub fun compliance_gdpr() { return { kind: "GDPR", region: "EU" }; }
+pub fun compliance_hipaa() { return { kind: "HIPAA", region: "US" }; }
+pub fun compliance_sox() { return { kind: "SOX", region: "US" }; }
+pub fun compliance_pci() { return { kind: "PCI-DSS", region: "Global" }; }
+
+// PII patterns
+pub fun pii_patterns() {
+  return {
+    email: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+    phone: "\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b",
+    ssn: "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+    credit_card: "\\b\\d{4}[-\\s]?\\d{4}[-\\s]?\\d{4}[-\\s]?\\d{4}\\b"
+  };
+}
+
+// Error types
+pub fun document_error(code, message) { return { kind: "DocumentError", code: code, message: message }; }
