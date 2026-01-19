@@ -1,0 +1,32 @@
+// Content hashing helpers
+
+module std.observability.privacy.hashing;
+
+pub fun configure(config) {
+  return {
+    prompt_handling: config.prompt_handling ?? "full",
+    response_handling: config.response_handling ?? "full",
+    hash_algorithm: config.hash_algorithm ?? "sha256"
+  };
+}
+
+pub fun apply_handling(config, kind, content) {
+  if (content == nil) {
+    return content;
+  }
+  let handling = kind == "prompt" ? config.prompt_handling : config.response_handling;
+  if (handling == "omit") {
+    return nil;
+  }
+  if (handling == "hash") {
+    return hash_content(content, config.hash_algorithm);
+  }
+  return content;
+}
+
+fun hash_content(content, algorithm) {
+  if (algorithm == "sha256") {
+    return sha256(content);
+  }
+  return sha256(content);
+}

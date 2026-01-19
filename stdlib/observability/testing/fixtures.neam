@@ -1,0 +1,13 @@
+// Observability fixtures
+
+module std.observability.testing.fixtures;
+
+pub fun sample_trace() {
+  return {
+    trace_id: "trace-001",
+    spans: [
+      { name: "agent.initialize", attributes: {} },
+      { name: "llm.chat", attributes: { "gen_ai.request.model": "gpt-4" } }
+    ]
+  };
+}

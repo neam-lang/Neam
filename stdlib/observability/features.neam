@@ -1,0 +1,9 @@
+// Feature flags
+
+module std.observability.features;
+
+use std.observability.config.runtime;
+
+pub fun set(flags) {
+  return runtime.set_features({}, flags);
+}

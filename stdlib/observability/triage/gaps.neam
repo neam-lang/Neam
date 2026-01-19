@@ -1,0 +1,12 @@
+// Gap analysis
+
+module std.observability.triage.gaps;
+
+pub fun analyze(config) {
+  return {
+    agent_name: config.agent_name,
+    time_range: config.time_range,
+    checks: config.checks ?? [],
+    gaps: []
+  };
+}

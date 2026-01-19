@@ -1,0 +1,9 @@
+// Langfuse helpers
+
+module std.observability.langfuse;
+
+use std.observability.exporters.langfuse;
+
+pub fun link_prompt(config) {
+  return langfuse.link_prompt(config.trace_id, config.prompt_name, config.prompt_version);
+}

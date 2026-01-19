@@ -1,0 +1,9 @@
+{
+  "title": "Agent Activity",
+  "description": "Real-time agent activity, token usage, error rates",
+  "panels": [
+    { "type": "timeseries", "title": "Agent Runs", "metric": "neam.agent.execution.duration" },
+    { "type": "timeseries", "title": "Token Usage", "metric": "gen_ai.client.token.usage" },
+    { "type": "timeseries", "title": "Error Rate", "metric": "neam.agent.errors" }
+  ]
+}

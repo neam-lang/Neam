@@ -1,0 +1,9 @@
+// SQLite exporter facade
+
+module std.observability.exporters.sqlite;
+
+use std.observability.exporters.local.sqlite;
+
+pub fun create_exporter(config) {
+  return sqlite.create_exporter(config);
+}

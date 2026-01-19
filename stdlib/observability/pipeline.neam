@@ -1,0 +1,9 @@
+// Pipeline facade
+
+module std.observability.pipeline;
+
+use std.observability.exporters.multi;
+
+pub fun create(config) {
+  return multi.create_pipeline(config);
+}

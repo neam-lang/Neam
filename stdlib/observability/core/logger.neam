@@ -1,0 +1,39 @@
+// OpenTelemetry logger provider helpers
+
+module std.observability.core.logger;
+
+pub fun create_provider(config) {
+  let default_config = {
+    name: "neam-otel",
+    version: "0.1.0",
+    resource: {},
+    exporters: [],
+    level: "info"
+  };
+  return merge_configs(default_config, config);
+}
+
+pub fun log_record(level, body, attributes) {
+  return {
+    kind: "LogRecord",
+    level: level,
+    body: body,
+    attributes: attributes ?? {},
+    timestamp: now()
+  };
+}
+
+pub fun merge_configs(base, override) {
+  if (override == nil) {
+    return base;
+  }
+  let merged = clone(base);
+  for (key in keys(override)) {
+    merged[key] = override[key];
+  }
+  return merged;
+}
+
+fun clone(value) {
+  return json_decode(json_encode(value));
+}

@@ -1,0 +1,13 @@
+// Runtime sampling controls
+
+module std.observability.runtime;
+
+use std.observability.config.runtime;
+
+pub fun set_sampling_rate(rate) {
+  return runtime.set_sampling_rate({}, rate);
+}
+
+pub fun set_agent_sampling(agent_name, rate) {
+  return runtime.set_agent_sampling({}, agent_name, rate);
+}

@@ -1,0 +1,137 @@
+// Agent auto-instrumentation
+
+module std.observability.instrumentation.agent;
+
+use std.observability.semantic.agent;
+
+pub fun lifecycle_spans(agent_info, task_info) {
+  return {
+    trace_name: "agent_execution",
+    spans: [
+      create_span("agent.initialize", agent_info, task_info, { phase: "initialize" }),
+      create_span("agent.plan", agent_info, task_info, { phase: "plan" }),
+      create_span("agent.execute", agent_info, task_info, { phase: "execute" }),
+      create_span("agent.evaluate", agent_info, task_info, { phase: "evaluate" }),
+      create_span("agent.cleanup", agent_info, task_info, { phase: "cleanup" })
+    ]
+  };
+}
+
+pub fun step_span(agent_info, task_info, step_number, attributes) {
+  let base = agent.agent_span_attributes(agent_info, task_info, { id: nil, type: "step", name: "agent.step" });
+  base["neam.agent.step_number"] = step_number;
+  return {
+    name: "agent.step[" + str(step_number) + "]",
+    attributes: merge(base, attributes ?? {})
+  };
+}
+
+pub fun error_attributes(agent_id, step_number, error_type, recovery_attempted, fallback_used) {
+  return {
+    "exception.type": "NeamAgentError",
+    "exception.message": error_type,
+    "neam.error.agent_id": agent_id,
+    "neam.error.step_number": step_number,
+    "neam.error.recovery_attempted": recovery_attempted,
+    "neam.error.fallback_used": fallback_used,
+    "error.type": error_type
+  };
+}
+
+pub fun retry_attributes(attempt, max_attempts, delay_ms, reason, strategy) {
+  return {
+    "neam.retry.attempt": attempt,
+    "neam.retry.max_attempts": max_attempts,
+    "neam.retry.delay_ms": delay_ms,
+    "neam.retry.reason": reason,
+    "neam.recovery.strategy": strategy
+  };
+}
+
+pub fun performance_metrics(agent_name, status, step_count) {
+  return {
+    duration: {
+      name: "neam.agent.execution.duration",
+      value: status.duration_ms,
+      attributes: { agent_name: agent_name, status: status.state }
+    },
+    steps: {
+      name: "neam.agent.step.count",
+      value: step_count,
+      attributes: { agent_name: agent_name }
+    }
+  };
+}
+
+pub fun tool_call_metric(agent_name, tool_name) {
+  return {
+    name: "neam.agent.tool.calls",
+    value: 1,
+    attributes: { agent_name: agent_name, tool_name: tool_name }
+  };
+}
+
+pub fun llm_call_metric(agent_name, model) {
+  return {
+    name: "neam.agent.llm.calls",
+    value: 1,
+    attributes: { agent_name: agent_name, model: model }
+  };
+}
+
+pub fun error_metric(agent_name, error_type) {
+  return {
+    name: "neam.agent.errors",
+    value: 1,
+    attributes: { agent_name: agent_name, error_type: error_type }
+  };
+}
+
+pub fun queue_depth_metric(orchestrator_name, depth) {
+  return {
+    name: "neam.agent.queue.depth",
+    value: depth,
+    attributes: { orchestrator_name: orchestrator_name }
+  };
+}
+
+pub fun cost_metrics(model, provider, usage, cost_millicents, compute_seconds) {
+  return {
+    tokens_input: {
+      name: "neam.cost.tokens.input",
+      value: usage.input_tokens,
+      attributes: { model: model, provider: provider }
+    },
+    tokens_output: {
+      name: "neam.cost.tokens.output",
+      value: usage.output_tokens,
+      attributes: { model: model, provider: provider }
+    },
+    api_dollars: {
+      name: "neam.cost.api.dollars",
+      value: cost_millicents,
+      attributes: { model: model, provider: provider }
+    },
+    compute_seconds: {
+      name: "neam.cost.compute.seconds",
+      value: compute_seconds,
+      attributes: { resource_type: provider }
+    }
+  };
+}
+
+fun create_span(name, agent_info, task_info, extra) {
+  let attrs = agent.agent_span_attributes(agent_info, task_info, nil);
+  return {
+    name: name,
+    attributes: merge(attrs, extra ?? {})
+  };
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override)) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

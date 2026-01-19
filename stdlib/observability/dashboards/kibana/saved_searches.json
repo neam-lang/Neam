@@ -1,0 +1,16 @@
+{
+  "searches": [
+    {
+      "name": "Failed Agent Executions",
+      "query": "status:error AND neam.agent.name:*"
+    },
+    {
+      "name": "High Token Usage",
+      "query": "gen_ai.usage.total_tokens:>5000"
+    },
+    {
+      "name": "Slow LLM Calls",
+      "query": "gen_ai.operation.name:chat AND duration_ms:>10000"
+    }
+  ]
+}

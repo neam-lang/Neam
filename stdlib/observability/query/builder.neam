@@ -1,0 +1,23 @@
+// Query builder helpers
+
+module std.observability.query.builder;
+
+pub fun where_clause(filters) {
+  return { where: filters ?? {} };
+}
+
+pub fun order_by(fields) {
+  return { order_by: fields ?? [] };
+}
+
+pub fun limit(count) {
+  return { limit: count };
+}
+
+pub fun merge(query, clause) {
+  let merged = json_decode(json_encode(query ?? {}));
+  for (key in keys(clause ?? {})) {
+    merged[key] = clause[key];
+  }
+  return merged;
+}

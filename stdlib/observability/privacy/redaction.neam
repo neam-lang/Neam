@@ -1,0 +1,41 @@
+// PII redaction helpers
+
+module std.observability.privacy.redaction;
+
+pub fun configure(config) {
+  return {
+    redact_patterns: config.redact_patterns ?? default_patterns(),
+    fields_to_redact: config.fields_to_redact ?? []
+  };
+}
+
+pub fun redact_text(config, text) {
+  if (text == nil) {
+    return text;
+  }
+  let redacted = text;
+  for (pattern in config.redact_patterns) {
+    redacted = regex_replace(redacted, pattern.pattern ?? pattern.type, pattern.replacement);
+  }
+  return redacted;
+}
+
+pub fun redact_attributes(config, attributes) {
+  let result = json_decode(json_encode(attributes ?? {}));
+  for (field in config.fields_to_redact) {
+    if (result[field] != nil) {
+      result[field] = redact_text(config, result[field]);
+    }
+  }
+  return result;
+}
+
+fun default_patterns() {
+  return [
+    { type: "email", pattern: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i, replacement: "[EMAIL]" },
+    { type: "phone", pattern: /\+?[0-9][0-9\-\s]{7,}/, replacement: "[PHONE]" },
+    { type: "ssn", pattern: /\b\d{3}-\d{2}-\d{4}\b/, replacement: "[SSN]" },
+    { type: "credit_card", pattern: /\b\d{4}-?\d{4}-?\d{4}-?\d{4}\b/, replacement: "[CC]" },
+    { type: "custom", pattern: /api[_-]?key[s]?[:=]\s*\S+/i, replacement: "[API_KEY]" }
+  ];
+}

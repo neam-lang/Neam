@@ -1,0 +1,28 @@
+// Access control helpers
+
+module std.observability.privacy.access;
+
+pub fun configure(config) {
+  return {
+    default_visibility: config.default_visibility ?? "internal",
+    rules: config.rules ?? []
+  };
+}
+
+pub fun visibility_for_trace(access_config, attributes) {
+  for (rule in access_config.rules) {
+    if (matches_rule(rule.condition, attributes)) {
+      return { visibility: rule.visibility, allowed_roles: rule.allowed_roles ?? [] };
+    }
+  }
+  return { visibility: access_config.default_visibility, allowed_roles: [] };
+}
+
+fun matches_rule(condition, attributes) {
+  for (key in keys(condition ?? {})) {
+    if (attributes[key] != condition[key]) {
+      return false;
+    }
+  }
+  return true;
+}
