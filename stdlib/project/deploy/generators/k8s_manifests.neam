@@ -1,0 +1,5 @@
+module std.project.deploy.generators.k8s_manifests;
+
+pub fun generate(config) {
+  return project_deploy_generate("kubernetes", config ?? {});
+}

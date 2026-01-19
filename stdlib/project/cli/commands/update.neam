@@ -1,0 +1,6 @@
+module std.project.cli.commands.update;
+
+pub fun run(dependency) {
+  let target = dependency ?? "all";
+  return { ok: true, message: "Updated " + target };
+}

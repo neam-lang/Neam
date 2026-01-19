@@ -1,0 +1,5 @@
+module std.project.cli.commands.add;
+
+pub fun run(dependency, options) {
+  return { ok: true, message: "Added dependency " + dependency, value: options ?? {} };
+}

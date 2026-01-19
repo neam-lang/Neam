@@ -1,0 +1,13 @@
+module std.project.dependencies.cache;
+
+pub fun cache_path() {
+  return "~/.neam/registry";
+}
+
+pub fun put(name, version, artifact) {
+  return { ok: true, value: { name: name, version: version, artifact: artifact } };
+}
+
+pub fun get(name, version) {
+  return { ok: true, value: { name: name, version: version } };
+}

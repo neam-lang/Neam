@@ -1,0 +1,9 @@
+module std.project.testing.assertions;
+
+pub fun assert_manifest(manifest) {
+  if (!manifest || !manifest.project || !manifest.project.name) {
+    return { ok: false, error: "Missing project name" };
+  }
+
+  return { ok: true };
+}

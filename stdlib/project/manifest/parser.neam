@@ -1,0 +1,18 @@
+module std.project.manifest.parser;
+
+pub fun parse(toml_text) {
+  if (toml_text == null || toml_text == "") {
+    return { ok: false, error: "Manifest is empty." };
+  }
+
+  let parsed = project_manifest_parse(toml_text);
+  return { ok: true, value: parsed };
+}
+
+pub fun stringify(manifest) {
+  if (manifest == null) {
+    return "";
+  }
+
+  return project_manifest_stringify(manifest);
+}

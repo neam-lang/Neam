@@ -1,0 +1,5 @@
+module std.project.templates.interpolation;
+
+pub fun render(template, variables) {
+  return project_template_render(template, variables ?? {});
+}

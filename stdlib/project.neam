@@ -1,0 +1,73 @@
+// Phase 20 project system entry point
+
+module std.project;
+
+use std.project.manifest.parser;
+use std.project.manifest.schema;
+use std.project.manifest.defaults;
+use std.project.manifest.inheritance;
+use std.project.workspace.discovery;
+use std.project.workspace.graph;
+use std.project.dependencies.resolver;
+use std.project.dependencies.lockfile;
+use std.project.build.compiler;
+use std.project.build.bundler;
+use std.project.templates.registry;
+use std.project.templates.scaffolder;
+use std.project.cli.parser as cli_parser;
+use std.project.cli.output as cli_output;
+
+pub fun load_manifest(toml_text) {
+  let manifest = parser.parse(toml_text);
+  let validated = schema.validate(manifest);
+  return validated;
+}
+
+pub fun default_manifest() {
+  return defaults.base_manifest();
+}
+
+pub fun inherit_manifest(manifest, workspace) {
+  return inheritance.apply(manifest, workspace);
+}
+
+pub fun discover_workspace(root, patterns) {
+  return discovery.discover(root, patterns ?? []);
+}
+
+pub fun workspace_graph(members) {
+  return graph.build(members);
+}
+
+pub fun resolve_dependencies(manifest, lock) {
+  return resolver.resolve(manifest, lock);
+}
+
+pub fun read_lockfile(path) {
+  return lockfile.read(path);
+}
+
+pub fun write_lockfile(path, lock) {
+  return lockfile.write(path, lock);
+}
+
+pub fun compile_project(config) {
+  return compiler.compile(config);
+}
+
+pub fun bundle_project(config) {
+  return bundler.bundle(config);
+}
+
+pub fun scaffold_project(template, variables) {
+  let source = registry.fetch(template);
+  return scaffolder.scaffold(source, variables ?? {});
+}
+
+pub fun parse_cli(argv) {
+  return cli_parser.parse(argv);
+}
+
+pub fun format_output(result) {
+  return cli_output.format(result);
+}

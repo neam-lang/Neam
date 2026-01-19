@@ -1,0 +1,5 @@
+module std.project.dependencies.sources.url;
+
+pub fun resolve(spec) {
+  return { ok: true, value: { source: "url", spec: spec } };
+}

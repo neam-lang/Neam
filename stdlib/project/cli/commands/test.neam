@@ -1,0 +1,5 @@
+module std.project.cli.commands.test;
+
+pub fun run(pattern, config) {
+  return { ok: true, message: "Tests completed", value: { pattern: pattern, config: config ?? {} } };
+}

@@ -1,0 +1,5 @@
+module std.project.dependencies.sources.path;
+
+pub fun resolve(spec) {
+  return { ok: true, value: { source: "path", spec: spec } };
+}

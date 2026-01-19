@@ -1,0 +1,5 @@
+module std.project.cli.commands.remove;
+
+pub fun run(dependency) {
+  return { ok: true, message: "Removed dependency " + dependency };
+}

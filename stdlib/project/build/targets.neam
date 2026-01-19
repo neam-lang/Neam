@@ -1,0 +1,5 @@
+module std.project.build.targets;
+
+pub fun supported() {
+  return ["linux-x86_64", "macos-arm64", "windows-x64"];
+}

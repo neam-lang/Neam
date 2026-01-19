@@ -1,0 +1,14 @@
+module std.project.templates.builtins.agent_rag;
+
+pub fun definition() {
+  return {
+    name: "agent-rag",
+    description: "RAG-enabled agent template",
+    files: [
+      "neam.toml",
+      "src/main.neam",
+      "src/agents/researcher.neam",
+      "prompts/system/default.md"
+    ]
+  };
+}

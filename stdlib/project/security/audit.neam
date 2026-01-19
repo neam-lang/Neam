@@ -1,0 +1,5 @@
+module std.project.security.audit;
+
+pub fun run(manifest) {
+  return project_security_audit(manifest);
+}

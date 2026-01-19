@@ -1,0 +1,8 @@
+module std.project.cli.commands.init;
+
+use std.project.manifest.defaults;
+
+pub fun run(path) {
+  let manifest = defaults.base_manifest();
+  return { ok: true, message: "Initialized project", value: { path: path, manifest: manifest } };
+}

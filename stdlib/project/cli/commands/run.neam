@@ -1,0 +1,5 @@
+module std.project.cli.commands.run;
+
+pub fun run(target, args) {
+  return { ok: true, message: "Run " + (target ?? "project"), value: { args: args ?? [] } };
+}

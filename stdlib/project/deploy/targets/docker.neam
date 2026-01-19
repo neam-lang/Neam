@@ -1,0 +1,5 @@
+module std.project.deploy.targets.docker;
+
+pub fun run(config) {
+  return { ok: true, value: { target: "docker", config: config ?? {} } };
+}

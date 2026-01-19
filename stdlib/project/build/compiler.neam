@@ -1,0 +1,5 @@
+module std.project.build.compiler;
+
+pub fun compile(config) {
+  return project_build_compile(config);
+}
