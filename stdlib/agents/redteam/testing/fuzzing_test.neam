@@ -1,0 +1,10 @@
+// Fuzzing tests
+
+module std.agents.redteam.testing.fuzzing_test;
+
+use std.agents.redteam.fuzzing.engine;
+
+pub fun run() {
+  let fuzzer = engine.create_fuzzer(nil);
+  return fuzzer != nil;
+}

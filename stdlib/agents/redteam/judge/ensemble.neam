@@ -1,0 +1,26 @@
+// Multi-judge ensemble
+
+module std.agents.redteam.judge.ensemble;
+
+use std.agents.redteam.judge.llm_judge;
+
+pub fun create_ensemble(judges) {
+  return { judges: judges };
+}
+
+pub fun judge_with_ensemble(ensemble, prompt, response) {
+  let scores = [];
+  for (judge in ensemble.judges) {
+    let judgment = llm_judge.judge_response(judge, prompt, response);
+    push(scores, judgment.score);
+  }
+  let avg = average(scores);
+  return { score: avg, judges: len(scores) };
+}
+
+fun average(values) {
+  if (values == nil || len(values) == 0) { return 0.0; }
+  let total = 0.0;
+  for (value in values) { total = total + value; }
+  return total / len(values);
+}

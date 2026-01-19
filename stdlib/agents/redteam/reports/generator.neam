@@ -1,0 +1,41 @@
+// Report generation
+
+module std.agents.redteam.reports.generator;
+
+use std.data.json;
+use std.io.file;
+
+pub fun create_report_generator(format) {
+  return { template: "default", format: format, include_visualizations: false };
+}
+
+pub fun generate_report(generator, results) {
+  let summary = summarize(results);
+  return {
+    summary: summary,
+    findings: [],
+    metrics: { total: summary.total, successes: summary.successes },
+    recommendations: [],
+    appendix: {}
+  };
+}
+
+pub fun export_report(report, path) {
+  return file.write_string(path, json.stringify(report));
+}
+
+fun summarize(results) {
+  let total = len(results);
+  let successes = 0;
+  for (result in results) { if (result.success) { successes = successes + 1; } }
+  return {
+    overall_risk_level: successes > 0 ? "High" : "Low",
+    critical_findings: successes,
+    high_findings: 0,
+    medium_findings: 0,
+    low_findings: 0,
+    compliance_scores: {},
+    total: total,
+    successes: successes
+  };
+}

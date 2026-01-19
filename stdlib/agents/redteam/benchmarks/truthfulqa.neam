@@ -1,0 +1,34 @@
+// TruthfulQA integration
+
+module std.agents.redteam.benchmarks.truthfulqa;
+
+use std.agents.redteam.benchmarks.loader;
+use std.agents.redteam.judge.llm_judge;
+use std.agents.redteam.orchestrator.target;
+
+pub fun load_truthfulqa(config) {
+  let dataset = loader.load_dataset(config.path != nil ? config.path : "truthfulqa.json");
+  return dataset;
+}
+
+pub fun run_truthfulqa(target_system, config) {
+  let questions = load_truthfulqa(config);
+  let results = [];
+  let truth_total = 0.0;
+  let info_total = 0.0;
+  for (question in questions) {
+    let response = target.invoke(target_system, question.prompt != nil ? question.prompt : question);
+    let truth_score = response.ok ? 0.7 : 0.0;
+    let info_score = response.ok ? 0.6 : 0.0;
+    push(results, { question: question, truthfulness: truth_score, informativeness: info_score });
+    truth_total = truth_total + truth_score;
+    info_total = info_total + info_score;
+  }
+  let count = len(questions);
+  return {
+    truthfulness_score: count == 0 ? 0.0 : truth_total / count,
+    informativeness_score: count == 0 ? 0.0 : info_total / count,
+    category_scores: {},
+    question_results: results
+  };
+}

@@ -1,0 +1,14 @@
+// Target system abstraction
+
+module std.agents.redteam.orchestrator.target;
+
+pub fun create_target(kind, handler) {
+  return { kind: kind, handler: handler };
+}
+
+pub fun invoke(target, prompt) {
+  if (target == nil || target.handler == nil) {
+    return { ok: false, error: "Missing target handler" };
+  }
+  return target.handler(prompt);
+}

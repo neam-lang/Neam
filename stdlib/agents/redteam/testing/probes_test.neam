@@ -1,0 +1,10 @@
+// Probes tests
+
+module std.agents.redteam.testing.probes_test;
+
+use std.agents.redteam.probes.registry;
+
+pub fun run() {
+  let probes = registry.seed_default_probes();
+  return len(probes) > 0;
+}

@@ -1,0 +1,16 @@
+// Integration tests
+
+module std.agents.redteam.testing.integration_test;
+
+use std.agents.redteam.orchestrator.engine as engine;
+use std.agents.redteam.orchestrator.target as target;
+use std.agents.redteam.judge.presets as presets;
+
+pub fun run() {
+  let orch = engine.create_orchestrator(nil);
+  let test_target = target.create_target("echo", fun(prompt) { return { ok: true, value: prompt }; });
+  engine.set_target(orch, test_target);
+  engine.set_judge(orch, presets.attack_success_judge("test"));
+  let report = engine.run_red_team(orch, [{ id: "t1", description: "Test" }]);
+  return report.summary.total == 1;
+}
