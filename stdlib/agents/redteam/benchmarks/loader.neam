@@ -1,0 +1,28 @@
+// Dataset loader
+
+module std.agents.redteam.benchmarks.loader;
+
+use std.io.file;
+use std.data.json;
+
+pub fun load_dataset(path) {
+  let content = file.read_string(path);
+  if (ends_with(path, ".json")) { return json.parse(content); }
+  if (ends_with(path, ".yaml") || ends_with(path, ".yml")) { return parse_yaml(content); }
+  if (ends_with(path, ".csv")) { return parse_csv(content); }
+  return content;
+}
+
+fun parse_yaml(content) {
+  return { raw: content, format: "yaml" };
+}
+
+fun parse_csv(content) {
+  let lines = split(content, "\n");
+  let rows = [];
+  for (line in lines) {
+    if (len(trim(line)) == 0) { continue; }
+    push(rows, split(line, ","));
+  }
+  return rows;
+}

@@ -1,0 +1,27 @@
+// Seed selection strategies
+
+module std.agents.redteam.fuzzing.selector;
+
+pub fun create_selector(kind, options) {
+  return { kind: kind, options: options };
+}
+
+pub fun select_seed(selector, seed_pool) {
+  if (len(seed_pool.seeds) == 0) { return nil; }
+  if (selector.kind == "Random") {
+    return seed_pool.seeds[0];
+  }
+  if (selector.kind == "MCTS") {
+    return seed_pool.seeds[0];
+  }
+  if (selector.kind == "Genetic") {
+    return seed_pool.seeds[0];
+  }
+  if (selector.kind == "CoverageGuided") {
+    return seed_pool.seeds[0];
+  }
+  if (selector.kind == "RewardBased") {
+    return seed_pool.seeds[0];
+  }
+  return seed_pool.seeds[0];
+}

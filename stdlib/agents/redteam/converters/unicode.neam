@@ -1,0 +1,29 @@
+// Unicode and homoglyph converters
+
+module std.agents.redteam.converters.unicode;
+
+use std.text.string as text;
+
+pub fun homoglyph_converter() {
+  return { kind: "Homoglyph" };
+}
+
+pub fun convert(converter, input) {
+  if (converter.kind != "Homoglyph") { return input; }
+  let map = { a: "а", e: "е", o: "ο", i: "і", c: "с", p: "р", y: "у" };
+  let out = "";
+  for (ch in text.split(input, "")) {
+    out = out + (map[ch] != nil ? map[ch] : ch);
+  }
+  return out;
+}
+
+pub fun revert(converter, input) {
+  if (converter.kind != "Homoglyph") { return input; }
+  let map = { "а": "a", "е": "e", "ο": "o", "і": "i", "с": "c", "р": "p", "у": "y" };
+  let out = "";
+  for (ch in text.split(input, "")) {
+    out = out + (map[ch] != nil ? map[ch] : ch);
+  }
+  return out;
+}

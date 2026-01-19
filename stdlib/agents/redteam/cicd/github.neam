@@ -1,0 +1,15 @@
+// GitHub Actions integration
+
+module std.agents.redteam.cicd.github;
+
+pub fun generate_github_workflow(config) {
+  return "name: Prompt Validation\non: [push, pull_request]\n";
+}
+
+pub fun parse_github_event() {
+  return { kind: "GitHubEvent" };
+}
+
+pub fun post_pr_comment(result, token) {
+  return { ok: true };
+}

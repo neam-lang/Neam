@@ -1,0 +1,9 @@
+// Report export utilities
+
+module std.agents.redteam.reports.export;
+
+pub fun export_format(report, format) {
+  if (format == "Markdown") { return "# Red Team Report"; }
+  if (format == "HTML") { return "<h1>Red Team Report</h1>"; }
+  return report;
+}

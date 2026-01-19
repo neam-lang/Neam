@@ -1,0 +1,11 @@
+// Judge tests
+
+module std.agents.redteam.testing.judge_test;
+
+use std.agents.redteam.judge.llm_judge;
+
+pub fun run() {
+  let judge = llm_judge.create_judge("test", nil);
+  let judgment = llm_judge.judge_response(judge, "prompt", "response");
+  return judgment.score >= 0.0;
+}

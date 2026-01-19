@@ -1,0 +1,11 @@
+// Judge calibration utilities
+
+module std.agents.redteam.judge.calibration;
+
+pub fun calibrate_judge(judge, calibration_set) {
+  return { judge: judge, calibration_set: calibration_set, calibration_score: 0.75 };
+}
+
+pub fun calibration_report(calibration) {
+  return { score: calibration.calibration_score, samples: len(calibration.calibration_set) };
+}

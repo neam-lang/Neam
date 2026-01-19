@@ -1,0 +1,25 @@
+// Language and tone converters
+
+module std.agents.redteam.converters.language;
+
+pub fun language_translator(target_lang) {
+  return { kind: "Translate", target_lang: target_lang };
+}
+
+pub fun tone_transformer(tone) {
+  return { kind: "Tone", tone: tone };
+}
+
+pub fun convert(converter, input) {
+  if (converter.kind == "Translate") {
+    return "[" + converter.target_lang + "] " + input;
+  }
+  if (converter.kind == "Tone") {
+    return "[tone:" + converter.tone + "] " + input;
+  }
+  return input;
+}
+
+pub fun revert(converter, input) {
+  return input;
+}

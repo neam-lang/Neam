@@ -1,0 +1,11 @@
+// Retention policies
+
+module std.agents.redteam.memory.retention;
+
+pub fun apply_retention(memory, policy) {
+  if (policy == nil) { return memory; }
+  if (policy.max_records != nil && len(memory.records) > policy.max_records) {
+    memory.records = slice(memory.records, len(memory.records) - policy.max_records, len(memory.records));
+  }
+  return memory;
+}

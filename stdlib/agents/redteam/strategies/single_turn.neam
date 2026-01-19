@@ -1,0 +1,16 @@
+// Single-turn attacks
+
+module std.agents.redteam.strategies.single_turn;
+
+use std.agents.redteam.orchestrator.target;
+use std.agents.redteam.judge.llm_judge;
+
+pub fun run_single_turn(objective, attacker_llm, target_system, judge_llm) {
+  let prompt = objective.prompt != nil ? objective.prompt : objective;
+  let response = target.invoke(target_system, prompt);
+  let success = false;
+  if (judge_llm != nil && response.ok) {
+    success = llm_judge.judge_attack_success(judge_llm, objective.description != nil ? objective.description : prompt, response.value);
+  }
+  return { objective: objective, prompt: prompt, response: response, success: success };
+}

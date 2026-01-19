@@ -1,0 +1,7 @@
+// Perspective API integration placeholder
+
+module std.agents.redteam.toxicity.perspective;
+
+pub fun perspective_api(api_key) {
+  return { kind: "PerspectiveAPI", api_key: api_key };
+}
