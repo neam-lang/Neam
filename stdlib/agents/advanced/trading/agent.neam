@@ -1,0 +1,59 @@
+// Trading agent implementation
+
+module std.agents.advanced.trading.agent;
+
+use std.agents.advanced.trading.config;
+use std.agents.advanced.trading.analyzer;
+use std.agents.advanced.trading.strategist;
+
+pub fun trading_builder(llm) {
+  return {
+    llm: llm,
+    data_feeds: [],
+    risk_settings: config.risk_settings_default(),
+    paper_trading: true
+  };
+}
+
+pub fun with_data_feeds(builder, feeds) { builder.data_feeds = feeds; return builder; }
+pub fun with_risk_limits(builder, settings) { builder.risk_settings = settings; return builder; }
+pub fun with_paper_trading(builder, enabled) { builder.paper_trading = enabled; return builder; }
+
+pub fun build_trading_agent(builder) {
+  if (builder.llm == nil) {
+    return { ok: false, error: config.trading_error("CONFIG", "LLM is required") };
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: "TradingAgent",
+      llm: builder.llm,
+      analyzer: analyzer.market_analyzer(builder.llm, builder.data_feeds),
+      risk_settings: builder.risk_settings,
+      paper_trading: builder.paper_trading,
+      portfolio: { positions: {}, cash: 100000, history: [] }
+    }
+  };
+}
+
+pub fun analyze(agent, symbol) {
+  let prices = analyzer.collect_prices(agent.analyzer.data_feeds, symbol);
+  let technicals = analyzer.get_technical_signals(agent.analyzer, symbol, prices);
+  let sentiment = analyzer.analyze_sentiment(agent.analyzer, symbol, []);
+
+  return { ok: true, value: { symbol: symbol, technicals: technicals.value, sentiment: sentiment.value } };
+}
+
+pub fun execute_strategy(agent, strategy_def) {
+  // Generate signals and create orders
+  return { ok: true, value: { strategy: strategy_def.name, status: "running" } };
+}
+
+pub fun backtest_strategy(agent, strategy_def, historical_data) {
+  return strategist.backtest(strategy_def, historical_data, agent.portfolio.cash);
+}
+
+pub fun get_portfolio(agent) {
+  return agent.portfolio;
+}

@@ -1,0 +1,42 @@
+// Orchestrator configuration
+
+module std.agents.advanced.orchestrator.config;
+
+// Routing strategies
+pub fun routing_round_robin() { return { kind: "RoundRobin" }; }
+pub fun routing_capability() { return { kind: "Capability" }; }
+pub fun routing_load_balanced() { return { kind: "LoadBalanced" }; }
+pub fun routing_adaptive() { return { kind: "Adaptive" }; }
+
+// Task states
+pub fun task_pending() { return "Pending"; }
+pub fun task_running() { return "Running"; }
+pub fun task_completed() { return "Completed"; }
+pub fun task_failed() { return "Failed"; }
+
+// Error policies
+pub fun error_retry(max_attempts) { return { kind: "Retry", max_attempts: max_attempts }; }
+pub fun error_failover() { return { kind: "Failover" }; }
+pub fun error_escalate() { return { kind: "Escalate" }; }
+
+// Task definition
+pub fun task(id, description, dependencies) {
+  return {
+    id: id,
+    description: description,
+    dependencies: dependencies || [],
+    status: task_pending(),
+    result: nil,
+    assigned_agent: nil
+  };
+}
+
+// Agent registration
+pub fun agent_registration(id, agent, capabilities) {
+  return { id: id, agent: agent, capabilities: capabilities, load: 0, available: true };
+}
+
+// Error types
+pub fun orchestrator_error(code, message) {
+  return { kind: "OrchestratorError", code: code, message: message };
+}
