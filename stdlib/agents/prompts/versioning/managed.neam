@@ -1,0 +1,158 @@
+// Managed prompt versioning (Langfuse-style)
+
+module std.agents.prompts.versioning.managed;
+
+use std.crypto;
+use std.time;
+
+pub fun managed_store() {
+  return { prompts: {} };
+}
+
+pub fun create_prompt(store, params) {
+  let prompt_id = crypto.uuid_v4();
+  let created_at = time.now();
+  let version = create_version_entry(1, params.content, params.config, params.message, params.metadata, created_at);
+
+  let prompt = {
+    id: prompt_id,
+    name: params.name,
+    type: params.type,
+    versions: [version],
+    labels: params.labels != nil ? params.labels : { production: 1 },
+    config: params.config,
+    metadata: params.metadata != nil ? params.metadata : {},
+    traces: {}
+  };
+
+  store.prompts[prompt_id] = prompt;
+  if (params.name != nil) {
+    store.prompts[params.name] = prompt;
+  }
+
+  return { ok: true, value: prompt };
+}
+
+pub fun create_version(store, prompt_id, content, message, config) {
+  let prompt = resolve_prompt(store, prompt_id);
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_id }; }
+
+  let version_number = len(prompt.versions) + 1;
+  let version = create_version_entry(version_number, content, config != nil ? config : prompt.config, message, prompt.metadata, time.now());
+  push(prompt.versions, version);
+  return { ok: true, value: version };
+}
+
+pub fun set_label(store, prompt_id, label, version_number) {
+  let prompt = resolve_prompt(store, prompt_id);
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_id }; }
+
+  let version = find_version(prompt, version_number);
+  if (version == nil) {
+    return { ok: false, error: "Version not found: " + version_number };
+  }
+
+  prompt.labels[label] = version_number;
+  return { ok: true, value: label };
+}
+
+pub fun get_prompt(store, prompt_id) {
+  let prompt = resolve_prompt(store, prompt_id);
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_id }; }
+  return { ok: true, value: prompt };
+}
+
+pub fun get_version(store, prompt_id, version_number) {
+  let prompt = resolve_prompt(store, prompt_id);
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_id }; }
+
+  let version = find_version(prompt, version_number);
+  if (version == nil) {
+    return { ok: false, error: "Version not found: " + version_number };
+  }
+
+  return { ok: true, value: version };
+}
+
+pub fun get_label(store, prompt_id, label) {
+  let prompt = resolve_prompt(store, prompt_id);
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_id }; }
+
+  let version_number = prompt.labels[label];
+  if (version_number == nil) {
+    return { ok: false, error: "Label not found: " + label };
+  }
+
+  return get_version(store, prompt_id, version_number);
+}
+
+pub fun list_versions(store, prompt_id) {
+  let prompt = resolve_prompt(store, prompt_id);
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_id }; }
+  return { ok: true, value: prompt.versions };
+}
+
+pub fun link_trace(store, prompt_id, version_number, trace_id) {
+  let prompt = resolve_prompt(store, prompt_id);
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_id }; }
+
+  let version = find_version(prompt, version_number);
+  if (version == nil) {
+    return { ok: false, error: "Version not found: " + version_number };
+  }
+
+  if (prompt.traces[version_number] == nil) {
+    prompt.traces[version_number] = [];
+  }
+  push(prompt.traces[version_number], trace_id);
+  return { ok: true, value: trace_id };
+}
+
+pub fun get_traces(store, prompt_id, version_number) {
+  let prompt = resolve_prompt(store, prompt_id);
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_id }; }
+  return { ok: true, value: prompt.traces[version_number] != nil ? prompt.traces[version_number] : [] };
+}
+
+pub fun select_ab_variant(prompt, label_a, label_b, seed) {
+  let combined = (seed != nil ? seed : time.now()) + "|" + label_a + "|" + label_b;
+  let hash = crypto.sha256(combined);
+  let digits = regex_replace(hash, "[^0-9]", "");
+  let value = len(digits) > 0 ? parse_int(substring(digits, 0, 1)) : 0;
+  let choice = value % 2;
+  return choice == 0 ? label_a : label_b;
+}
+
+fun create_version_entry(number, content, config, message, metadata, created_at) {
+  let content_hash = crypto.sha256(serialize_content(content));
+  return {
+    version: number,
+    content: content,
+    config: config,
+    message: message != nil ? message : "",
+    created_at: created_at,
+    content_hash: content_hash,
+    metadata: metadata != nil ? metadata : {}
+  };
+}
+
+fun serialize_content(content) {
+  if (is_string(content)) {
+    return content;
+  }
+  return json_stringify(content);
+}
+
+fun resolve_prompt(store, prompt_id) {
+  if (store.prompts[prompt_id] != nil) {
+    return store.prompts[prompt_id];
+  }
+  return nil;
+}
+
+fun find_version(prompt, version_number) {
+  for (entry in prompt.versions) {
+    if (entry.version == version_number) { return entry; }
+  }
+  return nil;
+}

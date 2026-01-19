@@ -1,0 +1,61 @@
+// Markdown prompt storage with frontmatter metadata
+
+module std.agents.prompts.storage.markdown;
+
+use std.io.file;
+use std.agents.prompts.storage.yaml;
+
+pub fun load(path) {
+  let content = file.read_string(path);
+  return parse(content);
+}
+
+pub fun parse(text) {
+  let lines = split(text, "\n");
+  if (len(lines) == 0) {
+    return { ok: true, value: { content: "", metadata: {} } };
+  }
+
+  if (trim(lines[0]) != "---") {
+    return { ok: true, value: { content: text, metadata: {} } };
+  }
+
+  let frontmatter_lines = [];
+  let body_lines = [];
+  let in_frontmatter = true;
+
+  let index = 1;
+  while (index < len(lines)) {
+    let line = lines[index];
+    if (in_frontmatter && trim(line) == "---") {
+      in_frontmatter = false;
+      index = index + 1;
+      continue;
+    }
+
+    if (in_frontmatter) {
+      push(frontmatter_lines, line);
+    } else {
+      push(body_lines, line);
+    }
+    index = index + 1;
+  }
+
+  let frontmatter_text = frontmatter_lines.join("\n");
+  let metadata_result = yaml.parse(frontmatter_text);
+  let metadata = metadata_result.ok ? metadata_result.value : {};
+
+  return { ok: true, value: { content: body_lines.join("\n"), metadata: metadata } };
+}
+
+pub fun stringify(prompt) {
+  let metadata = prompt.metadata != nil ? prompt.metadata : {};
+  let content = prompt.content != nil ? prompt.content : prompt;
+
+  if (len(keys(metadata)) == 0) {
+    return { ok: true, value: content };
+  }
+
+  let frontmatter = yaml.stringify(metadata);
+  return { ok: true, value: "---\n" + frontmatter + "\n---\n\n" + content };
+}

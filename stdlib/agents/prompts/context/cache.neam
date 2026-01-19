@@ -1,0 +1,60 @@
+// Prompt caching utilities
+
+module std.agents.prompts.context.cache;
+
+use std.time;
+
+pub fun create_cache(ttl_seconds, max_entries) {
+  return { storage: {}, ttl_seconds: ttl_seconds, max_entries: max_entries, hits: 0, misses: 0 };
+}
+
+pub fun cache_prompt(cache, prompt_id, compiled) {
+  if (len(keys(cache.storage)) >= cache.max_entries) {
+    evict_oldest(cache);
+  }
+  cache.storage[prompt_id] = { value: compiled, created_at: time.now() };
+  return { ok: true, value: true };
+}
+
+pub fun get_cached(cache, prompt_id) {
+  let entry = cache.storage[prompt_id];
+  if (entry == nil) {
+    cache.misses = cache.misses + 1;
+    return { ok: true, value: nil };
+  }
+
+  let age = time.now() - entry.created_at;
+  if (age > cache.ttl_seconds * 1000) {
+    cache.storage[prompt_id] = nil;
+    cache.misses = cache.misses + 1;
+    return { ok: true, value: nil };
+  }
+
+  cache.hits = cache.hits + 1;
+  return { ok: true, value: entry.value };
+}
+
+pub fun invalidate(cache, prompt_id) {
+  cache.storage[prompt_id] = nil;
+  return { ok: true, value: true };
+}
+
+pub fun get_cache_stats(cache) {
+  return { hits: cache.hits, misses: cache.misses, size: len(keys(cache.storage)) };
+}
+
+fun evict_oldest(cache) {
+  let oldest_key = nil;
+  let oldest_time = nil;
+  for (key in keys(cache.storage)) {
+    let entry = cache.storage[key];
+    if (entry == nil) { continue; }
+    if (oldest_time == nil || entry.created_at < oldest_time) {
+      oldest_time = entry.created_at;
+      oldest_key = key;
+    }
+  }
+  if (oldest_key != nil) {
+    cache.storage[oldest_key] = nil;
+  }
+}

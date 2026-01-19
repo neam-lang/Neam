@@ -1,0 +1,29 @@
+// Assertion builders for prompt validation
+
+module std.agents.prompts.validation.assertions;
+
+pub fun contains(pattern) { return { type: "contains", value: pattern }; }
+pub fun not_contains(pattern) { return { type: "not_contains", value: pattern }; }
+pub fun equals(expected) { return { type: "equals", value: expected }; }
+pub fun starts_with(prefix) { return { type: "starts_with", value: prefix }; }
+pub fun ends_with(suffix) { return { type: "ends_with", value: suffix }; }
+pub fun regex(pattern) { return { type: "regex", value: pattern }; }
+
+pub fun similar_to(reference, threshold) { return { type: "similar_to", value: reference, threshold: threshold }; }
+
+pub fun is_json() { return { type: "is_json" }; }
+pub fun is_yaml() { return { type: "is_yaml" }; }
+pub fun matches_schema(schema) { return { type: "matches_schema", value: schema }; }
+
+pub fun no_toxicity() { return { type: "no_toxicity" }; }
+pub fun no_pii() { return { type: "no_pii" }; }
+pub fun no_harmful_content() { return { type: "no_harmful" }; }
+
+pub fun min_length(chars) { return { type: "min_length", value: chars }; }
+pub fun max_length(chars) { return { type: "max_length", value: chars }; }
+
+pub fun readability_score(min_score) { return { type: "readability", value: min_score }; }
+
+pub fun llm_rubric(criteria, min_score) { return { type: "llm_rubric", value: criteria, threshold: min_score }; }
+
+pub fun factuality(ground_truth) { return { type: "factuality", value: ground_truth }; }

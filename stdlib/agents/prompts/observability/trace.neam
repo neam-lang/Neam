@@ -1,0 +1,37 @@
+// Prompt tracing utilities
+
+module std.agents.prompts.observability.trace;
+
+use std.crypto;
+use std.time;
+
+pub fun trace_store() {
+  return { traces: [] };
+}
+
+pub fun start_trace(store, prompt_ref) {
+  let trace_id = crypto.uuid_v4();
+  let ctx = {
+    trace_id: trace_id,
+    prompt_ref: prompt_ref,
+    start_time: time.now_millis()
+  };
+  return ctx;
+}
+
+pub fun end_trace(store, ctx, result) {
+  let latency = time.now_millis() - ctx.start_time;
+  let trace = {
+    trace_id: ctx.trace_id,
+    prompt_id: ctx.prompt_ref.path_or_name != nil ? ctx.prompt_ref.path_or_name : ctx.prompt_ref,
+    prompt_version: ctx.prompt_ref.version_or_label,
+    rendered_prompt_hash: crypto.sha256(result.prompt != nil ? result.prompt : ""),
+    input_tokens: result.input_tokens != nil ? result.input_tokens : 0,
+    output_tokens: result.output_tokens != nil ? result.output_tokens : 0,
+    latency_ms: latency,
+    validation_result: result.validation_result,
+    timestamp: time.now()
+  };
+  push(store.traces, trace);
+  return trace;
+}
