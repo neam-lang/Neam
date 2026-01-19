@@ -1,0 +1,29 @@
+// Webhook event queue
+
+module std.agents.serving.webhook.queue;
+
+pub fun event_queue(max_size) {
+  return {
+    max_size: max_size || 1000,
+    items: []
+  };
+}
+
+pub fun enqueue(queue, item) {
+  if (len(queue.items) >= queue.max_size) {
+    return { ok: false, error: "Queue full" };
+  }
+  push(queue.items, item);
+  return { ok: true, value: len(queue.items) };
+}
+
+pub fun dequeue(queue) {
+  if (len(queue.items) == 0) { return nil; }
+  let item = queue.items[0];
+  queue.items = slice(queue.items, 1, len(queue.items));
+  return item;
+}
+
+pub fun size(queue) {
+  return len(queue.items);
+}

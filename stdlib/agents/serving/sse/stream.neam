@@ -1,0 +1,60 @@
+// Agent streaming via SSE
+
+module std.agents.serving.sse.stream;
+
+use std.agents.serving.sse.server;
+use std.agents.serving.config;
+
+pub fun stream_agent_execution(conn, agent, input) {
+  let stream_id = "sse_" + str(now());
+
+  server.send_json(conn, "stream.start", {
+    stream_id: stream_id,
+    agent_id: agent.id,
+    timestamp: now()
+  }, stream_id + "_start");
+
+  let chunk_count = 0;
+  let start_time = now();
+
+  let result = agent.stream_execute(input, fun(chunk) {
+    server.send_json(conn, "stream.chunk", {
+      stream_id: stream_id,
+      chunk: chunk,
+      index: chunk_count
+    }, stream_id + "_" + str(chunk_count));
+
+    chunk_count = chunk_count + 1;
+  });
+
+  server.send_json(conn, "stream.end", {
+    stream_id: stream_id,
+    total_chunks: chunk_count,
+    duration_ms: now() - start_time,
+    success: result.ok
+  }, stream_id + "_end");
+
+  return result;
+}
+
+pub fun stream_orchestrated_execution(conn, orchestrator, goal) {
+  let execution_id = "exec_" + str(now());
+
+  server.send_json(conn, "execution.start", {
+    execution_id: execution_id,
+    goal: goal
+  }, nil);
+
+  orchestrator.execute_with_progress(goal, fun(progress) {
+    server.send_json(conn, "execution.progress", {
+      execution_id: execution_id,
+      task_id: progress.task_id,
+      status: progress.status,
+      result: progress.result
+    }, nil);
+  });
+
+  server.send_json(conn, "execution.end", {
+    execution_id: execution_id
+  }, nil);
+}

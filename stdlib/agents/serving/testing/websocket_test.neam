@@ -1,0 +1,13 @@
+// WebSocket tests
+
+module std.agents.serving.testing.websocket_test;
+
+use std.agents.serving.websocket.protocol;
+
+pub fun test_protocol_roundtrip() {
+  let message = protocol.create_message(protocol.msg_type_agent_invoke(), "evt_1", { agent_id: "coder" });
+  let serialized = protocol.serialize_message(message);
+  let parsed = protocol.parse_message(serialized);
+
+  return parsed.type == protocol.msg_type_agent_invoke() && parsed.event_id == "evt_1";
+}

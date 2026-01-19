@@ -1,0 +1,24 @@
+// Serving tests
+
+module std.agents.serving.testing.serving_test;
+
+use std.agents.serving.server.router;
+use std.agents.serving.schema.openapi;
+use std.agents.serving.config;
+
+pub fun test_router_path_params() {
+  let r = router.create_router();
+  let endpoint = config.rest_endpoint(config.method_get(), "/agents/:agent_id", fun(req) { return req; });
+  router.add_route(r, endpoint);
+
+  let match = router.match_route(r, "GET", "/agents/voice");
+  return match != nil && match.params["agent_id"] == "voice";
+}
+
+pub fun test_openapi_generation() {
+  let server = { config: config.server_config("localhost", 8080) };
+  let agents = [ { id: "voice", kind: "VoiceAgent" } ];
+  let spec = openapi.generate_openapi_spec(server, agents);
+
+  return spec.openapi == "3.0.3" && spec.paths["/agents/voice/invoke"] != nil;
+}

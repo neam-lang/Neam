@@ -1,0 +1,61 @@
+// Serving configuration types and helpers
+
+module std.agents.serving.config;
+
+// Server configuration
+pub fun server_config(host, port) {
+  return {
+    kind: "ServerConfig",
+    host: host || "0.0.0.0",
+    port: port || 8080,
+    read_timeout_ms: 30000,
+    write_timeout_ms: 30000,
+    max_request_size_bytes: 10 * 1024 * 1024,
+    cors_enabled: true,
+    cors_origins: ["*"],
+    tls_enabled: false,
+    tls_cert_path: nil,
+    tls_key_path: nil
+  };
+}
+
+// REST endpoint configuration
+pub fun rest_endpoint(method, path, handler) {
+  return {
+    kind: "RESTEndpoint",
+    method: method,
+    path: path,
+    handler: handler,
+    middleware: [],
+    timeout_ms: 30000,
+    rate_limit: nil,
+    auth_required: true
+  };
+}
+
+// HTTP methods
+pub fun method_get() { return "GET"; }
+pub fun method_post() { return "POST"; }
+pub fun method_put() { return "PUT"; }
+pub fun method_delete() { return "DELETE"; }
+pub fun method_patch() { return "PATCH"; }
+
+// Content types
+pub fun content_json() { return "application/json"; }
+pub fun content_text() { return "text/plain"; }
+pub fun content_stream() { return "application/octet-stream"; }
+pub fun content_sse() { return "text/event-stream"; }
+pub fun content_multipart() { return "multipart/form-data"; }
+
+// HTTP status codes
+pub fun status_ok() { return 200; }
+pub fun status_created() { return 201; }
+pub fun status_accepted() { return 202; }
+pub fun status_no_content() { return 204; }
+pub fun status_bad_request() { return 400; }
+pub fun status_unauthorized() { return 401; }
+pub fun status_forbidden() { return 403; }
+pub fun status_not_found() { return 404; }
+pub fun status_rate_limited() { return 429; }
+pub fun status_internal_error() { return 500; }
+pub fun status_service_unavailable() { return 503; }

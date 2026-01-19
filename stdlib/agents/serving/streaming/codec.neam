@@ -1,0 +1,31 @@
+// Streaming codec helpers
+
+module std.agents.serving.streaming.codec;
+
+pub fun codec_pcm16(sample_rate) {
+  return { kind: "PCM16", sample_rate: sample_rate || 16000, channels: 1, bits_per_sample: 16 };
+}
+
+pub fun codec_opus(sample_rate, bitrate) {
+  return { kind: "Opus", sample_rate: sample_rate || 48000, channels: 1, bitrate: bitrate || 32000 };
+}
+
+pub fun codec_h264(width, height, fps) {
+  return { kind: "H264", width: width || 1280, height: height || 720, fps: fps || 30 };
+}
+
+pub fun codec_vp8(width, height, fps) {
+  return { kind: "VP8", width: width || 1280, height: height || 720, fps: fps || 30 };
+}
+
+pub fun codec_jpeg(width, height, quality) {
+  return { kind: "JPEG", width: width || 1280, height: height || 720, quality: quality || 85 };
+}
+
+pub fun encode(codec, data) {
+  return { ok: true, value: data };
+}
+
+pub fun decode(codec, data) {
+  return { ok: true, value: data };
+}

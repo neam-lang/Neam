@@ -1,0 +1,134 @@
+// Agent-specific WebSocket handlers
+
+module std.agents.serving.websocket.handlers;
+
+use std.agents.serving.websocket.protocol;
+use std.agents.serving.websocket.server;
+
+pub fun register_agent_handlers(ws_server, agent_registry) {
+  ws_server = server.on_message(ws_server, protocol.msg_type_session_create(), fun(conn, msg) {
+    return handle_session_create(conn, msg, agent_registry);
+  });
+
+  ws_server = server.on_message(ws_server, protocol.msg_type_agent_invoke(), fun(conn, msg) {
+    return handle_agent_invoke(conn, msg, agent_registry);
+  });
+
+  ws_server = server.on_message(ws_server, protocol.msg_type_audio_buffer_append(), fun(conn, msg) {
+    return handle_audio_append(conn, msg, agent_registry);
+  });
+
+  ws_server = server.on_message(ws_server, protocol.msg_type_audio_buffer_commit(), fun(conn, msg) {
+    return handle_audio_commit(conn, msg, agent_registry);
+  });
+
+  ws_server = server.on_message(ws_server, protocol.msg_type_ping(), fun(conn, msg) {
+    return { response: protocol.create_message(protocol.msg_type_pong(), nil, {}) };
+  });
+
+  return ws_server;
+}
+
+fun handle_session_create(conn, msg, registry) {
+  let session_id = "session_" + str(now()) + "_" + str(random_int(10000));
+  conn.session = {
+    id: session_id,
+    created_at: now(),
+    agent_id: msg.data.agent_id,
+    config: msg.data.config || {},
+    audio_buffer: []
+  };
+
+  return {
+    response: protocol.session_created(session_id, conn.session.config)
+  };
+}
+
+fun handle_agent_invoke(conn, msg, registry) {
+  let agent_id = msg.data.agent_id;
+  let agent = registry.get(agent_id);
+
+  if (agent == nil) {
+    return {
+      response: protocol.error_message("AGENT_NOT_FOUND", "Agent not found: " + agent_id, nil)
+    };
+  }
+
+  let input = msg.data.input;
+  let stream = msg.data.stream || false;
+
+  if (stream) {
+    let stream_id = "stream_" + str(now());
+    conn.send(protocol.serialize_message(protocol.stream_start(stream_id, agent_id)));
+
+    let chunk_index = 0;
+    agent.stream_execute(input, fun(chunk) {
+      conn.send(protocol.serialize_message(protocol.stream_chunk(stream_id, chunk, chunk_index)));
+      chunk_index = chunk_index + 1;
+    });
+
+    conn.send(protocol.serialize_message(protocol.stream_end(stream_id, chunk_index)));
+    return nil;
+  }
+
+  let result = agent.execute(input);
+  return {
+    response: protocol.agent_response(agent_id, result.value, {
+      request_id: msg.event_id,
+      duration_ms: 0
+    })
+  };
+}
+
+fun handle_audio_append(conn, msg, registry) {
+  if (conn.session == nil) {
+    return {
+      response: protocol.error_message("NO_SESSION", "Create session first", nil)
+    };
+  }
+
+  push(conn.session.audio_buffer, msg.data.audio);
+  return nil;
+}
+
+fun handle_audio_commit(conn, msg, registry) {
+  if (conn.session == nil || len(conn.session.audio_buffer) == 0) {
+    return {
+      response: protocol.error_message("NO_AUDIO", "No audio data to process", nil)
+    };
+  }
+
+  let agent = registry.get(conn.session.agent_id);
+  if (agent == nil || agent.kind != "VoiceAgent") {
+    return {
+      response: protocol.error_message("INVALID_AGENT", "Voice agent required", nil)
+    };
+  }
+
+  let combined_audio = combine_audio_chunks(conn.session.audio_buffer);
+  conn.session.audio_buffer = [];
+
+  let result = agent.process_audio(combined_audio);
+
+  if (result.ok) {
+    return {
+      response: protocol.audio_response(
+        result.value.audio,
+        result.value.response_text,
+        result.value.duration_ms
+      )
+    };
+  }
+
+  return {
+    response: protocol.error_message("PROCESSING_ERROR", result.error.message, nil)
+  };
+}
+
+fun combine_audio_chunks(chunks) {
+  let combined = "";
+  for (chunk in chunks) {
+    combined = combined + chunk;
+  }
+  return combined;
+}

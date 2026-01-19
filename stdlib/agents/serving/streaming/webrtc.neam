@@ -1,0 +1,88 @@
+// WebRTC support
+
+module std.agents.serving.streaming.webrtc;
+
+pub fun webrtc_config() {
+  return {
+    ice_servers: [
+      { urls: "stun:stun.l.google.com:19302" }
+    ],
+    audio_enabled: true,
+    video_enabled: false,
+    data_channel_enabled: true
+  };
+}
+
+pub fun peer_connection(config) {
+  return {
+    kind: "PeerConnection",
+    config: config || webrtc_config(),
+    local_description: nil,
+    remote_description: nil,
+    ice_candidates: [],
+    state: "new",
+    audio_track: nil,
+    video_track: nil,
+    data_channel: nil
+  };
+}
+
+pub fun create_offer(peer) {
+  return {
+    ok: true,
+    value: {
+      type: "offer",
+      sdp: "..."
+    }
+  };
+}
+
+pub fun create_answer(peer, offer) {
+  peer.remote_description = offer;
+
+  return {
+    ok: true,
+    value: {
+      type: "answer",
+      sdp: "..."
+    }
+  };
+}
+
+pub fun set_remote_description(peer, description) {
+  peer.remote_description = description;
+  return { ok: true, value: peer };
+}
+
+pub fun add_ice_candidate(peer, candidate) {
+  push(peer.ice_candidates, candidate);
+  return { ok: true, value: peer };
+}
+
+pub fun on_ice_candidate(peer, handler) {
+  peer.on_ice_candidate = handler;
+  return peer;
+}
+
+pub fun on_track(peer, handler) {
+  peer.on_track = handler;
+  return peer;
+}
+
+pub fun on_data_channel(peer, handler) {
+  peer.on_data_channel = handler;
+  return peer;
+}
+
+pub fun send_data(peer, data) {
+  if (peer.data_channel == nil) {
+    return { ok: false, error: "No data channel" };
+  }
+  peer.data_channel.send(data);
+  return { ok: true, value: true };
+}
+
+pub fun close(peer) {
+  peer.state = "closed";
+  return peer;
+}
