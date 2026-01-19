@@ -1,0 +1,47 @@
+// Ingest test assertions
+
+module std.ingest.testing.assertions;
+
+pub fun assert_documents_count(result, expected) {
+  if (result.documents_processed != expected) {
+    panic("Expected " + str(expected) + " documents, got " + str(result.documents_processed));
+  }
+}
+
+pub fun assert_chunks_count(result, expected) {
+  if (result.chunks_created != expected) {
+    panic("Expected " + str(expected) + " chunks, got " + str(result.chunks_created));
+  }
+}
+
+pub fun assert_no_errors(result) {
+  if (len(result.errors) > 0) {
+    panic("Expected no errors, got " + str(len(result.errors)));
+  }
+}
+
+pub fun assert_vectors_stored(store, expected) {
+  let count = std.ingest.testing.mocks.get_stored_count(store);
+  if (count != expected) {
+    panic("Expected " + str(expected) + " vectors stored, got " + str(count));
+  }
+}
+
+pub fun assert_processing_time_under(result, max_ms) {
+  if (result.duration_ms > max_ms) {
+    panic("Processing time exceeded limit");
+  }
+}
+
+pub fun assert_cost_under(result, max_cents) {
+  if (result.cost.total_cost_cents > max_cents) {
+    panic("Cost exceeded limit");
+  }
+}
+
+pub fun assert_success(result) {
+  assert_no_errors(result);
+  if (result.documents_processed == 0) {
+    panic("No documents were processed");
+  }
+}

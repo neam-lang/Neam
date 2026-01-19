@@ -1,0 +1,231 @@
+// Vector store configuration
+
+module std.ingest.store;
+
+// Vector item for upsert
+pub fun vector_item(id, vector, item_metadata) {
+  return {
+    id: id,
+    vector: vector,
+    metadata: item_metadata
+  };
+}
+
+// Search result
+pub fun search_result(id, score, result_metadata) {
+  return {
+    id: id,
+    score: score,
+    metadata: result_metadata
+  };
+}
+
+// Upsert statistics
+pub fun upsert_stats(count, duration_ms) {
+  return {
+    count: count,
+    duration_ms: duration_ms
+  };
+}
+
+// Store statistics
+pub fun store_stats(total_vectors, index_size_bytes, dimensions) {
+  return {
+    total_vectors: total_vectors,
+    index_size_bytes: index_size_bytes,
+    dimensions: dimensions
+  };
+}
+
+// Pinecone vector store
+pub fun pinecone_store(api_key, environment, index_name) {
+  return {
+    kind: "Pinecone",
+    api_key: api_key,
+    environment: environment,
+    index_name: index_name,
+    namespace: nil
+  };
+}
+
+pub fun with_namespace(store, namespace) {
+  store.namespace = namespace;
+  return store;
+}
+
+// Qdrant vector store
+pub fun qdrant_store(url, collection) {
+  return {
+    kind: "Qdrant",
+    url: url,
+    collection_name: collection,
+    api_key: nil
+  };
+}
+
+pub fun with_api_key(store, api_key) {
+  store.api_key = api_key;
+  return store;
+}
+
+// Weaviate vector store
+pub fun weaviate_store(url, class_name) {
+  return {
+    kind: "Weaviate",
+    url: url,
+    class_name: class_name,
+    api_key: nil
+  };
+}
+
+// Milvus vector store
+pub fun milvus_store(host, port, collection) {
+  return {
+    kind: "Milvus",
+    host: host,
+    port: port,
+    collection_name: collection,
+    user: nil,
+    password: nil
+  };
+}
+
+pub fun with_auth(store, user, password) {
+  store.user = user;
+  store.password = password;
+  return store;
+}
+
+// ChromaDB vector store
+pub fun chroma_store(collection) {
+  return {
+    kind: "Chroma",
+    collection_name: collection,
+    host: "localhost",
+    port: 8000
+  };
+}
+
+pub fun with_host(store, host, port) {
+  store.host = host;
+  store.port = port;
+  return store;
+}
+
+// PostgreSQL with pgvector
+pub fun pgvector_store(connection_url, table) {
+  return {
+    kind: "PgVector",
+    connection_url: connection_url,
+    table_name: table,
+    vector_column: "embedding"
+  };
+}
+
+pub fun with_vector_column(store, column) {
+  store.vector_column = column;
+  return store;
+}
+
+// SQLite with sqlite-vec
+pub fun sqlite_vec_store(path, table) {
+  return {
+    kind: "SqliteVec",
+    path: path,
+    table_name: table
+  };
+}
+
+// In-memory vector store (for testing)
+pub fun memory_store() {
+  return {
+    kind: "Memory",
+    vectors: [],
+    dimensions: nil
+  };
+}
+
+// Filter expressions
+pub fun filter_eq(field, value) {
+  return { kind: "Eq", field: field, value: value };
+}
+
+pub fun filter_ne(field, value) {
+  return { kind: "Ne", field: field, value: value };
+}
+
+pub fun filter_gt(field, value) {
+  return { kind: "Gt", field: field, value: value };
+}
+
+pub fun filter_gte(field, value) {
+  return { kind: "Gte", field: field, value: value };
+}
+
+pub fun filter_lt(field, value) {
+  return { kind: "Lt", field: field, value: value };
+}
+
+pub fun filter_lte(field, value) {
+  return { kind: "Lte", field: field, value: value };
+}
+
+pub fun filter_in(field, values) {
+  return { kind: "In", field: field, values: values };
+}
+
+pub fun filter_not_in(field, values) {
+  return { kind: "NotIn", field: field, values: values };
+}
+
+pub fun filter_contains(field, value) {
+  return { kind: "Contains", field: field, value: value };
+}
+
+pub fun filter_exists(field) {
+  return { kind: "Exists", field: field };
+}
+
+pub fun filter_and(filters) {
+  return { kind: "And", filters: filters };
+}
+
+pub fun filter_or(filters) {
+  return { kind: "Or", filters: filters };
+}
+
+pub fun filter_not(filter) {
+  return { kind: "Not", filter: filter };
+}
+
+// Query builder
+pub fun query(vector, top_k) {
+  return {
+    vector: vector,
+    top_k: top_k,
+    filter: nil,
+    include_metadata: true,
+    include_vectors: false,
+    min_score: nil
+  };
+}
+
+pub fun with_filter(q, filter) {
+  q.filter = filter;
+  return q;
+}
+
+pub fun with_min_score(q, score) {
+  q.min_score = score;
+  return q;
+}
+
+pub fun with_metadata(q, include) {
+  q.include_metadata = include;
+  return q;
+}
+
+pub fun with_vectors(q, include) {
+  q.include_vectors = include;
+  return q;
+}

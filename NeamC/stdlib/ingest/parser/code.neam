@@ -1,0 +1,58 @@
+// Code parser configuration
+
+module std.ingest.parser.code;
+
+// Languages
+pub fun lang_rust() { return { kind: "Rust" }; }
+pub fun lang_python() { return { kind: "Python" }; }
+pub fun lang_javascript() { return { kind: "JavaScript" }; }
+pub fun lang_typescript() { return { kind: "TypeScript" }; }
+pub fun lang_go() { return { kind: "Go" }; }
+pub fun lang_java() { return { kind: "Java" }; }
+pub fun lang_csharp() { return { kind: "CSharp" }; }
+pub fun lang_cpp() { return { kind: "Cpp" }; }
+pub fun lang_c() { return { kind: "C" }; }
+pub fun lang_ruby() { return { kind: "Ruby" }; }
+pub fun lang_php() { return { kind: "PHP" }; }
+pub fun lang_swift() { return { kind: "Swift" }; }
+pub fun lang_kotlin() { return { kind: "Kotlin" }; }
+pub fun lang_neam() { return { kind: "Neam" }; }
+pub fun lang_auto() { return { kind: "Auto" }; }
+
+// Code parser
+pub fun code_parser() {
+  return {
+    kind: "Code",
+    languages: [lang_auto()],
+    extract_functions: true,
+    extract_classes: true,
+    extract_comments: true,
+    extract_imports: true,
+    include_line_numbers: true
+  };
+}
+
+pub fun with_languages(parser, languages) {
+  parser.languages = languages;
+  return parser;
+}
+
+pub fun with_functions(parser, extract) {
+  parser.extract_functions = extract;
+  return parser;
+}
+
+pub fun with_classes(parser, extract) {
+  parser.extract_classes = extract;
+  return parser;
+}
+
+pub fun with_imports(parser, extract) {
+  parser.extract_imports = extract;
+  return parser;
+}
+
+pub fun with_line_numbers(parser, include) {
+  parser.include_line_numbers = include;
+  return parser;
+}
