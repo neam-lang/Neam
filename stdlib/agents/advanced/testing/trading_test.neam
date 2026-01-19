@@ -1,0 +1,54 @@
+// Trading agent tests
+
+module std.agents.advanced.testing.trading_test;
+
+use std.agents.advanced.trading.agent;
+use std.agents.advanced.trading.executor;
+use std.agents.advanced.trading.risk;
+use std.agents.advanced.trading.config;
+use std.agents.special.testing.mocks;
+
+pub fun test_trading_agent_build_and_analyze() {
+  let llm = mocks.mock_llm([
+    { pattern: "Analyze sentiment", response: "bullish" }
+  ]);
+
+  let builder = agent.trading_builder(llm);
+  builder = agent.with_data_feeds(builder, [
+    { symbol: "ACME", prices: [100, 101, 102, 103, 104] }
+  ]);
+
+  let built = agent.build_trading_agent(builder);
+  if (!built.ok) { return false; }
+
+  let analysis = agent.analyze(built.value, "ACME");
+  return analysis.ok && analysis.value.symbol == "ACME";
+}
+
+pub fun test_order_executor_submit_and_status() {
+  let broker = {
+    submit: fun(order) { return { ok: true, value: { order_id: "brk_1" } }; },
+    cancel: fun(order_id) { return { ok: true, value: true }; },
+    get_status: fun(order_id) {
+      return { ok: true, value: { status: "filled", fill_price: 101, filled_at: now() } };
+    }
+  };
+
+  let exec = executor.order_executor(broker);
+  let order = config.trading_order("ACME", config.side_buy(), 1, config.order_market());
+
+  let submitted = executor.submit_order(exec, order);
+  if (!submitted.ok) { return false; }
+
+  let status = executor.get_order_status(exec, order.id);
+  return status.ok && status.value.status == "filled" && exec.positions["ACME"] != nil;
+}
+
+pub fun test_risk_manager_checks() {
+  let manager = risk.risk_manager(config.risk_settings_default());
+  let portfolio = { equity: 100000, positions: {} };
+  let order = config.trading_order("ACME", config.side_buy(), 2000, config.order_market());
+
+  let check = risk.check_order(manager, order, portfolio);
+  return check.ok && check.value.approved == false;
+}

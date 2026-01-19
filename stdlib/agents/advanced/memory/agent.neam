@@ -1,0 +1,266 @@
+// Memory Agent main implementation
+
+module std.agents.advanced.memory.agent;
+
+use std.agents.advanced.memory.config;
+use std.agents.advanced.memory.semantic;
+use std.agents.advanced.memory.episodic;
+use std.agents.advanced.memory.working;
+use std.agents.advanced.memory.graph;
+
+// Memory agent builder
+pub fun memory_builder(llm) {
+  return {
+    llm: llm,
+    embedder: nil,
+    vector_store: nil,
+    graph_store: nil,
+    retention_policy: config.retention_forever(),
+    working_memory_size: 10,
+    auto_consolidate: true,
+    consolidation_threshold_days: 30,
+    importance_threshold: 0.3
+  };
+}
+
+pub fun with_embedder(builder, embedder) {
+  builder.embedder = embedder;
+  return builder;
+}
+
+pub fun with_vector_store(builder, store) {
+  builder.vector_store = store;
+  return builder;
+}
+
+pub fun with_graph_store(builder, store) {
+  builder.graph_store = store;
+  return builder;
+}
+
+pub fun with_retention_policy(builder, policy) {
+  builder.retention_policy = policy;
+  return builder;
+}
+
+pub fun with_working_memory_size(builder, size) {
+  builder.working_memory_size = size;
+  return builder;
+}
+
+pub fun with_auto_consolidate(builder, enabled) {
+  builder.auto_consolidate = enabled;
+  return builder;
+}
+
+// Build the memory agent
+pub fun build_memory_agent(builder) {
+  if (builder.llm == nil) {
+    return { ok: false, error: config.memory_error("CONFIG", "LLM is required", nil) };
+  }
+  if (builder.embedder == nil) {
+    return { ok: false, error: config.memory_error("CONFIG", "Embedder is required", nil) };
+  }
+
+  let sem_store = semantic.semantic_store(builder.embedder);
+  if (builder.vector_store != nil) {
+    sem_store = semantic.with_vector_index(sem_store, builder.vector_store);
+  }
+
+  let ep_store = episodic.episodic_store(builder.embedder);
+  let work_ctx = working.working_context(builder.working_memory_size);
+  let kg = graph.knowledge_graph();
+
+  return {
+    ok: true,
+    value: {
+      kind: "MemoryAgent",
+      llm: builder.llm,
+      embedder: builder.embedder,
+      semantic_memory: sem_store,
+      episodic_memory: ep_store,
+      working_memory: work_ctx,
+      knowledge_graph: kg,
+      retention_policy: builder.retention_policy,
+      auto_consolidate: builder.auto_consolidate,
+      consolidation_threshold_days: builder.consolidation_threshold_days,
+      importance_threshold: builder.importance_threshold
+    }
+  };
+}
+
+// Remember a fact (semantic)
+pub fun remember_fact(agent, content, category, importance) {
+  let result = semantic.store_fact(agent.semantic_memory, content, category, { importance: importance });
+
+  if (result.ok && agent.auto_consolidate) {
+    extract_and_link(agent, content);
+  }
+
+  return result;
+}
+
+// Remember an event (episodic)
+pub fun remember_event(agent, event_type, content, context) {
+  return episodic.add_event(agent.episodic_memory, event_type, content, context);
+}
+
+// Add to working memory
+pub fun focus_on(agent, content, source) {
+  return working.add_item(agent.working_memory, content, source, 0.8);
+}
+
+// Recall similar facts
+pub fun recall_facts(agent, query, top_k) {
+  let results = semantic.retrieve_similar(agent.semantic_memory, query, top_k);
+
+  // Also update working memory relevance
+  working.update_relevance(agent.working_memory, agent.embedder, query);
+
+  return results;
+}
+
+// Recall episodes
+pub fun recall_episodes(agent, query, top_k) {
+  return episodic.search_episodes(agent.episodic_memory, query, top_k);
+}
+
+// Get current context
+pub fun get_context(agent) {
+  return working.to_text(agent.working_memory);
+}
+
+// Answer question using memory
+pub fun answer_from_memory(agent, question) {
+  // Retrieve relevant facts
+  let facts = recall_facts(agent, question, 5);
+
+  // Retrieve relevant episodes
+  let episodes = recall_episodes(agent, question, 3);
+
+  // Get working memory context
+  let context = get_context(agent);
+
+  // Build prompt
+  let prompt = "Answer the question using the following information.\n\n";
+
+  if (facts.ok && len(facts.value) > 0) {
+    prompt = prompt + "Facts:\n";
+    for (fact in facts.value) {
+      prompt = prompt + "- " + fact.entry.content + "\n";
+    }
+    prompt = prompt + "\n";
+  }
+
+  if (episodes.ok && len(episodes.value) > 0) {
+    prompt = prompt + "Related events:\n";
+    for (ep in episodes.value) {
+      prompt = prompt + "- " + (ep.episode.summary || "Event from " + str(ep.episode.start_time)) + "\n";
+    }
+    prompt = prompt + "\n";
+  }
+
+  if (len(context) > 0) {
+    prompt = prompt + "Current context:\n" + context + "\n";
+  }
+
+  prompt = prompt + "Question: " + question + "\n\nAnswer:";
+
+  let answer = trim(agent.llm.generate(prompt));
+
+  return {
+    ok: true,
+    value: {
+      answer: answer,
+      sources: {
+        facts: facts.ok ? len(facts.value) : 0,
+        episodes: episodes.ok ? len(episodes.value) : 0
+      }
+    }
+  };
+}
+
+// Start a new session
+pub fun start_session(agent, session_id, metadata) {
+  return episodic.start_episode(agent.episodic_memory, session_id, metadata);
+}
+
+// End current session
+pub fun end_session(agent) {
+  return episodic.end_episode(agent.episodic_memory, agent.llm);
+}
+
+// Consolidate memories
+pub fun consolidate(agent) {
+  return episodic.consolidate(
+    agent.episodic_memory,
+    agent.llm,
+    agent.consolidation_threshold_days,
+    agent.importance_threshold
+  );
+}
+
+// Link entities in knowledge graph
+pub fun link_entities(agent, entity1, relation, entity2) {
+  // Add nodes if not exist
+  let node1 = graph.get_node(agent.knowledge_graph, entity1);
+  if (node1 == nil) {
+    graph.add_node(agent.knowledge_graph, entity1, "Entity", { name: entity1 });
+  }
+
+  let node2 = graph.get_node(agent.knowledge_graph, entity2);
+  if (node2 == nil) {
+    graph.add_node(agent.knowledge_graph, entity2, "Entity", { name: entity2 });
+  }
+
+  return graph.add_edge(agent.knowledge_graph, entity1, entity2, relation, {});
+}
+
+// Query knowledge graph
+pub fun query_knowledge(agent, subject, predicate, object) {
+  return graph.query_pattern(agent.knowledge_graph, {
+    subject: subject,
+    predicate: predicate,
+    object: object
+  });
+}
+
+// Get memory statistics
+pub fun get_stats(agent) {
+  return {
+    semantic: semantic.get_stats(agent.semantic_memory),
+    episodic: {
+      total_episodes: len(keys(agent.episodic_memory.episodes)),
+      active_episode: agent.episodic_memory.current_episode != nil
+    },
+    working: {
+      items: len(agent.working_memory.items),
+      has_focus: agent.working_memory.focus != nil
+    },
+    graph: {
+      nodes: len(keys(agent.knowledge_graph.nodes)),
+      edges: len(agent.knowledge_graph.edges)
+    }
+  };
+}
+
+// Helper function
+fun extract_and_link(agent, content) {
+  let prompt = "Extract entity pairs and their relationships from:\n\"" + content + "\"\n\n" +
+               "Format: entity1 | relation | entity2 (one per line)";
+
+  let response = agent.llm.generate(prompt);
+  let lines = split(response, "\n");
+
+  for (line in lines) {
+    let parts = split(line, "|");
+    if (len(parts) == 3) {
+      let e1 = trim(parts[0]);
+      let rel = trim(parts[1]);
+      let e2 = trim(parts[2]);
+      if (len(e1) > 0 && len(e2) > 0) {
+        link_entities(agent, e1, rel, e2);
+      }
+    }
+  }
+}

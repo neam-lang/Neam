@@ -1,0 +1,154 @@
+// Error recovery module
+
+module std.agents.advanced.orchestrator.recovery;
+
+use std.agents.advanced.orchestrator.config;
+
+pub fun recovery_manager(error_policy) {
+  return {
+    kind: "RecoveryManager",
+    policy: error_policy || config.error_retry(3),
+    failure_counts: {},
+    circuit_breakers: {}
+  };
+}
+
+pub fun handle_failure(manager, task, error) {
+  let task_id = task.id;
+
+  // Track failure count
+  if (manager.failure_counts[task_id] == nil) {
+    manager.failure_counts[task_id] = 0;
+  }
+  manager.failure_counts[task_id] = manager.failure_counts[task_id] + 1;
+
+  let failure_count = manager.failure_counts[task_id];
+
+  // Determine recovery action based on policy
+  if (manager.policy.kind == "Retry") {
+    if (failure_count < manager.policy.max_attempts) {
+      return {
+        ok: true,
+        value: {
+          action: "retry",
+          attempt: failure_count + 1,
+          max_attempts: manager.policy.max_attempts,
+          delay_ms: calculate_backoff(failure_count)
+        }
+      };
+    } else {
+      return {
+        ok: true,
+        value: {
+          action: "fail",
+          reason: "Max retry attempts exceeded",
+          attempts: failure_count
+        }
+      };
+    }
+  } else if (manager.policy.kind == "Failover") {
+    return {
+      ok: true,
+      value: {
+        action: "failover",
+        original_agent: task.assigned_agent,
+        reason: error.message
+      }
+    };
+  } else if (manager.policy.kind == "Escalate") {
+    return {
+      ok: true,
+      value: {
+        action: "escalate",
+        task: task,
+        error: error,
+        failure_count: failure_count
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    value: { action: "fail", reason: "Unknown policy" }
+  };
+}
+
+pub fun reset_failure_count(manager, task_id) {
+  manager.failure_counts[task_id] = 0;
+  return manager;
+}
+
+pub fun check_circuit_breaker(manager, agent_id) {
+  let breaker = manager.circuit_breakers[agent_id];
+  if (breaker == nil) {
+    return { ok: true, value: { open: false } };
+  }
+
+  if (breaker.state == "open") {
+    // Check if enough time has passed to try again
+    if (now() - breaker.opened_at > breaker.reset_timeout_ms) {
+      breaker.state = "half-open";
+      return { ok: true, value: { open: false, state: "half-open" } };
+    }
+    return { ok: true, value: { open: true, opens_at: breaker.opened_at + breaker.reset_timeout_ms } };
+  }
+
+  return { ok: true, value: { open: false, state: breaker.state } };
+}
+
+pub fun record_success(manager, agent_id) {
+  let breaker = manager.circuit_breakers[agent_id];
+  if (breaker != nil && breaker.state == "half-open") {
+    breaker.state = "closed";
+    breaker.failure_count = 0;
+  }
+  return manager;
+}
+
+pub fun record_failure(manager, agent_id) {
+  if (manager.circuit_breakers[agent_id] == nil) {
+    manager.circuit_breakers[agent_id] = {
+      state: "closed",
+      failure_count: 0,
+      threshold: 5,
+      reset_timeout_ms: 30000
+    };
+  }
+
+  let breaker = manager.circuit_breakers[agent_id];
+  breaker.failure_count = breaker.failure_count + 1;
+
+  if (breaker.failure_count >= breaker.threshold) {
+    breaker.state = "open";
+    breaker.opened_at = now();
+  }
+
+  return manager;
+}
+
+pub fun get_recovery_stats(manager) {
+  let total_failures = 0;
+  for (task_id in keys(manager.failure_counts)) {
+    total_failures = total_failures + manager.failure_counts[task_id];
+  }
+
+  let open_breakers = 0;
+  for (agent_id in keys(manager.circuit_breakers)) {
+    if (manager.circuit_breakers[agent_id].state == "open") {
+      open_breakers = open_breakers + 1;
+    }
+  }
+
+  return {
+    total_failures: total_failures,
+    tasks_with_failures: len(keys(manager.failure_counts)),
+    open_circuit_breakers: open_breakers,
+    policy: manager.policy.kind
+  };
+}
+
+// Helper function
+fun calculate_backoff(attempt) {
+  // Exponential backoff: 1s, 2s, 4s, 8s, ...
+  return min(1000 * pow(2, attempt), 30000);
+}
