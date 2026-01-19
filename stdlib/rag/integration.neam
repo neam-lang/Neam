@@ -1,0 +1,110 @@
+// Package integration adapters
+
+module std.rag.integration;
+
+use std.core.option;
+use std.crypto;
+use std.rag.chain;
+use std.rag.context;
+use std.rag.document;
+use std.rag.retriever;
+
+pub fun from_neam_rag_document(rag_doc) {
+  return document.rag_document(
+    rag_doc.id || generate_id(),
+    rag_doc.content,
+    rag_doc.metadata
+  );
+}
+
+pub fun to_neam_rag_document(doc) {
+  return {
+    content: doc.content,
+    metadata: doc.metadata,
+    id: option.some(doc.id)
+  };
+}
+
+pub fun from_neam_rag_store(store_instance) {
+  return {
+    kind: "NeamRAGStore",
+    inner: store_instance,
+    search: fun(query) {
+      return store_instance.search(query.embedding, query.top_k);
+    }
+  };
+}
+
+pub fun embedder_from_neam_embeddings(provider) {
+  return {
+    kind: "NeamEmbeddingsProvider",
+    inner: provider,
+    embed: fun(text) {
+      return provider.embed(text).vector;
+    },
+    embed_batch: fun(texts) {
+      return provider.embed_batch(texts);
+    },
+    dimensions: fun() {
+      return provider.dimensions();
+    }
+  };
+}
+
+pub fun rag_retrieval_chain(retriever_instance) {
+  return {
+    kind: "Chain",
+    name: "rag_retrieval",
+    run: fun(input) {
+      let docs = retriever.retrieve(retriever_instance, input.query);
+      return {
+        documents: docs,
+        context: context.build_context_text(docs)
+      };
+    }
+  };
+}
+
+pub fun rag_chain_step(rag_chain) {
+  return {
+    kind: "Chain",
+    name: "rag",
+    run: fun(input) {
+      return chain.run_chain(rag_chain, input.question);
+    }
+  };
+}
+
+pub fun retriever_from_vector_memory(vector_memory) {
+  return {
+    kind: "VectorMemoryRetriever",
+    memory: vector_memory,
+    search: fun(query) {
+      return vector_memory.search(query.embedding, query.top_k);
+    }
+  };
+}
+
+pub fun traced_rag_chain(chain_instance, tracer) {
+  return {
+    kind: "TracedRAGChain",
+    chain: chain_instance,
+    tracer: tracer,
+    run: fun(question) {
+      let span = tracer.start_span("rag_chain");
+      span.set_attribute("question", question);
+
+      let result = chain.run_chain(chain_instance, question);
+
+      span.set_attribute("sources_count", len(result.sources));
+      span.set_attribute("answer_length", len(result.answer));
+      span.end();
+
+      return result;
+    }
+  };
+}
+
+fun generate_id() {
+  return crypto.uuid_v4();
+}

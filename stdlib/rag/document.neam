@@ -1,0 +1,54 @@
+// RAG document types and collections
+
+module std.rag.document;
+
+pub fun rag_document(id, content, metadata) {
+  return {
+    id: id,
+    content: content,
+    metadata: metadata,
+    embedding: nil,
+    score: nil
+  };
+}
+
+pub fun with_embedding(doc, embedding_vec) {
+  doc.embedding = embedding_vec;
+  return doc;
+}
+
+pub fun with_score(doc, score) {
+  doc.score = score;
+  return doc;
+}
+
+pub fun document_collection() {
+  return {
+    documents: [],
+    id_index: {}
+  };
+}
+
+pub fun add_document(collection, doc) {
+  push(collection.documents, doc);
+  collection.id_index[doc.id] = len(collection.documents) - 1;
+  return collection;
+}
+
+pub fun get_document(collection, id) {
+  let idx = collection.id_index[id];
+  if (idx == nil) {
+    return nil;
+  }
+  return collection.documents[idx];
+}
+
+pub fun search_documents(collection, query_fn) {
+  let results = [];
+  for (doc in collection.documents) {
+    if (query_fn(doc)) {
+      push(results, doc);
+    }
+  }
+  return results;
+}
