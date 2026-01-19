@@ -1,0 +1,211 @@
+// YAML prompt storage (minimal parser)
+
+module std.agents.prompts.storage.yaml;
+
+use std.io.file;
+
+pub fun load(path) {
+  let content = file.read_string(path);
+  return parse(content);
+}
+
+pub fun parse(text) {
+  let lines = split(text, "\n");
+  let result = parse_block(lines, 0, 0);
+  return { ok: true, value: result.value };
+}
+
+pub fun stringify(value) {
+  let lines = [];
+  write_value(lines, value, 0);
+  return lines.join("\n");
+}
+
+fun parse_block(lines, start, indent) {
+  let index = start;
+  let first = next_non_empty(lines, index);
+  if (first.index >= len(lines)) {
+    return { value: {}, index: len(lines) };
+  }
+  let line = lines[first.index];
+  if (count_indent(line) < indent) {
+    return { value: {}, index: first.index };
+  }
+
+  let trimmed = trim(line);
+  if (starts_with(trimmed, "- ")) {
+    return parse_list(lines, first.index, indent);
+  }
+  return parse_map(lines, first.index, indent);
+}
+
+fun parse_list(lines, start, indent) {
+  let items = [];
+  let index = start;
+
+  while (index < len(lines)) {
+    let line = lines[index];
+    if (trim(line) == "" || starts_with(trim(line), "#")) {
+      index = index + 1;
+      continue;
+    }
+
+    let current_indent = count_indent(line);
+    if (current_indent < indent) { break; }
+
+    let trimmed = trim(line);
+    if (!starts_with(trimmed, "- ")) { break; }
+
+    let item_text = trim(substring(trimmed, 2, len(trimmed)));
+    if (item_text == "") {
+      let nested = parse_block(lines, index + 1, current_indent + 2);
+      push(items, nested.value);
+      index = nested.index;
+      continue;
+    }
+
+    push(items, parse_scalar(item_text));
+    index = index + 1;
+  }
+
+  return { value: items, index: index };
+}
+
+fun parse_map(lines, start, indent) {
+  let map = {};
+  let index = start;
+
+  while (index < len(lines)) {
+    let line = lines[index];
+    if (trim(line) == "" || starts_with(trim(line), "#")) {
+      index = index + 1;
+      continue;
+    }
+
+    let current_indent = count_indent(line);
+    if (current_indent < indent) { break; }
+
+    let trimmed = trim(line);
+    if (starts_with(trimmed, "- ")) { break; }
+
+    let parts = split(trimmed, ":");
+    let key = trim(parts[0]);
+    let rest = "";
+    if (len(parts) > 1) {
+      rest = trim(substring(trimmed, len(key) + 1, len(trimmed)));
+    }
+
+    if (rest == "") {
+      let nested = parse_block(lines, index + 1, current_indent + 2);
+      map[key] = nested.value;
+      index = nested.index;
+      continue;
+    }
+
+    map[key] = parse_scalar(rest);
+    index = index + 1;
+  }
+
+  return { value: map, index: index };
+}
+
+fun parse_scalar(value) {
+  let trimmed = trim(value);
+  if (starts_with(trimmed, "[") && ends_with(trimmed, "]")) {
+    let inner = trim(substring(trimmed, 1, len(trimmed) - 1));
+    if (inner == "") { return []; }
+    let parts = split(inner, ",");
+    let values = [];
+    for (part in parts) {
+      push(values, parse_scalar(part));
+    }
+    return values;
+  }
+
+  if (trimmed == "true") { return true; }
+  if (trimmed == "false") { return false; }
+
+  if (is_number(trimmed)) {
+    return parse_float(trimmed);
+  }
+
+  return trim(strip_quotes(trimmed));
+}
+
+fun write_value(lines, value, indent) {
+  let prefix = repeat(" ", indent);
+  if (is_list(value)) {
+    for (item in value) {
+      if (is_complex(item)) {
+        push(lines, prefix + "-");
+        write_value(lines, item, indent + 2);
+      } else {
+        push(lines, prefix + "- " + format_scalar(item));
+      }
+    }
+    return;
+  }
+
+  if (is_map(value)) {
+    for (key in keys(value)) {
+      let item = value[key];
+      if (is_complex(item)) {
+        push(lines, prefix + key + ":");
+        write_value(lines, item, indent + 2);
+      } else {
+        push(lines, prefix + key + ": " + format_scalar(item));
+      }
+    }
+    return;
+  }
+
+  push(lines, prefix + format_scalar(value));
+}
+
+fun format_scalar(value) {
+  if (is_string(value)) { return value; }
+  return value + "";
+}
+
+fun is_complex(value) {
+  return is_list(value) || is_map(value);
+}
+
+fun next_non_empty(lines, start) {
+  let index = start;
+  while (index < len(lines)) {
+    if (trim(lines[index]) != "") { break; }
+    index = index + 1;
+  }
+  return { index: index };
+}
+
+fun count_indent(line) {
+  let count = 0;
+  while (count < len(line) && substring(line, count, count + 1) == " ") {
+    count = count + 1;
+  }
+  return count;
+}
+
+fun strip_quotes(value) {
+  if ((starts_with(value, "\"") && ends_with(value, "\"")) || (starts_with(value, "'") && ends_with(value, "'"))) {
+    return substring(value, 1, len(value) - 1);
+  }
+  return value;
+}
+
+fun is_number(value) {
+  let match = regex_match(value, "^[0-9]+(\\.[0-9]+)?$");
+  return len(match) > 0;
+}
+
+fun repeat(char, count) {
+  let result = "";
+  let i = 0;
+  while (i < count) {
+    result = result + char;
+    i = i + 1;
+  }
+  return result;
+}

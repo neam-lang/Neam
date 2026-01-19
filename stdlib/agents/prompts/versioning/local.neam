@@ -1,0 +1,221 @@
+// Local Git-native prompt versioning utilities
+
+module std.agents.prompts.versioning.local;
+
+use std.crypto;
+use std.time;
+
+pub fun prompt_repository() {
+  return {
+    prompts: {},
+    branches: {}
+  };
+}
+
+pub fun create_version(repo, prompt_id, content, message) {
+  return create_version_with(repo, prompt_id, content, message, "unknown", "main", nil);
+}
+
+pub fun create_version_with(repo, prompt_id, content, message, author, branch, version) {
+  let prompt = ensure_prompt(repo, prompt_id);
+  if (prompt.branches[branch] == nil) {
+    prompt.branches[branch] = nil;
+  }
+
+  let parent = latest_version_for_branch(prompt, branch);
+  let next_version = version;
+  if (next_version == nil) {
+    next_version = bump_patch_version(parent != nil ? parent.version : "0.1.0");
+  }
+
+  if (!is_semver(next_version)) {
+    return { ok: false, error: "Invalid semantic version: " + next_version };
+  }
+
+  let created_at = time.now();
+  let content_hash = crypto.sha256(content);
+  let sha = crypto.sha256(prompt_id + ":" + content_hash + ":" + created_at + ":" + message);
+
+  let version_entry = {
+    version: next_version,
+    sha: sha,
+    author: author,
+    created_at: created_at,
+    message: message,
+    parent_sha: parent != nil ? parent.sha : nil,
+    content_hash: content_hash,
+    branch: branch,
+    content: content
+  };
+
+  push(prompt.versions, version_entry);
+  prompt.branches[branch] = sha;
+
+  return { ok: true, value: version_entry };
+}
+
+pub fun get_version(repo, prompt_id, version_or_sha) {
+  let prompt = repo.prompts[prompt_id];
+  if (prompt == nil) {
+    return { ok: false, error: "Prompt not found: " + prompt_id };
+  }
+
+  for (entry in prompt.versions) {
+    if (entry.version == version_or_sha || entry.sha == version_or_sha) {
+      return { ok: true, value: entry.content };
+    }
+  }
+
+  return { ok: false, error: "Version not found: " + version_or_sha };
+}
+
+pub fun list_versions(repo, prompt_id) {
+  let prompt = repo.prompts[prompt_id];
+  if (prompt == nil) {
+    return { ok: false, error: "Prompt not found: " + prompt_id };
+  }
+  return { ok: true, value: prompt.versions };
+}
+
+pub fun diff_versions(repo, prompt_id, v1, v2) {
+  let content_a = get_version(repo, prompt_id, v1);
+  let content_b = get_version(repo, prompt_id, v2);
+
+  if (!content_a.ok) { return content_a; }
+  if (!content_b.ok) { return content_b; }
+
+  if (content_a.value == content_b.value) {
+    return { ok: true, value: { changed: false, diff: { added: [], removed: [], unchanged: split(content_a.value, "\n") } } };
+  }
+
+  let diff = diff_lines(content_a.value, content_b.value);
+  return { ok: true, value: { changed: true, diff: diff } };
+}
+
+pub fun rollback(repo, prompt_id, target_version) {
+  let content = get_version(repo, prompt_id, target_version);
+  if (!content.ok) { return content; }
+  return create_version_with(repo, prompt_id, content.value, "Rollback to " + target_version, "system", "main", nil);
+}
+
+pub fun generate_changelog(repo, prompt_id) {
+  let versions = list_versions(repo, prompt_id);
+  if (!versions.ok) { return versions; }
+
+  let changelog = [];
+  for (entry in versions.value) {
+    push(changelog, {
+      version: entry.version,
+      author: entry.author,
+      created_at: entry.created_at,
+      message: entry.message,
+      sha: entry.sha
+    });
+  }
+
+  return { ok: true, value: changelog };
+}
+
+pub fun create_branch(repo, prompt_id, branch, from_version) {
+  let prompt = ensure_prompt(repo, prompt_id);
+  let version_sha = nil;
+  if (from_version != nil) {
+    let content = get_version(repo, prompt_id, from_version);
+    if (!content.ok) { return content; }
+    let version_entry = find_version(prompt, from_version);
+    version_sha = version_entry != nil ? version_entry.sha : nil;
+  }
+
+  prompt.branches[branch] = version_sha;
+  return { ok: true, value: branch };
+}
+
+pub fun list_branches(repo, prompt_id) {
+  let prompt = repo.prompts[prompt_id];
+  if (prompt == nil) {
+    return { ok: false, error: "Prompt not found: " + prompt_id };
+  }
+  return { ok: true, value: keys(prompt.branches) };
+}
+
+fun ensure_prompt(repo, prompt_id) {
+  if (repo.prompts[prompt_id] == nil) {
+    repo.prompts[prompt_id] = { versions: [], branches: { main: nil } };
+  }
+  return repo.prompts[prompt_id];
+}
+
+fun latest_version_for_branch(prompt, branch) {
+  let branch_sha = prompt.branches[branch];
+  if (branch_sha == nil) {
+    return len(prompt.versions) > 0 ? prompt.versions[len(prompt.versions) - 1] : nil;
+  }
+
+  for (entry in prompt.versions) {
+    if (entry.sha == branch_sha) { return entry; }
+  }
+  return nil;
+}
+
+fun bump_patch_version(version) {
+  if (!is_semver(version)) {
+    return "0.1.0";
+  }
+
+  let parts = split(version, ".");
+  let major = parse_int(parts[0]);
+  let minor = parse_int(parts[1]);
+  let patch = parse_int(parts[2]);
+  return major + "." + minor + "." + (patch + 1);
+}
+
+fun is_semver(version) {
+  let parts = split(version, ".");
+  if (len(parts) != 3) { return false; }
+  return is_number(parts[0]) && is_number(parts[1]) && is_number(parts[2]);
+}
+
+fun is_number(value) {
+  let match = regex_match(value, "^[0-9]+$");
+  return len(match) > 0;
+}
+
+fun diff_lines(before, after) {
+  let before_lines = split(before, "\n");
+  let after_lines = split(after, "\n");
+  let removed = [];
+  let added = [];
+  let unchanged = [];
+
+  for (line in before_lines) {
+    if (contains_line(after_lines, line)) {
+      push(unchanged, line);
+    } else {
+      push(removed, line);
+    }
+  }
+
+  for (line in after_lines) {
+    if (!contains_line(before_lines, line)) {
+      push(added, line);
+    }
+  }
+
+  return { removed: removed, added: added, unchanged: unchanged };
+}
+
+fun contains_line(lines, target) {
+  for (line in lines) {
+    if (line == target) { return true; }
+  }
+  return false;
+}
+
+fun find_version(prompt, version_or_sha) {
+  for (entry in prompt.versions) {
+    if (entry.version == version_or_sha || entry.sha == version_or_sha) {
+      return entry;
+    }
+  }
+  return nil;
+}

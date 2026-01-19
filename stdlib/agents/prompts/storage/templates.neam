@@ -1,0 +1,236 @@
+// Minimal Jinja2-style template handling
+
+module std.agents.prompts.storage.templates;
+
+use std.io.file;
+
+pub fun load_template(path) {
+  let content = file.read_string(path);
+  return { ok: true, value: { path: path, content: content, required_variables: list_required_variables(content) } };
+}
+
+pub fun render_template(template, variables) {
+  let resolved = apply_inheritance(template.content, template.path, variables);
+  if (!resolved.ok) { return resolved; }
+
+  let with_includes = apply_includes(resolved.value, variables);
+  let rendered = render_lines(split(with_includes, "\n"), variables);
+
+  return { ok: true, value: rendered };
+}
+
+pub fun validate_variables(template, variables) {
+  let required = template.required_variables != nil ? template.required_variables : list_required_variables(template.content);
+  let missing = [];
+  for (name in required) {
+    if (variables == nil || variables[name] == nil) {
+      push(missing, name);
+    }
+  }
+  return { ok: true, value: { valid: len(missing) == 0, missing: missing } };
+}
+
+pub fun list_required_variables(template) {
+  let matches = regex_match_all(template, "\\{\\{\\s*([a-zA-Z0-9_\.]+)\\s*\\}\\}");
+  let variables = [];
+  for (match in matches) {
+    let name = trim(strip_delimiters(match));
+    if (!contains_value(variables, name)) {
+      push(variables, name);
+    }
+  }
+  return variables;
+}
+
+fun apply_inheritance(content, path, variables) {
+  let extends_match = regex_match(content, "\\{\\%\\s*extends\\s+\"([^\"]+)\"\\s*\\%\\}");
+  if (len(extends_match) == 0) {
+    return { ok: true, value: content };
+  }
+
+  let base_path = extends_match[1];
+  let base_template = file.read_string(resolve_path(path, base_path));
+  let child_blocks = extract_blocks(content);
+  let merged = replace_blocks(base_template, child_blocks);
+
+  return { ok: true, value: merged };
+}
+
+fun apply_includes(content, variables) {
+  let result = content;
+  let matches = regex_match_all(result, "\\{\\%\\s*include\\s+\"([^\"]+)\"\\s*\\%\\}");
+  for (match in matches) {
+    let include_path = strip_include_path(match);
+    let include_content = file.read_string(include_path);
+    result = replace(result, match, include_content);
+  }
+  return result;
+}
+
+fun render_lines(lines, variables) {
+  let output = [];
+  let index = 0;
+  while (index < len(lines)) {
+    let line = lines[index];
+    let trimmed = trim(line);
+
+    if (starts_with(trimmed, "{% if ")) {
+      let condition = extract_directive(trimmed, "if");
+      let block = collect_block(lines, index + 1, "endif");
+      if (truthy(variables[condition])) {
+        let rendered = render_lines(block.lines, variables);
+        output = output + split(rendered, "\n");
+      }
+      index = block.next_index;
+      continue;
+    }
+
+    if (starts_with(trimmed, "{% for ")) {
+      let directive = extract_directive(trimmed, "for");
+      let parts = split(directive, " in ");
+      let iterator = trim(parts[0]);
+      let list_name = trim(parts[1]);
+      let block = collect_block(lines, index + 1, "endfor");
+      let items = variables[list_name] != nil ? variables[list_name] : [];
+      for (item in items) {
+        let temp = variables;
+        temp[iterator] = item;
+        let rendered = render_lines(block.lines, temp);
+        output = output + split(rendered, "\n");
+      }
+      index = block.next_index;
+      continue;
+    }
+
+    output = output + [render_line(line, variables)];
+    index = index + 1;
+  }
+
+  return output.join("\n");
+}
+
+fun render_line(line, variables) {
+  let rendered = line;
+  let matches = regex_match_all(rendered, "\\{\\{\\s*([a-zA-Z0-9_\.]+)\\s*\\}\\}");
+  for (match in matches) {
+    let name = trim(strip_delimiters(match));
+    let value = variables != nil ? variables[name] : nil;
+    let safe = sanitize_value(value != nil ? value + "" : "");
+    rendered = replace(rendered, match, safe);
+  }
+  return rendered;
+}
+
+fun extract_blocks(content) {
+  let blocks = {};
+  let lines = split(content, "\n");
+  let index = 0;
+  while (index < len(lines)) {
+    let trimmed = trim(lines[index]);
+    if (starts_with(trimmed, "{% block ")) {
+      let block_name = extract_directive(trimmed, "block");
+      let block = collect_block(lines, index + 1, "endblock");
+      blocks[block_name] = block.lines.join("\n");
+      index = block.next_index;
+      continue;
+    }
+    index = index + 1;
+  }
+  return blocks;
+}
+
+fun replace_blocks(base, blocks) {
+  let result = base;
+  for (name in keys(blocks)) {
+    let pattern = "\\{\\%\\s*block\\s+" + name + "\\s*\\%\\}([\\s\\S]*?)\\{\\%\\s*endblock\\s*\\%\\}";
+    result = regex_replace(result, pattern, "{% block " + name + " %}\n" + blocks[name] + "\n{% endblock %}");
+  }
+  return result;
+}
+
+fun collect_block(lines, start, end_tag) {
+  let block_lines = [];
+  let index = start;
+  while (index < len(lines)) {
+    let trimmed = trim(lines[index]);
+    if (trimmed == "{% " + end_tag + " %}") {
+      return { lines: block_lines, next_index: index + 1 };
+    }
+    push(block_lines, lines[index]);
+    index = index + 1;
+  }
+  return { lines: block_lines, next_index: len(lines) };
+}
+
+fun extract_directive(text, name) {
+  let trimmed = trim(replace(replace(text, "{%", ""), "%}", ""));
+  return trim(replace(trimmed, name, ""));
+}
+
+fun strip_delimiters(value) {
+  let result = replace(value, "{{", "");
+  result = replace(result, "}}", "");
+  return result;
+}
+
+fun strip_include_path(value) {
+  let match = regex_match(value, "\\{\\%\\s*include\\s+\"([^\"]+)\"\\s*\\%\\}");
+  if (len(match) > 1) {
+    return match[1];
+  }
+  return "";
+}
+
+fun sanitize_value(value) {
+  let safe = replace(value, "{%", "");
+  safe = replace(safe, "%}", "");
+  safe = replace(safe, "{{", "");
+  safe = replace(safe, "}}", "");
+  return safe;
+}
+
+fun resolve_path(base, relative) {
+  if (starts_with(relative, "/")) { return relative; }
+  let parts = split(base, "/");
+  pop(parts);
+  let base_dir = parts.join("/");
+  return base_dir + "/" + relative;
+}
+
+fun regex_match_all(text, pattern) {
+  let matches = [];
+  let remaining = text;
+  let safety = 0;
+
+  while (safety < 1000) {
+    let match = regex_match(remaining, pattern);
+    if (len(match) == 0) { break; }
+
+    let value = match[0];
+    if (len(value) == 0) { break; }
+
+    push(matches, value);
+
+    let index = index_of(remaining, value);
+    if (index < 0) { break; }
+
+    let prefix = substring(remaining, 0, index + len(value));
+    let suffix = substring(remaining, index + len(value), len(remaining));
+    remaining = suffix;
+
+    safety = safety + 1;
+  }
+
+  return matches;
+}
+
+fun contains_value(items, value) {
+  for (item in items) {
+    if (item == value) { return true; }
+  }
+  return false;
+}
+
+fun truthy(value) {
+  return value != nil && value != false;
+}

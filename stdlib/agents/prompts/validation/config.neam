@@ -1,0 +1,43 @@
+// Test configuration for prompt validation
+
+module std.agents.prompts.validation.config;
+
+use std.io.file;
+use std.agents.prompts.storage.yaml;
+use std.data.json;
+
+pub fun load_config(path) {
+  let content = file.read_string(path);
+  let format = detect_format(path);
+  if (format == "json") {
+    return { ok: true, value: json.parse(content) };
+  }
+  return yaml.parse(content);
+}
+
+pub fun create_test_suite(name) {
+  return { name: name, description: "", prompts: [], providers: [], test_cases: [] };
+}
+
+pub fun add_prompt(suite, prompt) {
+  push(suite.prompts, prompt);
+  return suite;
+}
+
+pub fun add_provider(suite, provider) {
+  push(suite.providers, provider);
+  return suite;
+}
+
+pub fun add_test_case(suite, test_case) {
+  push(suite.test_cases, test_case);
+  return suite;
+}
+
+fun detect_format(path) {
+  let parts = split(path, ".");
+  if (len(parts) < 2) { return "yaml"; }
+  let ext = parts[len(parts) - 1];
+  if (ext == "json") { return "json"; }
+  return "yaml";
+}

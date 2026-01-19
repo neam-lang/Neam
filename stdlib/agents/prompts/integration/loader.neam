@@ -1,0 +1,98 @@
+// Prompt loading for agents
+
+module std.agents.prompts.integration.loader;
+
+use std.agents.prompts.storage.formats;
+use std.agents.prompts.storage.templates;
+use std.agents.prompts.versioning.registry;
+
+pub fun load_agent_prompts(config, prompt_registry, hooks) {
+  let active_hooks = hooks != nil ? hooks : { before_load: fun(ref) { return ref; }, after_render: fun(text) { return text; }, before_validation: fun(text) { return { skip: false, value: text }; }, on_validation_failure: fun(err) { return { ok: false, error: err }; } };
+
+  let system_ref = active_hooks.before_load(config.system_prompt);
+  let system_prompt = load_prompt_reference(system_ref, prompt_registry);
+
+  let user_prompt = nil;
+  if (config.user_prompt_template != nil) {
+    let user_ref = active_hooks.before_load(config.user_prompt_template);
+    user_prompt = load_prompt_reference(user_ref, prompt_registry);
+  }
+
+  let few_shot = nil;
+  if (config.few_shot_examples != nil) {
+    let few_ref = active_hooks.before_load(config.few_shot_examples);
+    few_shot = load_prompt_reference(few_ref, prompt_registry);
+  }
+
+  return {
+    ok: true,
+    value: {
+      system_prompt: system_prompt,
+      user_prompt: user_prompt,
+      few_shot_examples: few_shot,
+      output_schema: config.output_schema,
+      guardrails: config.guardrails,
+      hooks: active_hooks
+    }
+  };
+}
+
+pub fun render_system_prompt(prompts, context) {
+  let rendered = render_prompt(prompts.system_prompt, context);
+  let modified = prompts.hooks.after_render(rendered);
+  return { ok: true, value: modified };
+}
+
+pub fun render_user_prompt(prompts, user_input, context) {
+  let merged = context != nil ? context : {};
+  merged.user_input = user_input;
+  let rendered = render_prompt(prompts.user_prompt, merged);
+  let modified = prompts.hooks.after_render(rendered);
+  return { ok: true, value: modified };
+}
+
+fun load_prompt_reference(reference, prompt_registry) {
+  if (reference == nil) { return nil; }
+
+  if (reference.source == "file") {
+    let loaded = formats.load_prompt(reference.path_or_name);
+    if (!loaded.ok) { return loaded; }
+    let format = formats.detect_format(reference.path_or_name);
+    if (format == "jinja2") {
+      return { template: loaded.value, metadata: { format: format } };
+    }
+    return loaded.value;
+  }
+
+  if (reference.source == "registry") {
+    let label = reference.version_or_label != nil ? reference.version_or_label : "production";
+    let prompt = registry.get_prompt(prompt_registry, reference.path_or_name, label);
+    if (!prompt.ok) { return prompt; }
+    return { content: prompt.value, metadata: { format: "text" } };
+  }
+
+  if (reference.source == "inline") {
+    return { content: reference.path_or_name, metadata: { format: "text" } };
+  }
+
+  return { content: "", metadata: {} };
+}
+
+fun render_prompt(prompt, context) {
+  if (prompt == nil) { return ""; }
+
+  if (prompt.template != nil) {
+    let validation = templates.validate_variables(prompt.template, context);
+    if (!validation.value.valid) {
+      return "";
+    }
+    let rendered = templates.render_template(prompt.template, context);
+    return rendered.value;
+  }
+
+  if (prompt.content != nil) {
+    return prompt.content;
+  }
+
+  return prompt + "";
+}

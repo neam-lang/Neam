@@ -1,0 +1,19 @@
+// Context window helpers
+
+module std.agents.prompts.context.window;
+
+pub fun window_manager(size) {
+  return { size: size, messages: [] };
+}
+
+pub fun add_message(window, message) {
+  push(window.messages, message);
+  if (len(window.messages) > window.size) {
+    window.messages = slice(window.messages, len(window.messages) - window.size, len(window.messages));
+  }
+  return window;
+}
+
+pub fun get_messages(window) {
+  return window.messages;
+}
