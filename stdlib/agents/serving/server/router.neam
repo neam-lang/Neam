@@ -1,0 +1,74 @@
+// HTTP router
+
+module std.agents.serving.server.router;
+
+use std.agents.serving.config;
+
+pub fun create_router() {
+  return { routes: [] };
+}
+
+pub fun add_route(router, endpoint) {
+  push(router.routes, normalize_route(endpoint));
+  return router;
+}
+
+pub fun match_route(router, method, path) {
+  let normalized_path = normalize_path(path);
+  for (route in router.routes) {
+    if (route.method != method) { continue; }
+    let params = match_path(route.path, normalized_path);
+    if (params != nil) {
+      return { route: route, params: params };
+    }
+  }
+  return nil;
+}
+
+fun normalize_route(endpoint) {
+  endpoint.path = normalize_path(endpoint.path);
+  return endpoint;
+}
+
+fun normalize_path(path) {
+  if (path == nil || path == "") { return "/"; }
+  if (!starts_with(path, "/")) { path = "/" + path; }
+  if (len(path) > 1 && ends_with(path, "/")) {
+    path = substring(path, 0, len(path) - 1);
+  }
+  return path;
+}
+
+fun match_path(pattern, path) {
+  if (pattern == path) { return {}; }
+
+  let pattern_parts = split(trim_slash(pattern), "/");
+  let path_parts = split(trim_slash(path), "/");
+
+  if (len(pattern_parts) != len(path_parts)) { return nil; }
+
+  let params = {};
+  let idx = 0;
+  while (idx < len(pattern_parts)) {
+    let part = pattern_parts[idx];
+    let value = path_parts[idx];
+    if (starts_with(part, ":")) {
+      let key = substring(part, 1, len(part));
+      params[key] = value;
+    } else if (part != value) {
+      return nil;
+    }
+    idx = idx + 1;
+  }
+
+  return params;
+}
+
+fun trim_slash(path) {
+  if (path == "/") { return ""; }
+  let start = 0;
+  let end = len(path);
+  if (starts_with(path, "/")) { start = 1; }
+  if (end > start && ends_with(path, "/")) { end = end - 1; }
+  return substring(path, start, end);
+}

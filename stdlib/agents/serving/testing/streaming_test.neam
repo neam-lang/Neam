@@ -1,0 +1,15 @@
+// Streaming tests
+
+module std.agents.serving.testing.streaming_test;
+
+use std.agents.serving.streaming.buffer;
+
+pub fun test_frame_buffer_latest() {
+  let buf = buffer.frame_buffer(2);
+  buffer.append_frame(buf, { id: 1 });
+  buffer.append_frame(buf, { id: 2 });
+  buffer.append_frame(buf, { id: 3 });
+
+  let latest = buffer.get_latest(buf);
+  return latest.id == 3 && len(buf.frames) == 2;
+}

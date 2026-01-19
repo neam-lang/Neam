@@ -1,0 +1,188 @@
+// WebSocket server
+
+module std.agents.serving.websocket.server;
+
+use std.agents.serving.config;
+use std.agents.serving.websocket.connection;
+use std.agents.serving.websocket.protocol;
+use std.agents.serving.websocket.rooms;
+
+pub fun websocket_server_builder() {
+  return {
+    path: "/ws",
+    max_connections: 10000,
+    ping_interval_ms: 25000,
+    pong_timeout_ms: 10000,
+    max_message_size: 65536,
+    compression_enabled: true,
+    subprotocols: ["neam-agent-v1"]
+  };
+}
+
+pub fun with_ws_path(builder, path) {
+  builder.path = path;
+  return builder;
+}
+
+pub fun with_max_connections(builder, max) {
+  builder.max_connections = max;
+  return builder;
+}
+
+pub fun with_ping_interval(builder, ms) {
+  builder.ping_interval_ms = ms;
+  return builder;
+}
+
+pub fun with_compression(builder, enabled) {
+  builder.compression_enabled = enabled;
+  return builder;
+}
+
+pub fun build_websocket_server(builder, agent_registry) {
+  return {
+    ok: true,
+    value: {
+      kind: "WebSocketServer",
+      config: builder,
+      agent_registry: agent_registry,
+      connections: {},
+      rooms: {},
+      message_handlers: {},
+      state: "stopped"
+    }
+  };
+}
+
+pub fun on_connect(server, handler) {
+  server.message_handlers["connect"] = handler;
+  return server;
+}
+
+pub fun on_disconnect(server, handler) {
+  server.message_handlers["disconnect"] = handler;
+  return server;
+}
+
+pub fun on_message(server, message_type, handler) {
+  server.message_handlers[message_type] = handler;
+  return server;
+}
+
+pub fun on_error(server, handler) {
+  server.message_handlers["error"] = handler;
+  return server;
+}
+
+pub fun start(server) {
+  server.state = "running";
+  return { ok: true, value: server };
+}
+
+pub fun handle_connection(server, ws, request) {
+  let conn = connection.create_connection(ws, request);
+  if (len(keys(server.connections)) >= server.config.max_connections) {
+    connection.close(conn, 4002, "Too many connections");
+    return { ok: false, error: "Max connections reached" };
+  }
+
+  server.connections[conn.id] = conn;
+
+  let auth_result = authenticate_connection(server, conn, request);
+  if (!auth_result.ok) {
+    connection.close(conn, 4001, "Authentication failed");
+    return auth_result;
+  }
+
+  conn.authenticated = true;
+  conn.user_id = auth_result.value.user_id;
+
+  if (server.message_handlers["connect"] != nil) {
+    server.message_handlers["connect"](conn);
+  }
+
+  start_message_loop(server, conn);
+
+  return { ok: true, value: conn };
+}
+
+fun start_message_loop(server, conn) {
+  conn.on_message = fun(raw_message) {
+    let message = protocol.parse_message(raw_message);
+    if (message == nil) {
+      protocol.send_error(conn, "PARSE_ERROR", "Invalid message format");
+      return;
+    }
+
+    let handler = server.message_handlers[message.type];
+    if (handler != nil) {
+      let result = handler(conn, message);
+      if (result != nil && result.response != nil) {
+        connection.send(conn, result.response);
+      }
+    } else {
+      protocol.send_error(conn, "UNKNOWN_TYPE", "Unknown message type: " + message.type);
+    }
+  };
+
+  conn.on_close = fun(code, reason) {
+    delete server.connections[conn.id];
+    if (server.message_handlers["disconnect"] != nil) {
+      server.message_handlers["disconnect"](conn, code, reason);
+    }
+  };
+}
+
+pub fun broadcast(server, message) {
+  for (conn_id in keys(server.connections)) {
+    let conn = server.connections[conn_id];
+    connection.send(conn, message);
+  }
+}
+
+pub fun broadcast_to_room(server, room_id, message) {
+  let room = server.rooms[room_id];
+  if (room != nil) {
+    for (conn_id in rooms.list_members(room)) {
+      let conn = server.connections[conn_id];
+      if (conn != nil) {
+        connection.send(conn, message);
+      }
+    }
+  }
+}
+
+pub fun create_room(server, room_id) {
+  server.rooms[room_id] = rooms.create_room(room_id);
+  return server.rooms[room_id];
+}
+
+pub fun join_room(server, room_id, conn_id) {
+  let room = server.rooms[room_id];
+  if (room == nil) {
+    room = create_room(server, room_id);
+  }
+  rooms.join_room(room, conn_id);
+  return room;
+}
+
+pub fun leave_room(server, room_id, conn_id) {
+  let room = server.rooms[room_id];
+  if (room != nil) {
+    rooms.leave_room(room, conn_id);
+  }
+  return room;
+}
+
+fun authenticate_connection(server, conn, request) {
+  let token = request.headers["Authorization"];
+  if (token == nil) {
+    token = request.query_params["token"];
+  }
+
+  if (token == nil) {
+    return { ok: false, error: "No authentication token provided" };
+  }
+
+  return { ok: true, value: { user_id: "user_123" } };
+}

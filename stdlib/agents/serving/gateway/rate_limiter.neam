@@ -1,0 +1,226 @@
+// Rate limiting
+
+module std.agents.serving.gateway.rate_limiter;
+
+pub fun rate_limit_fixed_window(requests, window_seconds) {
+  return {
+    kind: "FixedWindow",
+    max_requests: requests,
+    window_seconds: window_seconds
+  };
+}
+
+pub fun rate_limit_sliding_window(requests, window_seconds) {
+  return {
+    kind: "SlidingWindow",
+    max_requests: requests,
+    window_seconds: window_seconds
+  };
+}
+
+pub fun rate_limit_token_bucket(capacity, refill_rate, refill_interval_ms) {
+  return {
+    kind: "TokenBucket",
+    capacity: capacity,
+    refill_rate: refill_rate,
+    refill_interval_ms: refill_interval_ms
+  };
+}
+
+pub fun rate_limit_tokens(max_tokens_per_minute, max_requests_per_minute) {
+  return {
+    kind: "TokenBased",
+    max_tokens_per_minute: max_tokens_per_minute,
+    max_requests_per_minute: max_requests_per_minute
+  };
+}
+
+pub fun rate_limiter(config, key_type, store) {
+  return {
+    kind: "RateLimiter",
+    config: config,
+    key_type: key_type,
+    store: store || in_memory_store(),
+    tier_limits: {}
+  };
+}
+
+pub fun with_tier(limiter, tier_name, tier_config) {
+  limiter.tier_limits[tier_name] = tier_config;
+  return limiter;
+}
+
+pub fun check(limiter, key, tier) {
+  let config = limiter.config;
+  if (tier != nil) {
+    let tier_config = limiter.tier_limits[tier];
+    if (tier_config != nil) {
+      config = tier_config;
+    }
+  }
+
+  if (config.kind == "FixedWindow") {
+    return check_fixed_window(limiter, key, config);
+  } else if (config.kind == "SlidingWindow") {
+    return check_sliding_window(limiter, key, config);
+  } else if (config.kind == "TokenBucket") {
+    return check_token_bucket(limiter, key, config);
+  } else if (config.kind == "TokenBased") {
+    return check_token_based(limiter, key, config);
+  }
+
+  return { ok: true, value: { allowed: true } };
+}
+
+fun check_fixed_window(limiter, key, config) {
+  let window_key = key + ":" + str(floor(now() / (config.window_seconds * 1000)));
+  let count = limiter.store.get(window_key) || 0;
+
+  if (count >= config.max_requests) {
+    return {
+      ok: false,
+      error: "Rate limit exceeded",
+      retry_after_seconds: config.window_seconds - ((now() / 1000) % config.window_seconds)
+    };
+  }
+
+  limiter.store.set(window_key, count + 1, config.window_seconds);
+
+  return {
+    ok: true,
+    value: {
+      allowed: true,
+      remaining: config.max_requests - count - 1,
+      reset_at: (floor(now() / (config.window_seconds * 1000)) + 1) * config.window_seconds * 1000
+    }
+  };
+}
+
+fun check_sliding_window(limiter, key, config) {
+  let window_ms = config.window_seconds * 1000;
+  let now_ms = now();
+  let timestamps = limiter.store.get(key) || [];
+
+  let filtered = [];
+  for (ts in timestamps) {
+    if (now_ms - ts < window_ms) {
+      push(filtered, ts);
+    }
+  }
+
+  if (len(filtered) >= config.max_requests) {
+    return {
+      ok: false,
+      error: "Rate limit exceeded",
+      retry_after_seconds: config.window_seconds - ((now_ms - filtered[0]) / 1000)
+    };
+  }
+
+  push(filtered, now_ms);
+  limiter.store.set(key, filtered, config.window_seconds);
+
+  return {
+    ok: true,
+    value: {
+      allowed: true,
+      remaining: config.max_requests - len(filtered),
+      reset_at: now_ms + window_ms
+    }
+  };
+}
+
+fun check_token_bucket(limiter, key, config) {
+  let bucket = limiter.store.get(key);
+  let current_time = now();
+
+  if (bucket == nil) {
+    bucket = {
+      tokens: config.capacity,
+      last_refill: current_time
+    };
+  }
+
+  let elapsed = current_time - bucket.last_refill;
+  let refills = floor(elapsed / config.refill_interval_ms);
+  if (refills > 0) {
+    bucket.tokens = min(config.capacity, bucket.tokens + (refills * config.refill_rate));
+    bucket.last_refill = current_time;
+  }
+
+  if (bucket.tokens < 1) {
+    return {
+      ok: false,
+      error: "Rate limit exceeded",
+      retry_after_ms: config.refill_interval_ms
+    };
+  }
+
+  bucket.tokens = bucket.tokens - 1;
+  limiter.store.set(key, bucket, 0);
+
+  return {
+    ok: true,
+    value: {
+      allowed: true,
+      remaining: floor(bucket.tokens)
+    }
+  };
+}
+
+fun check_token_based(limiter, key, config) {
+  let minute_key = key + ":minute:" + str(floor(now() / 60000));
+
+  let usage = limiter.store.get(minute_key) || { requests: 0, tokens: 0 };
+
+  if (usage.requests >= config.max_requests_per_minute) {
+    return { ok: false, error: "Request limit exceeded" };
+  }
+
+  return {
+    ok: true,
+    value: {
+      allowed: true,
+      remaining_requests: config.max_requests_per_minute - usage.requests,
+      remaining_tokens: config.max_tokens_per_minute - usage.tokens
+    }
+  };
+}
+
+pub fun record_tokens(limiter, key, tokens_used) {
+  let minute_key = key + ":minute:" + str(floor(now() / 60000));
+  let usage = limiter.store.get(minute_key) || { requests: 0, tokens: 0 };
+
+  usage.requests = usage.requests + 1;
+  usage.tokens = usage.tokens + tokens_used;
+
+  limiter.store.set(minute_key, usage, 60);
+
+  return usage;
+}
+
+fun in_memory_store() {
+  let data = {};
+  let ttls = {};
+
+  return {
+    get: fun(key) {
+      let ttl = ttls[key];
+      if (ttl != nil && now() > ttl) {
+        delete data[key];
+        delete ttls[key];
+        return nil;
+      }
+      return data[key];
+    },
+    set: fun(key, value, ttl_seconds) {
+      data[key] = value;
+      if (ttl_seconds > 0) {
+        ttls[key] = now() + (ttl_seconds * 1000);
+      }
+    },
+    delete: fun(key) {
+      delete data[key];
+      delete ttls[key];
+    }
+  };
+}

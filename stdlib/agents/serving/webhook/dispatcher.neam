@@ -1,0 +1,150 @@
+// Outgoing webhook dispatch
+
+module std.agents.serving.webhook.dispatcher;
+
+use std.agents.serving.config;
+use std.agents.serving.webhook.retry;
+
+pub fun webhook_config(url, secret) {
+  return {
+    kind: "WebhookConfig",
+    url: url,
+    secret: secret,
+    timeout_ms: 30000,
+    retry_policy: retry.exponential_backoff(3, 1000, 30000),
+    headers: {},
+    events: []
+  };
+}
+
+pub fun webhook_dispatcher() {
+  return {
+    kind: "WebhookDispatcher",
+    subscriptions: {},
+    pending_queue: [],
+    delivery_log: [],
+    max_concurrent: 10
+  };
+}
+
+pub fun subscribe(dispatcher, event_type, webhook_config) {
+  if (dispatcher.subscriptions[event_type] == nil) {
+    dispatcher.subscriptions[event_type] = [];
+  }
+  push(dispatcher.subscriptions[event_type], webhook_config);
+  return dispatcher;
+}
+
+pub fun unsubscribe(dispatcher, event_type, url) {
+  let hooks = dispatcher.subscriptions[event_type];
+  if (hooks != nil) {
+    dispatcher.subscriptions[event_type] = filter(hooks, fun(h) {
+      return h.url != url;
+    });
+  }
+  return dispatcher;
+}
+
+pub fun dispatch(dispatcher, event_type, payload) {
+  let hooks = dispatcher.subscriptions[event_type];
+  if (hooks == nil || len(hooks) == 0) {
+    return { ok: true, value: { delivered: 0 } };
+  }
+
+  let delivery_id = "dlv_" + str(now());
+  let results = [];
+
+  for (hook in hooks) {
+    let result = deliver_webhook(dispatcher, hook, event_type, payload, delivery_id);
+    push(results, result);
+  }
+
+  return {
+    ok: true,
+    value: {
+      delivery_id: delivery_id,
+      delivered: len(filter(results, fun(r) { return r.ok; })),
+      failed: len(filter(results, fun(r) { return !r.ok; }))
+    }
+  };
+}
+
+fun deliver_webhook(dispatcher, hook, event_type, payload, delivery_id) {
+  let event = {
+    id: delivery_id + "_" + str(random_int(10000)),
+    type: event_type,
+    timestamp: now(),
+    data: payload
+  };
+
+  let body = json_encode(event);
+  let signature = sign_payload(body, hook.secret);
+
+  let headers = {
+    "Content-Type": config.content_json(),
+    "X-Webhook-ID": event.id,
+    "X-Webhook-Timestamp": str(event.timestamp),
+    "X-Webhook-Signature": signature
+  };
+
+  for (key in keys(hook.headers)) {
+    headers[key] = hook.headers[key];
+  }
+
+  let attempt = 0;
+  let max_attempts = hook.retry_policy.max_attempts;
+  let last_error = nil;
+
+  while (attempt < max_attempts) {
+    let result = http_post(hook.url, headers, body, hook.timeout_ms);
+
+    if (result.ok && result.status >= 200 && result.status < 300) {
+      log_delivery(dispatcher, event.id, hook.url, "success", attempt + 1);
+      return { ok: true, value: { event_id: event.id, attempts: attempt + 1 } };
+    }
+
+    last_error = result.error || "HTTP " + str(result.status);
+    attempt = attempt + 1;
+
+    if (attempt < max_attempts) {
+      let delay = retry.calculate_delay(hook.retry_policy, attempt);
+      sleep(delay);
+    }
+  }
+
+  log_delivery(dispatcher, event.id, hook.url, "failed", attempt);
+  return { ok: false, error: last_error, attempts: attempt };
+}
+
+fun sign_payload(payload, secret) {
+  if (secret == nil) {
+    return "";
+  }
+  return "sha256=" + hmac_sha256(payload, secret);
+}
+
+fun log_delivery(dispatcher, event_id, url, status, attempts) {
+  push(dispatcher.delivery_log, {
+    event_id: event_id,
+    url: url,
+    status: status,
+    attempts: attempts,
+    timestamp: now()
+  });
+
+  if (len(dispatcher.delivery_log) > 1000) {
+    dispatcher.delivery_log = slice(dispatcher.delivery_log, 100, len(dispatcher.delivery_log));
+  }
+}
+
+fun http_post(url, headers, body, timeout_ms) {
+  return { ok: true, status: 200 };
+}
+
+fun hmac_sha256(data, key) {
+  return "";
+}
+
+fun sleep(ms) {
+  return true;
+}

@@ -1,0 +1,42 @@
+// Shared handler helpers
+
+module std.agents.serving.server.handlers;
+
+use std.agents.serving.config;
+
+pub fun json_response(status, data) {
+  return {
+    status: status,
+    headers: { "Content-Type": config.content_json() },
+    body: json_encode(data)
+  };
+}
+
+pub fun text_response(status, text) {
+  return {
+    status: status,
+    headers: { "Content-Type": config.content_text() },
+    body: text
+  };
+}
+
+pub fun error_response(status, code, message) {
+  return json_response(status, {
+    error: {
+      code: code,
+      message: message,
+      timestamp: now()
+    }
+  });
+}
+
+pub fun parse_json(body) {
+  if (body == nil || body == "") { return { ok: false, error: "Empty body" }; }
+  let parsed = json_decode(body);
+  if (parsed == nil) { return { ok: false, error: "Invalid JSON" }; }
+  return { ok: true, value: parsed };
+}
+
+pub fun ok_response(data) {
+  return json_response(config.status_ok(), data);
+}

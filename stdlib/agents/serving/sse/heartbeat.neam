@@ -1,0 +1,13 @@
+// SSE heartbeat management
+
+module std.agents.serving.sse.heartbeat;
+
+use std.agents.serving.sse.server;
+
+pub fun enable_heartbeat(conn) {
+  return server.start_heartbeat(conn);
+}
+
+pub fun disable_heartbeat(conn) {
+  return server.stop_heartbeat(conn);
+}

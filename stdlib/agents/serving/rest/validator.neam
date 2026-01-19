@@ -1,0 +1,26 @@
+// REST request validation helpers
+
+module std.agents.serving.rest.validator;
+
+use std.agents.serving.config;
+
+pub fun validate_json_request(request, max_size) {
+  let size = len(request.body || "");
+  if (max_size != nil && size > max_size) {
+    return { ok: false, error: "Request body too large" };
+  }
+
+  let content_type = request.headers["Content-Type"] || "";
+  if (!contains(content_type, config.content_json())) {
+    return { ok: false, error: "Expected application/json" };
+  }
+
+  return { ok: true, value: true };
+}
+
+pub fun validate_required_fields(data, fields) {
+  for (field in fields) {
+    if (data[field] == nil) { return { ok: false, error: "Missing field: " + field }; }
+  }
+  return { ok: true, value: true };
+}

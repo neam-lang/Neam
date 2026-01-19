@@ -1,0 +1,32 @@
+// WebSocket connection management
+
+module std.agents.serving.websocket.connection;
+
+pub fun create_connection(ws, request) {
+  return {
+    id: generate_connection_id(),
+    ws: ws,
+    request: request,
+    authenticated: false,
+    user_id: nil,
+    session: nil,
+    on_message: nil,
+    on_close: nil
+  };
+}
+
+pub fun send(conn, message) {
+  if (conn == nil || conn.ws == nil) { return { ok: false, error: "No socket" }; }
+  conn.ws.send(message);
+  return { ok: true, value: true };
+}
+
+pub fun close(conn, code, reason) {
+  if (conn == nil || conn.ws == nil) { return { ok: false, error: "No socket" }; }
+  conn.ws.close(code || 1000, reason || "");
+  return { ok: true, value: true };
+}
+
+fun generate_connection_id() {
+  return "ws_" + str(now()) + "_" + str(random_int(10000));
+}
