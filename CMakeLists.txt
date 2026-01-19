@@ -111,6 +111,13 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/module/graph.cpp
     NeamC/src/module/visibility.cpp
     NeamC/src/lsp/server.cpp
+    NeamC/src/project_manifest.cpp
+    NeamC/src/deploy/aws_lambda.cpp
+    NeamC/src/deploy/docker.cpp
+    NeamC/src/deploy/gcp_cloudrun.cpp
+    NeamC/src/deploy/helm.cpp
+    NeamC/src/deploy/kubernetes.cpp
+    NeamC/src/deploy/terraform.cpp
     NeamC/src/vm/memory.cpp
     NeamC/src/vm/object.cpp
     NeamC/src/vm/table.cpp
