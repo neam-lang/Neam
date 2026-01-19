@@ -1,0 +1,202 @@
+// Context building and formatting
+
+module std.rag.context;
+
+// Context format types
+pub fun format_plain() {
+  return { kind: "Plain" };
+}
+
+pub fun format_numbered() {
+  return { kind: "Numbered" };
+}
+
+pub fun format_markdown() {
+  return { kind: "Markdown" };
+}
+
+pub fun format_xml() {
+  return { kind: "XML" };
+}
+
+pub fun format_custom(template) {
+  return { kind: "Custom", template: template };
+}
+
+// Context builder
+pub fun context_builder() {
+  return {
+    documents: [],
+    format: format_plain(),
+    separator: "\n\n---\n\n",
+    max_tokens: nil,
+    include_sources: false,
+    include_scores: false,
+    deduplicate: false
+  };
+}
+
+pub fun with_documents(builder, docs) {
+  builder.documents = docs;
+  return builder;
+}
+
+pub fun with_format(builder, format) {
+  builder.format = format;
+  return builder;
+}
+
+pub fun with_separator(builder, sep) {
+  builder.separator = sep;
+  return builder;
+}
+
+pub fun with_max_tokens(builder, max_tokens) {
+  builder.max_tokens = max_tokens;
+  return builder;
+}
+
+pub fun with_sources(builder, include) {
+  builder.include_sources = include;
+  return builder;
+}
+
+pub fun with_scores(builder, include) {
+  builder.include_scores = include;
+  return builder;
+}
+
+pub fun with_deduplicate(builder, dedupe) {
+  builder.deduplicate = dedupe;
+  return builder;
+}
+
+pub fun build_context(builder) {
+  let docs = builder.documents;
+
+  if (builder.deduplicate) {
+    docs = deduplicate_documents(docs);
+  }
+
+  let formatted = format_documents(docs, builder);
+
+  if (builder.max_tokens != nil) {
+    formatted = truncate_to_tokens(formatted, builder.max_tokens);
+  }
+
+  return {
+    text: formatted,
+    document_count: len(docs),
+    sources: builder.include_sources ? extract_sources(docs) : []
+  };
+}
+
+pub fun build_context_text(docs) {
+  let builder = context_builder();
+  builder = with_documents(builder, docs);
+  let ctx = build_context(builder);
+  return ctx.text;
+}
+
+pub fun extract_sources(docs) {
+  let sources = [];
+  for (doc in docs) {
+    if (doc.metadata != nil && doc.metadata.source != nil) {
+      push(sources, {
+        id: doc.id,
+        source: doc.metadata.source,
+        score: doc.score
+      });
+    }
+  }
+  return sources;
+}
+
+fun format_documents(docs, builder) {
+  let parts = [];
+
+  for (i, doc in enumerate(docs)) {
+    let part = format_single_document(doc, i, builder);
+    push(parts, part);
+  }
+
+  return join(parts, builder.separator);
+}
+
+fun format_single_document(doc, index, builder) {
+  let format = builder.format;
+
+  if (format.kind == "Plain") {
+    return doc.content;
+  }
+
+  if (format.kind == "Numbered") {
+    let prefix = "[" + str(index + 1) + "]";
+    if (builder.include_scores && doc.score != nil) {
+      prefix = prefix + " (score: " + str(doc.score) + ")";
+    }
+    return prefix + " " + doc.content;
+  }
+
+  if (format.kind == "Markdown") {
+    let header = "### Document " + str(index + 1);
+    if (builder.include_sources && doc.metadata.source != nil) {
+      header = header + " - " + doc.metadata.source;
+    }
+    return header + "\n\n" + doc.content;
+  }
+
+  if (format.kind == "XML") {
+    let attrs = "id=\"" + doc.id + "\"";
+    if (builder.include_scores && doc.score != nil) {
+      attrs = attrs + " score=\"" + str(doc.score) + "\"";
+    }
+    return "<document " + attrs + ">\n" + doc.content + "\n</document>";
+  }
+
+  if (format.kind == "Custom") {
+    return apply_template(format.template, doc, index);
+  }
+
+  return doc.content;
+}
+
+fun deduplicate_documents(docs) {
+  let seen = {};
+  let unique = [];
+  for (doc in docs) {
+    let hash = compute_content_hash(doc.content);
+    if (seen[hash] == nil) {
+      seen[hash] = true;
+      push(unique, doc);
+    }
+  }
+  return unique;
+}
+
+fun apply_template(template, doc, index) {
+  let output = template;
+  output = replace(output, "{id}", doc.id);
+  output = replace(output, "{index}", str(index + 1));
+  output = replace(output, "{content}", doc.content);
+  if (doc.score != nil) {
+    output = replace(output, "{score}", str(doc.score));
+  }
+  if (doc.metadata != nil) {
+    output = replace(output, "{metadata}", json_stringify(doc.metadata));
+  }
+  return output;
+}
+
+fun truncate_to_tokens(text, max_tokens) {
+  let tokens = split(text, " ");
+  if (len(tokens) <= max_tokens) {
+    return text;
+  }
+  let trimmed = take(tokens, max_tokens);
+  return join(trimmed, " ");
+}
+
+fun compute_content_hash(content) {
+  return sha256(content);
+}

@@ -1,0 +1,135 @@
+// Hypothetical Document Embeddings (HyDE)
+
+module std.rag.advanced.hyde;
+
+use std.ingest.store;
+use std.rag.error;
+use std.rag.retriever;
+
+let DEFAULT_HYDE_PROMPT = "Please write a passage that would answer the following question. Write only the passage, no preamble.\n\nQuestion: {question}\n\nPassage:";
+
+pub fun hyde_config(llm) {
+  return {
+    llm: llm,
+    num_hypothetical: 1,
+    prompt_template: DEFAULT_HYDE_PROMPT,
+    combine_method: "average"
+  };
+}
+
+pub fun with_num_hypothetical(config, num) {
+  config.num_hypothetical = num;
+  return config;
+}
+
+pub fun with_hyde_prompt(config, template) {
+  config.prompt_template = template;
+  return config;
+}
+
+pub fun with_combine_method(config, method) {
+  config.combine_method = method;
+  return config;
+}
+
+pub fun hyde_retriever_builder(base_retriever) {
+  return {
+    base_retriever: base_retriever,
+    hyde_config: nil,
+    embedder: nil
+  };
+}
+
+pub fun with_hyde_config(builder, config) {
+  builder.hyde_config = config;
+  return builder;
+}
+
+pub fun with_hyde_embedder(builder, embedder) {
+  builder.embedder = embedder;
+  return builder;
+}
+
+pub fun build_hyde_retriever(builder) {
+  if (builder.hyde_config == nil) {
+    return { ok: false, error: error.config_error("hyde_config", "HyDE config is required") };
+  }
+  if (builder.embedder == nil) {
+    return { ok: false, error: error.config_error("embedder", "Embedder is required") };
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: "HyDERetriever",
+      base_retriever: builder.base_retriever,
+      hyde_config: builder.hyde_config,
+      embedder: builder.embedder
+    }
+  };
+}
+
+pub fun hyde_retrieve(retriever_instance, query_text) {
+  let config = retriever_instance.hyde_config;
+
+  let hypothetical_docs = [];
+  for (i in range(0, config.num_hypothetical)) {
+    let prompt = replace(config.prompt_template, "{question}", query_text);
+    let hypothetical = config.llm.generate(prompt);
+    push(hypothetical_docs, hypothetical);
+  }
+
+  let hypothetical_embeddings = [];
+  for (doc in hypothetical_docs) {
+    let emb = retriever_instance.embedder.embed(doc);
+    push(hypothetical_embeddings, emb);
+  }
+
+  let combined_embedding = combine_embeddings(hypothetical_embeddings, config.combine_method);
+
+  let results = retriever_instance.base_retriever.store.search(
+    store.query(combined_embedding, retriever_instance.base_retriever.top_k)
+  );
+
+  return {
+    documents: retriever.results_to_documents(results, true),
+    hypothetical_docs: hypothetical_docs,
+    method: "hyde"
+  };
+}
+
+fun combine_embeddings(embeddings, method) {
+  if (method == "first" || len(embeddings) == 1) {
+    return embeddings[0];
+  }
+
+  if (method == "average") {
+    let dims = len(embeddings[0]);
+    let result = [];
+    for (i in range(0, dims)) {
+      let sum = 0.0;
+      for (emb in embeddings) {
+        sum = sum + emb[i];
+      }
+      push(result, sum / len(embeddings));
+    }
+    return result;
+  }
+
+  if (method == "max") {
+    let dims = len(embeddings[0]);
+    let result = [];
+    for (i in range(0, dims)) {
+      let max_val = embeddings[0][i];
+      for (emb in embeddings) {
+        if (emb[i] > max_val) {
+          max_val = emb[i];
+        }
+      }
+      push(result, max_val);
+    }
+    return result;
+  }
+
+  return embeddings[0];
+}
