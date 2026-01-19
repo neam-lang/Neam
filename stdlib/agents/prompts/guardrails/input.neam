@@ -1,0 +1,93 @@
+// Input guardrails for prompt safety
+
+module std.agents.prompts.guardrails.input;
+
+use std.agents.prompts.security.injection;
+use std.agents.prompts.security.pii;
+use std.agents.prompts.security.audit;
+use std.agents.advanced.document.redactor;
+
+pub fun create_input_guardrails() {
+  return { guardrails: [], audit_log: audit.audit_log(), blocked: [] };
+}
+
+pub fun add_injection_detector(chain) {
+  push(chain.guardrails, { name: "injection_detector", action: "block", type: "injection", config: {} });
+  return chain;
+}
+
+pub fun add_pii_detector(chain, pii_types) {
+  push(chain.guardrails, { name: "pii_detector", action: "redact", type: "pii", config: { types: pii_types } });
+  return chain;
+}
+
+pub fun add_toxicity_filter(chain, threshold) {
+  push(chain.guardrails, { name: "toxicity_filter", action: "block", type: "toxicity", config: { threshold: threshold } });
+  return chain;
+}
+
+pub fun add_topic_restriction(chain, topics) {
+  push(chain.guardrails, { name: "topic_restriction", action: "block", type: "topic", config: { topics: topics } });
+  return chain;
+}
+
+pub fun add_length_validator(chain, max_length) {
+  push(chain.guardrails, { name: "length_validator", action: "block", type: "length", config: { max_length: max_length } });
+  return chain;
+}
+
+pub fun validate_input(chain, input) {
+  let current = input;
+
+  for (guardrail in chain.guardrails) {
+    let result = apply_guardrail(guardrail, current);
+    if (result.blocked) {
+      audit.log_event(chain.audit_log, guardrail.type, { reason: result.reason, input: input });
+      push(chain.blocked, { input: input, reason: result.reason, guardrail: guardrail.name });
+      return { ok: false, error: result.reason, blocked: true };
+    }
+
+    current = result.input;
+  }
+
+  return { ok: true, value: { input: current, blocked: false } };
+}
+
+fun apply_guardrail(guardrail, input) {
+  if (guardrail.type == "injection") {
+    let result = injection.detect_injection(input);
+    if (result.value.detected) {
+      return { blocked: guardrail.action == "block", input: input, reason: "Prompt injection detected" };
+    }
+  }
+
+  if (guardrail.type == "pii") {
+    let result = redactor.redact(redactor.pii_redactor(), input);
+    if (guardrail.action == "redact") {
+      return { blocked: false, input: result.value.redacted_content, reason: "PII redacted" };
+    }
+  }
+
+  if (guardrail.type == "toxicity") {
+    let toxic = regex_match(input, "(?i)\\b(hate|kill|violence|slur)\\b");
+    if (len(toxic) > 0) {
+      return { blocked: true, input: input, reason: "Toxic content" };
+    }
+  }
+
+  if (guardrail.type == "topic") {
+    for (topic in guardrail.config.topics) {
+      if (contains(input, topic)) {
+        return { blocked: true, input: input, reason: "Restricted topic" };
+      }
+    }
+  }
+
+  if (guardrail.type == "length") {
+    if (len(input) > guardrail.config.max_length) {
+      return { blocked: true, input: input, reason: "Input too long" };
+    }
+  }
+
+  return { blocked: false, input: input, reason: "ok" };
+}

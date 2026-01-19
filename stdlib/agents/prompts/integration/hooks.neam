@@ -1,0 +1,12 @@
+// Prompt lifecycle hooks
+
+module std.agents.prompts.integration.hooks;
+
+pub fun default_hooks() {
+  return {
+    before_load: fun(ref) { return ref; },
+    after_render: fun(text) { return text; },
+    before_validation: fun(text) { return { skip: false, value: text }; },
+    on_validation_failure: fun(error) { return { ok: false, error: error }; }
+  };
+}

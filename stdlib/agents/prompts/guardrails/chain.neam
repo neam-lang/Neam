@@ -1,0 +1,18 @@
+// Guardrail chain utilities
+
+module std.agents.prompts.guardrails.chain;
+
+use std.agents.prompts.guardrails.input;
+use std.agents.prompts.guardrails.output;
+
+pub fun create_guardrails() {
+  return { input: input.create_input_guardrails(), output: output.create_output_guardrails() };
+}
+
+pub fun validate(chain, input_text, output_text) {
+  let input_result = input.validate_input(chain.input, input_text);
+  if (!input_result.ok) { return input_result; }
+  let output_result = output.validate_output(chain.output, output_text);
+  if (!output_result.ok) { return output_result; }
+  return { ok: true, value: { input: input_result.value.input, output: output_result.value.output } };
+}

@@ -1,0 +1,72 @@
+// Output guardrails for prompt safety
+
+module std.agents.prompts.guardrails.output;
+
+use std.data.json;
+use std.agents.prompts.security.audit;
+
+pub fun create_output_guardrails() {
+  return { guardrails: [], audit_log: audit.audit_log(), blocked: [] };
+}
+
+pub fun add_schema_validator(chain, schema) {
+  push(chain.guardrails, { name: "schema_validator", type: "schema", action: "block", config: { schema: schema } });
+  return chain;
+}
+
+pub fun add_safety_filter(chain, guidelines) {
+  push(chain.guardrails, { name: "safety_filter", type: "safety", action: "block", config: { guidelines: guidelines } });
+  return chain;
+}
+
+pub fun add_leak_detector(chain, sensitive_patterns) {
+  push(chain.guardrails, { name: "leak_detector", type: "leak", action: "block", config: { patterns: sensitive_patterns } });
+  return chain;
+}
+
+pub fun validate_output(chain, output) {
+  for (guardrail in chain.guardrails) {
+    let result = apply_guardrail(guardrail, output);
+    if (result.blocked) {
+      audit.log_event(chain.audit_log, guardrail.type, { reason: result.reason, output: output });
+      push(chain.blocked, { output: output, reason: result.reason, guardrail: guardrail.name });
+      return { ok: false, error: result.reason, blocked: true };
+    }
+  }
+
+  return { ok: true, value: { output: output, blocked: false } };
+}
+
+fun apply_guardrail(guardrail, output) {
+  if (guardrail.type == "schema") {
+    let parsed = json.parse(output);
+    if (parsed == nil) {
+      return { blocked: true, reason: "Invalid JSON" };
+    }
+    let schema = guardrail.config.schema;
+    if (schema.type == "object" && schema.properties != nil) {
+      for (key in keys(schema.properties)) {
+        if (parsed[key] == nil) {
+          return { blocked: true, reason: "Missing field: " + key };
+        }
+      }
+    }
+  }
+
+  if (guardrail.type == "safety") {
+    let match = regex_match(output, "(?i)\\b(hate|violence|self-harm|suicide)\\b");
+    if (len(match) > 0) {
+      return { blocked: true, reason: "Safety guideline violation" };
+    }
+  }
+
+  if (guardrail.type == "leak") {
+    for (pattern in guardrail.config.patterns) {
+      if (contains(output, pattern)) {
+        return { blocked: true, reason: "Sensitive content leak" };
+      }
+    }
+  }
+
+  return { blocked: false, reason: "ok" };
+}

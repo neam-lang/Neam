@@ -1,0 +1,27 @@
+// Prompt injection detection utilities
+
+module std.agents.prompts.security.injection;
+
+pub fun detect_injection(text) {
+  let patterns = injection_patterns();
+  let matches = [];
+
+  for (pattern in patterns) {
+    let match = regex_match(text, pattern);
+    if (len(match) > 0) {
+      push(matches, { pattern: pattern, match: match[0] });
+    }
+  }
+
+  return { ok: true, value: { detected: len(matches) > 0, matches: matches } };
+}
+
+pub fun injection_patterns() {
+  return [
+    "(?i)ignore previous",
+    "(?i)system prompt",
+    "(?i)developer mode",
+    "(?i)override instructions",
+    "(?i)reveal secrets"
+  ];
+}

@@ -1,0 +1,19 @@
+// JSON prompt storage
+
+module std.agents.prompts.storage.json;
+
+use std.io.file;
+use std.data.json;
+
+pub fun load(path) {
+  let content = file.read_string(path);
+  let parsed = json.parse(content);
+  if (parsed == nil) {
+    return { ok: false, error: "Invalid JSON prompt: " + path };
+  }
+  return { ok: true, value: parsed };
+}
+
+pub fun stringify(value) {
+  return json.stringify(value);
+}
