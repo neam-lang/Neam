@@ -1,0 +1,65 @@
+// Ingest test mocks
+
+module std.ingest.testing.mocks;
+
+// Mock embedding provider
+pub fun mock_embedding_provider(dimensions) {
+  return {
+    kind: "MockEmbedding",
+    dimensions: dimensions,
+    latency_ms: 0,
+    fail_rate: 0.0,
+    call_count: 0
+  };
+}
+
+pub fun with_latency(provider, ms) {
+  provider.latency_ms = ms;
+  return provider;
+}
+
+pub fun with_fail_rate(provider, rate) {
+  provider.fail_rate = rate;
+  return provider;
+}
+
+pub fun get_call_count(provider) {
+  return provider.call_count;
+}
+
+// Mock vector store
+pub fun mock_vector_store() {
+  return {
+    kind: "MockVectorStore",
+    stored: [],
+    latency_ms: 0,
+    fail_rate: 0.0
+  };
+}
+
+pub fun get_stored_items(store) {
+  return store.stored;
+}
+
+pub fun get_stored_count(store) {
+  return len(store.stored);
+}
+
+pub fun clear_store(store) {
+  store.stored = [];
+  return store;
+}
+
+// Mock data source
+pub fun mock_data_source() {
+  return {
+    kind: "MockDataSource",
+    documents: [],
+    read_count: 0
+  };
+}
+
+pub fun add_mock_document(source, doc) {
+  push(source.documents, doc);
+  return source;
+}
