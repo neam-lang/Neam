@@ -1,0 +1,183 @@
+// Audio streaming support
+
+module std.agents.serving.streaming.audio;
+
+use std.agents.serving.streaming.codec;
+use std.agents.serving.streaming.buffer;
+
+pub fun audio_format_pcm16(sample_rate) {
+  return {
+    kind: "PCM16",
+    sample_rate: sample_rate || 16000,
+    channels: 1,
+    bits_per_sample: 16
+  };
+}
+
+pub fun audio_format_opus(sample_rate, bitrate) {
+  return {
+    kind: "Opus",
+    sample_rate: sample_rate || 48000,
+    channels: 1,
+    bitrate: bitrate || 32000
+  };
+}
+
+pub fun audio_format_mp3(sample_rate, bitrate) {
+  return {
+    kind: "MP3",
+    sample_rate: sample_rate || 44100,
+    channels: 1,
+    bitrate: bitrate || 128000
+  };
+}
+
+pub fun audio_stream_config() {
+  return {
+    input_format: audio_format_pcm16(16000),
+    output_format: audio_format_pcm16(24000),
+    chunk_size_ms: 20,
+    buffer_size_ms: 200,
+    vad_enabled: true,
+    vad_threshold: 0.5,
+    silence_timeout_ms: 1000,
+    max_duration_ms: 60000
+  };
+}
+
+pub fun audio_stream_handler(config, voice_agent) {
+  return {
+    kind: "AudioStreamHandler",
+    config: config || audio_stream_config(),
+    agent: voice_agent,
+    input_buffer: buffer.audio_buffer(config.buffer_size_ms),
+    output_buffer: buffer.audio_buffer(config.buffer_size_ms),
+    state: "idle",
+    vad_state: { speaking: false, silence_start: nil },
+    transcription_buffer: ""
+  };
+}
+
+pub fun process_audio_chunk(handler, chunk_base64) {
+  let chunk = base64_decode(chunk_base64);
+
+  buffer.append(handler.input_buffer, chunk);
+
+  if (handler.config.vad_enabled) {
+    let vad_result = detect_voice_activity(chunk, handler.config.vad_threshold);
+
+    if (vad_result.is_speech) {
+      handler.vad_state.speaking = true;
+      handler.vad_state.silence_start = nil;
+      handler.state = "listening";
+    } else if (handler.vad_state.speaking) {
+      if (handler.vad_state.silence_start == nil) {
+        handler.vad_state.silence_start = now();
+      } else if (now() - handler.vad_state.silence_start > handler.config.silence_timeout_ms) {
+        handler.vad_state.speaking = false;
+        handler.state = "processing";
+
+        let audio_data = buffer.get_all(handler.input_buffer);
+        buffer.clear(handler.input_buffer);
+
+        return process_complete_utterance(handler, audio_data);
+      }
+    }
+  }
+
+  return { ok: true, value: { state: handler.state, partial: nil } };
+}
+
+fun process_complete_utterance(handler, audio_data) {
+  let result = handler.agent.process_audio({
+    format: handler.config.input_format,
+    data: base64_encode(audio_data)
+  });
+
+  if (result.ok) {
+    handler.state = "responding";
+
+    let output_chunks = chunk_audio(
+      result.value.audio,
+      handler.config.output_format,
+      handler.config.chunk_size_ms
+    );
+
+    handler.state = "idle";
+
+    return {
+      ok: true,
+      value: {
+        state: handler.state,
+        transcription: result.value.transcription,
+        response_text: result.value.response_text,
+        audio_chunks: output_chunks,
+        duration_ms: result.value.duration_ms
+      }
+    };
+  }
+
+  handler.state = "idle";
+  return result;
+}
+
+pub fun commit_audio(handler) {
+  let audio_data = buffer.get_all(handler.input_buffer);
+  buffer.clear(handler.input_buffer);
+
+  if (len(audio_data) == 0) {
+    return { ok: false, error: "No audio data in buffer" };
+  }
+
+  return process_complete_utterance(handler, audio_data);
+}
+
+pub fun stream_output(handler, audio_base64, on_chunk) {
+  let chunks = chunk_audio(
+    base64_decode(audio_base64),
+    handler.config.output_format,
+    handler.config.chunk_size_ms
+  );
+
+  for (chunk in chunks) {
+    on_chunk(base64_encode(chunk));
+  }
+
+  return { ok: true, value: { chunks_sent: len(chunks) } };
+}
+
+fun detect_voice_activity(audio_chunk, threshold) {
+  let sum = 0;
+  for (let i = 0; i < len(audio_chunk); i = i + 2) {
+    let sample = (audio_chunk[i + 1] << 8) | audio_chunk[i];
+    if (sample > 32767) { sample = sample - 65536; }
+    sum = sum + sample * sample;
+  }
+  let rms = sqrt(sum / (len(audio_chunk) / 2));
+  let normalized = rms / 32768.0;
+
+  return { is_speech: normalized > threshold, energy: normalized };
+}
+
+fun chunk_audio(audio_data, format, chunk_ms) {
+  let bytes_per_ms = (format.sample_rate * format.channels * (format.bits_per_sample / 8)) / 1000;
+  let chunk_size = floor(bytes_per_ms * chunk_ms);
+  let chunks = [];
+
+  let offset = 0;
+  while (offset < len(audio_data)) {
+    let end = min(offset + chunk_size, len(audio_data));
+    push(chunks, slice(audio_data, offset, end));
+    offset = end;
+  }
+
+  return chunks;
+}
+
+fun base64_encode(data) {
+  return "";
+}
+
+fun base64_decode(data) {
+  return [];
+}

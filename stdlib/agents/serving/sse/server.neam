@@ -1,0 +1,107 @@
+// Server-Sent Events implementation
+
+module std.agents.serving.sse.server;
+
+use std.agents.serving.config;
+
+pub fun sse_config() {
+  return {
+    retry_ms: 3000,
+    heartbeat_ms: 15000,
+    max_connections: 5000
+  };
+}
+
+pub fun create_sse_connection(response_writer, config) {
+  return {
+    kind: "SSEConnection",
+    writer: response_writer,
+    config: config || sse_config(),
+    connected: true,
+    last_event_id: nil,
+    heartbeat_timer: nil
+  };
+}
+
+pub fun send_event(conn, event_type, data, id) {
+  if (!conn.connected) {
+    return { ok: false, error: "Connection closed" };
+  }
+
+  let message = "";
+
+  if (id != nil) {
+    message = message + "id: " + id + "\n";
+    conn.last_event_id = id;
+  }
+
+  if (event_type != nil) {
+    message = message + "event: " + event_type + "\n";
+  }
+
+  let data_str = str(data);
+  let lines = split(data_str, "\n");
+  for (line in lines) {
+    message = message + "data: " + line + "\n";
+  }
+
+  message = message + "\n";
+
+  conn.writer.write(message);
+  conn.writer.flush();
+
+  return { ok: true, value: true };
+}
+
+pub fun send_json(conn, event_type, data, id) {
+  return send_event(conn, event_type, json_encode(data), id);
+}
+
+pub fun send_comment(conn, comment) {
+  if (!conn.connected) {
+    return { ok: false, error: "Connection closed" };
+  }
+
+  conn.writer.write(": " + comment + "\n\n");
+  conn.writer.flush();
+
+  return { ok: true, value: true };
+}
+
+pub fun start_heartbeat(conn) {
+  conn.heartbeat_timer = set_interval(fun() {
+    if (conn.connected) {
+      send_comment(conn, "heartbeat");
+    }
+  }, conn.config.heartbeat_ms);
+
+  return conn;
+}
+
+pub fun stop_heartbeat(conn) {
+  if (conn.heartbeat_timer != nil) {
+    clear_interval(conn.heartbeat_timer);
+    conn.heartbeat_timer = nil;
+  }
+  return conn;
+}
+
+pub fun close(conn) {
+  stop_heartbeat(conn);
+  conn.connected = false;
+  return conn;
+}
+
+pub fun set_retry(conn, ms) {
+  conn.writer.write("retry: " + str(ms) + "\n\n");
+  conn.writer.flush();
+  return conn;
+}
+
+fun set_interval(handler, ms) {
+  return { handler: handler, interval_ms: ms };
+}
+
+fun clear_interval(timer) {
+  return true;
+}

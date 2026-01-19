@@ -1,0 +1,21 @@
+// WebSocket room management
+
+module std.agents.serving.websocket.rooms;
+
+pub fun create_room(room_id) {
+  return { id: room_id, members: {} };
+}
+
+pub fun join_room(room, conn_id) {
+  room.members[conn_id] = true;
+  return room;
+}
+
+pub fun leave_room(room, conn_id) {
+  delete room.members[conn_id];
+  return room;
+}
+
+pub fun list_members(room) {
+  return keys(room.members);
+}
