@@ -1,0 +1,71 @@
+// Document agent implementation
+
+module std.agents.advanced.document.agent;
+
+use std.agents.advanced.document.config;
+use std.agents.advanced.document.analyzer;
+use std.agents.advanced.document.redactor;
+
+pub fun document_builder(llm) {
+  return { llm: llm, compliance_rules: [], templates: {}, redaction_enabled: true };
+}
+
+pub fun with_compliance_rules(builder, rules) { builder.compliance_rules = rules; return builder; }
+pub fun with_templates(builder, templates) { builder.templates = templates; return builder; }
+pub fun with_redaction(builder, enabled) { builder.redaction_enabled = enabled; return builder; }
+
+pub fun build_document_agent(builder) {
+  if (builder.llm == nil) {
+    return { ok: false, error: config.document_error("CONFIG", "LLM is required") };
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: "DocumentAgent",
+      llm: builder.llm,
+      analyzer: analyzer.document_analyzer(builder.llm),
+      redactor: redactor.pii_redactor(),
+      compliance_rules: builder.compliance_rules,
+      templates: builder.templates,
+      redaction_enabled: builder.redaction_enabled
+    }
+  };
+}
+
+pub fun analyze(agent, content, doc_type) {
+  return analyzer.analyze_document(agent.analyzer, content, doc_type);
+}
+
+pub fun extract_clauses(agent, content) {
+  return analyzer.extract_clauses(agent.analyzer, content);
+}
+
+pub fun redact_pii(agent, content) {
+  if (!agent.redaction_enabled) {
+    return { ok: true, value: { redacted_content: content, findings: [] } };
+  }
+  return redactor.redact(agent.redactor, content);
+}
+
+pub fun check_compliance(agent, content, framework) {
+  let prompt = "Check this document for " + framework.kind + " compliance:\n\n" + content + "\n\nList violations:";
+  let response = agent.llm.generate(prompt);
+  let compliant = !contains(lowercase(response), "violation");
+
+  return { ok: true, value: { compliant: compliant, framework: framework.kind, findings: response } };
+}
+
+pub fun generate_document(agent, template_name, data) {
+  let template = agent.templates[template_name];
+  if (template == nil) {
+    return { ok: false, error: config.document_error("TEMPLATE", "Template not found: " + template_name) };
+  }
+
+  let content = template;
+  for (key in keys(data)) {
+    content = replace(content, "{{" + key + "}}", data[key]);
+  }
+
+  return { ok: true, value: content };
+}
