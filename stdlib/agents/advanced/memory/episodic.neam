@@ -1,0 +1,264 @@
+// Episodic memory - event and session tracking
+
+module std.agents.advanced.memory.episodic;
+
+use std.agents.advanced.memory.config;
+
+// Event record
+pub fun event(event_type, content, timestamp) {
+  return {
+    event_type: event_type,
+    content: content,
+    timestamp: timestamp,
+    context: {}
+  };
+}
+
+// Episode (collection of events)
+pub fun episode(id, session_id) {
+  return {
+    id: id,
+    session_id: session_id,
+    events: [],
+    start_time: now(),
+    end_time: nil,
+    summary: nil,
+    importance: 0.5,
+    metadata: {}
+  };
+}
+
+// Episodic memory store
+pub fun episodic_store(embedder) {
+  return {
+    kind: "EpisodicStore",
+    embedder: embedder,
+    episodes: {},
+    current_episode: nil,
+    session_index: {},
+    timeline: []
+  };
+}
+
+// Start a new episode
+pub fun start_episode(store, session_id, metadata) {
+  let ep = episode(generate_episode_id(), session_id);
+  ep.metadata = metadata || {};
+
+  store.current_episode = ep;
+  store.episodes[ep.id] = ep;
+
+  // Index by session
+  if (store.session_index[session_id] == nil) {
+    store.session_index[session_id] = [];
+  }
+  push(store.session_index[session_id], ep.id);
+
+  return { ok: true, value: ep };
+}
+
+// End current episode
+pub fun end_episode(store, llm) {
+  if (store.current_episode == nil) {
+    return { ok: false, error: config.retrieval_error("No active episode") };
+  }
+
+  let ep = store.current_episode;
+  ep.end_time = now();
+
+  // Generate summary if LLM provided
+  if (llm != nil && len(ep.events) > 0) {
+    ep.summary = generate_episode_summary(llm, ep);
+  }
+
+  // Add to timeline
+  push(store.timeline, { episode_id: ep.id, end_time: ep.end_time });
+
+  store.current_episode = nil;
+  return { ok: true, value: ep };
+}
+
+// Add event to current episode
+pub fun add_event(store, event_type, content, context) {
+  if (store.current_episode == nil) {
+    // Auto-start episode
+    start_episode(store, "auto_" + str(now()), {});
+  }
+
+  let ev = event(event_type, content, now());
+  ev.context = context || {};
+
+  push(store.current_episode.events, ev);
+
+  return { ok: true, value: ev };
+}
+
+// Retrieve episodes by time range
+pub fun retrieve_by_time(store, start_time, end_time) {
+  let results = [];
+
+  for (id in keys(store.episodes)) {
+    let ep = store.episodes[id];
+    if (ep.start_time >= start_time && (ep.end_time == nil || ep.end_time <= end_time)) {
+      push(results, ep);
+    }
+  }
+
+  // Sort by start time
+  results = sort_by(results, fun(a, b) { return a.start_time - b.start_time; });
+
+  return { ok: true, value: results };
+}
+
+// Retrieve episodes by session
+pub fun retrieve_by_session(store, session_id) {
+  let ids = store.session_index[session_id];
+  if (ids == nil) {
+    return { ok: true, value: [] };
+  }
+
+  let results = [];
+  for (id in ids) {
+    let ep = store.episodes[id];
+    if (ep != nil) {
+      push(results, ep);
+    }
+  }
+
+  return { ok: true, value: results };
+}
+
+// Search episodes by content
+pub fun search_episodes(store, query, top_k) {
+  let query_embedding = store.embedder.embed(query);
+  let scored = [];
+
+  for (id in keys(store.episodes)) {
+    let ep = store.episodes[id];
+
+    // Embed episode summary or concatenated events
+    let ep_text = ep.summary || concat_events(ep.events);
+    let ep_embedding = store.embedder.embed(ep_text);
+
+    let score = cosine_similarity(query_embedding, ep_embedding);
+    push(scored, { episode: ep, score: score });
+  }
+
+  scored = sort_by(scored, fun(a, b) { return b.score - a.score; });
+
+  return { ok: true, value: take(scored, top_k) };
+}
+
+// Get recent episodes
+pub fun get_recent(store, count) {
+  let recent = take_last(store.timeline, count);
+  let results = [];
+
+  for (item in recent) {
+    let ep = store.episodes[item.episode_id];
+    if (ep != nil) {
+      push(results, ep);
+    }
+  }
+
+  return { ok: true, value: results };
+}
+
+// Consolidate old episodes
+pub fun consolidate(store, llm, age_threshold_days, importance_threshold) {
+  let cutoff = now() - (age_threshold_days * 24 * 60 * 60 * 1000);
+  let to_consolidate = [];
+  let to_remove = [];
+
+  for (id in keys(store.episodes)) {
+    let ep = store.episodes[id];
+    if (ep.end_time != nil && ep.end_time < cutoff) {
+      if (ep.importance < importance_threshold) {
+        push(to_remove, id);
+      } else {
+        push(to_consolidate, ep);
+      }
+    }
+  }
+
+  // Remove low-importance episodes
+  for (id in to_remove) {
+    delete store.episodes[id];
+  }
+
+  // Merge similar episodes
+  if (len(to_consolidate) > 1 && llm != nil) {
+    let merged = merge_episodes(llm, to_consolidate);
+    store.episodes[merged.id] = merged;
+  }
+
+  return {
+    ok: true,
+    value: {
+      removed: len(to_remove),
+      consolidated: len(to_consolidate)
+    }
+  };
+}
+
+// Helper functions
+fun generate_episode_id() {
+  return "ep_" + str(now()) + "_" + str(random_int(10000));
+}
+
+fun generate_episode_summary(llm, episode) {
+  let events_text = concat_events(episode.events);
+  let prompt = "Summarize this sequence of events in 1-2 sentences:\n\n" + events_text;
+  return trim(llm.generate(prompt));
+}
+
+fun concat_events(events) {
+  let text = "";
+  for (ev in events) {
+    text = text + "[" + ev.event_type + "] " + ev.content + "\n";
+  }
+  return text;
+}
+
+fun merge_episodes(llm, episodes) {
+  let all_events = [];
+  for (ep in episodes) {
+    all_events = concat(all_events, ep.events);
+  }
+
+  let merged = episode(generate_episode_id(), "consolidated");
+  merged.events = all_events;
+  merged.start_time = episodes[0].start_time;
+  merged.end_time = episodes[len(episodes) - 1].end_time;
+  merged.summary = generate_episode_summary(llm, merged);
+  merged.importance = max_importance(episodes);
+
+  return merged;
+}
+
+fun max_importance(episodes) {
+  let max_val = 0;
+  for (ep in episodes) {
+    if (ep.importance > max_val) {
+      max_val = ep.importance;
+    }
+  }
+  return max_val;
+}
+
+fun cosine_similarity(a, b) {
+  let dot = 0;
+  let norm_a = 0;
+  let norm_b = 0;
+  for (let i = 0; i < len(a); i = i + 1) {
+    dot = dot + a[i] * b[i];
+    norm_a = norm_a + a[i] * a[i];
+    norm_b = norm_b + b[i] * b[i];
+  }
+  return dot / (sqrt(norm_a) * sqrt(norm_b));
+}
+
+fun take_last(list, n) {
+  if (len(list) <= n) { return list; }
+  return slice(list, len(list) - n, len(list));
+}

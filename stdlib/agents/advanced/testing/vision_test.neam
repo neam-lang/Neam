@@ -1,0 +1,33 @@
+// Vision agent tests
+
+module std.agents.advanced.testing.vision_test;
+
+use std.agents.advanced.vision.agent;
+use std.agents.advanced.vision.extractor;
+use std.agents.special.testing.mocks;
+
+fun mock_vision_llm() {
+  return {
+    generate: fun(prompt) { return "Mock response"; },
+    analyze_image: fun(image_data, prompt) {
+      if (contains(prompt, "headers")) {
+        return "{\"headers\":[\"A\"],\"rows\":[[\"1\"]]}";
+      }
+      return "{\"field\":\"value\"}";
+    }
+  };
+}
+
+pub fun test_vision_agent_build() {
+  let llm = mocks.mock_llm([]);
+  let builder = agent.vision_builder(llm);
+  let built = agent.build_vision_agent(builder);
+  return built.ok && built.value.kind == "VisionAgent";
+}
+
+pub fun test_extractor_table() {
+  let llm = mock_vision_llm();
+  let ext = extractor.data_extractor(llm);
+  let result = extractor.extract_table(ext, "image_data");
+  return result.ok && result.value.row_count == 1;
+}

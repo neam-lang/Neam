@@ -1,0 +1,40 @@
+// Orchestrator agent tests
+
+module std.agents.advanced.testing.orchestrator_test;
+
+use std.agents.advanced.orchestrator.agent;
+use std.agents.advanced.orchestrator.state;
+use std.agents.advanced.orchestrator.recovery;
+use std.agents.advanced.orchestrator.config;
+use std.agents.special.testing.mocks;
+
+pub fun test_orchestrator_build() {
+  let llm = mocks.mock_llm([
+    { pattern: "Break down", response: "task_1 | Do thing |" }
+  ]);
+
+  let builder = agent.orchestrator_builder(llm);
+  let built = agent.build_orchestrator_agent(builder);
+  return built.ok && built.value.kind == "OrchestratorAgent";
+}
+
+pub fun test_state_manager_checkpoint() {
+  let manager = state.state_manager();
+  state.set_state(manager, "step", 1);
+  state.save_checkpoint(manager, "cp1", manager.current_state);
+
+  state.set_state(manager, "step", 2);
+  let restored = state.restore_checkpoint(manager, "cp1");
+  return restored.ok && restored.value.step == 1;
+}
+
+pub fun test_recovery_manager_retry() {
+  let manager = recovery.recovery_manager(config.error_retry(2));
+  let task = { id: "task_1", assigned_agent: "agent_a" };
+  let error = { message: "failure" };
+
+  let first = recovery.handle_failure(manager, task, error);
+  let second = recovery.handle_failure(manager, task, error);
+
+  return first.ok && first.value.action == "retry" && second.value.action == "fail";
+}

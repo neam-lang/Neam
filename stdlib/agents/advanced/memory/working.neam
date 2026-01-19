@@ -1,0 +1,163 @@
+// Working memory - current context management
+
+module std.agents.advanced.memory.working;
+
+use std.agents.advanced.memory.config;
+
+// Working memory context
+pub fun working_context(max_items) {
+  return {
+    kind: "WorkingContext",
+    items: [],
+    max_items: max_items || 10,
+    focus: nil,
+    relevance_scores: {}
+  };
+}
+
+// Add item to working memory
+pub fun add_item(context, content, source, importance) {
+  let item = {
+    id: generate_id(),
+    content: content,
+    source: source,
+    importance: importance || 0.5,
+    added_at: now(),
+    last_used: now()
+  };
+
+  push(context.items, item);
+  context.relevance_scores[item.id] = importance || 0.5;
+
+  // Enforce capacity limit
+  if (len(context.items) > context.max_items) {
+    evict_least_relevant(context);
+  }
+
+  return { ok: true, value: item };
+}
+
+// Set focus item
+pub fun set_focus(context, item_id) {
+  for (item in context.items) {
+    if (item.id == item_id) {
+      context.focus = item;
+      item.last_used = now();
+      context.relevance_scores[item_id] = min(1.0, context.relevance_scores[item_id] + 0.1);
+      return { ok: true, value: item };
+    }
+  }
+
+  return { ok: false, error: config.retrieval_error("Item not found: " + item_id) };
+}
+
+// Get current focus
+pub fun get_focus(context) {
+  return context.focus;
+}
+
+// Update relevance scores based on query
+pub fun update_relevance(context, embedder, query) {
+  let query_embedding = embedder.embed(query);
+
+  for (item in context.items) {
+    let item_embedding = embedder.embed(item.content);
+    let similarity = cosine_similarity(query_embedding, item_embedding);
+
+    // Blend with existing score
+    let old_score = context.relevance_scores[item.id] || 0.5;
+    context.relevance_scores[item.id] = (old_score + similarity) / 2;
+  }
+
+  return { ok: true, value: context.relevance_scores };
+}
+
+// Get most relevant items
+pub fun get_relevant(context, top_k) {
+  let scored = [];
+
+  for (item in context.items) {
+    let score = context.relevance_scores[item.id] || 0.5;
+    push(scored, { item: item, score: score });
+  }
+
+  scored = sort_by(scored, fun(a, b) { return b.score - a.score; });
+
+  let results = [];
+  for (let i = 0; i < min(top_k, len(scored)); i = i + 1) {
+    push(results, scored[i].item);
+  }
+
+  return { ok: true, value: results };
+}
+
+// Clear working memory
+pub fun clear(context) {
+  context.items = [];
+  context.focus = nil;
+  context.relevance_scores = {};
+  return { ok: true, value: true };
+}
+
+// Get context as text
+pub fun to_text(context) {
+  let text = "";
+  let relevant = get_relevant(context, context.max_items);
+
+  for (item in relevant.value) {
+    text = text + "- " + item.content + "\n";
+  }
+
+  return text;
+}
+
+// Get context summary
+pub fun get_summary(context, llm) {
+  let text = to_text(context);
+
+  if (len(text) == 0) {
+    return { ok: true, value: "No items in working memory." };
+  }
+
+  let prompt = "Summarize the current context:\n\n" + text;
+  return { ok: true, value: trim(llm.generate(prompt)) };
+}
+
+// Helper functions
+fun evict_least_relevant(context) {
+  let min_score = 1.0;
+  let min_id = nil;
+
+  for (item in context.items) {
+    let score = context.relevance_scores[item.id] || 0.5;
+    if (score < min_score) {
+      min_score = score;
+      min_id = item.id;
+    }
+  }
+
+  if (min_id != nil) {
+    context.items = filter(context.items, fun(i) { return i.id != min_id; });
+    delete context.relevance_scores[min_id];
+
+    if (context.focus != nil && context.focus.id == min_id) {
+      context.focus = nil;
+    }
+  }
+}
+
+fun generate_id() {
+  return "wm_" + str(now()) + "_" + str(random_int(10000));
+}
+
+fun cosine_similarity(a, b) {
+  let dot = 0;
+  let norm_a = 0;
+  let norm_b = 0;
+  for (let i = 0; i < len(a); i = i + 1) {
+    dot = dot + a[i] * b[i];
+    norm_a = norm_a + a[i] * a[i];
+    norm_b = norm_b + b[i] * b[i];
+  }
+  return dot / (sqrt(norm_a) * sqrt(norm_b));
+}

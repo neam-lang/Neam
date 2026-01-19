@@ -6,8 +6,9 @@ use std.agents.advanced.orchestrator.config;
 use std.agents.advanced.orchestrator.decomposer;
 use std.agents.advanced.orchestrator.router;
 
-pub fun orchestrator_builder() {
+pub fun orchestrator_builder(llm) {
   return {
+    llm: llm,
     routing_strategy: config.routing_adaptive(),
     max_parallel: 5,
     error_policy: config.error_retry(3)
@@ -18,8 +19,8 @@ pub fun with_routing_strategy(builder, strategy) { builder.routing_strategy = st
 pub fun with_max_parallel(builder, max) { builder.max_parallel = max; return builder; }
 pub fun with_error_policy(builder, policy) { builder.error_policy = policy; return builder; }
 
-pub fun build_orchestrator_agent(builder, llm) {
-  if (llm == nil) {
+pub fun build_orchestrator_agent(builder) {
+  if (builder.llm == nil) {
     return { ok: false, error: config.orchestrator_error("CONFIG", "LLM is required") };
   }
 
@@ -27,7 +28,8 @@ pub fun build_orchestrator_agent(builder, llm) {
     ok: true,
     value: {
       kind: "OrchestratorAgent",
-      decomposer: decomposer.task_decomposer(llm),
+      llm: builder.llm,
+      decomposer: decomposer.task_decomposer(builder.llm),
       router: router.agent_router(builder.routing_strategy),
       max_parallel: builder.max_parallel,
       error_policy: builder.error_policy,

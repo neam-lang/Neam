@@ -1,22 +1,168 @@
-// Memory agent tests
-
 module std.agents.advanced.testing.memory_test;
 
+use std.testing;
+use std.agents.advanced.memory.agent;
 use std.agents.advanced.memory.semantic;
+use std.agents.advanced.memory.episodic;
+use std.agents.advanced.memory.working;
+use std.agents.advanced.memory.graph;
+use std.agents.advanced.memory.config;
 
-fun mock_embedder() {
+fun fake_embedder() {
   return {
     embed: fun(text) {
-      return [1.0, 0.0, len(text) * 1.0];
+      // Simple hash-based fake embedding
+      let hash = 0;
+      for (let i = 0; i < len(text); i = i + 1) {
+        hash = hash + char_code(text, i);
+      }
+      return [hash % 100 / 100.0, (hash * 2) % 100 / 100.0, (hash * 3) % 100 / 100.0];
     }
   };
 }
 
-pub fun test_semantic_store_and_retrieve() {
-  let store = semantic.semantic_store(mock_embedder());
-  let stored = semantic.store_fact(store, "The sky is blue", "nature", {});
-  if (!stored.ok) { return false; }
+fun fake_llm() {
+  return {
+    generate: fun(prompt) { return "Test response"; }
+  };
+}
 
-  let results = semantic.retrieve_similar(store, "sky", 1);
-  return results.ok && len(results.value) == 1;
+// Semantic memory tests
+pub fun test_semantic_store_creation() {
+  let store = semantic.semantic_store(fake_embedder());
+  testing.expect_true(store.kind == "SemanticStore");
+}
+
+pub fun test_semantic_store_fact() {
+  let store = semantic.semantic_store(fake_embedder());
+  let result = semantic.store_fact(store, "Neam is a programming language", "facts", {});
+  testing.expect_ok(result);
+  testing.expect_true(result.value.content == "Neam is a programming language");
+}
+
+pub fun test_semantic_retrieve_similar() {
+  let store = semantic.semantic_store(fake_embedder());
+  semantic.store_fact(store, "Neam supports agents", "facts", {});
+  semantic.store_fact(store, "Python is popular", "facts", {});
+
+  let results = semantic.retrieve_similar(store, "agents", 2);
+  testing.expect_ok(results);
+  testing.expect_true(len(results.value) > 0);
+}
+
+pub fun test_semantic_retrieve_by_category() {
+  let store = semantic.semantic_store(fake_embedder());
+  semantic.store_fact(store, "Fact 1", "category_a", {});
+  semantic.store_fact(store, "Fact 2", "category_a", {});
+  semantic.store_fact(store, "Fact 3", "category_b", {});
+
+  let results = semantic.retrieve_by_category(store, "category_a", 10);
+  testing.expect_ok(results);
+  testing.expect_true(len(results.value) == 2);
+}
+
+// Episodic memory tests
+pub fun test_episodic_store_creation() {
+  let store = episodic.episodic_store(fake_embedder());
+  testing.expect_true(store.kind == "EpisodicStore");
+}
+
+pub fun test_episodic_start_end_episode() {
+  let store = episodic.episodic_store(fake_embedder());
+
+  let start_result = episodic.start_episode(store, "session_1", {});
+  testing.expect_ok(start_result);
+  testing.expect_true(store.current_episode != nil);
+
+  let end_result = episodic.end_episode(store, fake_llm());
+  testing.expect_ok(end_result);
+  testing.expect_true(store.current_episode == nil);
+}
+
+pub fun test_episodic_add_event() {
+  let store = episodic.episodic_store(fake_embedder());
+  episodic.start_episode(store, "session_1", {});
+
+  let event_result = episodic.add_event(store, "user_action", "clicked button", {});
+  testing.expect_ok(event_result);
+  testing.expect_true(len(store.current_episode.events) == 1);
+}
+
+// Working memory tests
+pub fun test_working_context_creation() {
+  let ctx = working.working_context(5);
+  testing.expect_true(ctx.kind == "WorkingContext");
+  testing.expect_true(ctx.max_items == 5);
+}
+
+pub fun test_working_add_item() {
+  let ctx = working.working_context(5);
+  let result = working.add_item(ctx, "test content", "test", 0.8);
+  testing.expect_ok(result);
+  testing.expect_true(len(ctx.items) == 1);
+}
+
+pub fun test_working_set_focus() {
+  let ctx = working.working_context(5);
+  let item = working.add_item(ctx, "test content", "test", 0.8);
+  let focus_result = working.set_focus(ctx, item.value.id);
+  testing.expect_ok(focus_result);
+  testing.expect_true(ctx.focus != nil);
+}
+
+// Graph tests
+pub fun test_knowledge_graph_creation() {
+  let kg = graph.knowledge_graph();
+  testing.expect_true(kg.kind == "KnowledgeGraph");
+}
+
+pub fun test_graph_add_node() {
+  let kg = graph.knowledge_graph();
+  let result = graph.add_node(kg, "node_1", "Entity", { name: "Test" });
+  testing.expect_ok(result);
+  testing.expect_true(graph.get_node(kg, "node_1") != nil);
+}
+
+pub fun test_graph_add_edge() {
+  let kg = graph.knowledge_graph();
+  graph.add_node(kg, "node_1", "Entity", {});
+  graph.add_node(kg, "node_2", "Entity", {});
+
+  let result = graph.add_edge(kg, "node_1", "node_2", "RELATED_TO", {});
+  testing.expect_ok(result);
+  testing.expect_true(len(kg.edges) == 1);
+}
+
+pub fun test_graph_get_neighbors() {
+  let kg = graph.knowledge_graph();
+  graph.add_node(kg, "a", "Entity", {});
+  graph.add_node(kg, "b", "Entity", {});
+  graph.add_node(kg, "c", "Entity", {});
+  graph.add_edge(kg, "a", "b", "KNOWS", {});
+  graph.add_edge(kg, "a", "c", "KNOWS", {});
+
+  let neighbors = graph.get_neighbors(kg, "a", nil);
+  testing.expect_true(len(neighbors) == 2);
+}
+
+// Memory Agent integration tests
+pub fun test_memory_agent_builder() {
+  let builder = agent.memory_builder(fake_llm());
+  builder = agent.with_embedder(builder, fake_embedder());
+
+  let result = agent.build_memory_agent(builder);
+  testing.expect_ok(result);
+  testing.expect_true(result.value.kind == "MemoryAgent");
+}
+
+pub fun test_memory_agent_remember_recall() {
+  let builder = agent.memory_builder(fake_llm());
+  builder = agent.with_embedder(builder, fake_embedder());
+  let mem_agent = agent.build_memory_agent(builder).value;
+
+  agent.remember_fact(mem_agent, "The sky is blue", "facts", 0.9);
+  let recall = agent.recall_facts(mem_agent, "sky color", 1);
+
+  testing.expect_ok(recall);
+  testing.expect_true(len(recall.value) > 0);
 }
