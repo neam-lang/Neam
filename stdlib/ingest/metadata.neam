@@ -1,0 +1,50 @@
+// Metadata helpers for ingestion
+
+module std.ingest.metadata;
+
+pub fun metadata_map() {
+  return {};
+}
+
+pub fun with_value(meta, key, value) {
+  meta[key] = value;
+  return meta;
+}
+
+pub fun with_values(meta, entries) {
+  for (entry in entries) {
+    meta[entry.key] = entry.value;
+  }
+  return meta;
+}
+
+pub fun with_tags(meta, tags) {
+  meta["tags"] = tags;
+  return meta;
+}
+
+pub fun with_entities(meta, entities) {
+  meta["entities"] = entities;
+  return meta;
+}
+
+pub fun from_document(doc) {
+  let result = {};
+  if (doc.metadata != nil) {
+    result["title"] = doc.metadata.title;
+    result["author"] = doc.metadata.author;
+    result["language"] = doc.metadata.language;
+    result["mime_type"] = doc.metadata.mime_type;
+    result["created_at"] = doc.metadata.created_at;
+    result["modified_at"] = doc.metadata.modified_at;
+    result["file_size"] = doc.metadata.file_size;
+    result["page_count"] = doc.metadata.page_count;
+    result["word_count"] = doc.metadata.word_count;
+    result["custom"] = doc.metadata.custom;
+  }
+  if (doc.source != nil) {
+    result["source_type"] = doc.source.source_type.kind;
+    result["source_uri"] = doc.source.uri;
+  }
+  return result;
+}

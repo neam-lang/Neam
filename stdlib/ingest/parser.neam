@@ -1,0 +1,162 @@
+// Parser registry and basic parser configurations
+
+module std.ingest.parser;
+
+pub fun parser_registry() {
+  return {
+    parsers: {},
+    default_parser: nil
+  };
+}
+
+pub fun register_parser(registry, extension, parser) {
+  registry.parsers[extension] = parser;
+  return registry;
+}
+
+pub fun with_default_parser(registry, parser) {
+  registry.default_parser = parser;
+  return registry;
+}
+
+pub fun get_parser(registry, extension) {
+  if (registry.parsers[extension] != nil) {
+    return registry.parsers[extension];
+  }
+  return registry.default_parser;
+}
+
+pub fun text_parser() {
+  return {
+    kind: "Text",
+    encoding: nil,
+    detect_encoding: true
+  };
+}
+
+pub fun with_encoding(parser, encoding) {
+  parser.encoding = encoding;
+  return parser;
+}
+
+pub fun with_detect_encoding(parser, detect) {
+  parser.detect_encoding = detect;
+  return parser;
+}
+
+pub fun markdown_parser() {
+  return {
+    kind: "Markdown",
+    extract_frontmatter: true,
+    extract_code_blocks: true,
+    preserve_structure: true
+  };
+}
+
+pub fun with_frontmatter(parser, extract) {
+  parser.extract_frontmatter = extract;
+  return parser;
+}
+
+pub fun with_code_blocks(parser, extract) {
+  parser.extract_code_blocks = extract;
+  return parser;
+}
+
+pub fun with_structure(parser, preserve) {
+  parser.preserve_structure = preserve;
+  return parser;
+}
+
+pub fun json_parser() {
+  return {
+    kind: "JSON",
+    content_field: nil,
+    metadata_fields: [],
+    flatten: false
+  };
+}
+
+pub fun with_content_field(parser, field) {
+  parser.content_field = field;
+  return parser;
+}
+
+pub fun with_metadata_fields(parser, fields) {
+  parser.metadata_fields = fields;
+  return parser;
+}
+
+pub fun with_flatten(parser, flatten) {
+  parser.flatten = flatten;
+  return parser;
+}
+
+pub fun csv_parser() {
+  return {
+    kind: "CSV",
+    delimiter: ",",
+    has_header: true,
+    content_columns: [],
+    metadata_columns: []
+  };
+}
+
+pub fun with_delimiter(parser, delimiter) {
+  parser.delimiter = delimiter;
+  return parser;
+}
+
+pub fun with_header(parser, has_header) {
+  parser.has_header = has_header;
+  return parser;
+}
+
+pub fun html_parser() {
+  return {
+    kind: "HTML",
+    extract_text: true,
+    extract_links: true,
+    extract_images: false,
+    remove_scripts: true,
+    remove_styles: true,
+    selectors: nil
+  };
+}
+
+pub fun with_links(parser, extract) {
+  parser.extract_links = extract;
+  return parser;
+}
+
+pub fun with_scripts(parser, remove) {
+  parser.remove_scripts = remove;
+  return parser;
+}
+
+pub fun with_styles(parser, remove) {
+  parser.remove_styles = remove;
+  return parser;
+}
+
+pub fun with_selectors(parser, selectors) {
+  parser.selectors = selectors;
+  return parser;
+}
+
+pub fun default_registry() {
+  let registry = parser_registry();
+
+  register_parser(registry, "txt", text_parser());
+  register_parser(registry, "text", text_parser());
+  register_parser(registry, "md", markdown_parser());
+  register_parser(registry, "markdown", markdown_parser());
+  register_parser(registry, "json", json_parser());
+  register_parser(registry, "jsonl", json_parser());
+  register_parser(registry, "csv", csv_parser());
+  register_parser(registry, "tsv", with_delimiter(csv_parser(), "\t"));
+  register_parser(registry, "html", html_parser());
+  register_parser(registry, "htm", html_parser());
+
+  return with_default_parser(registry, text_parser());
+}

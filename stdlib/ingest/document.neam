@@ -1,0 +1,304 @@
+// Document representations for ingestion
+
+module std.ingest.document;
+
+pub fun document_id(id) {
+  return { id: id };
+}
+
+pub fun source_info(source_type, uri, source_metadata) {
+  return {
+    source_type: source_type,
+    uri: uri,
+    source_metadata: source_metadata
+  };
+}
+
+pub fun source_type_file() { return { kind: "File" }; }
+pub fun source_type_s3() { return { kind: "S3" }; }
+pub fun source_type_gcs() { return { kind: "GCS" }; }
+pub fun source_type_azure() { return { kind: "Azure" }; }
+pub fun source_type_http() { return { kind: "HTTP" }; }
+pub fun source_type_database() { return { kind: "Database" }; }
+pub fun source_type_stream() { return { kind: "Stream" }; }
+
+pub fun content_text(text) {
+  return { kind: "Text", value: text };
+}
+
+pub fun content_structured(sections, tables, images) {
+  return {
+    kind: "Structured",
+    sections: sections,
+    tables: tables,
+    images: images
+  };
+}
+
+pub fun content_binary(data, mime_type, extracted_text) {
+  return {
+    kind: "Binary",
+    data: data,
+    mime_type: mime_type,
+    extracted_text: extracted_text
+  };
+}
+
+pub fun content_multimodal(text, images, audio, video) {
+  return {
+    kind: "MultiModal",
+    text: text,
+    images: images,
+    audio: audio,
+    video: video
+  };
+}
+
+pub fun section(title, level, content, children) {
+  return {
+    title: title,
+    level: level,
+    content: content,
+    children: children
+  };
+}
+
+pub fun table(headers, rows, caption) {
+  return {
+    headers: headers,
+    rows: rows,
+    caption: caption
+  };
+}
+
+pub fun image_ref(id, caption, alt_text, ocr_text, page) {
+  return {
+    id: id,
+    caption: caption,
+    alt_text: alt_text,
+    ocr_text: ocr_text,
+    page: page
+  };
+}
+
+pub fun metadata(title, author, created_at, modified_at, language, mime_type, file_size) {
+  return {
+    title: title,
+    author: author,
+    created_at: created_at,
+    modified_at: modified_at,
+    language: language,
+    mime_type: mime_type,
+    file_size: file_size,
+    page_count: nil,
+    word_count: nil,
+    custom: {},
+    entities: [],
+    keywords: []
+  };
+}
+
+pub fun with_page_count(meta, count) {
+  meta.page_count = count;
+  return meta;
+}
+
+pub fun with_word_count(meta, count) {
+  meta.word_count = count;
+  return meta;
+}
+
+pub fun with_custom(meta, key, value) {
+  meta.custom[key] = value;
+  return meta;
+}
+
+pub fun with_entity(meta, entity) {
+  push(meta.entities, entity);
+  return meta;
+}
+
+pub fun with_keyword(meta, keyword) {
+  push(meta.keywords, keyword);
+  return meta;
+}
+
+pub fun entity_type_person() { return { kind: "Person" }; }
+pub fun entity_type_organization() { return { kind: "Organization" }; }
+pub fun entity_type_location() { return { kind: "Location" }; }
+pub fun entity_type_date() { return { kind: "Date" }; }
+pub fun entity_type_money() { return { kind: "Money" }; }
+pub fun entity_type_email() { return { kind: "Email" }; }
+pub fun entity_type_phone() { return { kind: "Phone" }; }
+pub fun entity_type_url() { return { kind: "Url" }; }
+pub fun entity_type_custom(name) { return { kind: "Custom", name: name }; }
+
+pub fun entity(text, entity_type, confidence, start_offset, end_offset) {
+  return {
+    text: text,
+    entity_type: entity_type,
+    confidence: confidence,
+    start_offset: start_offset,
+    end_offset: end_offset
+  };
+}
+
+pub fun document(id, source, content, doc_metadata, content_hash, ingested_at) {
+  return {
+    id: id,
+    source: source,
+    content: content,
+    metadata: doc_metadata,
+    content_hash: content_hash,
+    ingested_at: ingested_at
+  };
+}
+
+pub fun builder(id) {
+  return {
+    id: id,
+    source: nil,
+    content: nil,
+    metadata: nil,
+    content_hash: nil,
+    ingested_at: nil
+  };
+}
+
+pub fun with_source(doc, source) {
+  doc.source = source;
+  return doc;
+}
+
+pub fun with_content(doc, content) {
+  doc.content = content;
+  return doc;
+}
+
+pub fun with_metadata(doc, meta) {
+  doc.metadata = meta;
+  return doc;
+}
+
+pub fun with_hash(doc, hash) {
+  doc.content_hash = hash;
+  return doc;
+}
+
+pub fun with_timestamp(doc, ts) {
+  doc.ingested_at = ts;
+  return doc;
+}
+
+pub fun build(doc) {
+  return document(
+    doc.id,
+    doc.source,
+    doc.content,
+    doc.metadata,
+    doc.content_hash,
+    doc.ingested_at
+  );
+}
+
+pub fun raw_document(content_bytes, mime_type, raw_metadata) {
+  return {
+    content: content_bytes,
+    mime_type: mime_type,
+    metadata: raw_metadata
+  };
+}
+
+pub fun source_document(id, uri, name, mime_type, size, modified_at, etag) {
+  return {
+    id: id,
+    uri: uri,
+    name: name,
+    mime_type: mime_type,
+    size: size,
+    modified_at: modified_at,
+    etag: etag
+  };
+}
+
+pub fun extract_text_content(content) {
+  if (content.kind == "Text") {
+    return content.value;
+  }
+  if (content.kind == "Structured") {
+    let text = "";
+    for (section in content.sections) {
+      text = text + extract_section_text(section);
+    }
+    for (table_item in content.tables) {
+      text = text + extract_table_text(table_item);
+    }
+    for (image in content.images) {
+      if (image.ocr_text != nil) {
+        text = text + image.ocr_text;
+      }
+    }
+    return text;
+  }
+  if (content.kind == "Binary") {
+    if (content.extracted_text != nil) {
+      return content.extracted_text;
+    }
+  }
+  if (content.kind == "MultiModal") {
+    return content.text;
+  }
+  return "";
+}
+
+pub fun extract_section_text(section_item) {
+  let text = "";
+  if (section_item.title != nil) {
+    text = text + section_item.title + "\n";
+  }
+  if (section_item.content != nil) {
+    text = text + section_item.content + "\n";
+  }
+  for (child in section_item.children) {
+    text = text + extract_section_text(child);
+  }
+  return text;
+}
+
+pub fun extract_table_text(table_item) {
+  let text = "";
+  if (table_item.caption != nil) {
+    text = text + table_item.caption + "\n";
+  }
+  if (table_item.headers != nil) {
+    for (header in table_item.headers) {
+      text = text + header + "\t";
+    }
+    text = text + "\n";
+  }
+  for (row in table_item.rows) {
+    for (cell in row) {
+      text = text + cell + "\t";
+    }
+    text = text + "\n";
+  }
+  return text;
+}
+
+pub fun compute_hash(content) {
+  return sha256(content);
+}
+
+pub fun merge_metadata(meta, source) {
+  return {
+    custom: meta.custom,
+    source_type: source.source_type.kind,
+    source_uri: source.uri,
+    title: meta.title,
+    author: meta.author,
+    mime_type: meta.mime_type,
+    language: meta.language,
+    created_at: meta.created_at,
+    modified_at: meta.modified_at
+  };
+}
