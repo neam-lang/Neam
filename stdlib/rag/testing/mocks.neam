@@ -1,0 +1,91 @@
+// RAG test mocks
+
+module std.rag.testing.mocks;
+
+use std.ingest.embed;
+
+pub fun mock_embedder(dimensions) {
+  let state = { call_count: 0 };
+  let embed_func = fun(text) {
+    state.call_count = state.call_count + 1;
+    let base = len(text);
+    let embedding = [];
+    for (i in range(0, dimensions)) {
+      let value = ((base + (i * 13)) % 97) / 97.0;
+      push(embedding, value);
+    }
+    return embed.normalize(embedding);
+  };
+  return {
+    kind: "MockEmbedder",
+    dimensions: dimensions,
+    state: state,
+    embed: embed_func,
+    embed_batch: fun(texts) {
+      return map(texts, fun(t) { return embed_func(t); });
+    },
+    call_count: fun() { return state.call_count; }
+  };
+}
+
+pub fun mock_llm() {
+  let state = { call_count: 0, responses: {}, default_response: "This is a mock response." };
+  return {
+    kind: "MockLLM",
+    state: state,
+    set_response: fun(pattern, response) {
+      state.responses[pattern] = response;
+    },
+    generate: fun(prompt) {
+      state.call_count = state.call_count + 1;
+      for (pattern, response in state.responses) {
+        if (contains(prompt, pattern)) {
+          return response;
+        }
+      }
+      return state.default_response;
+    },
+    call_count: fun() { return state.call_count; }
+  };
+}
+
+pub fun mock_vector_store() {
+  let state = { documents: [], embeddings: [] };
+  return {
+    kind: "MockVectorStore",
+    state: state,
+    search: fun(query) {
+      let k = query.top_k || 4;
+      let results = [];
+      for (doc in take(state.documents, k)) {
+        push(results, {
+          id: doc.id,
+          content: doc.content,
+          metadata: doc.metadata,
+          score: 1.0
+        });
+      }
+      return results;
+    },
+    upsert: fun(items) {
+      for (item in items) {
+        push(state.documents, item);
+      }
+      return { ok: true, count: len(items) };
+    }
+  };
+}
+
+pub fun mock_reranker() {
+  return {
+    kind: "MockReranker",
+    rerank: fun(query, docs) {
+      let scored = [];
+      for (i, doc in enumerate(docs)) {
+        doc.rerank_score = 1.0 - (i * 0.1);
+        push(scored, doc);
+      }
+      return scored;
+    }
+  };
+}

@@ -1,0 +1,177 @@
+// Reranking strategies
+
+module std.rag.reranker;
+
+let DEFAULT_RERANK_PROMPT = "Given the query: \"{query}\"\n\nRate the relevance of this document on a scale of 0-10:\n\"{document}\"\n\nScore (0-10):";
+
+pub fun reranker_cross_encoder(model) {
+  return {
+    kind: "CrossEncoder",
+    model: model
+  };
+}
+
+pub fun reranker_colbert(model) {
+  return {
+    kind: "ColBERT",
+    model: model
+  };
+}
+
+pub fun reranker_cohere(api_key) {
+  return {
+    kind: "Cohere",
+    api_key: api_key,
+    model: "rerank-english-v3.0"
+  };
+}
+
+pub fun reranker_cohere_multilingual(api_key) {
+  return {
+    kind: "Cohere",
+    api_key: api_key,
+    model: "rerank-multilingual-v3.0"
+  };
+}
+
+pub fun reranker_llm(llm, prompt_template) {
+  return {
+    kind: "LLM",
+    llm: llm,
+    prompt_template: prompt_template || DEFAULT_RERANK_PROMPT
+  };
+}
+
+pub fun reranker_builder(reranker_type) {
+  return {
+    reranker_type: reranker_type,
+    top_k: nil,
+    min_score: nil,
+    batch_size: 32
+  };
+}
+
+pub fun with_rerank_top_k(builder, k) {
+  builder.top_k = k;
+  return builder;
+}
+
+pub fun with_min_rerank_score(builder, score) {
+  builder.min_score = score;
+  return builder;
+}
+
+pub fun with_batch_size(builder, size) {
+  builder.batch_size = size;
+  return builder;
+}
+
+pub fun build_reranker(builder) {
+  return {
+    ok: true,
+    value: {
+      kind: "Reranker",
+      reranker_type: builder.reranker_type,
+      top_k: builder.top_k,
+      min_score: builder.min_score,
+      batch_size: builder.batch_size
+    }
+  };
+}
+
+pub fun rerank(reranker, query, documents) {
+  let scored = score_documents(reranker, query, documents);
+
+  scored = sort_by(scored, fun(a, b) { b.rerank_score - a.rerank_score });
+
+  if (reranker.min_score != nil) {
+    scored = filter(scored, fun(doc) { doc.rerank_score >= reranker.min_score });
+  }
+
+  if (reranker.top_k != nil) {
+    scored = take(scored, reranker.top_k);
+  }
+
+  return scored;
+}
+
+fun score_documents(reranker, query, documents) {
+  let rtype = reranker.reranker_type;
+
+  if (rtype.kind == "CrossEncoder") {
+    return cross_encoder_score(rtype.model, query, documents);
+  }
+
+  if (rtype.kind == "ColBERT") {
+    return colbert_score(rtype.model, query, documents);
+  }
+
+  if (rtype.kind == "Cohere") {
+    return cohere_rerank(rtype.api_key, rtype.model, query, documents);
+  }
+
+  if (rtype.kind == "LLM") {
+    return llm_rerank(rtype.llm, rtype.prompt_template, query, documents);
+  }
+
+  return documents;
+}
+
+fun cross_encoder_score(model, query, documents) {
+  let pairs = [];
+  for (doc in documents) {
+    push(pairs, [query, doc.content]);
+  }
+
+  let scores = native.cross_encoder_score(model, pairs);
+
+  for (i, doc in enumerate(documents)) {
+    doc.rerank_score = scores[i];
+  }
+
+  return documents;
+}
+
+fun colbert_score(model, query, documents) {
+  let scores = native.colbert_score(model, query, documents);
+
+  for (i, doc in enumerate(documents)) {
+    doc.rerank_score = scores[i];
+  }
+
+  return documents;
+}
+
+fun cohere_rerank(api_key, model, query, documents) {
+  let texts = map(documents, fun(d) { d.content });
+
+  let response = native.cohere_rerank(api_key, model, query, texts);
+
+  for (result in response.results) {
+    documents[result.index].rerank_score = result.relevance_score;
+  }
+
+  return documents;
+}
+
+fun llm_rerank(llm, prompt_template, query, documents) {
+  for (doc in documents) {
+    let prompt = prompt_template;
+    prompt = replace(prompt, "{query}", query);
+    prompt = replace(prompt, "{document}", doc.content);
+
+    let response = llm.generate(prompt);
+    let score = parse_score(response);
+    doc.rerank_score = score / 10.0;
+  }
+
+  return documents;
+}
+
+fun parse_score(response) {
+  let match = regex_match(response, "\\d+(\\.\\d+)?");
+  if (match != nil) {
+    return parse_float(match);
+  }
+  return 5.0;
+}
