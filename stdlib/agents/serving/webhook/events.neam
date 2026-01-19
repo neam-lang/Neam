@@ -1,0 +1,38 @@
+// Webhook event types
+
+module std.agents.serving.webhook.events;
+
+pub fun event_agent_started() { return "agent.started"; }
+pub fun event_agent_completed() { return "agent.completed"; }
+pub fun event_agent_failed() { return "agent.failed"; }
+pub fun event_agent_timeout() { return "agent.timeout"; }
+
+pub fun event_execution_started() { return "execution.started"; }
+pub fun event_execution_progress() { return "execution.progress"; }
+pub fun event_execution_completed() { return "execution.completed"; }
+pub fun event_execution_failed() { return "execution.failed"; }
+
+pub fun event_task_created() { return "task.created"; }
+pub fun event_task_assigned() { return "task.assigned"; }
+pub fun event_task_completed() { return "task.completed"; }
+pub fun event_task_failed() { return "task.failed"; }
+
+pub fun event_transcription_completed() { return "transcription.completed"; }
+pub fun event_synthesis_completed() { return "synthesis.completed"; }
+pub fun event_analysis_completed() { return "analysis.completed"; }
+
+pub fun event_memory_stored() { return "memory.stored"; }
+pub fun event_memory_recalled() { return "memory.recalled"; }
+
+pub fun event_threat_detected() { return "security.threat_detected"; }
+pub fun event_scan_completed() { return "security.scan_completed"; }
+
+pub fun create_event(type, agent_id, data) {
+  return {
+    id: "evt_" + str(now()) + "_" + str(random_int(10000)),
+    type: type,
+    agent_id: agent_id,
+    timestamp: now(),
+    data: data
+  };
+}

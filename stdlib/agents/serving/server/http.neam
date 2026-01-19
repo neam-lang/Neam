@@ -1,0 +1,142 @@
+// HTTP server implementation
+
+module std.agents.serving.server.http;
+
+use std.agents.serving.config;
+use std.agents.serving.server.router;
+use std.agents.serving.server.middleware;
+use std.agents.serving.server.handlers;
+
+// HTTP server builder
+pub fun http_server_builder() {
+  return {
+    config: config.server_config(nil, nil),
+    router: router.create_router(),
+    middleware_chain: [],
+    error_handler: default_error_handler,
+    not_found_handler: default_not_found_handler
+  };
+}
+
+pub fun with_server_config(builder, cfg) {
+  builder.config = cfg;
+  return builder;
+}
+
+pub fun with_middleware(builder, mw) {
+  push(builder.middleware_chain, mw);
+  return builder;
+}
+
+pub fun with_error_handler(builder, handler) {
+  builder.error_handler = handler;
+  return builder;
+}
+
+pub fun with_not_found_handler(builder, handler) {
+  builder.not_found_handler = handler;
+  return builder;
+}
+
+// Register routes
+pub fun route(builder, endpoint) {
+  router.add_route(builder.router, endpoint);
+  return builder;
+}
+
+pub fun route_group(builder, prefix, endpoints) {
+  for (ep in endpoints) {
+    ep.path = prefix + ep.path;
+    router.add_route(builder.router, ep);
+  }
+  return builder;
+}
+
+// Build and start server
+pub fun build_http_server(builder) {
+  return {
+    ok: true,
+    value: {
+      kind: "HTTPServer",
+      config: builder.config,
+      router: builder.router,
+      middleware: builder.middleware_chain,
+      error_handler: builder.error_handler,
+      not_found_handler: builder.not_found_handler,
+      state: "stopped"
+    }
+  };
+}
+
+pub fun start(server) {
+  server.state = "running";
+  return { ok: true, value: { address: server.config.host + ":" + str(server.config.port) } };
+}
+
+pub fun stop(server) {
+  server.state = "stopped";
+  return { ok: true, value: true };
+}
+
+// Dispatch request
+pub fun handle_request(server, request) {
+  let match_result = router.match_route(server.router, request.method, request.path);
+  if (match_result == nil) {
+    return server.not_found_handler(request);
+  }
+
+  request.path_params = match_result.params || {};
+
+  let chain = middleware.compose_endpoint_middleware(server.middleware, match_result.route);
+  let handler = middleware.apply_middleware(chain, match_result.route.handler);
+
+  let response = handler(request);
+  if (response == nil) {
+    return server.error_handler({ message: "Empty response" }, request);
+  }
+
+  return response;
+}
+
+// Request/Response types
+pub fun http_request(method, path, headers, body) {
+  return {
+    method: method,
+    path: path,
+    headers: headers || {},
+    body: body,
+    query_params: {},
+    path_params: {},
+    client_ip: nil,
+    request_id: generate_request_id()
+  };
+}
+
+pub fun http_response(status, headers, body) {
+  return {
+    status: status,
+    headers: headers || {},
+    body: body
+  };
+}
+
+pub fun json_response(status, data) {
+  return http_response(status, { "Content-Type": config.content_json() }, json_encode(data));
+}
+
+pub fun error_response(status, code, message) {
+  return handlers.error_response(status, code, message);
+}
+
+// Default handlers
+fun default_error_handler(err, req) {
+  return handlers.error_response(config.status_internal_error(), "INTERNAL_ERROR", err.message || "Unknown error");
+}
+
+fun default_not_found_handler(req) {
+  return handlers.error_response(config.status_not_found(), "NOT_FOUND", "Endpoint not found: " + req.path);
+}
+
+fun generate_request_id() {
+  return "req_" + str(now()) + "_" + str(random_int(10000));
+}

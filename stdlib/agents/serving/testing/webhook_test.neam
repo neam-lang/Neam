@@ -1,0 +1,24 @@
+// Webhook tests
+
+module std.agents.serving.testing.webhook_test;
+
+use std.agents.serving.webhook.queue;
+use std.agents.serving.webhook.retry;
+
+pub fun test_webhook_queue() {
+  let q = queue.event_queue(2);
+  queue.enqueue(q, { id: 1 });
+  queue.enqueue(q, { id: 2 });
+
+  let first = queue.dequeue(q);
+  let second = queue.dequeue(q);
+  let third = queue.dequeue(q);
+
+  return first.id == 1 && second.id == 2 && third == nil;
+}
+
+pub fun test_retry_delay() {
+  let policy = retry.exponential_backoff(3, 1000, 4000);
+  let delay = retry.calculate_delay(policy, 2);
+  return delay == 2000;
+}

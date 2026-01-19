@@ -1,0 +1,214 @@
+// AsyncAPI specification generator
+
+module std.agents.serving.schema.asyncapi;
+
+pub fun generate_asyncapi_spec(server, agents) {
+  return {
+    asyncapi: "2.6.0",
+    info: {
+      title: "Neam Agent WebSocket API",
+      version: "1.0.0",
+      description: "Real-time WebSocket API for Neam Advanced Agents"
+    },
+    servers: {
+      production: {
+        url: "ws://" + server.config.host + ":" + str(server.config.port) + "/ws",
+        protocol: "ws",
+        description: "WebSocket server"
+      }
+    },
+    channels: generate_channels(agents),
+    components: {
+      messages: generate_messages(),
+      schemas: generate_asyncapi_schemas()
+    }
+  };
+}
+
+fun generate_channels(agents) {
+  return {
+    "/": {
+      publish: {
+        summary: "Send messages to server",
+        message: {
+          oneOf: [
+            { "$ref": "#/components/messages/SessionCreate" },
+            { "$ref": "#/components/messages/AgentInvoke" },
+            { "$ref": "#/components/messages/AudioBufferAppend" },
+            { "$ref": "#/components/messages/AudioBufferCommit" }
+          ]
+        }
+      },
+      subscribe: {
+        summary: "Receive messages from server",
+        message: {
+          oneOf: [
+            { "$ref": "#/components/messages/SessionCreated" },
+            { "$ref": "#/components/messages/AgentResponse" },
+            { "$ref": "#/components/messages/StreamChunk" },
+            { "$ref": "#/components/messages/AudioResponse" },
+            { "$ref": "#/components/messages/Error" }
+          ]
+        }
+      }
+    }
+  };
+}
+
+fun generate_messages() {
+  return {
+    SessionCreate: {
+      name: "session.create",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "session.create" },
+          data: {
+            type: "object",
+            properties: {
+              agent_id: { type: "string" },
+              config: { type: "object" }
+            },
+            required: ["agent_id"]
+          }
+        }
+      }
+    },
+    SessionCreated: {
+      name: "session.created",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "session.created" },
+          data: {
+            type: "object",
+            properties: {
+              session_id: { type: "string" },
+              config: { type: "object" }
+            },
+            required: ["session_id"]
+          }
+        }
+      }
+    },
+    AgentInvoke: {
+      name: "agent.invoke",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "agent.invoke" },
+          data: {
+            type: "object",
+            properties: {
+              agent_id: { type: "string" },
+              input: { type: "object" },
+              stream: { type: "boolean" }
+            },
+            required: ["agent_id", "input"]
+          }
+        }
+      }
+    },
+    AgentResponse: {
+      name: "agent.response",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "agent.response" },
+          data: {
+            type: "object",
+            properties: {
+              agent_id: { type: "string" },
+              output: { type: "object" }
+            },
+            required: ["agent_id"]
+          }
+        }
+      }
+    },
+    StreamChunk: {
+      name: "agent.stream.chunk",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "agent.stream.chunk" },
+          data: {
+            type: "object",
+            properties: {
+              stream_id: { type: "string" },
+              chunk: { type: "object" },
+              index: { type: "integer" }
+            },
+            required: ["stream_id", "chunk"]
+          }
+        }
+      }
+    },
+    AudioBufferAppend: {
+      name: "audio.buffer.append",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "audio.buffer.append" },
+          data: {
+            type: "object",
+            properties: {
+              audio: { type: "string", format: "base64" }
+            },
+            required: ["audio"]
+          }
+        }
+      }
+    },
+    AudioBufferCommit: {
+      name: "audio.buffer.commit",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "audio.buffer.commit" },
+          data: { type: "object" }
+        }
+      }
+    },
+    AudioResponse: {
+      name: "audio.response",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "audio.response" },
+          data: {
+            type: "object",
+            properties: {
+              audio: { type: "string", format: "base64" },
+              transcript: { type: "string" }
+            },
+            required: ["audio"]
+          }
+        }
+      }
+    },
+    Error: {
+      name: "error",
+      payload: {
+        type: "object",
+        properties: {
+          type: { const: "error" },
+          data: {
+            type: "object",
+            properties: {
+              code: { type: "string" },
+              message: { type: "string" }
+            },
+            required: ["code", "message"]
+          }
+        }
+      }
+    }
+  };
+}
+
+fun generate_asyncapi_schemas() {
+  return {
+    Empty: { type: "object" }
+  };
+}

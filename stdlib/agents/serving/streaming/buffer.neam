@@ -1,0 +1,57 @@
+// Streaming buffers
+
+module std.agents.serving.streaming.buffer;
+
+pub fun audio_buffer(max_ms) {
+  return {
+    kind: "AudioBuffer",
+    max_ms: max_ms || 200,
+    chunks: []
+  };
+}
+
+pub fun append(buffer, chunk) {
+  push(buffer.chunks, chunk);
+  return buffer;
+}
+
+pub fun get_all(buffer) {
+  let combined = [];
+  for (chunk in buffer.chunks) {
+    combined = concat(combined, chunk);
+  }
+  return combined;
+}
+
+pub fun clear(buffer) {
+  buffer.chunks = [];
+  return buffer;
+}
+
+pub fun frame_buffer(max_frames) {
+  return {
+    kind: "FrameBuffer",
+    max_frames: max_frames || 30,
+    frames: []
+  };
+}
+
+pub fun append_frame(buffer, frame) {
+  push(buffer.frames, frame);
+  if (len(buffer.frames) > buffer.max_frames) {
+    buffer.frames = slice(buffer.frames, len(buffer.frames) - buffer.max_frames, len(buffer.frames));
+  }
+  return buffer;
+}
+
+pub fun get_latest(buffer) {
+  if (len(buffer.frames) == 0) { return nil; }
+  return buffer.frames[len(buffer.frames) - 1];
+}
+
+fun concat(list_a, list_b) {
+  let combined = [];
+  for (item in list_a) { push(combined, item); }
+  for (item in list_b) { push(combined, item); }
+  return combined;
+}

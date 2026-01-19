@@ -1,0 +1,210 @@
+// Agent REST endpoints
+
+module std.agents.serving.rest.endpoints;
+
+use std.agents.serving.config;
+use std.agents.serving.server.http;
+use std.agents.serving.rest.serializer;
+use std.agents.serving.rest.validator;
+
+// Agent endpoint factory
+pub fun create_agent_endpoints(agent_registry) {
+  return [
+    config.rest_endpoint(config.method_post(), "/agents/:agent_id/invoke", fun(req) {
+      return invoke_handler(agent_registry, req);
+    }),
+    config.rest_endpoint(config.method_post(), "/agents/:agent_id/batch", fun(req) {
+      return batch_handler(agent_registry, req);
+    }),
+    config.rest_endpoint(config.method_post(), "/agents/:agent_id/stream", fun(req) {
+      return stream_handler(agent_registry, req);
+    }),
+    config.rest_endpoint(config.method_get(), "/agents/:agent_id", fun(req) {
+      return info_handler(agent_registry, req);
+    }),
+    config.rest_endpoint(config.method_get(), "/agents/:agent_id/schema", fun(req) {
+      return schema_handler(agent_registry, req);
+    }),
+    config.rest_endpoint(config.method_get(), "/agents/:agent_id/health", fun(req) {
+      return health_handler(agent_registry, req);
+    }),
+    config.rest_endpoint(config.method_get(), "/agents/:agent_id/metrics", fun(req) {
+      return metrics_handler(agent_registry, req);
+    })
+  ];
+}
+
+fun invoke_handler(registry, req) {
+  let agent_id = req.path_params["agent_id"];
+  let agent = registry.get(agent_id);
+
+  if (agent == nil) {
+    return http.error_response(config.status_not_found(), "AGENT_NOT_FOUND", "Agent not found: " + agent_id);
+  }
+
+  let validation = validator.validate_json_request(req, 10 * 1024 * 1024);
+  if (!validation.ok) {
+    return http.error_response(config.status_bad_request(), "INVALID_INPUT", validation.error);
+  }
+
+  let input_result = serializer.decode_json(req.body);
+  if (!input_result.ok) {
+    return http.error_response(config.status_bad_request(), "INVALID_INPUT", input_result.error);
+  }
+
+  let start_time = now();
+  let result = agent.execute(input_result.value);
+  let duration_ms = now() - start_time;
+
+  if (result.ok) {
+    return http.json_response(config.status_ok(), {
+      output: result.value,
+      metadata: {
+        agent_id: agent_id,
+        duration_ms: duration_ms,
+        request_id: req.request_id
+      }
+    });
+  }
+
+  return http.json_response(config.status_internal_error(), {
+    error: result.error,
+    metadata: {
+      agent_id: agent_id,
+      duration_ms: duration_ms,
+      request_id: req.request_id
+    }
+  });
+}
+
+fun batch_handler(registry, req) {
+  let agent_id = req.path_params["agent_id"];
+  let agent = registry.get(agent_id);
+
+  if (agent == nil) {
+    return http.error_response(config.status_not_found(), "AGENT_NOT_FOUND", "Agent not found: " + agent_id);
+  }
+
+  let input_result = serializer.decode_json(req.body);
+  if (!input_result.ok) {
+    return http.error_response(config.status_bad_request(), "INVALID_INPUT", input_result.error);
+  }
+
+  let batch_input = input_result.value;
+  if (batch_input.inputs == nil) {
+    return http.error_response(config.status_bad_request(), "INVALID_INPUT", "Expected {inputs: [...]}" );
+  }
+
+  let results = [];
+  for (input in batch_input.inputs) {
+    let result = agent.execute(input);
+    push(results, result);
+  }
+
+  return http.json_response(config.status_ok(), {
+    outputs: results,
+    metadata: { count: len(results), agent_id: agent_id }
+  });
+}
+
+fun stream_handler(registry, req) {
+  return {
+    status: config.status_ok(),
+    headers: {
+      "Content-Type": config.content_sse(),
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive"
+    },
+    stream: true,
+    stream_handler: fun(writer) {
+      let agent_id = req.path_params["agent_id"];
+      let agent = registry.get(agent_id);
+      if (agent == nil) {
+        writer.write("data: " + json_encode({ error: "Agent not found" }) + "\n\n");
+        return;
+      }
+
+      let input_result = serializer.decode_json(req.body);
+      if (!input_result.ok) {
+        writer.write("data: " + json_encode({ error: input_result.error }) + "\n\n");
+        return;
+      }
+
+      agent.stream_execute(input_result.value, fun(chunk) {
+        writer.write("data: " + json_encode(chunk) + "\n\n");
+      });
+
+      writer.write("data: [DONE]\n\n");
+    }
+  };
+}
+
+fun schema_handler(registry, req) {
+  let agent_id = req.path_params["agent_id"];
+  let agent = registry.get(agent_id);
+
+  if (agent == nil) {
+    return http.error_response(config.status_not_found(), "AGENT_NOT_FOUND", "Agent not found: " + agent_id);
+  }
+
+  return http.json_response(config.status_ok(), {
+    agent_id: agent_id,
+    kind: agent.kind,
+    input_schema: get_input_schema(agent),
+    output_schema: get_output_schema(agent),
+    config_schema: get_config_schema(agent)
+  });
+}
+
+fun health_handler(registry, req) {
+  let agent_id = req.path_params["agent_id"];
+  let agent = registry.get(agent_id);
+
+  if (agent == nil) {
+    return http.json_response(config.status_service_unavailable(), { status: "unavailable" });
+  }
+
+  return http.json_response(config.status_ok(), {
+    status: "healthy",
+    agent_id: agent_id,
+    state: agent.state
+  });
+}
+
+fun metrics_handler(registry, req) {
+  let agent_id = req.path_params["agent_id"];
+  let agent = registry.get(agent_id);
+
+  if (agent == nil) {
+    return http.error_response(config.status_not_found(), "AGENT_NOT_FOUND", "Agent not found: " + agent_id);
+  }
+
+  return http.json_response(config.status_ok(), agent.metrics);
+}
+
+fun info_handler(registry, req) {
+  let agent_id = req.path_params["agent_id"];
+  let agent = registry.get(agent_id);
+
+  if (agent == nil) {
+    return http.error_response(config.status_not_found(), "AGENT_NOT_FOUND", "Agent not found: " + agent_id);
+  }
+
+  return http.json_response(config.status_ok(), {
+    agent_id: agent_id,
+    kind: agent.kind,
+    state: agent.state
+  });
+}
+
+fun get_input_schema(agent) {
+  return { type: "object", properties: {} };
+}
+
+fun get_output_schema(agent) {
+  return { type: "object", properties: {} };
+}
+
+fun get_config_schema(agent) {
+  return { type: "object", properties: {} };
+}

@@ -1,0 +1,231 @@
+// API Gateway implementation
+
+module std.agents.serving.gateway.gateway;
+
+use std.agents.serving.gateway.rate_limiter;
+use std.agents.serving.gateway.auth;
+use std.agents.serving.gateway.metrics;
+use std.agents.serving.config;
+
+pub fun api_gateway_builder() {
+  return {
+    routes: [],
+    middleware: [],
+    auth_providers: [],
+    rate_limiters: [],
+    metrics_enabled: true,
+    logging_enabled: true,
+    cors_config: nil,
+    circuit_breaker_config: nil
+  };
+}
+
+pub fun with_route(builder, pattern, handler, options) {
+  push(builder.routes, {
+    pattern: pattern,
+    handler: handler,
+    options: options || {}
+  });
+  return builder;
+}
+
+pub fun with_auth_provider(builder, provider) {
+  push(builder.auth_providers, provider);
+  return builder;
+}
+
+pub fun with_rate_limiter(builder, limiter) {
+  push(builder.rate_limiters, limiter);
+  return builder;
+}
+
+pub fun with_cors(builder, cors_config) {
+  builder.cors_config = cors_config;
+  return builder;
+}
+
+pub fun with_circuit_breaker(builder, config) {
+  builder.circuit_breaker_config = config;
+  return builder;
+}
+
+pub fun build_api_gateway(builder) {
+  return {
+    ok: true,
+    value: {
+      kind: "APIGateway",
+      routes: builder.routes,
+      middleware: build_middleware_chain(builder),
+      metrics: metrics.metrics_collector(),
+      circuit_breakers: {},
+      state: "stopped"
+    }
+  };
+}
+
+fun build_middleware_chain(builder) {
+  let chain = [];
+
+  if (builder.logging_enabled) {
+    push(chain, logging_middleware());
+  }
+
+  if (builder.cors_config != nil) {
+    push(chain, cors_middleware(builder.cors_config));
+  }
+
+  for (provider in builder.auth_providers) {
+    push(chain, auth_middleware(provider));
+  }
+
+  for (limiter in builder.rate_limiters) {
+    push(chain, rate_limit_middleware(limiter));
+  }
+
+  if (builder.metrics_enabled) {
+    push(chain, metrics_middleware());
+  }
+
+  return chain;
+}
+
+pub fun handle_request(gateway, request) {
+  let start_time = now();
+
+  for (mw in gateway.middleware) {
+    let result = mw(request);
+    if (result.stop) {
+      metrics.record_request(gateway.metrics, request, result.response, now() - start_time);
+      return result.response;
+    }
+    request = result.request || request;
+  }
+
+  let route = find_route(gateway, request);
+  if (route == nil) {
+    return error_response(config.status_not_found(), "NOT_FOUND", "Route not found");
+  }
+
+  let breaker_key = route.pattern;
+  if (is_circuit_open(gateway, breaker_key)) {
+    return error_response(config.status_service_unavailable(), "CIRCUIT_OPEN", "Service temporarily unavailable");
+  }
+
+  let response = route.handler(request);
+
+  metrics.record_request(gateway.metrics, request, response, now() - start_time);
+
+  update_circuit_breaker(gateway, breaker_key, response);
+
+  return response;
+}
+
+fun logging_middleware() {
+  return fun(request) {
+    let timestamp = now();
+    log_info("[" + str(timestamp) + "] " + request.method + " " + request.path);
+    return { request: request };
+  };
+}
+
+fun cors_middleware(config) {
+  return fun(request) {
+    request.cors_headers = {
+      "Access-Control-Allow-Origin": config.allow_origin || "*",
+      "Access-Control-Allow-Methods": config.allow_methods || "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": config.allow_headers || "Content-Type, Authorization"
+    };
+
+    if (request.method == "OPTIONS") {
+      return {
+        stop: true,
+        response: { status: 204, headers: request.cors_headers, body: "" }
+      };
+    }
+
+    return { request: request };
+  };
+}
+
+fun auth_middleware(provider) {
+  return fun(request) {
+    let auth_result = provider.authenticate(request);
+    if (!auth_result.ok) {
+      return {
+        stop: true,
+        response: error_response(config.status_unauthorized(), "AUTH_FAILED", auth_result.error)
+      };
+    }
+    request.user = auth_result.value;
+    return { request: request };
+  };
+}
+
+fun rate_limit_middleware(limiter) {
+  return fun(request) {
+    let key = get_rate_limit_key(request, limiter);
+    let tier = nil;
+    if (request.user != nil) { tier = request.user.tier; }
+    let allowed = rate_limiter.check(limiter, key, tier);
+
+    if (!allowed.ok) {
+      return {
+        stop: true,
+        response: error_response(config.status_rate_limited(), "RATE_LIMITED", "Too many requests")
+      };
+    }
+
+    return { request: request };
+  };
+}
+
+fun metrics_middleware() {
+  return fun(request) {
+    request.metrics_start = now();
+    return { request: request };
+  };
+}
+
+fun find_route(gateway, request) {
+  for (route in gateway.routes) {
+    if (match_pattern(route.pattern, request.path)) {
+      return route;
+    }
+  }
+  return nil;
+}
+
+fun match_pattern(pattern, path) {
+  return starts_with(path, pattern);
+}
+
+fun is_circuit_open(gateway, key) {
+  let breaker = gateway.circuit_breakers[key];
+  return breaker != nil && breaker.state == "open";
+}
+
+fun update_circuit_breaker(gateway, key, response) {
+  return true;
+}
+
+fun get_rate_limit_key(request, limiter) {
+  if (limiter.key_type == "user") {
+    return request.user.id;
+  } else if (limiter.key_type == "ip") {
+    return request.client_ip;
+  } else if (limiter.key_type == "api_key") {
+    return request.headers["X-API-Key"];
+  }
+  return request.path;
+}
+
+fun error_response(status, code, message) {
+  return {
+    status: status,
+    body: json_encode({ error: { code: code, message: message } })
+  };
+}
+
+fun log_info(msg) {
+  return true;
+}

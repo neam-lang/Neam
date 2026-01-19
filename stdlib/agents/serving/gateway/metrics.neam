@@ -1,0 +1,31 @@
+// Metrics collection for gateway
+
+module std.agents.serving.gateway.metrics;
+
+pub fun metrics_collector() {
+  return {
+    requests: 0,
+    errors: 0,
+    by_status: {},
+    total_latency_ms: 0,
+    avg_latency_ms: 0
+  };
+}
+
+pub fun record_request(metrics, request, response, duration_ms) {
+  metrics.requests = metrics.requests + 1;
+  metrics.total_latency_ms = metrics.total_latency_ms + duration_ms;
+  metrics.avg_latency_ms = metrics.total_latency_ms / metrics.requests;
+
+  let status = response.status || 0;
+  if (metrics.by_status[status] == nil) {
+    metrics.by_status[status] = 0;
+  }
+  metrics.by_status[status] = metrics.by_status[status] + 1;
+
+  if (status >= 400) {
+    metrics.errors = metrics.errors + 1;
+  }
+
+  return metrics;
+}
