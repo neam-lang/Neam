@@ -1,0 +1,38 @@
+// OCR configuration helpers
+
+module std.ingest.parser.ocr;
+
+// OCR configuration
+pub fun ocr_config(enabled, language, dpi, provider) {
+  return {
+    enabled: enabled,
+    language: language,
+    dpi: dpi,
+    provider: provider
+  };
+}
+
+pub fun ocr_disabled() {
+  return ocr_config(false, "eng", 300, nil);
+}
+
+pub fun ocr_default() {
+  return ocr_config(true, "eng", 300, ocr_provider_tesseract());
+}
+
+// OCR providers
+pub fun ocr_provider_tesseract() {
+  return { kind: "Tesseract" };
+}
+
+pub fun ocr_provider_azure() {
+  return { kind: "AzureVision" };
+}
+
+pub fun ocr_provider_google() {
+  return { kind: "GoogleVision" };
+}
+
+pub fun ocr_provider_aws() {
+  return { kind: "AwsTextract" };
+}
