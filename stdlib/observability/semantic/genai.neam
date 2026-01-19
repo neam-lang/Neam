@@ -1,0 +1,47 @@
+// GenAI semantic conventions
+
+module std.observability.semantic.genai;
+
+use std.observability.semantic.attributes;
+
+pub fun operation_attributes(system, operation, model, params) {
+  return attributes.gen_ai_operation(system, operation, model, params);
+}
+
+pub fun response_attributes(response) {
+  return attributes.gen_ai_response(response);
+}
+
+pub fun token_usage_metrics(system, model, operation, usage) {
+  return {
+    input: {
+      name: "gen_ai.client.token.usage",
+      value: usage.input_tokens,
+      attributes: {
+        "gen_ai.token.type": "input",
+        "gen_ai.system": system,
+        "gen_ai.request.model": model,
+        "gen_ai.operation.name": operation
+      }
+    },
+    output: {
+      name: "gen_ai.client.token.usage",
+      value: usage.output_tokens,
+      attributes: {
+        "gen_ai.token.type": "output",
+        "gen_ai.system": system,
+        "gen_ai.request.model": model,
+        "gen_ai.operation.name": operation
+      }
+    },
+    duration: {
+      name: "gen_ai.client.operation.duration",
+      value: usage.duration_ms,
+      attributes: {
+        "gen_ai.system": system,
+        "gen_ai.request.model": model,
+        "gen_ai.operation.name": operation
+      }
+    }
+  };
+}

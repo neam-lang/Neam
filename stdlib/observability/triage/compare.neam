@@ -1,0 +1,31 @@
+// Trace comparison
+
+module std.observability.triage.compare;
+
+pub fun traces(config) {
+  return {
+    success_traces: config.success_traces ?? [],
+    failure_traces: config.failure_traces ?? [],
+    compare_fields: config.compare_fields ?? []
+  };
+}
+
+pub fun compare_fields(results) {
+  let stats = [];
+  for (field in results.compare_fields) {
+    let success_values = extract_values(results.success_traces, field);
+    let failure_values = extract_values(results.failure_traces, field);
+    push(stats, { field: field, success: success_values, failure: failure_values });
+  }
+  return stats;
+}
+
+fun extract_values(traces, field) {
+  let values = [];
+  for (trace in traces) {
+    if (trace[field] != nil) {
+      push(values, trace[field]);
+    }
+  }
+  return values;
+}

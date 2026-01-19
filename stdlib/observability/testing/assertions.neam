@@ -1,0 +1,16 @@
+// Observability test assertions
+
+module std.observability.testing.assertions;
+
+pub fun has_attribute(span, key, value) {
+  return span.attributes[key] == value;
+}
+
+pub fun has_event(span, event_name) {
+  for (event in span.events ?? []) {
+    if (event.name == event_name) {
+      return true;
+    }
+  }
+  return false;
+}

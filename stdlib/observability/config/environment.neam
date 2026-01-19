@@ -1,0 +1,20 @@
+// Environment-based configuration
+
+module std.observability.config.environment;
+
+pub fun load() {
+  return {
+    service_name: env("OTEL_SERVICE_NAME") ?? "neam-app",
+    otlp_endpoint: env("OTEL_EXPORTER_OTLP_ENDPOINT") ?? "http://localhost:4317",
+    otlp_protocol: env("OTEL_EXPORTER_OTLP_PROTOCOL") ?? "grpc",
+    sampler: env("OTEL_TRACES_SAMPLER") ?? "parentbased_traceidratio",
+    sampler_arg: env("OTEL_TRACES_SAMPLER_ARG") ?? "0.1",
+    semconv_opt_in: env("OTEL_SEMCONV_STABILITY_OPT_IN") ?? "gen_ai",
+    capture_prompts: env("NEAM_OTEL_CAPTURE_PROMPTS") == "true",
+    capture_responses: env("NEAM_OTEL_CAPTURE_RESPONSES") == "true",
+    langfuse_public_key: env("LANGFUSE_PUBLIC_KEY"),
+    langfuse_secret_key: env("LANGFUSE_SECRET_KEY"),
+    mlflow_tracking_uri: env("MLFLOW_TRACKING_URI"),
+    es_hosts: env("ES_HOSTS")
+  };
+}

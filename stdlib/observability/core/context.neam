@@ -1,0 +1,71 @@
+// Context propagation helpers
+
+module std.observability.core.context;
+
+pub fun trace_context(trace_id, span_id, trace_flags, trace_state) {
+  return {
+    trace_id: trace_id,
+    span_id: span_id,
+    trace_flags: trace_flags ?? "01",
+    trace_state: trace_state ?? ""
+  };
+}
+
+pub fun inject(headers, context) {
+  headers["traceparent"] = build_traceparent(context);
+  if (context.trace_state != "") {
+    headers["tracestate"] = context.trace_state;
+  }
+  return headers;
+}
+
+pub fun extract(headers) {
+  let traceparent = headers["traceparent"];
+  if (traceparent == nil) {
+    return nil;
+  }
+  return parse_traceparent(traceparent, headers["tracestate"]);
+}
+
+pub fun baggage(items) {
+  return { kind: "Baggage", items: items ?? {} };
+}
+
+pub fun inject_baggage(headers, baggage) {
+  let pairs = [];
+  for (key in keys(baggage.items)) {
+    push(pairs, key + "=" + str(baggage.items[key]));
+  }
+  if (len(pairs) > 0) {
+    headers["baggage"] = join(pairs, ",");
+  }
+  return headers;
+}
+
+pub fun extract_baggage(headers) {
+  let raw = headers["baggage"];
+  if (raw == nil) {
+    return baggage({});
+  }
+  let items = {};
+  let parts = split(raw, ",");
+  for (part in parts) {
+    let kv = split(trim(part), "=");
+    if (len(kv) == 2) {
+      items[kv[0]] = kv[1];
+    }
+  }
+  return baggage(items);
+}
+
+fun build_traceparent(context) {
+  return "00-" + context.trace_id + "-" + context.span_id + "-" + context.trace_flags;
+}
+
+fun parse_traceparent(traceparent, trace_state) {
+  let parts = split(traceparent, "-");
+  if (len(parts) < 4) {
+    return nil;
+  }
+  return trace_context(parts[1], parts[2], parts[3], trace_state ?? "");
+}

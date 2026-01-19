@@ -1,0 +1,11 @@
+// Session replay
+
+module std.observability.triage.replay;
+
+pub fun load_session(session_id) {
+  return { id: session_id, timeline: [] };
+}
+
+pub fun get_timeline(session) {
+  return session.timeline ?? [];
+}

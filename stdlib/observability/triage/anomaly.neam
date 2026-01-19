@@ -1,0 +1,34 @@
+// Anomaly detection
+
+module std.observability.triage.anomaly;
+
+pub fun create_detector(config) {
+  let default_config = {
+    metrics: [],
+    window_size: "1h",
+    alert_callback: nil
+  };
+  return merge(default_config, config);
+}
+
+pub fun evaluate(detector, metric_samples) {
+  let alerts = [];
+  for (metric in detector.metrics) {
+    let sample = metric_samples[metric.name];
+    if (sample != nil && sample.alert == true) {
+      push(alerts, { metric: metric.name, details: sample });
+      if (detector.alert_callback != nil) {
+        detector.alert_callback({ metric: metric.name, details: sample });
+      }
+    }
+  }
+  return alerts;
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

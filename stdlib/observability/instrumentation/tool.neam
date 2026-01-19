@@ -1,0 +1,29 @@
+// Tool call instrumentation
+
+module std.observability.instrumentation.tool;
+
+use std.observability.semantic.events;
+
+pub fun tool_span(tool_name, call_id, attributes) {
+  let base = {
+    "gen_ai.tool.name": tool_name,
+    "gen_ai.tool.call.id": call_id
+  };
+  return { name: "tool.call", attributes: merge(base, attributes ?? {}) };
+}
+
+pub fun call_event(tool_name, call_id, arguments) {
+  return events.tool_call(tool_name, call_id, arguments);
+}
+
+pub fun result_event(call_id, result, error) {
+  return events.tool_result(call_id, result, error);
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override)) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

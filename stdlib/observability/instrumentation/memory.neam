@@ -1,0 +1,20 @@
+// Memory instrumentation
+
+module std.observability.instrumentation.memory;
+
+use std.observability.semantic.agent;
+
+pub fun memory_span(memory_info) {
+  return {
+    name: "agent.memory",
+    attributes: agent.memory_state_attributes(memory_info)
+  };
+}
+
+pub fun memory_metric(agent_name, memory_info) {
+  return {
+    name: "neam.agent.memory.size",
+    value: memory_info.size,
+    attributes: { agent_name: agent_name, memory_type: memory_info.type }
+  };
+}

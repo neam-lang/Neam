@@ -1,0 +1,37 @@
+// LLM call instrumentation
+
+module std.observability.instrumentation.llm;
+
+use std.observability.semantic.genai;
+use std.observability.semantic.events;
+
+pub fun llm_span(system, operation, model, params) {
+  return {
+    name: "llm." + operation,
+    attributes: genai.operation_attributes(system, operation, model, params)
+  };
+}
+
+pub fun response_attributes(response) {
+  return genai.response_attributes(response);
+}
+
+pub fun prompt_event(prompt, template_name, template_version) {
+  return events.user_message(prompt, template_name, template_version);
+}
+
+pub fun completion_event(completion) {
+  return events.assistant_message(completion);
+}
+
+pub fun tool_call_event(name, call_id, arguments) {
+  return events.tool_call(name, call_id, arguments);
+}
+
+pub fun tool_result_event(call_id, result, error) {
+  return events.tool_result(call_id, result, error);
+}
+
+pub fun token_metrics(system, model, operation, usage) {
+  return genai.token_usage_metrics(system, model, operation, usage);
+}
