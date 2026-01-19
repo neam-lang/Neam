@@ -1,0 +1,102 @@
+// Query processing and transformation
+
+module std.rag.query;
+
+pub fun query_text(text) {
+  return {
+    text: text,
+    context: nil,
+    filters: [],
+    metadata: {}
+  };
+}
+
+pub fun query_with_context(text, context) {
+  let q = query_text(text);
+  q.context = context;
+  return q;
+}
+
+pub fun with_filter(query, filter) {
+  push(query.filters, filter);
+  return query;
+}
+
+pub fun with_metadata(query, key, value) {
+  query.metadata[key] = value;
+  return query;
+}
+
+pub fun with_tags(query, tags) {
+  query.metadata.tags = tags;
+  return query;
+}
+
+pub fun expand_query_simple(query, expansions) {
+  let expanded = [query.text];
+  for (item in expansions) {
+    if (len(trim(item)) > 0) {
+      push(expanded, item);
+    }
+  }
+  return expanded;
+}
+
+pub fun expand_query_with_llm(llm, template, query) {
+  let prompt = replace(template, "{query}", query.text);
+  let response = llm.generate(prompt);
+  let lines = split(response, "\n");
+  let expansions = [];
+  for (line in lines) {
+    let cleaned = trim(line);
+    if (len(cleaned) > 0) {
+      push(expansions, cleaned);
+    }
+  }
+  return expansions;
+}
+
+pub fun decompose_query_simple(query) {
+  let separators = ["?", " and ", " & ", ","];
+  let parts = [query.text];
+  for (sep in separators) {
+    let next_parts = [];
+    for (part in parts) {
+      let split_parts = split(part, sep);
+      for (item in split_parts) {
+        let cleaned = trim(item);
+        if (len(cleaned) > 0) {
+          push(next_parts, cleaned);
+        }
+      }
+    }
+    parts = next_parts;
+  }
+  return parts;
+}
+
+pub fun rewrite_query(llm, template, query) {
+  let prompt = replace(template, "{query}", query.text);
+  return llm.generate(prompt);
+}
+
+pub fun combine_queries(queries) {
+  return join(queries, " ");
+}
+
+pub fun apply_transforms(query, transforms) {
+  let current = query;
+  for (transform in transforms) {
+    current = transform(current);
+  }
+  return current;
+}
+
+pub fun query_summary(query) {
+  return {
+    text: query.text,
+    has_context: query.context != nil,
+    filter_count: len(query.filters),
+    metadata_keys: keys(query.metadata)
+  };
+}
