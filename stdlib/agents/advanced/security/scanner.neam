@@ -1,0 +1,47 @@
+module std.agents.advanced.security.scanner;
+
+use std.agents.advanced.security.config;
+
+pub fun vulnerability_scanner(llm) {
+  return {
+    llm: llm,
+    rules: [],
+    tools: []
+  };
+}
+
+pub fun add_scan_rule(scanner, rule) {
+  push(scanner.rules, rule);
+  return scanner;
+}
+
+pub fun add_tool(scanner, tool) {
+  push(scanner.tools, tool);
+  return scanner;
+}
+
+pub fun scan_code(scanner, codebase) {
+  let issues = [];
+
+  for (rule in scanner.rules) {
+    let findings = rule.check(codebase);
+    issues = concat(issues, findings);
+  }
+
+  for (tool in scanner.tools) {
+    let tool_results = tool.run(codebase);
+    issues = concat(issues, tool_results);
+  }
+
+  return { ok: true, value: { issues: issues, count: len(issues) } };
+}
+
+pub fun scan_dependencies(scanner, manifest) {
+  let prompt = "Analyze these dependencies for known vulnerabilities.\n\n" + manifest;
+  return { ok: true, value: trim(scanner.llm.generate(prompt)) };
+}
+
+pub fun prioritize_issues(issues) {
+  let sorted = sort_by(issues, fun(a, b) { return (a.severity_score || 0) - (b.severity_score || 0); });
+  return reverse(sorted);
+}

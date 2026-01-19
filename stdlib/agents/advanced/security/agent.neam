@@ -1,0 +1,70 @@
+module std.agents.advanced.security.agent;
+
+use std.agents.advanced.security.config;
+use std.agents.advanced.security.detector;
+use std.agents.advanced.security.responder;
+use std.agents.advanced.security.analyzer;
+use std.agents.advanced.security.scanner;
+
+pub fun security_builder(llm) {
+  return {
+    llm: llm,
+    threat_feeds: [],
+    siem: nil,
+    auto_remediation: false,
+    detection_sensitivity: "medium"
+  };
+}
+
+pub fun with_threat_feeds(builder, feeds) { builder.threat_feeds = feeds; return builder; }
+pub fun with_siem_integration(builder, siem) { builder.siem = siem; return builder; }
+pub fun with_auto_remediation(builder, enabled) { builder.auto_remediation = enabled; return builder; }
+
+pub fun build_security_agent(builder) {
+  if (builder.llm == nil) {
+    return { ok: false, error: config.security_error("CONFIG", "LLM is required") };
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: "SecurityAgent",
+      llm: builder.llm,
+      detector: detector.threat_detector(builder.llm),
+      responder: responder.incident_responder(builder.llm),
+      analyzer: analyzer.log_analyzer(builder.llm),
+      scanner: scanner.vulnerability_scanner(builder.llm),
+      threat_feeds: builder.threat_feeds,
+      siem: builder.siem,
+      auto_remediation: builder.auto_remediation
+    }
+  };
+}
+
+pub fun monitor(agent, events) {
+  let alerts = detector.detect_threats(agent.detector, events);
+  if (!alerts.ok) { return alerts; }
+
+  let responses = [];
+  for (alert in alerts.value) {
+    if (agent.auto_remediation) {
+      let response = responder.respond_to_alert(agent.responder, alert);
+      push(responses, response.value);
+    }
+  }
+
+  return { ok: true, value: { alerts: alerts.value, responses: responses } };
+}
+
+pub fun analyze_threat(agent, description) {
+  let prompt = "Analyze this security threat and provide:\n1. Threat assessment\n2. Indicators of compromise\n3. Recommended actions\n\nThreat: " + description;
+  return { ok: true, value: trim(agent.llm.generate(prompt)) };
+}
+
+pub fun analyze_logs(agent, logs) {
+  return analyzer.analyze_logs(agent.analyzer, logs);
+}
+
+pub fun scan_codebase(agent, codebase) {
+  return scanner.scan_code(agent.scanner, codebase);
+}

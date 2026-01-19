@@ -1,0 +1,185 @@
+// Speech-to-text functionality
+
+module std.agents.advanced.voice.transcriber;
+
+use std.agents.advanced.voice.config;
+
+// Transcription request
+pub fun transcription_request(audio_data) {
+  return {
+    audio: audio_data,
+    language: config.lang_en_us(),
+    engine: config.engine_deepgram(),
+    punctuation: true,
+    speaker_diarization: false,
+    word_timestamps: false
+  };
+}
+
+pub fun with_transcription_language(req, lang) {
+  req.language = lang;
+  return req;
+}
+
+pub fun with_transcription_engine(req, engine) {
+  req.engine = engine;
+  return req;
+}
+
+pub fun with_speaker_diarization(req, enabled) {
+  req.speaker_diarization = enabled;
+  return req;
+}
+
+pub fun with_word_timestamps(req, enabled) {
+  req.word_timestamps = enabled;
+  return req;
+}
+
+// Transcription result
+pub fun transcription_result(text, confidence, duration_ms) {
+  return {
+    text: text,
+    confidence: confidence,
+    duration_ms: duration_ms,
+    words: [],
+    speakers: []
+  };
+}
+
+// Transcribe audio to text
+pub fun transcribe(engine_client, request) {
+  let response = engine_client.transcribe({
+    audio: request.audio,
+    language: request.language.code,
+    punctuate: request.punctuation,
+    diarize: request.speaker_diarization,
+    word_timestamps: request.word_timestamps
+  });
+
+  if (response.error != nil) {
+    return { ok: false, error: config.transcription_error(response.error) };
+  }
+
+  let result = transcription_result(
+    response.text,
+    response.confidence || 0.95,
+    response.duration_ms || 0
+  );
+
+  if (request.word_timestamps && response.words != nil) {
+    result.words = response.words;
+  }
+
+  if (request.speaker_diarization && response.speakers != nil) {
+    result.speakers = response.speakers;
+  }
+
+  return { ok: true, value: result };
+}
+
+// Streaming transcription
+pub fun create_stream(engine_client, language) {
+  return {
+    kind: "TranscriptionStream",
+    client: engine_client,
+    language: language,
+    buffer: [],
+    is_final: false
+  };
+}
+
+pub fun stream_audio(stream, audio_chunk) {
+  let partial = stream.client.stream_chunk(audio_chunk);
+
+  if (partial.is_final) {
+    stream.is_final = true;
+    return {
+      ok: true,
+      value: {
+        text: partial.text,
+        is_final: true,
+        confidence: partial.confidence
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      text: partial.text,
+      is_final: false,
+      confidence: partial.confidence
+    }
+  };
+}
+
+pub fun end_stream(stream) {
+  let final_result = stream.client.end_stream();
+  return {
+    ok: true,
+    value: transcription_result(
+      final_result.text,
+      final_result.confidence,
+      final_result.duration_ms
+    )
+  };
+}
+
+// Detect language from audio
+pub fun detect_language(engine_client, audio_data) {
+  let response = engine_client.detect_language(audio_data);
+
+  if (response.error != nil) {
+    return { ok: false, error: config.transcription_error(response.error) };
+  }
+
+  return {
+    ok: true,
+    value: {
+      language: response.language,
+      confidence: response.confidence,
+      alternatives: response.alternatives || []
+    }
+  };
+}
+
+// Extract keywords from transcription
+pub fun extract_keywords(text, language) {
+  let words = split(lowercase(text), " ");
+  let stop_words = get_stop_words(language);
+  let keywords = [];
+
+  for (word in words) {
+    let cleaned = regex_replace(word, "[^a-z0-9]", "");
+    if (len(cleaned) > 2 && !contains(stop_words, cleaned)) {
+      push(keywords, cleaned);
+    }
+  }
+
+  return dedupe(keywords);
+}
+
+fun get_stop_words(language) {
+  if (language.code == "en-US" || language.code == "en-GB") {
+    return ["the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+            "have", "has", "had", "do", "does", "did", "will", "would", "could",
+            "should", "may", "might", "must", "shall", "can", "and", "or", "but",
+            "if", "then", "else", "when", "where", "why", "how", "all", "each",
+            "every", "both", "few", "more", "most", "other", "some", "such", "no",
+            "not", "only", "same", "so", "than", "too", "very", "just", "also"];
+  }
+  return [];
+}
+
+fun dedupe(list) {
+  let seen = {};
+  let result = [];
+  for (item in list) {
+    if (seen[item] == nil) {
+      seen[item] = true;
+      push(result, item);
+    }
+  }
+  return result;
+}
