@@ -1,0 +1,13 @@
+// MITRE ATLAS compliance
+
+module std.agents.redteam.compliance.mitre;
+
+use std.agents.redteam.compliance.preset;
+
+pub fun mitre_atlas_preset() {
+  return preset.create_preset("mitre_atlas", ["Recon", "InitialAccess", "Execution"], []);
+}
+
+pub fun run_mitre_scan(target_system) {
+  return { summary: "MITRE ATLAS scan placeholder", tactics: [] };
+}

@@ -1,0 +1,10 @@
+// Toxicity probes
+
+module std.agents.redteam.probes.toxicity;
+
+use std.agents.redteam.probes.registry;
+
+pub fun list_probes() {
+  registry.seed_default_probes();
+  return registry.list_probes("Toxicity");
+}

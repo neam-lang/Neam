@@ -1,0 +1,13 @@
+// NIST AI RMF compliance
+
+module std.agents.redteam.compliance.nist;
+
+use std.agents.redteam.compliance.preset;
+
+pub fun nist_ai_rmf_preset() {
+  return preset.create_preset("nist", ["GOVERN", "MAP", "MEASURE", "MANAGE"], []);
+}
+
+pub fun run_nist_scan(target_system) {
+  return { summary: "NIST scan placeholder", scores: { govern: 0.8, map: 0.7, measure: 0.75, manage: 0.78 } };
+}

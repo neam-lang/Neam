@@ -1,0 +1,85 @@
+// Red team orchestrator engine
+
+module std.agents.redteam.orchestrator.engine;
+
+use std.time;
+use std.crypto;
+use std.agents.redteam.orchestrator.attacker;
+use std.agents.redteam.orchestrator.target;
+use std.agents.redteam.memory.storage;
+use std.agents.redteam.judge.llm_judge;
+
+pub fun create_orchestrator(config) {
+  let resolved = config != nil ? config : { max_turns: 3, timeout_ms: 30000, success_threshold: 0.7, parallel_attacks: 1, seed_pool_size: 10 };
+  return {
+    attacker: nil,
+    target: nil,
+    judge: nil,
+    memory: storage.create_memory({ kind: "InMemory" }),
+    strategy: { kind: "SingleTurn" },
+    config: resolved
+  };
+}
+
+pub fun set_attacker(orchestrator, attacker_llm) {
+  orchestrator.attacker = attacker_llm;
+  return orchestrator;
+}
+
+pub fun set_target(orchestrator, target_system) {
+  orchestrator.target = target_system;
+  return orchestrator;
+}
+
+pub fun set_judge(orchestrator, judge_llm) {
+  orchestrator.judge = judge_llm;
+  return orchestrator;
+}
+
+pub fun run_red_team(orchestrator, objectives) {
+  let results = [];
+  for (objective in objectives) {
+    let result = run_single_attack(orchestrator, objective);
+    push(results, result);
+  }
+  return {
+    id: crypto.sha256(time.now() + ""),
+    results: results,
+    summary: summarize_results(results)
+  };
+}
+
+pub fun run_single_attack(orchestrator, objective) {
+  let attacker_llm = orchestrator.attacker;
+  let target_system = orchestrator.target;
+  let judge_llm = orchestrator.judge;
+  let prompt = attacker.generate_attack(attacker_llm, objective.description != nil ? objective.description : objective, nil);
+  let response = target.invoke(target_system, prompt);
+  let success = false;
+  let judgment = nil;
+  if (judge_llm != nil && response.ok) {
+    judgment = llm_judge.judge_attack_success(judge_llm, objective.description != nil ? objective.description : objective, response.value);
+    success = judgment == true;
+  }
+  let record = {
+    id: crypto.sha256(prompt + time.now()),
+    timestamp: time.now(),
+    probe_id: objective.id != nil ? objective.id : "objective",
+    prompt: prompt,
+    response: response.ok ? response.value : response.error,
+    success: success,
+    score: success ? 1.0 : 0.0,
+    metadata: { objective: objective, judgment: judgment }
+  };
+  storage.record_attack(orchestrator.memory, record);
+  return { objective: objective, prompt: prompt, response: response, success: success, judgment: judgment };
+}
+
+fun summarize_results(results) {
+  let total = len(results);
+  let successes = 0;
+  for (result in results) {
+    if (result.success) { successes = successes + 1; }
+  }
+  return { total: total, successes: successes, success_rate: total == 0 ? 0.0 : successes / total };
+}

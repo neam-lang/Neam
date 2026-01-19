@@ -1,0 +1,48 @@
+// Content moderation pipeline
+
+module std.agents.redteam.toxicity.moderation;
+
+use std.agents.redteam.toxicity.scorer;
+
+pub fun create_moderation_pipeline() {
+  return { input_filters: [], output_filters: [], action_config: { default_action: { kind: "Pass" } } };
+}
+
+pub fun add_input_filter(pipeline, filter) {
+  push(pipeline.input_filters, filter);
+  return pipeline;
+}
+
+pub fun add_output_filter(pipeline, filter) {
+  push(pipeline.output_filters, filter);
+  return pipeline;
+}
+
+pub fun moderate_input(pipeline, input) {
+  return run_filters(pipeline.input_filters, input);
+}
+
+pub fun moderate_output(pipeline, output) {
+  return run_filters(pipeline.output_filters, output);
+}
+
+fun run_filters(filters, text) {
+  for (filter in filters) {
+    if (!filter.enabled) { continue; }
+    let result = filter.detector(text);
+    if (result.flagged) {
+      return { action: filter.action, result: result };
+    }
+  }
+  return { action: { kind: "Pass" }, result: { flagged: false } };
+}
+
+pub fun toxicity_filter(scorer_backend, action) {
+  let scorer_instance = scorer.create_toxicity_scorer(scorer_backend);
+  return {
+    name: "toxicity",
+    detector: fun(text) { return scorer.score_toxicity(scorer_instance, text); },
+    action: action,
+    enabled: true
+  };
+}

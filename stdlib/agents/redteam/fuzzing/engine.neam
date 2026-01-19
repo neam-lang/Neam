@@ -1,0 +1,67 @@
+// Fuzzing engine
+
+module std.agents.redteam.fuzzing.engine;
+
+use std.agents.redteam.fuzzing.seed_pool;
+use std.agents.redteam.fuzzing.selector;
+use std.agents.redteam.fuzzing.coverage;
+use std.agents.redteam.fuzzing.mutations;
+use std.agents.redteam.orchestrator.target;
+use std.text.string as text;
+
+pub fun default_config() {
+  return {
+    iterations: 100,
+    parallel_workers: 1,
+    mutation_rate: 0.2,
+    exploration_weight: 1.2,
+    early_stop_threshold: 1.0,
+    coverage_targets: []
+  };
+}
+
+pub fun create_fuzzer(config) {
+  let resolved = config != nil ? config : default_config();
+  return {
+    seed_pool: seed_pool.create_seed_pool([], resolved.coverage_targets),
+    mutator: mutations.create_mutator({ kind: "TokenLevel", ops: [] }),
+    executor: nil,
+    scorer: nil,
+    selector: selector.create_selector("Random", nil),
+    config: resolved
+  };
+}
+
+pub fun add_seed(engine, seed) {
+  seed_pool.add_seed(engine.seed_pool, seed);
+  return { ok: true };
+}
+
+pub fun run_fuzzing(engine, target_system, iterations) {
+  let total = iterations != nil ? iterations : engine.config.iterations;
+  let successes = 0;
+  let executed = 0;
+  while (executed < total) {
+    let seed = selector.select_seed(engine.selector, engine.seed_pool);
+    if (seed == nil) { break; }
+    let mutated = mutations.mutate(engine.mutator, seed, { mutation_type: engine.mutator.mutation_type });
+    let response = target.invoke(target_system, mutated);
+    let success = response.ok && text.contains(text.to_lower(response.value), "success");
+    if (success) {
+      successes = successes + 1;
+      if (engine.config.early_stop_threshold != nil && successes >= engine.config.early_stop_threshold) {
+        break;
+      }
+    }
+    executed = executed + 1;
+  }
+  return {
+    executed: executed,
+    successful_attacks: successes,
+    coverage: coverage.coverage_report(engine.seed_pool.coverage)
+  };
+}
+
+pub fun get_coverage(engine) {
+  return coverage.coverage_report(engine.seed_pool.coverage);
+}

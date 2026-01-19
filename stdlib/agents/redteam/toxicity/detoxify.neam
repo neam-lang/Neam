@@ -1,0 +1,7 @@
+// Detoxify integration placeholder
+
+module std.agents.redteam.toxicity.detoxify;
+
+pub fun detoxify_model(model) {
+  return { kind: "Detoxify", model: model };
+}

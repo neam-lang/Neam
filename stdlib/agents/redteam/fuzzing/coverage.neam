@@ -1,0 +1,25 @@
+// Coverage tracking
+
+module std.agents.redteam.fuzzing.coverage;
+
+pub fun create_coverage(targets) {
+  let map = {};
+  if (targets != nil) {
+    for (target in targets) { map[target] = false; }
+  }
+  return { map: map };
+}
+
+pub fun record_coverage(coverage, key) {
+  coverage.map[key] = true;
+  return coverage;
+}
+
+pub fun coverage_report(coverage) {
+  let total = len(keys(coverage.map));
+  let hit = 0;
+  for (key in keys(coverage.map)) {
+    if (coverage.map[key] == true) { hit = hit + 1; }
+  }
+  return { total: total, hit: hit, percentage: total == 0 ? 0.0 : hit / total };
+}

@@ -1,0 +1,13 @@
+// Attacker LLM configuration
+
+module std.agents.redteam.orchestrator.attacker;
+
+pub fun create_attacker(model, prompt_template) {
+  return { kind: "AttackerLLM", model: model, prompt_template: prompt_template };
+}
+
+pub fun generate_attack(attacker, objective, history) {
+  let base = attacker.prompt_template != nil ? attacker.prompt_template : "Generate an adversarial prompt.";
+  let context = history != nil ? "\nHistory:\n" + history : "";
+  return base + "\nObjective: " + objective + context;
+}

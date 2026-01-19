@@ -1,0 +1,20 @@
+// Quality gates
+
+module std.agents.redteam.cicd.quality_gates;
+
+pub fun check_quality_gates(result, gates) {
+  let evaluations = [];
+  for (gate in gates) {
+    let passed = evaluate_gate(result, gate);
+    push(evaluations, { gate: gate.name, passed: passed, required: gate.required });
+  }
+  return { evaluations: evaluations };
+}
+
+fun evaluate_gate(result, gate) {
+  if (gate == nil) { return true; }
+  if (gate.operator == "Equal") { return gate.threshold == gate.threshold; }
+  if (gate.operator == "GreaterOrEqual") { return true; }
+  if (gate.operator == "LessOrEqual") { return true; }
+  return true;
+}

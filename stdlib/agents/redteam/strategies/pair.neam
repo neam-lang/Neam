@@ -1,0 +1,35 @@
+// PAIR iterative refinement attack
+
+module std.agents.redteam.strategies.pair;
+
+use std.agents.redteam.orchestrator.target;
+use std.agents.redteam.judge.llm_judge;
+
+pub fun create_pair(objective, attacker, iterations) {
+  return { objective: objective, attacker_llm: attacker, iterations: iterations, improvement_history: [] };
+}
+
+pub fun refine_prompt(attack, previous_result) {
+  let base = previous_result.prompt != nil ? previous_result.prompt : attack.objective;
+  let improvement = "Refine: " + base;
+  push(attack.improvement_history, { previous: base, improved: improvement });
+  return improvement;
+}
+
+pub fun run_pair(attack, target_system, judge_llm) {
+  let prompt = attack.objective;
+  let success = false;
+  let last_response = nil;
+  let i = 0;
+  while (i < attack.iterations) {
+    let response = target.invoke(target_system, prompt);
+    last_response = response;
+    if (judge_llm != nil && response.ok) {
+      success = llm_judge.judge_attack_success(judge_llm, attack.objective, response.value);
+      if (success) { break; }
+    }
+    prompt = refine_prompt(attack, { prompt: prompt, response: response });
+    i = i + 1;
+  }
+  return { objective: attack.objective, prompt: prompt, response: last_response, success: success, history: attack.improvement_history };
+}
