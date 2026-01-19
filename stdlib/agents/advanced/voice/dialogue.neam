@@ -1,0 +1,221 @@
+// Conversation and dialogue management
+
+module std.agents.advanced.voice.dialogue;
+
+use std.agents.advanced.voice.config;
+
+// Dialogue turn
+pub fun dialogue_turn(role, content, timestamp) {
+  return {
+    role: role,
+    content: content,
+    timestamp: timestamp,
+    intent: nil,
+    entities: {},
+    emotion: config.emotion_neutral()
+  };
+}
+
+pub fun user_turn(content) {
+  return dialogue_turn("user", content, now());
+}
+
+pub fun assistant_turn(content) {
+  return dialogue_turn("assistant", content, now());
+}
+
+pub fun system_turn(content) {
+  return dialogue_turn("system", content, now());
+}
+
+// Dialogue manager
+pub fun dialogue_manager(llm, system_prompt) {
+  return {
+    llm: llm,
+    system_prompt: system_prompt,
+    state: config.conversation_state(),
+    intents: {},
+    fallback_response: "I'm sorry, I didn't understand that. Could you please rephrase?"
+  };
+}
+
+pub fun with_intents(manager, intents) {
+  manager.intents = intents;
+  return manager;
+}
+
+pub fun with_fallback(manager, response) {
+  manager.fallback_response = response;
+  return manager;
+}
+
+// Process user input and generate response
+pub fun process_turn(manager, user_input) {
+  let user_turn_obj = user_turn(user_input);
+
+  let intent = detect_intent(manager.llm, user_input, manager.intents);
+  user_turn_obj.intent = intent.value;
+
+  let entities = extract_entities(manager.llm, user_input);
+  user_turn_obj.entities = entities.value;
+
+  let emotion = detect_emotion(manager.llm, user_input);
+  user_turn_obj.emotion = emotion.value;
+
+  push(manager.state.turns, user_turn_obj);
+  manager.state.current_intent = intent.value;
+  manager.state.entities = merge(manager.state.entities, entities.value);
+  manager.state.sentiment = emotion.value;
+
+  let response = generate_response(manager, user_input);
+  if (!response.ok) {
+    let fallback = assistant_turn(manager.fallback_response);
+    push(manager.state.turns, fallback);
+    return { ok: true, value: fallback };
+  }
+
+  let assistant = assistant_turn(response.value);
+  push(manager.state.turns, assistant);
+
+  return { ok: true, value: assistant };
+}
+
+// Generate response based on context
+pub fun generate_response(manager, user_input) {
+  let context = build_context(manager);
+
+  let prompt = manager.system_prompt + "\n\n" +
+               "Conversation history:\n" + context + "\n\n" +
+               "User: " + user_input + "\n\n" +
+               "Respond naturally and helpfully. Be concise.";
+
+  let response = trim(manager.llm.generate(prompt));
+
+  if (len(response) == 0) {
+    return { ok: false, error: config.dialogue_error("Empty response") };
+  }
+
+  return { ok: true, value: response };
+}
+
+// Detect intent from user input
+pub fun detect_intent(llm, text, intents) {
+  if (len(intents) == 0) {
+    return { ok: true, value: { name: "general", confidence: 1.0 } };
+  }
+
+  let intent_list = "";
+  for (name in keys(intents)) {
+    intent_list = intent_list + "- " + name + ": " + intents[name].description + "\n";
+  }
+
+  let prompt = "Classify the user intent.\n\n" +
+               "Available intents:\n" + intent_list + "\n" +
+               "User message: \"" + text + "\"\n\n" +
+               "Intent name (one word):";
+
+  let intent_name = lowercase(trim(llm.generate(prompt)));
+
+  if (intents[intent_name] == nil) {
+    intent_name = "unknown";
+  }
+
+  return {
+    ok: true,
+    value: {
+      name: intent_name,
+      confidence: 0.85
+    }
+  };
+}
+
+// Extract entities from text
+pub fun extract_entities(llm, text) {
+  let prompt = "Extract entities from this text.\n\n" +
+               "Text: \"" + text + "\"\n\n" +
+               "Return as JSON with entity types as keys (e.g., name, date, location, number):";
+
+  let response = trim(llm.generate(prompt));
+  let entities = {};
+
+  let json_start = index_of(response, "{");
+  if (json_start >= 0) {
+    let json_end = last_index_of(response, "}");
+    if (json_end > json_start) {
+      entities = json_decode(substring(response, json_start, json_end + 1));
+    }
+  }
+
+  return { ok: true, value: entities };
+}
+
+// Detect emotion from text
+pub fun detect_emotion(llm, text) {
+  let prompt = "Detect the primary emotion in this text.\n\n" +
+               "Text: \"" + text + "\"\n\n" +
+               "Emotions: neutral, happy, sad, angry, fearful, surprised\n" +
+               "Return format: emotion_name intensity(0-1)";
+
+  let response = lowercase(trim(llm.generate(prompt)));
+
+  let emotion = config.emotion_neutral();
+  let intensity = 0.5;
+
+  if (contains(response, "happy")) { emotion = config.emotion_happy(); }
+  else if (contains(response, "sad")) { emotion = config.emotion_sad(); }
+  else if (contains(response, "angry")) { emotion = config.emotion_angry(); }
+  else if (contains(response, "fear")) { emotion = config.emotion_fearful(); }
+  else if (contains(response, "surprise")) { emotion = config.emotion_surprised(); }
+
+  let numbers = regex_match(response, "\\d+\\.?\\d*");
+  if (len(numbers) > 0) {
+    intensity = parse_float(numbers[0]);
+    if (intensity > 1) { intensity = intensity / 100; }
+  }
+
+  emotion = config.with_intensity(emotion, intensity);
+
+  return { ok: true, value: emotion };
+}
+
+// Get conversation summary
+pub fun summarize_conversation(manager) {
+  let context = build_context(manager);
+
+  let prompt = "Summarize this conversation in 2-3 sentences:\n\n" + context;
+
+  return {
+    ok: true,
+    value: trim(manager.llm.generate(prompt))
+  };
+}
+
+// Reset conversation
+pub fun reset_conversation(manager) {
+  manager.state = config.conversation_state();
+  return manager;
+}
+
+// Helper functions
+fun build_context(manager) {
+  let context = "";
+  let recent_turns = take_last(manager.state.turns, 10);
+
+  for (turn in recent_turns) {
+    context = context + turn.role + ": " + turn.content + "\n";
+  }
+
+  return context;
+}
+
+fun take_last(list, n) {
+  if (len(list) <= n) { return list; }
+  return slice(list, len(list) - n, len(list));
+}
+
+fun merge(obj1, obj2) {
+  let result = {};
+  for (key in keys(obj1)) { result[key] = obj1[key]; }
+  for (key in keys(obj2)) { result[key] = obj2[key]; }
+  return result;
+}

@@ -1,0 +1,79 @@
+module std.agents.advanced.security.responder;
+
+use std.agents.advanced.security.config;
+
+pub fun incident_responder(llm) {
+  return {
+    llm: llm,
+    playbooks: {},
+    auto_actions: [],
+    notify_handlers: []
+  };
+}
+
+pub fun with_playbook(responder, alert_type, playbook) {
+  responder.playbooks[alert_type] = playbook;
+  return responder;
+}
+
+pub fun add_auto_action(responder, action) {
+  push(responder.auto_actions, action);
+  return responder;
+}
+
+pub fun add_notification_handler(responder, handler) {
+  push(responder.notify_handlers, handler);
+  return responder;
+}
+
+pub fun respond_to_alert(responder, alert) {
+  let actions = [];
+  let playbook = responder.playbooks[alert.alert_type];
+
+  if (playbook != nil) {
+    for (step in playbook.steps) {
+      let result = execute_step(step, alert);
+      push(actions, result);
+    }
+  }
+
+  for (action in responder.auto_actions) {
+    if (action.condition(alert)) {
+      push(actions, action.execute(alert));
+    }
+  }
+
+  notify_handlers(responder.notify_handlers, alert, actions);
+
+  return {
+    ok: true,
+    value: {
+      alert_id: alert.id,
+      actions: actions,
+      status: "responded"
+    }
+  };
+}
+
+pub fun generate_response_plan(responder, alert) {
+  let prompt = "Create an incident response plan for this alert:\n\n" +
+               "Type: " + alert.alert_type + "\n" +
+               "Severity: " + alert.threat_level.level + "\n" +
+               "Description: " + alert.description + "\n\n" +
+               "Provide ordered steps with owners.";
+
+  return { ok: true, value: trim(responder.llm.generate(prompt)) };
+}
+
+fun execute_step(step, alert) {
+  if (step.action != nil) {
+    return step.action(alert);
+  }
+  return { step: step.name, status: "skipped" };
+}
+
+fun notify_handlers(handlers, alert, actions) {
+  for (handler in handlers) {
+    handler(alert, actions);
+  }
+}

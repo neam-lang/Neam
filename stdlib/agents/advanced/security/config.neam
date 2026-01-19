@@ -1,0 +1,43 @@
+module std.agents.advanced.security.config;
+
+// Threat levels
+pub fun threat_critical() { return { level: "Critical", priority: 1, auto_respond: true }; }
+pub fun threat_high() { return { level: "High", priority: 2, auto_respond: true }; }
+pub fun threat_medium() { return { level: "Medium", priority: 3, auto_respond: false }; }
+pub fun threat_low() { return { level: "Low", priority: 4, auto_respond: false }; }
+pub fun threat_info() { return { level: "Info", priority: 5, auto_respond: false }; }
+
+// Alert types
+pub fun alert_type_intrusion() { return "Intrusion"; }
+pub fun alert_type_malware() { return "Malware"; }
+pub fun alert_type_data_exfil() { return "DataExfiltration"; }
+pub fun alert_type_brute_force() { return "BruteForce"; }
+pub fun alert_type_anomaly() { return "Anomaly"; }
+pub fun alert_type_policy() { return "PolicyViolation"; }
+
+// SIEM integrations
+pub fun siem_splunk() { return { kind: "Splunk", api_version: "v2" }; }
+pub fun siem_elastic() { return { kind: "Elastic", api_version: "8.x" }; }
+pub fun siem_sentinel() { return { kind: "AzureSentinel", api_version: "v1" }; }
+
+// Security alert
+pub fun security_alert(id, alert_type, threat_level, source, description) {
+  return {
+    id: id,
+    alert_type: alert_type,
+    threat_level: threat_level,
+    source: source,
+    description: description,
+    timestamp: now(),
+    indicators: [],
+    status: "open",
+    assigned_to: nil
+  };
+}
+
+// Error types
+pub fun security_error(code, message) { return { kind: "SecurityError", code: code, message: message }; }
+pub fun detection_error(message) { return security_error("DETECTION", message); }
+pub fun response_error(message) { return security_error("RESPONSE", message); }
+pub fun analysis_error(message) { return security_error("ANALYSIS", message); }
+pub fun scan_error(message) { return security_error("SCAN", message); }

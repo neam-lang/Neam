@@ -1,0 +1,79 @@
+// Coder agent configuration types
+
+module std.agents.advanced.coder.config;
+
+// Supported programming languages
+pub fun language_typescript() { return { kind: "TypeScript", extensions: [".ts", ".tsx"] }; }
+pub fun language_javascript() { return { kind: "JavaScript", extensions: [".js", ".jsx"] }; }
+pub fun language_python() { return { kind: "Python", extensions: [".py"] }; }
+pub fun language_rust() { return { kind: "Rust", extensions: [".rs"] }; }
+pub fun language_go() { return { kind: "Go", extensions: [".go"] }; }
+pub fun language_java() { return { kind: "Java", extensions: [".java"] }; }
+pub fun language_csharp() { return { kind: "CSharp", extensions: [".cs"] }; }
+pub fun language_neam() { return { kind: "Neam", extensions: [".neam"] }; }
+
+// Code generation modes
+pub fun mode_generate() { return { kind: "Generate" }; }
+pub fun mode_complete() { return { kind: "Complete" }; }
+pub fun mode_edit() { return { kind: "Edit" }; }
+pub fun mode_refactor() { return { kind: "Refactor" }; }
+
+// Test frameworks
+pub fun test_framework_jest() { return { kind: "Jest", language: "typescript" }; }
+pub fun test_framework_pytest() { return { kind: "Pytest", language: "python" }; }
+pub fun test_framework_cargo() { return { kind: "CargoTest", language: "rust" }; }
+pub fun test_framework_go() { return { kind: "GoTest", language: "go" }; }
+
+// Code quality settings
+pub fun quality_settings_default() {
+  return {
+    max_function_length: 50,
+    max_file_length: 500,
+    max_complexity: 10,
+    require_types: true,
+    require_docs: false,
+    lint_enabled: true
+  };
+}
+
+// Repository context
+pub fun repo_context(root_path, language) {
+  return {
+    root_path: root_path,
+    language: language,
+    file_tree: nil,
+    dependencies: [],
+    config_files: []
+  };
+}
+
+pub fun with_file_tree(ctx, tree) {
+  ctx.file_tree = tree;
+  return ctx;
+}
+
+pub fun with_dependencies(ctx, deps) {
+  ctx.dependencies = deps;
+  return ctx;
+}
+
+// Error types
+pub fun coder_error(code, message, detail) {
+  return { kind: "CoderError", code: code, message: message, detail: detail };
+}
+
+pub fun syntax_error(file, line, message) {
+  return coder_error("SYNTAX", message, { file: file, line: line });
+}
+
+pub fun type_error(file, line, expected, actual) {
+  return coder_error("TYPE", "Type mismatch", { file: file, line: line, expected: expected, actual: actual });
+}
+
+pub fun test_failure(test_name, expected, actual) {
+  return coder_error("TEST_FAILURE", "Test failed: " + test_name, { expected: expected, actual: actual });
+}
+
+pub fun lint_error(file, line, rule, message) {
+  return coder_error("LINT", message, { file: file, line: line, rule: rule });
+}

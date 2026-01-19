@@ -1,0 +1,22 @@
+// Memory agent tests
+
+module std.agents.advanced.testing.memory_test;
+
+use std.agents.advanced.memory.semantic;
+
+fun mock_embedder() {
+  return {
+    embed: fun(text) {
+      return [1.0, 0.0, len(text) * 1.0];
+    }
+  };
+}
+
+pub fun test_semantic_store_and_retrieve() {
+  let store = semantic.semantic_store(mock_embedder());
+  let stored = semantic.store_fact(store, "The sky is blue", "nature", {});
+  if (!stored.ok) { return false; }
+
+  let results = semantic.retrieve_similar(store, "sky", 1);
+  return results.ok && len(results.value) == 1;
+}

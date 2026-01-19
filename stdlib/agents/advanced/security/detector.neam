@@ -1,0 +1,86 @@
+module std.agents.advanced.security.detector;
+
+use std.agents.advanced.security.config;
+
+pub fun threat_detector(llm) {
+  return { llm: llm, signatures: [], anomaly_baseline: {}, detection_rules: [] };
+}
+
+pub fun add_signature(detector, signature) {
+  push(detector.signatures, signature);
+  return detector;
+}
+
+pub fun add_rule(detector, rule) {
+  push(detector.detection_rules, rule);
+  return detector;
+}
+
+pub fun detect_threats(detector, events) {
+  let alerts = [];
+
+  for (event in events) {
+    let sig_match = match_signatures(detector.signatures, event);
+    if (sig_match != nil) {
+      push(alerts, create_alert(sig_match, event));
+    }
+
+    let anomaly = detect_anomaly(detector, event);
+    if (anomaly != nil) {
+      push(alerts, anomaly);
+    }
+
+    let rule_match = apply_rules(detector.detection_rules, event);
+    if (rule_match != nil) {
+      push(alerts, create_alert(rule_match, event));
+    }
+  }
+
+  return { ok: true, value: alerts };
+}
+
+pub fun detect_anomaly(detector, event) {
+  let baseline = detector.anomaly_baseline[event.source];
+  if (baseline == nil) { return nil; }
+
+  let deviation = calculate_deviation(event, baseline);
+  if (deviation > baseline.threshold) {
+    return config.security_alert(
+      generate_id(), config.alert_type_anomaly(), config.threat_medium(),
+      event.source, "Anomalous behavior detected: " + str(deviation) + " std devs from baseline"
+    );
+  }
+  return nil;
+}
+
+fun match_signatures(signatures, event) {
+  for (sig in signatures) {
+    if (regex_match(event.raw, sig.pattern)) {
+      return sig;
+    }
+  }
+  return nil;
+}
+
+fun apply_rules(rules, event) {
+  for (rule in rules) {
+    if (rule.condition(event)) {
+      return rule;
+    }
+  }
+  return nil;
+}
+
+fun create_alert(match, event) {
+  return config.security_alert(
+    generate_id(), match.alert_type || config.alert_type_intrusion(),
+    match.threat_level || config.threat_medium(), event.source, match.description
+  );
+}
+
+fun calculate_deviation(event, baseline) {
+  if (baseline.std == 0) { return 0; }
+  return abs(event.value - baseline.mean) / baseline.std;
+}
+
+fun generate_id() { return "alert_" + str(now()) + "_" + str(random_int(10000)); }

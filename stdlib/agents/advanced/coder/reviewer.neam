@@ -1,0 +1,299 @@
+// Code review functionality
+
+module std.agents.advanced.coder.reviewer;
+
+use std.agents.advanced.coder.config;
+
+// Review request
+pub fun review_request(code, language) {
+  return {
+    code: code,
+    language: language,
+    review_types: ["style", "bugs", "performance", "security"],
+    severity_threshold: "low"
+  };
+}
+
+pub fun with_review_types(req, types) {
+  req.review_types = types;
+  return req;
+}
+
+pub fun with_severity_threshold(req, threshold) {
+  req.severity_threshold = threshold;
+  return req;
+}
+
+// Review comment
+pub fun review_comment(line, severity, category, message, suggestion) {
+  return {
+    line: line,
+    severity: severity,
+    category: category,
+    message: message,
+    suggestion: suggestion
+  };
+}
+
+// Review result
+pub fun review_result(comments, score, summary) {
+  return {
+    comments: comments,
+    score: score,
+    summary: summary,
+    passed: score >= 70
+  };
+}
+
+// Perform code review
+pub fun review_code(llm, request) {
+  let comments = [];
+
+  for (review_type in request.review_types) {
+    let type_comments = review_by_type(llm, request.code, review_type, request.language);
+    comments = concat(comments, type_comments);
+  }
+
+  let filtered = filter_by_severity(comments, request.severity_threshold);
+  let score = calculate_score(filtered);
+  let summary = generate_summary(llm, request.code, filtered);
+
+  return {
+    ok: true,
+    value: review_result(filtered, score, summary)
+  };
+}
+
+// Review by specific type
+pub fun review_by_type(llm, code, review_type, language) {
+  let prompt = build_review_prompt(code, review_type, language);
+  let response = llm.generate(prompt);
+  return parse_review_comments(response, review_type);
+}
+
+// Review pull request diff
+pub fun review_diff(llm, diff, language) {
+  let prompt = "Review this " + language.kind + " code diff:\n\n" +
+               "```diff\n" + diff + "\n```\n\n" +
+               "Provide feedback on:\n" +
+               "1. Code quality issues\n" +
+               "2. Potential bugs\n" +
+               "3. Suggestions for improvement\n" +
+               "Format: [LINE] [SEVERITY] [CATEGORY]: message";
+
+  let response = llm.generate(prompt);
+  let comments = parse_review_comments(response, "diff");
+
+  return {
+    ok: true,
+    value: {
+      comments: comments,
+      approve: len(filter_by_severity(comments, "high")) == 0
+    }
+  };
+}
+
+// Check code style
+pub fun check_style(llm, code, style_guide, language) {
+  let prompt = "Check if this " + language.kind + " code follows the style guide.\n\n" +
+               "Style guide:\n" + style_guide + "\n\n" +
+               "Code:\n```\n" + code + "\n```\n\n" +
+               "List style violations:";
+
+  let response = llm.generate(prompt);
+
+  return {
+    ok: true,
+    value: {
+      violations: parse_style_violations(response),
+      compliant: !contains(lowercase(response), "violation")
+    }
+  };
+}
+
+// Security review
+pub fun security_review(llm, code, language) {
+  let prompt = "Perform a security review of this " + language.kind + " code:\n\n" +
+               "```\n" + code + "\n```\n\n" +
+               "Check for:\n" +
+               "- SQL injection\n" +
+               "- XSS vulnerabilities\n" +
+               "- Command injection\n" +
+               "- Insecure data handling\n" +
+               "- Authentication/authorization issues\n" +
+               "- Sensitive data exposure\n\n" +
+               "List all security issues with severity:";
+
+  let response = llm.generate(prompt);
+  let issues = parse_security_issues(response);
+
+  return {
+    ok: true,
+    value: {
+      issues: issues,
+      critical_count: count_severity(issues, "critical"),
+      high_count: count_severity(issues, "high"),
+      secure: count_severity(issues, "critical") == 0 && count_severity(issues, "high") == 0
+    }
+  };
+}
+
+// Performance review
+pub fun performance_review(llm, code, language) {
+  let prompt = "Analyze performance of this " + language.kind + " code:\n\n" +
+               "```\n" + code + "\n```\n\n" +
+               "Check for:\n" +
+               "- Time complexity issues\n" +
+               "- Memory leaks\n" +
+               "- Unnecessary allocations\n" +
+               "- N+1 query problems\n" +
+               "- Inefficient algorithms\n\n" +
+               "List performance issues with suggestions:";
+
+  let response = llm.generate(prompt);
+
+  return {
+    ok: true,
+    value: {
+      issues: parse_performance_issues(response),
+      suggestions: extract_performance_suggestions(response)
+    }
+  };
+}
+
+// Helper functions
+fun build_review_prompt(code, review_type, language) {
+  let base = "Review this " + language.kind + " code for " + review_type + " issues:\n\n" +
+             "```\n" + code + "\n```\n\n";
+
+  if (review_type == "style") {
+    return base + "Check naming conventions, formatting, and code organization.";
+  } else if (review_type == "bugs") {
+    return base + "Look for potential bugs, logic errors, and edge cases.";
+  } else if (review_type == "performance") {
+    return base + "Identify performance bottlenecks and optimization opportunities.";
+  } else if (review_type == "security") {
+    return base + "Find security vulnerabilities and unsafe practices.";
+  }
+
+  return base + "Provide comprehensive feedback.";
+}
+
+fun parse_review_comments(response, category) {
+  let comments = [];
+  let lines = split(response, "\n");
+
+  for (line in lines) {
+    let parsed = parse_comment_line(line, category);
+    if (parsed != nil) {
+      push(comments, parsed);
+    }
+  }
+
+  return comments;
+}
+
+fun parse_comment_line(line, default_category) {
+  let trimmed = trim(line);
+  if (len(trimmed) < 10) { return nil; }
+
+  let line_num = 0;
+  let line_match = regex_match(trimmed, "^\\[?(\\d+)\\]?");
+  if (len(line_match) > 0) {
+    line_num = parse_int(line_match[0]);
+  }
+
+  let severity = "low";
+  let lower = lowercase(trimmed);
+  if (contains(lower, "critical") || contains(lower, "severe")) { severity = "critical"; }
+  else if (contains(lower, "high") || contains(lower, "important")) { severity = "high"; }
+  else if (contains(lower, "medium") || contains(lower, "moderate")) { severity = "medium"; }
+
+  return review_comment(line_num, severity, default_category, trimmed, "");
+}
+
+fun filter_by_severity(comments, threshold) {
+  let levels = { "low": 1, "medium": 2, "high": 3, "critical": 4 };
+  let threshold_level = levels[threshold] || 1;
+
+  let filtered = [];
+  for (comment in comments) {
+    let comment_level = levels[comment.severity] || 1;
+    if (comment_level >= threshold_level) {
+      push(filtered, comment);
+    }
+  }
+
+  return filtered;
+}
+
+fun calculate_score(comments) {
+  if (len(comments) == 0) { return 100; }
+
+  let deductions = 0;
+  for (comment in comments) {
+    if (comment.severity == "critical") { deductions = deductions + 25; }
+    else if (comment.severity == "high") { deductions = deductions + 15; }
+    else if (comment.severity == "medium") { deductions = deductions + 5; }
+    else { deductions = deductions + 2; }
+  }
+
+  return max(0, 100 - deductions);
+}
+
+fun generate_summary(llm, code, comments) {
+  if (len(comments) == 0) {
+    return "Code looks good! No significant issues found.";
+  }
+
+  let issues = "";
+  for (comment in comments) {
+    issues = issues + "- " + comment.message + "\n";
+  }
+
+  let prompt = "Summarize these code review findings in 2-3 sentences:\n" + issues;
+  return trim(llm.generate(prompt));
+}
+
+fun parse_style_violations(response) {
+  let violations = [];
+  let lines = split(response, "\n");
+
+  for (line in lines) {
+    if (starts_with(trim(line), "-") || starts_with(trim(line), "*")) {
+      push(violations, trim(regex_replace(line, "^[-*]\\s*", "")));
+    }
+  }
+
+  return violations;
+}
+
+fun parse_security_issues(response) {
+  return parse_review_comments(response, "security");
+}
+
+fun parse_performance_issues(response) {
+  return parse_review_comments(response, "performance");
+}
+
+fun extract_performance_suggestions(response) {
+  let suggestions = [];
+  let lower = lowercase(response);
+
+  if (contains(lower, "cache")) { push(suggestions, "Consider caching"); }
+  if (contains(lower, "index")) { push(suggestions, "Add database index"); }
+  if (contains(lower, "batch")) { push(suggestions, "Use batch processing"); }
+  if (contains(lower, "async")) { push(suggestions, "Make asynchronous"); }
+
+  return suggestions;
+}
+
+fun count_severity(issues, severity) {
+  let count = 0;
+  for (issue in issues) {
+    if (issue.severity == severity) {
+      count = count + 1;
+    }
+  }
+  return count;
+}

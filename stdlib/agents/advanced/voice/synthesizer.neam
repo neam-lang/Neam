@@ -1,0 +1,182 @@
+// Text-to-speech functionality
+
+module std.agents.advanced.voice.synthesizer;
+
+use std.agents.advanced.voice.config;
+
+// Synthesis request
+pub fun synthesis_request(text) {
+  return {
+    text: text,
+    voice_id: nil,
+    engine: config.tts_elevenlabs(),
+    language: config.lang_en_us(),
+    settings: config.voice_settings_default(),
+    output_format: "mp3"
+  };
+}
+
+pub fun with_voice_id(req, voice_id) {
+  req.voice_id = voice_id;
+  return req;
+}
+
+pub fun with_tts_engine(req, engine) {
+  req.engine = engine;
+  return req;
+}
+
+pub fun with_synthesis_language(req, lang) {
+  req.language = lang;
+  return req;
+}
+
+pub fun with_voice_settings(req, settings) {
+  req.settings = settings;
+  return req;
+}
+
+pub fun with_output_format(req, format) {
+  req.output_format = format;
+  return req;
+}
+
+// Synthesis result
+pub fun synthesis_result(audio_data, duration_ms, format) {
+  return {
+    audio: audio_data,
+    duration_ms: duration_ms,
+    format: format,
+    voice_id: nil,
+    characters_used: 0
+  };
+}
+
+// Synthesize text to speech
+pub fun synthesize(engine_client, request) {
+  let response = engine_client.synthesize({
+    text: request.text,
+    voice_id: request.voice_id,
+    language: request.language.code,
+    speed: request.settings.speed,
+    pitch: request.settings.pitch,
+    stability: request.settings.stability,
+    output_format: request.output_format
+  });
+
+  if (response.error != nil) {
+    return { ok: false, error: config.synthesis_error(response.error) };
+  }
+
+  let result = synthesis_result(
+    response.audio,
+    response.duration_ms,
+    request.output_format
+  );
+
+  result.voice_id = request.voice_id;
+  result.characters_used = len(request.text);
+
+  return { ok: true, value: result };
+}
+
+// Streaming synthesis
+pub fun create_synthesis_stream(engine_client, voice_id, settings) {
+  return {
+    kind: "SynthesisStream",
+    client: engine_client,
+    voice_id: voice_id,
+    settings: settings,
+    total_characters: 0
+  };
+}
+
+pub fun stream_text(stream, text_chunk) {
+  let audio = stream.client.stream_synthesis(text_chunk, stream.voice_id);
+  stream.total_characters = stream.total_characters + len(text_chunk);
+
+  return {
+    ok: true,
+    value: {
+      audio: audio.data,
+      duration_ms: audio.duration_ms
+    }
+  };
+}
+
+pub fun end_synthesis_stream(stream) {
+  let final_audio = stream.client.end_synthesis_stream();
+  return {
+    ok: true,
+    value: {
+      audio: final_audio.data,
+      total_duration_ms: final_audio.total_duration_ms,
+      total_characters: stream.total_characters
+    }
+  };
+}
+
+// Clone voice from sample
+pub fun clone_voice(engine_client, name, audio_samples) {
+  let response = engine_client.clone_voice({
+    name: name,
+    samples: audio_samples
+  });
+
+  if (response.error != nil) {
+    return { ok: false, error: config.synthesis_error(response.error) };
+  }
+
+  return {
+    ok: true,
+    value: {
+      voice_id: response.voice_id,
+      name: name,
+      sample_count: len(audio_samples)
+    }
+  };
+}
+
+// List available voices
+pub fun list_voices(engine_client) {
+  let response = engine_client.list_voices();
+
+  if (response.error != nil) {
+    return { ok: false, error: config.synthesis_error(response.error) };
+  }
+
+  return {
+    ok: true,
+    value: {
+      voices: response.voices,
+      count: len(response.voices)
+    }
+  };
+}
+
+// Add emotion to speech via SSML
+pub fun with_emotion(text, emotion) {
+  let intensity_word = "medium";
+  if (emotion.intensity > 0.7) { intensity_word = "high"; }
+  else if (emotion.intensity < 0.3) { intensity_word = "low"; }
+
+  return "<speak><emotion name=\"" + emotion.kind + "\" intensity=\"" +
+         intensity_word + "\">" + text + "</emotion></speak>";
+}
+
+// Add pauses to text
+pub fun with_pauses(text, pause_config) {
+  let result = text;
+
+  if (pause_config.after_sentence != nil) {
+    result = regex_replace(result, "\\. ", ". <break time=\"" +
+                           str(pause_config.after_sentence) + "ms\"/> ");
+  }
+
+  if (pause_config.after_comma != nil) {
+    result = regex_replace(result, ", ", ", <break time=\"" +
+                           str(pause_config.after_comma) + "ms\"/> ");
+  }
+
+  return result;
+}
