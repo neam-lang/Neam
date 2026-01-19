@@ -1,0 +1,117 @@
+// Risk management module
+
+module std.agents.advanced.trading.risk;
+
+use std.agents.advanced.trading.config;
+
+pub fun risk_manager(settings) {
+  return {
+    kind: "RiskManager",
+    settings: settings || config.risk_settings_default(),
+    daily_pnl: 0,
+    peak_equity: 0,
+    current_drawdown: 0
+  };
+}
+
+pub fun check_order(manager, order, portfolio) {
+  let checks = [];
+
+  // Position size check
+  let position_value = order.quantity * (order.order_type.price || get_market_price(order.symbol));
+  let position_pct = position_value / portfolio.equity;
+
+  if (position_pct > manager.settings.max_position_size) {
+    push(checks, {
+      passed: false,
+      rule: "max_position_size",
+      message: "Position size " + str(position_pct * 100) + "% exceeds limit " + str(manager.settings.max_position_size * 100) + "%"
+    });
+  } else {
+    push(checks, { passed: true, rule: "max_position_size" });
+  }
+
+  // Drawdown check
+  if (manager.current_drawdown > manager.settings.max_drawdown) {
+    push(checks, {
+      passed: false,
+      rule: "max_drawdown",
+      message: "Current drawdown " + str(manager.current_drawdown * 100) + "% exceeds limit"
+    });
+  } else {
+    push(checks, { passed: true, rule: "max_drawdown" });
+  }
+
+  let all_passed = true;
+  for (check in checks) {
+    if (!check.passed) {
+      all_passed = false;
+      break;
+    }
+  }
+
+  return { ok: true, value: { approved: all_passed, checks: checks } };
+}
+
+pub fun calculate_position_size(manager, symbol, price, portfolio) {
+  let max_value = portfolio.equity * manager.settings.max_position_size;
+  let max_quantity = floor(max_value / price);
+
+  // Adjust for stop loss
+  let risk_per_share = price * manager.settings.stop_loss_pct;
+  let max_risk = portfolio.equity * 0.02; // 2% risk per trade
+  let risk_based_quantity = floor(max_risk / risk_per_share);
+
+  return min(max_quantity, risk_based_quantity);
+}
+
+pub fun calculate_stop_loss(manager, entry_price, side) {
+  if (side == config.side_buy()) {
+    return entry_price * (1 - manager.settings.stop_loss_pct);
+  } else {
+    return entry_price * (1 + manager.settings.stop_loss_pct);
+  }
+}
+
+pub fun calculate_take_profit(manager, entry_price, side) {
+  if (side == config.side_buy()) {
+    return entry_price * (1 + manager.settings.take_profit_pct);
+  } else {
+    return entry_price * (1 - manager.settings.take_profit_pct);
+  }
+}
+
+pub fun update_equity(manager, equity) {
+  if (equity > manager.peak_equity) {
+    manager.peak_equity = equity;
+  }
+
+  manager.current_drawdown = (manager.peak_equity - equity) / manager.peak_equity;
+
+  return manager;
+}
+
+pub fun get_risk_metrics(manager, portfolio) {
+  return {
+    current_drawdown: manager.current_drawdown,
+    max_drawdown_limit: manager.settings.max_drawdown,
+    daily_pnl: manager.daily_pnl,
+    position_count: len(keys(portfolio.positions)),
+    total_exposure: calculate_total_exposure(portfolio)
+  };
+}
+
+// Helper functions
+fun get_market_price(symbol) {
+  // Would call market data API
+  return 100;
+}
+
+fun calculate_total_exposure(portfolio) {
+  let total = 0;
+  for (symbol in keys(portfolio.positions)) {
+    let pos = portfolio.positions[symbol];
+    total = total + abs(pos.quantity * pos.current_price);
+  }
+  return total;
+}

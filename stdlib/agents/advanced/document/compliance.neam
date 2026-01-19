@@ -1,0 +1,212 @@
+// Compliance checking module
+
+module std.agents.advanced.document.compliance;
+
+use std.agents.advanced.document.config;
+
+pub fun compliance_checker(llm) {
+  return {
+    kind: "ComplianceChecker",
+    llm: llm,
+    frameworks: {},
+    rules: []
+  };
+}
+
+pub fun register_framework(checker, framework, rules) {
+  checker.frameworks[framework.kind] = {
+    framework: framework,
+    rules: rules || []
+  };
+  return checker;
+}
+
+pub fun check_gdpr(checker, content) {
+  let rules = [
+    { id: "gdpr_1", name: "Data minimization", check: check_data_minimization },
+    { id: "gdpr_2", name: "Consent requirements", check: check_consent },
+    { id: "gdpr_3", name: "Right to erasure", check: check_erasure_rights },
+    { id: "gdpr_4", name: "Data portability", check: check_portability }
+  ];
+
+  return check_framework(checker, content, config.compliance_gdpr(), rules);
+}
+
+pub fun check_hipaa(checker, content) {
+  let rules = [
+    { id: "hipaa_1", name: "PHI protection", check: check_phi_protection },
+    { id: "hipaa_2", name: "Access controls", check: check_access_controls },
+    { id: "hipaa_3", name: "Audit trails", check: check_audit_trails }
+  ];
+
+  return check_framework(checker, content, config.compliance_hipaa(), rules);
+}
+
+pub fun check_pci(checker, content) {
+  let rules = [
+    { id: "pci_1", name: "Card data protection", check: check_card_data },
+    { id: "pci_2", name: "Encryption requirements", check: check_encryption },
+    { id: "pci_3", name: "Access restrictions", check: check_access_restrictions }
+  ];
+
+  return check_framework(checker, content, config.compliance_pci(), rules);
+}
+
+pub fun check_framework(checker, content, framework, rules) {
+  let violations = [];
+  let passed = [];
+
+  for (rule in rules) {
+    let result = rule.check(checker.llm, content);
+    if (result.violation) {
+      push(violations, {
+        rule_id: rule.id,
+        rule_name: rule.name,
+        description: result.description,
+        severity: result.severity || "medium"
+      });
+    } else {
+      push(passed, rule.id);
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      framework: framework.kind,
+      compliant: len(violations) == 0,
+      violations: violations,
+      passed_rules: passed,
+      total_rules: len(rules)
+    }
+  };
+}
+
+pub fun generate_compliance_report(checker, content, frameworks) {
+  let reports = [];
+
+  for (framework in frameworks) {
+    let result = nil;
+    if (framework.kind == "GDPR") {
+      result = check_gdpr(checker, content);
+    } else if (framework.kind == "HIPAA") {
+      result = check_hipaa(checker, content);
+    } else if (framework.kind == "PCI-DSS") {
+      result = check_pci(checker, content);
+    }
+
+    if (result != nil && result.ok) {
+      push(reports, result.value);
+    }
+  }
+
+  let overall_compliant = true;
+  for (report in reports) {
+    if (!report.compliant) {
+      overall_compliant = false;
+      break;
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      overall_compliant: overall_compliant,
+      framework_reports: reports,
+      generated_at: now()
+    }
+  };
+}
+
+// Rule check functions
+fun check_data_minimization(llm, content) {
+  let prompt = "Does this document collect only necessary data? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Data minimization check"
+  };
+}
+
+fun check_consent(llm, content) {
+  let prompt = "Does this document properly address user consent? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Consent requirements check"
+  };
+}
+
+fun check_erasure_rights(llm, content) {
+  let prompt = "Does this document mention right to erasure/deletion? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Right to erasure check"
+  };
+}
+
+fun check_portability(llm, content) {
+  let prompt = "Does this document address data portability? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Data portability check"
+  };
+}
+
+fun check_phi_protection(llm, content) {
+  let prompt = "Does this document properly protect PHI? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "PHI protection check",
+    severity: "high"
+  };
+}
+
+fun check_access_controls(llm, content) {
+  let prompt = "Does this document specify proper access controls? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Access controls check"
+  };
+}
+
+fun check_audit_trails(llm, content) {
+  let prompt = "Does this document mention audit trail requirements? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Audit trails check"
+  };
+}
+
+fun check_card_data(llm, content) {
+  let prompt = "Does this document properly protect card data? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Card data protection check",
+    severity: "critical"
+  };
+}
+
+fun check_encryption(llm, content) {
+  let prompt = "Does this document specify encryption requirements? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Encryption requirements check"
+  };
+}
+
+fun check_access_restrictions(llm, content) {
+  let prompt = "Does this document specify proper access restrictions? Answer: violation/compliant\n\n" + content;
+  let response = lowercase(llm.generate(prompt));
+  return {
+    violation: contains(response, "violation"),
+    description: "Access restrictions check"
+  };
+}
