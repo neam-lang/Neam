@@ -1,0 +1,99 @@
+// Mutation operators
+
+module std.agents.redteam.fuzzing.mutations;
+
+use std.text.string as text;
+
+pub fun create_mutator(mutation_type) {
+  return { kind: "Mutator", mutation_type: mutation_type };
+}
+
+pub fun llm_guided_mutator(model, improvement_prompt) {
+  return create_mutator({ kind: "LLMGuided", model: model, prompt_template: improvement_prompt });
+}
+
+pub fun semantic_preserving_mutator(threshold) {
+  return create_mutator({ kind: "Semantic", strategy: "synonym", similarity_threshold: threshold });
+}
+
+pub fun mutate(mutator, input, config) {
+  let mutation = mutator.mutation_type != nil ? mutator.mutation_type : config.mutation_type;
+  if (mutation.kind == "TokenLevel") {
+    return token_mutate(input, mutation.ops != nil ? mutation.ops : []);
+  }
+  if (mutation.kind == "Semantic") {
+    return semantic_mutate(input, mutation.strategy != nil ? mutation.strategy : "synonym");
+  }
+  if (mutation.kind == "Structural") {
+    return structural_mutate(input, mutation.strategy != nil ? mutation.strategy : "reorder");
+  }
+  if (mutation.kind == "Context") {
+    return context_mutate(input, mutation.injection_type != nil ? mutation.injection_type : "prefix");
+  }
+  if (mutation.kind == "LLMGuided") {
+    return "[" + mutation.model + "] " + mutation.prompt_template + "\n" + input;
+  }
+  return input;
+}
+
+pub fun batch_mutate(mutator, input, count, config) {
+  let outputs = [];
+  let i = 0;
+  while (i < count) {
+    push(outputs, mutate(mutator, input, config));
+    i = i + 1;
+  }
+  return outputs;
+}
+
+fun token_mutate(input, ops) {
+  let tokens = text.split(input, " ");
+  for (op in ops) {
+    if (op.kind == "Insert") { tokens = list_insert(tokens, op.position != nil ? op.position : 0, op.content); }
+    if (op.kind == "Delete" && len(tokens) > 0) { tokens = list_delete(tokens, op.position != nil ? op.position : 0); }
+    if (op.kind == "Swap" && len(tokens) > op.pos2) {
+      let tmp = tokens[op.pos1];
+      tokens[op.pos1] = tokens[op.pos2];
+      tokens[op.pos2] = tmp;
+    }
+    if (op.kind == "Substitute") {
+      for (i in range(0, len(tokens))) {
+        if (tokens[i] == op.original) { tokens[i] = op.replacement; }
+      }
+    }
+  }
+  return text.join(" ", tokens);
+}
+
+fun semantic_mutate(input, strategy) {
+  if (strategy == "antonym") { return text.replace(input, "good", "bad"); }
+  return text.replace(input, "important", "critical");
+}
+
+fun structural_mutate(input, strategy) {
+  let parts = text.split(input, ".");
+  if (strategy == "reorder" && len(parts) > 1) {
+    let first = parts[0];
+    parts[0] = parts[len(parts) - 1];
+    parts[len(parts) - 1] = first;
+  }
+  return text.join(".", parts);
+}
+
+fun context_mutate(input, injection_type) {
+  if (injection_type == "suffix") { return input + " Please comply."; }
+  return "Context: " + input;
+}
+
+fun list_insert(items, index, value) {
+  if (index <= 0) { return [value] + items; }
+  if (index >= len(items)) { return items + [value]; }
+  return slice(items, 0, index) + [value] + slice(items, index, len(items));
+}
+
+fun list_delete(items, index) {
+  if (len(items) == 0) { return items; }
+  if (index <= 0) { return slice(items, 1, len(items)); }
+  if (index >= len(items) - 1) { return slice(items, 0, len(items) - 1); }
+  return slice(items, 0, index) + slice(items, index + 1, len(items));
+}

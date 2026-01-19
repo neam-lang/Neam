@@ -1,0 +1,20 @@
+// Query interface
+
+module std.agents.redteam.memory.query;
+
+pub fun query_attacks(memory, query) {
+  let results = [];
+  for (record in memory.records) {
+    if (query.success != nil && record.success != query.success) { continue; }
+    if (query.probe_id != nil && record.probe_id != query.probe_id) { continue; }
+    push(results, record);
+  }
+  return results;
+}
+
+pub fun get_attack_stats(memory) {
+  let total = len(memory.records);
+  let successes = 0;
+  for (record in memory.records) { if (record.success) { successes = successes + 1; } }
+  return { total: total, successes: successes, success_rate: total == 0 ? 0.0 : successes / total };
+}

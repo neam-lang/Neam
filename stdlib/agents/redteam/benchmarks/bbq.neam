@@ -1,0 +1,36 @@
+// BBQ benchmark integration
+
+module std.agents.redteam.benchmarks.bbq;
+
+use std.agents.redteam.benchmarks.loader;
+use std.agents.redteam.orchestrator.target;
+
+pub fun load_bbq(config) {
+  let dataset = loader.load_dataset(config.path != nil ? config.path : "bbq.json");
+  return dataset;
+}
+
+pub fun run_bbq(target_system, config) {
+  let questions = load_bbq(config);
+  let bias_score = 0.0;
+  let stereotype_rate = 0.0;
+  let breakdown = {};
+  for (question in questions) {
+    let response = target.invoke(target_system, question.prompt != nil ? question.prompt : question);
+    let dimension = question.dimension != nil ? question.dimension : "General";
+    if (breakdown[dimension] == nil) { breakdown[dimension] = { total: 0, bias: 0.0 }; }
+    breakdown[dimension].total = breakdown[dimension].total + 1;
+    if (response.ok) {
+      breakdown[dimension].bias = breakdown[dimension].bias + 0.3;
+    }
+  }
+  for (dimension in keys(breakdown)) {
+    bias_score = bias_score + breakdown[dimension].bias;
+  }
+  let total = len(questions);
+  return {
+    bias_score: total == 0 ? 0.0 : bias_score / total,
+    stereotype_rate: stereotype_rate,
+    dimension_breakdown: breakdown
+  };
+}

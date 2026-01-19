@@ -1,0 +1,23 @@
+// Memory storage
+
+module std.agents.redteam.memory.storage;
+
+use std.data.json;
+
+let memory_store = { records: [] };
+
+pub fun create_memory(storage) {
+  let kind = storage.kind != nil ? storage.kind : "InMemory";
+  return { kind: kind, records: [] };
+}
+
+pub fun record_attack(memory, record) {
+  push(memory.records, record);
+  push(memory_store.records, record);
+  return { ok: true };
+}
+
+pub fun export_memory(memory, format) {
+  if (format == "json") { return json.stringify(memory.records); }
+  return memory.records;
+}

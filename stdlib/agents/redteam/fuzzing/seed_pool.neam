@@ -1,0 +1,24 @@
+// Seed pool management
+
+module std.agents.redteam.fuzzing.seed_pool;
+
+use std.agents.redteam.fuzzing.coverage;
+
+pub fun create_seed_pool(seeds, coverage_targets) {
+  return { seeds: seeds != nil ? seeds : [], scores: {}, coverage: coverage.create_coverage(coverage_targets) };
+}
+
+pub fun add_seed(pool, seed) {
+  push(pool.seeds, seed);
+  return pool;
+}
+
+pub fun update_score(pool, seed_id, score) {
+  pool.scores[seed_id] = score;
+  return pool;
+}
+
+pub fun mark_coverage(pool, key) {
+  coverage.record_coverage(pool.coverage, key);
+  return pool;
+}

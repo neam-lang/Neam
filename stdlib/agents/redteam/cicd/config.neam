@@ -1,0 +1,14 @@
+// CI/CD configuration
+
+module std.agents.redteam.cicd.config;
+
+use std.io.file;
+use std.data.json;
+
+pub fun load_cicd_config(path) {
+  let content = file.read_string(path);
+  if (ends_with(path, ".json")) {
+    return { ok: true, value: json.parse(content) };
+  }
+  return { ok: true, value: { raw: content } };
+}

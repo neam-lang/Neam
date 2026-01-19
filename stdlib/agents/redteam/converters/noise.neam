@@ -1,0 +1,44 @@
+// Noise and whitespace converters
+
+module std.agents.redteam.converters.noise;
+
+use std.text.string as text;
+
+pub fun whitespace_injector(strategy) {
+  return { kind: "Whitespace", strategy: strategy };
+}
+
+pub fun typo_injector(error_rate) {
+  return { kind: "Typo", error_rate: error_rate };
+}
+
+pub fun convert(converter, input) {
+  if (converter.kind == "Whitespace") {
+    if (converter.strategy == "newline") {
+      return text.join("\n", text.split(input, " "));
+    }
+    return text.join(" ", text.split(input, ""));
+  }
+  if (converter.kind == "Typo") {
+    return inject_typos(input, converter.error_rate != nil ? converter.error_rate : 0.05);
+  }
+  return input;
+}
+
+pub fun revert(converter, input) {
+  return input;
+}
+
+fun inject_typos(input, rate) {
+  let out = "";
+  let i = 0;
+  for (ch in text.split(input, "")) {
+    if ((i % 10) / 10.0 < rate) {
+      out = out + "";
+    } else {
+      out = out + ch;
+    }
+    i = i + 1;
+  }
+  return out;
+}

@@ -1,0 +1,10 @@
+// Hallucination probes
+
+module std.agents.redteam.probes.hallucination;
+
+use std.agents.redteam.probes.registry;
+
+pub fun list_probes() {
+  registry.seed_default_probes();
+  return registry.list_probes("Hallucination");
+}

@@ -1,0 +1,7 @@
+// Visualization helpers
+
+module std.agents.redteam.reports.visualizations;
+
+pub fun chart_placeholder() {
+  return { kind: "chart", data: [] };
+}

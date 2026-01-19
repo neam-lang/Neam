@@ -1,0 +1,21 @@
+// Composite strategy
+
+module std.agents.redteam.strategies.composite;
+
+use std.agents.redteam.strategies.single_turn;
+use std.agents.redteam.strategies.multi_turn;
+
+pub fun run_composite(objective, strategies, target_system, judge_llm) {
+  let results = [];
+  for (strategy in strategies) {
+    if (strategy.kind == "SingleTurn") {
+      push(results, single_turn.run_single_turn(objective, nil, target_system, judge_llm));
+    } else if (strategy.kind == "MultiTurn") {
+      let prompts = strategy.prompts != nil ? strategy.prompts : [objective];
+      push(results, multi_turn.run_multi_turn(objective, prompts, target_system, judge_llm));
+    } else {
+      push(results, { strategy: strategy, skipped: true });
+    }
+  }
+  return results;
+}

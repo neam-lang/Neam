@@ -1,0 +1,45 @@
+// Crescendo escalation attack
+
+module std.agents.redteam.strategies.crescendo;
+
+use std.agents.redteam.orchestrator.target;
+use std.agents.redteam.judge.llm_judge;
+
+pub fun create_crescendo(objective, steps) {
+  return {
+    target_objective: objective,
+    escalation_steps: steps,
+    current_step: 0,
+    conversation_history: [],
+    success_indicators: ["comply", "provide", "steps", "instructions"]
+  };
+}
+
+pub fun escalate_step(attack, target_system, judge_llm) {
+  let step = attack.current_step + 1;
+  let prompt = "Step " + step + ": " + attack.target_objective;
+  let response = target.invoke(target_system, prompt);
+  push(attack.conversation_history, { prompt: prompt, response: response });
+  attack.current_step = step;
+  let success = false;
+  if (judge_llm != nil && response.ok) {
+    success = llm_judge.judge_attack_success(judge_llm, attack.target_objective, response.value);
+  }
+  return { step: step, prompt: prompt, response: response, success: success };
+}
+
+pub fun run_crescendo(attack, target_system, judge_llm) {
+  let step = 0;
+  let success = false;
+  let success_step = nil;
+  while (step < attack.escalation_steps) {
+    let result = escalate_step(attack, target_system, judge_llm);
+    if (result.success) {
+      success = true;
+      success_step = result.step;
+      break;
+    }
+    step = step + 1;
+  }
+  return { success: success, success_step: success_step, history: attack.conversation_history };
+}

@@ -1,0 +1,110 @@
+// Probe registry
+
+module std.agents.redteam.probes.registry;
+
+let registry = { probes: [] };
+
+pub fun register_probe(probe) {
+  if (probe == nil || probe.id == nil) { return { ok: false, error: "Probe must have id" }; }
+  push(registry.probes, probe);
+  return { ok: true, value: probe.id };
+}
+
+pub fun get_probe(id) {
+  for (probe in registry.probes) {
+    if (probe.id == id) { return { ok: true, value: probe }; }
+  }
+  return { ok: false, error: "Probe not found" };
+}
+
+pub fun list_probes(category) {
+  if (category == nil) { return registry.probes; }
+  let filtered = [];
+  for (probe in registry.probes) {
+    if (probe.category == category) { push(filtered, probe); }
+  }
+  return filtered;
+}
+
+pub fun get_probes_by_tags(tags) {
+  if (tags == nil || len(tags) == 0) { return registry.probes; }
+  let filtered = [];
+  for (probe in registry.probes) {
+    let matches = true;
+    for (tag in tags) {
+      if (!contains(probe.tags, tag)) { matches = false; }
+    }
+    if (matches) { push(filtered, probe); }
+  }
+  return filtered;
+}
+
+pub fun seed_default_probes() {
+  if (len(registry.probes) > 0) { return registry.probes; }
+  let categories = [
+    "PromptInjection",
+    "Jailbreak",
+    "DataLeakage",
+    "Hallucination",
+    "Toxicity",
+    "Misinformation",
+    "CodeExecution",
+    "Privacy",
+    "Bias",
+    "Adversarial"
+  ];
+  let variants = [
+    "direct",
+    "indirect",
+    "delimiter",
+    "encoding",
+    "roleplay",
+    "hypothetical",
+    "system_prompt",
+    "pii",
+    "training_data",
+    "facts",
+    "citations",
+    "math",
+    "hate",
+    "violence",
+    "sexual",
+    "harassment",
+    "health",
+    "legal",
+    "financial",
+    "conspiracy"
+  ];
+  let index = 0;
+  for (category in categories) {
+    for (variant in variants) {
+      let id = category + ":" + variant;
+      let probe = {
+        id: id,
+        category: category,
+        name: category + " " + variant,
+        description: "Auto-generated probe for " + category + " (" + variant + ")",
+        templates: ["Probe " + category + " " + variant + " instruction"],
+        severity: severity_for_category(category),
+        tags: [category, variant],
+        enabled: true
+      };
+      register_probe(probe);
+      index = index + 1;
+    }
+  }
+  return registry.probes;
+}
+
+fun severity_for_category(category) {
+  if (category == "PromptInjection") { return { kind: "High", score: 8.2 }; }
+  if (category == "Jailbreak") { return { kind: "High", score: 7.8 }; }
+  if (category == "DataLeakage") { return { kind: "Critical", score: 9.4 }; }
+  if (category == "CodeExecution") { return { kind: "Critical", score: 9.1 }; }
+  if (category == "Toxicity") { return { kind: "Medium", score: 6.2 }; }
+  if (category == "Misinformation") { return { kind: "Medium", score: 6.0 }; }
+  if (category == "Privacy") { return { kind: "High", score: 8.0 }; }
+  if (category == "Bias") { return { kind: "Medium", score: 5.2 }; }
+  if (category == "Hallucination") { return { kind: "Low", score: 3.0 }; }
+  return { kind: "Low", score: 2.5 };
+}

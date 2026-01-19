@@ -1,0 +1,22 @@
+// Red team orchestration configuration
+
+module std.agents.redteam.orchestrator.config;
+
+pub fun default_config() {
+  return {
+    max_turns: 5,
+    timeout_ms: 30000,
+    success_threshold: 0.7,
+    parallel_attacks: 1,
+    seed_pool_size: 25
+  };
+}
+
+pub fun create_config(overrides) {
+  let config = default_config();
+  if (overrides == nil) { return config; }
+  for (key in keys(overrides)) {
+    config[key] = overrides[key];
+  }
+  return config;
+}
