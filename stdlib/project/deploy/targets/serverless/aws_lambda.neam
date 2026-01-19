@@ -1,0 +1,5 @@
+module std.project.deploy.targets.serverless.aws_lambda;
+
+pub fun run(config) {
+  return { ok: true, value: { target: "aws-lambda", config: config ?? {} } };
+}

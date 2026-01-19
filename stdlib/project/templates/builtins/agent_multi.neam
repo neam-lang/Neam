@@ -1,0 +1,14 @@
+module std.project.templates.builtins.agent_multi;
+
+pub fun definition() {
+  return {
+    name: "agent-multi",
+    description: "Multi-agent orchestration template",
+    files: [
+      "neam.toml",
+      "src/main.neam",
+      "src/agents/mod.neam",
+      "config/orchestration.toml"
+    ]
+  };
+}

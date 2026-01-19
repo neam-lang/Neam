@@ -1,0 +1,21 @@
+module std.project.cli.commands.new;
+
+use std.project.templates.registry;
+use std.project.templates.scaffolder;
+
+pub fun run(name, template, variables) {
+  let source = registry.fetch(template ?? "agent-basic");
+  let scaffolded = scaffolder.scaffold(source, merge({ project_name: name }, variables ?? {}));
+  return { ok: true, message: "Created project " + name, value: scaffolded };
+}
+
+fun merge(base, override) {
+  let result = {};
+  for (key in keys(base)) {
+    result[key] = base[key];
+  }
+  for (key in keys(override ?? {})) {
+    result[key] = override[key];
+  }
+  return result;
+}

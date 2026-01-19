@@ -1,0 +1,5 @@
+module std.project.deploy.generators.helm_chart;
+
+pub fun generate(config) {
+  return project_deploy_generate("helm", config ?? {});
+}

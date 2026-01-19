@@ -1,0 +1,5 @@
+module std.project.cicd.pipelines.gitlab_ci;
+
+pub fun template() {
+  return project_cicd_template("gitlab_ci");
+}

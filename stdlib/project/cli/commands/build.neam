@@ -1,0 +1,10 @@
+module std.project.cli.commands.build;
+
+use std.project.build.compiler;
+use std.project.build.bundler;
+
+pub fun run(config) {
+  let compile_result = compiler.compile(config);
+  let bundle_result = bundler.bundle(config);
+  return { ok: true, value: { compile: compile_result, bundle: bundle_result } };
+}

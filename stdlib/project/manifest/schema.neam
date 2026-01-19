@@ -1,0 +1,33 @@
+module std.project.manifest.schema;
+
+fun ensure_fields(manifest, fields) {
+  let missing = [];
+
+  for (field in fields) {
+    if (!manifest[field]) {
+      push(missing, field);
+    }
+  }
+
+  return missing;
+}
+
+pub fun validate(manifest_result) {
+  if (!manifest_result || !manifest_result.ok) {
+    return manifest_result ?? { ok: false, error: "Invalid manifest." };
+  }
+
+  let manifest = manifest_result.value;
+  let missing = ensure_fields(manifest.project ?? {}, ["name", "version"]);
+
+  if (len(missing) > 0) {
+    return { ok: false, error: "Missing required fields: " + join(missing, ", ") };
+  }
+
+  let issues = project_manifest_validate(manifest);
+  if (issues && len(issues) > 0) {
+    return { ok: false, error: "Schema validation failed", issues: issues };
+  }
+
+  return { ok: true, value: manifest };
+}

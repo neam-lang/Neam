@@ -1,0 +1,9 @@
+module std.project.workspace.graph;
+
+pub fun build(members) {
+  if (!members) {
+    return { nodes: [], edges: [] };
+  }
+
+  return project_workspace_graph(members);
+}

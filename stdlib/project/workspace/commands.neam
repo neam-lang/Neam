@@ -1,0 +1,15 @@
+module std.project.workspace.commands;
+
+use std.project.workspace.discovery;
+use std.project.workspace.graph;
+
+pub fun list_members(root, patterns) {
+  let members = discovery.discover(root, patterns ?? []);
+  return { ok: true, value: members };
+}
+
+pub fun graph_workspace(root, patterns) {
+  let members = discovery.discover(root, patterns ?? []);
+  let graph_data = graph.build(members);
+  return { ok: true, value: graph_data };
+}

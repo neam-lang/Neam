@@ -1,0 +1,5 @@
+module std.project.deploy.targets.kubernetes;
+
+pub fun run(config) {
+  return { ok: true, value: { target: "kubernetes", config: config ?? {} } };
+}

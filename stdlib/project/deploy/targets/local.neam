@@ -1,0 +1,5 @@
+module std.project.deploy.targets.local;
+
+pub fun run(config) {
+  return { ok: true, value: { target: "local", config: config ?? {} } };
+}
