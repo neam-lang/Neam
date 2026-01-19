@@ -1,0 +1,206 @@
+// Browser automator
+
+module std.agents.special.browser.automator;
+
+// === Automator ===
+
+pub fun create(config) {
+  return {
+    llm: config.llm
+  };
+}
+
+// === Form Filling ===
+
+pub fun fill_form(automator, agent, form_data) {
+  let results = [];
+
+  for (field in keys(form_data)) {
+    let value = form_data[field];
+
+    let element = find_form_field(agent, field);
+    if (element == nil) {
+      push(results, { field: field, ok: false, error: "Field not found" });
+      continue;
+    }
+
+    let field_type = native.element_get_attribute(element, "type") || "text";
+
+    if (field_type == "checkbox" || field_type == "radio") {
+      if (value) {
+        native.element_check(element);
+      }
+    } else if (field_type == "select") {
+      native.element_select_option(element, value);
+    } else {
+      native.element_clear(element);
+      native.element_type(element, value);
+    }
+
+    push(results, { field: field, ok: true });
+  }
+
+  return { ok: true, value: results };
+}
+
+pub fun find_form_field(agent, field_identifier) {
+  let by_name = native.page_query_selector(agent.current_page, "[name=\"" + field_identifier + "\"]");
+  if (by_name != nil) { return by_name; }
+
+  let by_id = native.page_query_selector(agent.current_page, "#" + field_identifier);
+  if (by_id != nil) { return by_id; }
+
+  let label = native.page_query_selector(agent.current_page, "label:has-text(\"" + field_identifier + "\")");
+  if (label != nil) {
+    let for_id = native.element_get_attribute(label, "for");
+    if (for_id != nil) {
+      return native.page_query_selector(agent.current_page, "#" + for_id);
+    }
+  }
+
+  return nil;
+}
+
+// === Workflow Execution ===
+
+pub fun run_workflow(automator, agent, workflow) {
+  let context = {
+    variables: workflow.variables || {},
+    results: []
+  };
+
+  for (step in workflow.steps) {
+    let step_result = execute_step(automator, agent, step, context);
+    push(context.results, step_result);
+
+    if (!step_result.ok && !step.continue_on_error) {
+      return {
+        ok: false,
+        error: { kind: "WorkflowStepFailed", step: step.name, detail: step_result.error },
+        context: context
+      };
+    }
+
+    if (step.store_as != nil) {
+      context.variables[step.store_as] = step_result.value;
+    }
+  }
+
+  return { ok: true, value: context };
+}
+
+pub fun execute_step(automator, agent, step, context) {
+  let processed_step = interpolate_variables(step, context.variables);
+
+  if (step.action == "goto") {
+    return agent.goto(processed_step.url);
+  }
+
+  if (step.action == "click") {
+    return agent.click(processed_step.target);
+  }
+
+  if (step.action == "type") {
+    return agent.type_text(processed_step.target, processed_step.value);
+  }
+
+  if (step.action == "wait") {
+    return agent.wait_for(processed_step.condition, processed_step.timeout);
+  }
+
+  if (step.action == "extract") {
+    if (step.type == "table") {
+      return agent.extract_table(processed_step.selector);
+    }
+    if (step.type == "links") {
+      return agent.extract_links(processed_step.selector);
+    }
+    return agent.extract_text(processed_step.selector);
+  }
+
+  if (step.action == "fill_form") {
+    return fill_form(automator, agent, processed_step.data);
+  }
+
+  if (step.action == "assert") {
+    return execute_assertion(agent, processed_step);
+  }
+
+  if (step.action == "screenshot") {
+    return agent.screenshot();
+  }
+
+  return { ok: false, error: { kind: "UnknownAction", action: step.action } };
+}
+
+// === Workflow Definition ===
+
+pub fun workflow(name, steps) {
+  return {
+    name: name,
+    steps: steps,
+    variables: {}
+  };
+}
+
+pub fun workflow_step(action, config) {
+  return {
+    action: action,
+    name: config.name || action,
+    continue_on_error: config.continue_on_error || false,
+    store_as: config.store_as,
+    ...config
+  };
+}
+
+pub fun step_goto(url, options) {
+  return workflow_step("goto", { url: url, ...options });
+}
+
+pub fun step_click(target, options) {
+  return workflow_step("click", { target: target, ...options });
+}
+
+pub fun step_type(target, value, options) {
+  return workflow_step("type", { target: target, value: value, ...options });
+}
+
+pub fun step_wait(condition, timeout, options) {
+  return workflow_step("wait", { condition: condition, timeout: timeout, ...options });
+}
+
+pub fun step_extract(selector, type, options) {
+  return workflow_step("extract", { selector: selector, type: type || "text", ...options });
+}
+
+pub fun step_fill_form(data, options) {
+  return workflow_step("fill_form", { data: data, ...options });
+}
+
+pub fun step_assert(condition, message, options) {
+  return workflow_step("assert", { condition: condition, message: message, ...options });
+}
+
+fun interpolate_variables(step, variables) {
+  let updated = step;
+  for (key in keys(variables)) {
+    let token = "${" + key + "}";
+    for (field in keys(updated)) {
+      if (typeof(updated[field]) == "string") {
+        updated[field] = replace(updated[field], token, str(variables[key]));
+      }
+    }
+  }
+  return updated;
+}
+
+fun execute_assertion(agent, step) {
+  if (step.condition == nil) {
+    return { ok: false, error: "Missing assertion condition" };
+  }
+  let result = native.page_evaluate(agent.current_page, step.condition);
+  if (!result) {
+    return { ok: false, error: step.message || "Assertion failed" };
+  }
+  return { ok: true, value: true };
+}

@@ -1,0 +1,43 @@
+// Special agents test assertions
+
+module std.agents.special.testing.assertions;
+
+pub fun assert_ok(result) {
+  if (!result.ok) {
+    panic("Expected ok result");
+  }
+}
+
+pub fun assert_error(result, field, message) {
+  if (result.ok) {
+    panic("Expected error result");
+  }
+  if (result.error.field != field || result.error.message != message) {
+    panic("Unexpected error: " + json_stringify(result.error));
+  }
+}
+
+pub fun assert_has_sections(report, count) {
+  if (len(report.sections) != count) {
+    panic("Expected " + str(count) + " sections, got " + str(len(report.sections)));
+  }
+}
+
+pub fun assert_sources_include(report, source_type) {
+  let matches = filter(report.citations, fun(c) { c.source_type == source_type; });
+  if (len(matches) == 0) {
+    panic("Expected citations from source type: " + source_type);
+  }
+}
+
+pub fun assert_has_insights(report) {
+  if (len(report.insights) == 0) {
+    panic("Expected insights in analysis report");
+  }
+}
+
+pub fun assert_url_contains(agent, fragment) {
+  if (!contains(agent.page_context.url, fragment)) {
+    panic("Expected URL to contain: " + fragment);
+  }
+}

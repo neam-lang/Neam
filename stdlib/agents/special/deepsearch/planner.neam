@@ -1,0 +1,84 @@
+// DeepSearch planner
+
+module std.agents.special.deepsearch.planner;
+
+// === Planner Type ===
+
+pub fun create(llm) {
+  return {
+    llm: llm,
+    decomposition_prompt: DEFAULT_DECOMPOSITION_PROMPT,
+    prioritization_prompt: DEFAULT_PRIORITIZATION_PROMPT
+  };
+}
+
+// === Planning Operations ===
+
+pub fun plan(planner, query, options) {
+  let sub_queries = decompose_query(planner, query, options);
+  let prioritized = prioritize_queries(planner, sub_queries, options);
+  let plan = research_plan(query, prioritized, options);
+
+  return { ok: true, value: plan };
+}
+
+pub fun research_plan(original_query, sub_queries, options) {
+  return {
+    original_query: original_query,
+    sub_queries: sub_queries,
+    focus_areas: options.focus_areas,
+    estimated_sources: len(sub_queries) * 5,
+    created_at: now()
+  };
+}
+
+pub fun decompose_query(planner, query, options) {
+  let prompt = replace(planner.decomposition_prompt, "{query}", query);
+  if (len(options.focus_areas) > 0) {
+    prompt = prompt + "\n\nFocus areas: " + join(options.focus_areas, ", ");
+  }
+
+  let response = planner.llm.generate(prompt);
+  let lines = split(response, "\n");
+  let sub_queries = [];
+
+  for (line in lines) {
+    let cleaned = trim(regex_replace(line, "^[\\d.\\-*]+\\s*", ""));
+    if (len(cleaned) > 10) {
+      push(sub_queries, sub_query(cleaned, "medium"));
+    }
+  }
+
+  if (len(sub_queries) == 0) {
+    push(sub_queries, sub_query(query, "high"));
+  }
+
+  return sub_queries;
+}
+
+pub fun sub_query(text, priority) {
+  return {
+    text: text,
+    priority: priority,
+    status: "pending",
+    results: []
+  };
+}
+
+pub fun prioritize_queries(planner, queries, options) {
+  return sort_by(queries, fun(q) {
+    let score = 0;
+    if (q.priority == "high") { score = score + 100; }
+    if (q.priority == "medium") { score = score + 50; }
+    for (area in options.focus_areas) {
+      if (contains(lowercase(q.text), lowercase(area))) {
+        score = score + 25;
+      }
+    }
+    return -score;
+  });
+}
+
+let DEFAULT_DECOMPOSITION_PROMPT = "Break down this research query into specific sub-questions that can be individually searched and answered. Each sub-question should be self-contained and searchable.\n\nResearch Query: {query}\n\nList 5-10 specific sub-questions:";
+
+let DEFAULT_PRIORITIZATION_PROMPT = "Prioritize these research sub-questions by importance and dependency order.";
