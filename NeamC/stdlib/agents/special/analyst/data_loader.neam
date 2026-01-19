@@ -1,0 +1,230 @@
+// Analyst data loader
+
+module std.agents.special.analyst.data_loader;
+
+use std.net.http;
+
+// === Data Loader ===
+
+pub fun create(config) {
+  return {
+    max_rows: config.max_rows_in_memory,
+    sampling_strategy: config.sampling_strategy
+  };
+}
+
+// === Data Sources ===
+
+pub fun source_csv(path, options) {
+  return { kind: "CSV", path: path, options: options || {} };
+}
+
+pub fun source_json(path, options) {
+  return { kind: "JSON", path: path, options: options || {} };
+}
+
+pub fun source_api(url, options) {
+  return { kind: "API", url: url, options: options || {} };
+}
+
+pub fun source_database(connection_string, query) {
+  return { kind: "Database", connection: connection_string, query: query };
+}
+
+pub fun source_dataframe(data, schema) {
+  return { kind: "DataFrame", data: data, schema: schema };
+}
+
+// === Loading Operations ===
+
+pub fun load(loader, source, options) {
+  let raw_data = nil;
+  let schema = nil;
+
+  if (source.kind == "CSV") {
+    let result = load_csv(source.path, source.options);
+    raw_data = result.data;
+    schema = result.schema;
+  } else if (source.kind == "JSON") {
+    let result = load_json(source.path, source.options);
+    raw_data = result.data;
+    schema = result.schema;
+  } else if (source.kind == "API") {
+    let result = load_api(source.url, source.options);
+    raw_data = result.data;
+    schema = result.schema;
+  } else if (source.kind == "Database") {
+    let result = load_database(source.connection, source.query);
+    raw_data = result.data;
+    schema = result.schema;
+  } else if (source.kind == "DataFrame") {
+    raw_data = source.data;
+    schema = source.schema;
+  } else {
+    return { ok: false, error: { kind: "UnsupportedSource", source: source.kind } };
+  }
+
+  if (len(raw_data) > loader.max_rows) {
+    raw_data = apply_sampling(raw_data, loader.sampling_strategy, loader.max_rows);
+  }
+
+  return {
+    ok: true,
+    value: dataset(raw_data, schema, source)
+  };
+}
+
+pub fun dataset(data, schema, source) {
+  return {
+    kind: "Dataset",
+    data: data,
+    schema: schema,
+    source: source,
+    row_count: len(data),
+    column_count: len(schema.columns),
+    created_at: now()
+  };
+}
+
+pub fun load_csv(path, options) {
+  let content = native.file_read(path);
+  let delimiter = options.delimiter || ",";
+  let has_header = options.has_header != false;
+
+  let lines = split(content, "\n");
+  let header = [];
+  let data = [];
+  let start_idx = 0;
+
+  if (has_header && len(lines) > 0) {
+    header = split(lines[0], delimiter);
+    start_idx = 1;
+  }
+
+  for (i in range(start_idx, len(lines))) {
+    let row = split(lines[i], delimiter);
+    if (len(row) == len(header)) {
+      let row_obj = {};
+      for (j in range(0, len(header))) {
+        row_obj[header[j]] = parse_value(row[j]);
+      }
+      push(data, row_obj);
+    }
+  }
+
+  return {
+    data: data,
+    schema: infer_schema(data, header)
+  };
+}
+
+pub fun load_json(path, options) {
+  let content = native.file_read(path);
+  let data = json_parse(content);
+  if (typeof(data) == "object" && data.items != nil) {
+    data = data.items;
+  }
+
+  let columns = extract_columns(data);
+  return {
+    data: data,
+    schema: infer_schema(data, columns)
+  };
+}
+
+pub fun load_api(url, options) {
+  let headers = options.headers || {};
+  let response = http.get(url);
+  let data = json_parse(response.body || response);
+  let columns = extract_columns(data);
+
+  return {
+    data: data,
+    schema: infer_schema(data, columns)
+  };
+}
+
+pub fun load_database(connection, query) {
+  return {
+    data: [],
+    schema: { columns: [], types: {} }
+  };
+}
+
+pub fun infer_schema(data, columns) {
+  let column_types = {};
+  for (col in columns) {
+    column_types[col] = infer_column_type(data, col);
+  }
+
+  return {
+    columns: columns,
+    types: column_types
+  };
+}
+
+pub fun infer_column_type(data, column) {
+  if (len(data) == 0) { return "unknown"; }
+
+  let sample = data[0][column];
+  if (typeof(sample) == "number") { return "numeric"; }
+  if (typeof(sample) == "boolean") { return "boolean"; }
+  if (is_date_string(sample)) { return "datetime"; }
+  return "string";
+}
+
+fun extract_columns(data) {
+  if (data == nil || len(data) == 0) {
+    return [];
+  }
+  return keys(data[0]);
+}
+
+fun parse_value(value) {
+  let trimmed = trim(value);
+  if (trimmed == "") { return nil; }
+  if (trimmed == "true") { return true; }
+  if (trimmed == "false") { return false; }
+  if (regex_match(trimmed, "^-?\\d+$")) { return int(trimmed); }
+  if (regex_match(trimmed, "^-?\\d+\\.\\d+$")) { return float(trimmed); }
+  return trimmed;
+}
+
+fun is_date_string(value) {
+  if (typeof(value) != "string") { return false; }
+  return regex_match(value, "^\\d{4}-\\d{2}-\\d{2}");
+}
+
+fun apply_sampling(data, strategy, max_rows) {
+  if (strategy == nil || strategy.kind == "Auto") {
+    return take(data, max_rows);
+  }
+  if (strategy.kind == "Random") {
+    return take(shuffle(data, strategy.seed), max_rows);
+  }
+  if (strategy.kind == "Systematic") {
+    let interval = strategy.interval || 2;
+    let sampled = [];
+    for (i in range(0, len(data))) {
+      if (i % interval == 0) {
+        push(sampled, data[i]);
+      }
+      if (len(sampled) >= max_rows) {
+        break;
+      }
+    }
+    return sampled;
+  }
+  return take(data, max_rows);
+}
+
+fun shuffle(data, seed) {
+  let copy = data;
+  for (i in range(0, len(copy))) {
+    let idx = (i * 9301 + (seed || 1) * 49297) % len(copy);
+    let tmp = copy[i];
+    copy[i] = copy[idx];
+    copy[idx] = tmp;
+  }
+  return copy;
+}
