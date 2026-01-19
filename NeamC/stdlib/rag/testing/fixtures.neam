@@ -1,0 +1,44 @@
+// RAG test fixtures
+
+module std.rag.testing.fixtures;
+
+use std.rag.document;
+
+pub fun sample_documents(count) {
+  let docs = [];
+  for (i in range(0, count)) {
+    push(docs, document.rag_document(
+      "doc_" + str(i),
+      "This is sample document " + str(i) + " with some content for testing.",
+      { source: "test", index: i }
+    ));
+  }
+  return docs;
+}
+
+pub fun sample_qa_pairs() {
+  return [
+    {
+      question: "What is RAG?",
+      context: "RAG stands for Retrieval-Augmented Generation. It combines retrieval systems with language models.",
+      answer: "RAG is Retrieval-Augmented Generation, a technique that combines document retrieval with language models.",
+      ground_truth: "RAG (Retrieval-Augmented Generation) is a technique that enhances language model responses by retrieving relevant documents."
+    },
+    {
+      question: "How does hybrid search work?",
+      context: "Hybrid search combines keyword-based BM25 search with dense vector embeddings using techniques like Reciprocal Rank Fusion.",
+      answer: "Hybrid search combines traditional keyword search with semantic vector search.",
+      ground_truth: "Hybrid search merges keyword matching (like BM25) with semantic similarity from embeddings."
+    }
+  ];
+}
+
+pub fun sample_knowledge_base() {
+  return [
+    document.rag_document("kb_1", "Python is a high-level programming language known for its simplicity.", { topic: "programming" }),
+    document.rag_document("kb_2", "Machine learning is a subset of artificial intelligence focused on pattern recognition.", { topic: "ai" }),
+    document.rag_document("kb_3", "Vector databases store high-dimensional vectors for similarity search.", { topic: "databases" }),
+    document.rag_document("kb_4", "Natural language processing deals with the interaction between computers and human language.", { topic: "nlp" }),
+    document.rag_document("kb_5", "Transformers are neural network architectures that use self-attention mechanisms.", { topic: "ai" })
+  ];
+}
