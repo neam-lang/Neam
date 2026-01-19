@@ -1,0 +1,95 @@
+// Special agent shared utilities
+
+module std.agents.special.base;
+
+// === Base Special Agent ===
+
+pub fun special_agent_base(kind, config) {
+  return {
+    kind: kind,
+    config: config,
+    id: generate_agent_id(),
+    created_at: now(),
+    state: agent_state_idle(),
+    metrics: agent_metrics()
+  };
+}
+
+// === Agent States ===
+
+pub fun agent_state_idle() { return { kind: "Idle" }; }
+pub fun agent_state_running() { return { kind: "Running" }; }
+pub fun agent_state_paused() { return { kind: "Paused" }; }
+pub fun agent_state_completed() { return { kind: "Completed" }; }
+pub fun agent_state_error(message) { return { kind: "Error", message: message }; }
+
+// === Metrics ===
+
+pub fun agent_metrics() {
+  return {
+    invocations: 0,
+    total_duration_ms: 0,
+    avg_duration_ms: 0,
+    success_count: 0,
+    error_count: 0,
+    tokens_used: 0,
+    cost_usd: 0.0
+  };
+}
+
+pub fun update_metrics(metrics, result, duration_ms, tokens, cost) {
+  metrics.invocations = metrics.invocations + 1;
+  metrics.total_duration_ms = metrics.total_duration_ms + duration_ms;
+  metrics.avg_duration_ms = metrics.total_duration_ms / metrics.invocations;
+  if (result.ok) {
+    metrics.success_count = metrics.success_count + 1;
+  } else {
+    metrics.error_count = metrics.error_count + 1;
+  }
+  metrics.tokens_used = metrics.tokens_used + tokens;
+  metrics.cost_usd = metrics.cost_usd + cost;
+  return metrics;
+}
+
+// === Session Management ===
+
+pub fun create_session(agent, query, options) {
+  return {
+    id: generate_session_id(),
+    agent_id: agent.id,
+    query: query,
+    options: options,
+    started_at: now(),
+    progress: 0,
+    events: [],
+    cancelled: false
+  };
+}
+
+pub fun emit_progress(agent, session) {
+  let event = {
+    kind: "Progress",
+    progress: session.progress,
+    state: agent.state,
+    timestamp: now()
+  };
+  push(session.events, event);
+
+  if (session.options != nil && session.options.on_progress != nil) {
+    session.options.on_progress(event);
+  }
+}
+
+// === Utility Functions ===
+
+pub fun generate_agent_id() {
+  return "agent_" + crypto.uuid_v4();
+}
+
+pub fun generate_session_id() {
+  return "session_" + crypto.uuid_v4();
+}
+
+pub fun generate_dataset_id() {
+  return "dataset_" + crypto.uuid_v4();
+}
