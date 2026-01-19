@@ -1,0 +1,9 @@
+module std.project.dependencies.lockfile;
+
+pub fun read(path) {
+  return project_lock_read(path);
+}
+
+pub fun write(path, lock) {
+  return project_lock_write(path, lock);
+}

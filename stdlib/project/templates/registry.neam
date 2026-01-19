@@ -1,0 +1,9 @@
+module std.project.templates.registry;
+
+pub fun list() {
+  return ["agent-basic", "agent-rag", "agent-multi", "library", "workspace"];
+}
+
+pub fun fetch(template) {
+  return project_template_fetch(template);
+}

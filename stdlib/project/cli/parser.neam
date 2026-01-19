@@ -1,0 +1,5 @@
+module std.project.cli.parser;
+
+pub fun parse(argv) {
+  return { command: argv[0] ?? "help", args: slice(argv, 1) };
+}

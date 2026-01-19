@@ -1,0 +1,5 @@
+module std.project.testing.mocks;
+
+pub fun manifest(name) {
+  return { project: { name: name ?? "mock", version: "0.0.0" } };
+}

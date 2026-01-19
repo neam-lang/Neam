@@ -1,0 +1,5 @@
+module std.project.build.bundler;
+
+pub fun bundle(config) {
+  return project_build_bundle(config);
+}

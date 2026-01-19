@@ -1,0 +1,9 @@
+module std.project.templates.scaffolder;
+
+pub fun scaffold(template, variables) {
+  return {
+    template: template,
+    variables: variables ?? {},
+    files: []
+  };
+}

@@ -1,0 +1,5 @@
+module std.project.security.licenses;
+
+pub fun check(config) {
+  return project_security_scan("licenses", config ?? {});
+}

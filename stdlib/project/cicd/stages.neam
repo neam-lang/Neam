@@ -1,0 +1,5 @@
+module std.project.cicd.stages;
+
+pub fun standard() {
+  return ["commit", "build", "test", "package", "publish", "security", "staging", "production"];
+}

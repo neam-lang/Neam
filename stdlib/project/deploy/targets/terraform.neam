@@ -1,0 +1,5 @@
+module std.project.deploy.targets.terraform;
+
+pub fun run(config) {
+  return { ok: true, value: { target: "terraform", config: config ?? {} } };
+}

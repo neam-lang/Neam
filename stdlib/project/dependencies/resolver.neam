@@ -1,0 +1,6 @@
+module std.project.dependencies.resolver;
+
+pub fun resolve(manifest, lock) {
+  let payload = { manifest: manifest, lock: lock };
+  return project_dependency_resolve(payload.manifest, payload.lock);
+}

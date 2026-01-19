@@ -1,0 +1,5 @@
+module std.project.cicd.artifacts;
+
+pub fun default_paths() {
+  return ["target/release", "target/artifacts"];
+}

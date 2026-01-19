@@ -1,0 +1,5 @@
+module std.project.cicd.pipelines.github_actions;
+
+pub fun template() {
+  return project_cicd_template("github_actions");
+}
