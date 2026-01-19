@@ -1,0 +1,45 @@
+// GenAI event helpers
+
+module std.observability.semantic.events;
+
+pub fun user_message(prompt, template_name, template_version) {
+  return {
+    name: "gen_ai.user.message",
+    attributes: {
+      "gen_ai.prompt": prompt,
+      "gen_ai.prompt.template": template_name,
+      "gen_ai.prompt.template.version": template_version
+    }
+  };
+}
+
+pub fun assistant_message(completion) {
+  return {
+    name: "gen_ai.assistant.message",
+    attributes: {
+      "gen_ai.completion": completion
+    }
+  };
+}
+
+pub fun tool_call(name, call_id, arguments) {
+  return {
+    name: "gen_ai.tool.call",
+    attributes: {
+      "gen_ai.tool.name": name,
+      "gen_ai.tool.call.id": call_id,
+      "gen_ai.tool.arguments": arguments
+    }
+  };
+}
+
+pub fun tool_result(call_id, result, error) {
+  return {
+    name: "gen_ai.tool.result",
+    attributes: {
+      "gen_ai.tool.call.id": call_id,
+      "gen_ai.tool.result": result,
+      "gen_ai.tool.error": error
+    }
+  };
+}

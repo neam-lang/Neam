@@ -1,0 +1,11 @@
+// Dashboard export helpers
+
+module std.observability.visualization.export;
+
+pub fun kibana_template(name, description, panels) {
+  return { type: "kibana", name: name, description: description, panels: panels ?? [] };
+}
+
+pub fun grafana_template(name, description, panels) {
+  return { type: "grafana", name: name, description: description, panels: panels ?? [] };
+}

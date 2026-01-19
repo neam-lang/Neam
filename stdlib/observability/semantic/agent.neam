@@ -1,0 +1,30 @@
+// Agent semantic conventions
+
+module std.observability.semantic.agent;
+
+use std.observability.semantic.attributes;
+
+pub fun agent_span_attributes(agent, task, action) {
+  let attrs = attributes.agent_attributes(agent);
+  if (task != nil) {
+    attrs = merge(attrs, attributes.task_attributes(task));
+  }
+  if (action != nil) {
+    attrs = merge(attrs, attributes.action_attributes(action));
+  }
+  return attrs;
+}
+
+pub fun memory_state_attributes(memory) {
+  return attributes.memory_attributes(memory);
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override)) {
+    if (override[key] != nil) {
+      merged[key] = override[key];
+    }
+  }
+  return merged;
+}

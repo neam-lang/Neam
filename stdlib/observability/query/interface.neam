@@ -1,0 +1,21 @@
+// Query interface
+
+module std.observability.query.interface;
+
+pub fun traces(query) {
+  return {
+    type: "trace_query",
+    where: query.where ?? {},
+    order_by: query.order_by ?? [],
+    limit: query.limit ?? 100
+  };
+}
+
+pub fun aggregate(query) {
+  return {
+    type: "aggregate_query",
+    group_by: query.group_by ?? [],
+    metrics: query.metrics ?? [],
+    time_range: query.time_range ?? "last_24h"
+  };
+}

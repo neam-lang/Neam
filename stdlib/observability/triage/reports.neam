@@ -1,0 +1,24 @@
+// Diagnostic reports
+
+module std.observability.triage.reports;
+
+pub fun generate_diagnostic(config) {
+  return {
+    trace_id: config.trace_id,
+    include: config.include ?? [],
+    format: config.format ?? "markdown",
+    report: build_report(config)
+  };
+}
+
+fun build_report(config) {
+  return {
+    timeline: config.timeline ?? [],
+    span_tree: config.span_tree ?? [],
+    error_analysis: config.error_analysis ?? {},
+    performance_breakdown: config.performance_breakdown ?? {},
+    token_analysis: config.token_analysis ?? {},
+    similar_traces: config.similar_traces ?? [],
+    recommendations: config.recommendations ?? []
+  };
+}

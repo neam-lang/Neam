@@ -1,0 +1,46 @@
+// OpenTelemetry meter provider helpers
+
+module std.observability.core.meter;
+
+pub fun create_provider(config) {
+  let default_config = {
+    name: "neam-otel",
+    version: "0.1.0",
+    resource: {},
+    readers: [],
+    exporters: [],
+    export_interval_ms: 60000
+  };
+  return merge_configs(default_config, config);
+}
+
+pub fun counter(name, description, unit) {
+  return { kind: "Counter", name: name, description: description, unit: unit };
+}
+
+pub fun histogram(name, description, unit) {
+  return { kind: "Histogram", name: name, description: description, unit: unit };
+}
+
+pub fun gauge(name, description, unit) {
+  return { kind: "Gauge", name: name, description: description, unit: unit };
+}
+
+pub fun record(metric, value, attributes) {
+  return { metric: metric, value: value, attributes: attributes ?? {}, timestamp: now() };
+}
+
+pub fun merge_configs(base, override) {
+  if (override == nil) {
+    return base;
+  }
+  let merged = clone(base);
+  for (key in keys(override)) {
+    merged[key] = override[key];
+  }
+  return merged;
+}
+
+fun clone(value) {
+  return json_decode(json_encode(value));
+}

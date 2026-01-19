@@ -1,0 +1,50 @@
+// Sampling strategies
+
+module std.observability.core.sampling;
+
+pub fun always_on() {
+  return { type: "always_on" };
+}
+
+pub fun always_off() {
+  return { type: "always_off" };
+}
+
+pub fun trace_id_ratio(ratio) {
+  return { type: "trace_id_ratio", ratio: ratio };
+}
+
+pub fun parent_based(root_sampler) {
+  return { type: "parent_based", root: root_sampler };
+}
+
+pub fun custom(predicate) {
+  return { type: "custom", predicate: predicate };
+}
+
+pub fun should_sample(sampler, context, attributes) {
+  if (sampler.type == "always_on") {
+    return true;
+  }
+  if (sampler.type == "always_off") {
+    return false;
+  }
+  if (sampler.type == "trace_id_ratio") {
+    return hash_ratio(context.trace_id, sampler.ratio);
+  }
+  if (sampler.type == "parent_based") {
+    if (context.parent_sampled != nil) {
+      return context.parent_sampled;
+    }
+    return should_sample(sampler.root, context, attributes);
+  }
+  if (sampler.type == "custom") {
+    return sampler.predicate(context, attributes);
+  }
+  return true;
+}
+
+fun hash_ratio(trace_id, ratio) {
+  let value = str_hash(trace_id) % 10000;
+  return value < (ratio * 10000);
+}

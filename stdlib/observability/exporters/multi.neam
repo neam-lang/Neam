@@ -1,0 +1,32 @@
+// Multi-backend exporter routing
+
+module std.observability.exporters.multi;
+
+pub fun create_pipeline(config) {
+  let default_config = {
+    exporters: [],
+    routing: { traces: [], metrics: [], logs: [] }
+  };
+  return merge(default_config, config);
+}
+
+pub fun route_signal(pipeline, signal_type) {
+  if (signal_type == "traces") {
+    return pipeline.routing.traces;
+  }
+  if (signal_type == "metrics") {
+    return pipeline.routing.metrics;
+  }
+  if (signal_type == "logs") {
+    return pipeline.routing.logs;
+  }
+  return [];
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

@@ -1,0 +1,21 @@
+// Runtime controls
+
+module std.observability.config.runtime;
+
+pub fun set_sampling_rate(state, rate) {
+  state.sampling_rate = rate;
+  return state;
+}
+
+pub fun set_agent_sampling(state, agent_name, rate) {
+  if (state.agent_sampling == nil) {
+    state.agent_sampling = {};
+  }
+  state.agent_sampling[agent_name] = rate;
+  return state;
+}
+
+pub fun set_features(state, features) {
+  state.features = features;
+  return state;
+}

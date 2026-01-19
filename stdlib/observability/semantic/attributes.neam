@@ -1,0 +1,77 @@
+// Shared attribute helpers
+
+module std.observability.semantic.attributes;
+
+pub fun gen_ai_operation(system, operation, model, params) {
+  return merge({
+    "gen_ai.system": system,
+    "gen_ai.operation.name": operation,
+    "gen_ai.request.model": model,
+    "gen_ai.request.max_tokens": params.max_tokens,
+    "gen_ai.request.temperature": params.temperature,
+    "gen_ai.request.top_p": params.top_p,
+    "gen_ai.request.top_k": params.top_k,
+    "gen_ai.request.stop_sequences": params.stop_sequences,
+    "gen_ai.request.presence_penalty": params.presence_penalty,
+    "gen_ai.request.frequency_penalty": params.frequency_penalty
+  }, params.extra ?? {});
+}
+
+pub fun gen_ai_response(response) {
+  return {
+    "gen_ai.response.id": response.id,
+    "gen_ai.response.model": response.model,
+    "gen_ai.response.finish_reasons": response.finish_reasons,
+    "gen_ai.usage.input_tokens": response.usage.input_tokens,
+    "gen_ai.usage.output_tokens": response.usage.output_tokens,
+    "gen_ai.usage.total_tokens": response.usage.total_tokens
+  };
+}
+
+pub fun agent_attributes(agent) {
+  return {
+    "gen_ai.agent.name": agent.name,
+    "gen_ai.agent.id": agent.id,
+    "gen_ai.agent.description": agent.description,
+    "gen_ai.agent.team.id": agent.team_id,
+    "gen_ai.agent.team.name": agent.team_name,
+    "gen_ai.agent.parent_id": agent.parent_id,
+    "gen_ai.agent.role": agent.role
+  };
+}
+
+pub fun task_attributes(task) {
+  return {
+    "gen_ai.task.id": task.id,
+    "gen_ai.task.name": task.name,
+    "gen_ai.task.description": task.description,
+    "gen_ai.task.status": task.status
+  };
+}
+
+pub fun action_attributes(action) {
+  return {
+    "gen_ai.action.id": action.id,
+    "gen_ai.action.type": action.type,
+    "gen_ai.action.name": action.name
+  };
+}
+
+pub fun memory_attributes(memory) {
+  return {
+    "gen_ai.memory.type": memory.type,
+    "gen_ai.memory.size": memory.size,
+    "gen_ai.memory.retrieval_count": memory.retrieval_count,
+    "gen_ai.state.checkpoint_id": memory.checkpoint_id
+  };
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override)) {
+    if (override[key] != nil) {
+      merged[key] = override[key];
+    }
+  }
+  return merged;
+}
