@@ -1,0 +1,134 @@
+// Order execution module
+
+module std.agents.advanced.trading.executor;
+
+use std.agents.advanced.trading.config;
+
+pub fun order_executor(broker_client) {
+  return {
+    kind: "OrderExecutor",
+    broker: broker_client,
+    pending_orders: {},
+    executed_orders: [],
+    positions: {}
+  };
+}
+
+pub fun submit_order(executor, order) {
+  // Validate order
+  let validation = validate_order(order);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  // Submit to broker
+  let result = executor.broker.submit(order);
+  if (!result.ok) {
+    return { ok: false, error: config.trading_error("EXECUTION", result.error) };
+  }
+
+  order.status = "submitted";
+  order.broker_id = result.value.order_id;
+  executor.pending_orders[order.id] = order;
+
+  return { ok: true, value: order };
+}
+
+pub fun cancel_order(executor, order_id) {
+  let order = executor.pending_orders[order_id];
+  if (order == nil) {
+    return { ok: false, error: config.trading_error("NOT_FOUND", "Order not found: " + order_id) };
+  }
+
+  let result = executor.broker.cancel(order.broker_id);
+  if (!result.ok) {
+    return result;
+  }
+
+  order.status = "cancelled";
+  delete executor.pending_orders[order_id];
+
+  return { ok: true, value: order };
+}
+
+pub fun get_order_status(executor, order_id) {
+  let order = executor.pending_orders[order_id];
+  if (order != nil) {
+    // Refresh status from broker
+    let status = executor.broker.get_status(order.broker_id);
+    if (status.ok) {
+      order.status = status.value.status;
+      if (status.value.status == "filled") {
+        order.fill_price = status.value.fill_price;
+        order.filled_at = status.value.filled_at;
+        push(executor.executed_orders, order);
+        delete executor.pending_orders[order_id];
+        update_position(executor, order);
+      }
+    }
+    return { ok: true, value: order };
+  }
+
+  // Check executed orders
+  for (executed in executor.executed_orders) {
+    if (executed.id == order_id) {
+      return { ok: true, value: executed };
+    }
+  }
+
+  return { ok: false, error: config.trading_error("NOT_FOUND", "Order not found") };
+}
+
+pub fun get_position(executor, symbol) {
+  return executor.positions[symbol];
+}
+
+pub fun get_all_positions(executor) {
+  return executor.positions;
+}
+
+pub fun close_position(executor, symbol) {
+  let position = executor.positions[symbol];
+  if (position == nil) {
+    return { ok: false, error: config.trading_error("NOT_FOUND", "No position for: " + symbol) };
+  }
+
+  let side = position.quantity > 0 ? config.side_sell() : config.side_buy();
+  let order = config.trading_order(symbol, side, abs(position.quantity), config.order_market());
+
+  return submit_order(executor, order);
+}
+
+// Helper functions
+fun validate_order(order) {
+  if (order.symbol == nil || len(order.symbol) == 0) {
+    return { ok: false, error: config.trading_error("VALIDATION", "Symbol is required") };
+  }
+  if (order.quantity <= 0) {
+    return { ok: false, error: config.trading_error("VALIDATION", "Quantity must be positive") };
+  }
+  return { ok: true, value: true };
+}
+
+fun update_position(executor, order) {
+  let symbol = order.symbol;
+  let position = executor.positions[symbol];
+
+  if (position == nil) {
+    position = config.position(symbol, 0, 0);
+  }
+
+  if (order.side == config.side_buy()) {
+    let total_cost = (position.quantity * position.entry_price) + (order.quantity * order.fill_price);
+    position.quantity = position.quantity + order.quantity;
+    position.entry_price = total_cost / position.quantity;
+  } else {
+    position.quantity = position.quantity - order.quantity;
+    if (position.quantity == 0) {
+      delete executor.positions[symbol];
+      return;
+    }
+  }
+
+  executor.positions[symbol] = position;
+}

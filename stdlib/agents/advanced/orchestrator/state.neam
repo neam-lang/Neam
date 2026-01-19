@@ -1,0 +1,134 @@
+// State management for orchestration
+
+module std.agents.advanced.orchestrator.state;
+
+use std.agents.advanced.orchestrator.config;
+
+pub fun state_manager() {
+  return {
+    kind: "StateManager",
+    checkpoints: {},
+    current_state: {},
+    history: [],
+    transaction_stack: []
+  };
+}
+
+pub fun save_checkpoint(manager, checkpoint_id, state) {
+  manager.checkpoints[checkpoint_id] = {
+    id: checkpoint_id,
+    state: deep_clone(state),
+    created_at: now()
+  };
+
+  return { ok: true, value: checkpoint_id };
+}
+
+pub fun restore_checkpoint(manager, checkpoint_id) {
+  let checkpoint = manager.checkpoints[checkpoint_id];
+  if (checkpoint == nil) {
+    return { ok: false, error: config.orchestrator_error("STATE", "Checkpoint not found: " + checkpoint_id) };
+  }
+
+  manager.current_state = deep_clone(checkpoint.state);
+
+  return { ok: true, value: manager.current_state };
+}
+
+pub fun delete_checkpoint(manager, checkpoint_id) {
+  if (manager.checkpoints[checkpoint_id] == nil) {
+    return { ok: false, error: config.orchestrator_error("STATE", "Checkpoint not found") };
+  }
+
+  delete manager.checkpoints[checkpoint_id];
+  return { ok: true, value: true };
+}
+
+pub fun begin_transaction(manager) {
+  let transaction = {
+    id: "tx_" + str(now()),
+    started_at: now(),
+    snapshot: deep_clone(manager.current_state),
+    operations: []
+  };
+
+  push(manager.transaction_stack, transaction);
+
+  return { ok: true, value: transaction.id };
+}
+
+pub fun commit_transaction(manager) {
+  if (len(manager.transaction_stack) == 0) {
+    return { ok: false, error: config.orchestrator_error("STATE", "No active transaction") };
+  }
+
+  let transaction = pop(manager.transaction_stack);
+  transaction.committed_at = now();
+
+  push(manager.history, {
+    type: "commit",
+    transaction_id: transaction.id,
+    timestamp: now()
+  });
+
+  return { ok: true, value: transaction.id };
+}
+
+pub fun rollback_transaction(manager) {
+  if (len(manager.transaction_stack) == 0) {
+    return { ok: false, error: config.orchestrator_error("STATE", "No active transaction") };
+  }
+
+  let transaction = pop(manager.transaction_stack);
+  manager.current_state = transaction.snapshot;
+
+  push(manager.history, {
+    type: "rollback",
+    transaction_id: transaction.id,
+    timestamp: now()
+  });
+
+  return { ok: true, value: transaction.id };
+}
+
+pub fun set_state(manager, key, value) {
+  let old_value = manager.current_state[key];
+  manager.current_state[key] = value;
+
+  // Record operation if in transaction
+  if (len(manager.transaction_stack) > 0) {
+    let tx = manager.transaction_stack[len(manager.transaction_stack) - 1];
+    push(tx.operations, {
+      type: "set",
+      key: key,
+      old_value: old_value,
+      new_value: value
+    });
+  }
+
+  return { ok: true, value: value };
+}
+
+pub fun get_state(manager, key) {
+  return manager.current_state[key];
+}
+
+pub fun get_full_state(manager) {
+  return deep_clone(manager.current_state);
+}
+
+pub fun list_checkpoints(manager) {
+  let checkpoints = [];
+  for (id in keys(manager.checkpoints)) {
+    push(checkpoints, {
+      id: id,
+      created_at: manager.checkpoints[id].created_at
+    });
+  }
+  return checkpoints;
+}
+
+// Helper function
+fun deep_clone(obj) {
+  return json_decode(json_encode(obj));
+}

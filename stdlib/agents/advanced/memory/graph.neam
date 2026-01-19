@@ -1,0 +1,251 @@
+// Knowledge graph operations
+
+module std.agents.advanced.memory.graph;
+
+use std.agents.advanced.memory.config;
+
+// Knowledge graph
+pub fun knowledge_graph() {
+  return {
+    kind: "KnowledgeGraph",
+    nodes: {},
+    edges: [],
+    node_index: {},
+    edge_index: {}
+  };
+}
+
+// Add node
+pub fun add_node(graph, id, label, properties) {
+  let node = {
+    id: id,
+    label: label,
+    properties: properties || {},
+    created_at: now()
+  };
+
+  graph.nodes[id] = node;
+
+  // Index by label
+  if (graph.node_index[label] == nil) {
+    graph.node_index[label] = [];
+  }
+  push(graph.node_index[label], id);
+
+  return { ok: true, value: node };
+}
+
+// Add edge (relation)
+pub fun add_edge(graph, source_id, target_id, relation_type, properties) {
+  if (graph.nodes[source_id] == nil) {
+    return { ok: false, error: config.storage_error("Source node not found: " + source_id) };
+  }
+  if (graph.nodes[target_id] == nil) {
+    return { ok: false, error: config.storage_error("Target node not found: " + target_id) };
+  }
+
+  let edge = config.memory_relation(source_id, target_id, relation_type, 1.0);
+  edge.properties = properties || {};
+
+  push(graph.edges, edge);
+
+  // Index edges
+  let edge_key = source_id + "->" + target_id;
+  graph.edge_index[edge_key] = edge;
+
+  return { ok: true, value: edge };
+}
+
+// Get node by ID
+pub fun get_node(graph, id) {
+  return graph.nodes[id];
+}
+
+// Get nodes by label
+pub fun get_nodes_by_label(graph, label) {
+  let ids = graph.node_index[label];
+  if (ids == nil) {
+    return [];
+  }
+
+  let nodes = [];
+  for (id in ids) {
+    push(nodes, graph.nodes[id]);
+  }
+  return nodes;
+}
+
+// Get outgoing edges
+pub fun get_outgoing(graph, node_id) {
+  let edges = [];
+  for (edge in graph.edges) {
+    if (edge.source_id == node_id) {
+      push(edges, edge);
+    }
+  }
+  return edges;
+}
+
+// Get incoming edges
+pub fun get_incoming(graph, node_id) {
+  let edges = [];
+  for (edge in graph.edges) {
+    if (edge.target_id == node_id) {
+      push(edges, edge);
+    }
+  }
+  return edges;
+}
+
+// Get neighbors
+pub fun get_neighbors(graph, node_id, relation_type) {
+  let neighbors = [];
+
+  for (edge in graph.edges) {
+    if (edge.source_id == node_id) {
+      if (relation_type == nil || edge.relation_type == relation_type) {
+        push(neighbors, graph.nodes[edge.target_id]);
+      }
+    }
+    if (edge.target_id == node_id) {
+      if (relation_type == nil || edge.relation_type == relation_type) {
+        push(neighbors, graph.nodes[edge.source_id]);
+      }
+    }
+  }
+
+  return neighbors;
+}
+
+// Find path between nodes (BFS)
+pub fun find_path(graph, start_id, end_id, max_depth) {
+  if (graph.nodes[start_id] == nil || graph.nodes[end_id] == nil) {
+    return { ok: false, error: config.retrieval_error("Node not found") };
+  }
+
+  let queue = [[start_id]];
+  let visited = {};
+  visited[start_id] = true;
+
+  while (len(queue) > 0) {
+    let path = shift(queue);
+    let current = path[len(path) - 1];
+
+    if (current == end_id) {
+      return { ok: true, value: path };
+    }
+
+    if (len(path) >= max_depth) {
+      continue;
+    }
+
+    let neighbors = get_neighbors(graph, current, nil);
+    for (neighbor in neighbors) {
+      if (visited[neighbor.id] == nil) {
+        visited[neighbor.id] = true;
+        let new_path = concat(path, [neighbor.id]);
+        push(queue, new_path);
+      }
+    }
+  }
+
+  return { ok: false, error: config.retrieval_error("No path found") };
+}
+
+// Query graph with pattern
+pub fun query_pattern(graph, pattern) {
+  // pattern: { subject: label, predicate: relation, object: label }
+  let results = [];
+
+  for (edge in graph.edges) {
+    let source = graph.nodes[edge.source_id];
+    let target = graph.nodes[edge.target_id];
+
+    let matches = true;
+
+    if (pattern.subject != nil && source.label != pattern.subject) {
+      matches = false;
+    }
+    if (pattern.predicate != nil && edge.relation_type != pattern.predicate) {
+      matches = false;
+    }
+    if (pattern.object != nil && target.label != pattern.object) {
+      matches = false;
+    }
+
+    if (matches) {
+      push(results, {
+        subject: source,
+        predicate: edge.relation_type,
+        object: target
+      });
+    }
+  }
+
+  return { ok: true, value: results };
+}
+
+// Get subgraph around node
+pub fun get_subgraph(graph, center_id, depth) {
+  let nodes = {};
+  let edges = [];
+  let to_visit = [center_id];
+  let current_depth = 0;
+
+  while (current_depth < depth && len(to_visit) > 0) {
+    let next_visit = [];
+
+    for (node_id in to_visit) {
+      if (nodes[node_id] != nil) { continue; }
+
+      nodes[node_id] = graph.nodes[node_id];
+
+      let node_edges = concat(get_outgoing(graph, node_id), get_incoming(graph, node_id));
+      for (edge in node_edges) {
+        push(edges, edge);
+        if (nodes[edge.source_id] == nil) { push(next_visit, edge.source_id); }
+        if (nodes[edge.target_id] == nil) { push(next_visit, edge.target_id); }
+      }
+    }
+
+    to_visit = next_visit;
+    current_depth = current_depth + 1;
+  }
+
+  return {
+    nodes: values(nodes),
+    edges: dedupe_edges(edges)
+  };
+}
+
+// Helper functions
+fun dedupe_edges(edges) {
+  let seen = {};
+  let unique = [];
+  for (edge in edges) {
+    let key = edge.source_id + "-" + edge.relation_type + "-" + edge.target_id;
+    if (seen[key] == nil) {
+      seen[key] = true;
+      push(unique, edge);
+    }
+  }
+  return unique;
+}
+
+fun shift(arr) {
+  if (len(arr) == 0) { return nil; }
+  let first = arr[0];
+  for (let i = 0; i < len(arr) - 1; i = i + 1) {
+    arr[i] = arr[i + 1];
+  }
+  pop(arr);
+  return first;
+}
+
+fun values(obj) {
+  let result = [];
+  for (key in keys(obj)) {
+    push(result, obj[key]);
+  }
+  return result;
+}
