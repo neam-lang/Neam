@@ -1,0 +1,177 @@
+// Semantic memory - factual knowledge storage
+
+module std.agents.advanced.memory.semantic;
+
+use std.agents.advanced.memory.config;
+
+// Semantic memory store
+pub fun semantic_store(embedder) {
+  return {
+    kind: "SemanticStore",
+    embedder: embedder,
+    entries: {},
+    index: nil,
+    categories: {}
+  };
+}
+
+pub fun with_vector_index(store, index) {
+  store.index = index;
+  return store;
+}
+
+// Store a fact
+pub fun store_fact(store, content, category, metadata) {
+  let id = generate_id();
+  let embedding = store.embedder.embed(content);
+
+  let entry = config.memory_entry(id, content, config.memory_type_semantic());
+  entry.embedding = embedding;
+  entry.metadata = metadata || {};
+  entry.metadata.category = category;
+
+  store.entries[id] = entry;
+
+  if (store.categories[category] == nil) {
+    store.categories[category] = [];
+  }
+  push(store.categories[category], id);
+
+  if (store.index != nil) {
+    store.index.add(id, embedding);
+  }
+
+  return { ok: true, value: entry };
+}
+
+// Retrieve facts by similarity
+pub fun retrieve_similar(store, query, top_k) {
+  let query_embedding = store.embedder.embed(query);
+
+  if (store.index != nil) {
+    let results = store.index.search(query_embedding, top_k);
+    let entries = [];
+
+    for (result in results) {
+      let entry = store.entries[result.id];
+      if (entry != nil) {
+        entry.last_accessed = now();
+        entry.access_count = entry.access_count + 1;
+        push(entries, { entry: entry, score: result.score });
+      }
+    }
+
+    return { ok: true, value: entries };
+  }
+
+  return linear_search(store, query_embedding, top_k);
+}
+
+// Retrieve facts by category
+pub fun retrieve_by_category(store, category, limit) {
+  let ids = store.categories[category];
+  if (ids == nil) {
+    return { ok: true, value: [] };
+  }
+
+  let entries = [];
+  let count = 0;
+
+  for (id in ids) {
+    if (count >= limit) { break; }
+    let entry = store.entries[id];
+    if (entry != nil) {
+      entry.last_accessed = now();
+      entry.access_count = entry.access_count + 1;
+      push(entries, entry);
+      count = count + 1;
+    }
+  }
+
+  return { ok: true, value: entries };
+}
+
+// Update fact importance
+pub fun update_importance(store, id, importance) {
+  let entry = store.entries[id];
+  if (entry == nil) {
+    return { ok: false, error: config.retrieval_error("Entry not found: " + id) };
+  }
+
+  entry.importance = importance;
+  return { ok: true, value: entry };
+}
+
+// Delete fact
+pub fun delete_fact(store, id) {
+  let entry = store.entries[id];
+  if (entry == nil) {
+    return { ok: false, error: config.retrieval_error("Entry not found: " + id) };
+  }
+
+  let category = entry.metadata.category;
+  if (category != nil && store.categories[category] != nil) {
+    store.categories[category] = filter(store.categories[category], fun(i) { return i != id; });
+  }
+
+  if (store.index != nil) {
+    store.index.remove(id);
+  }
+
+  delete store.entries[id];
+  return { ok: true, value: true };
+}
+
+// Get all categories
+pub fun get_categories(store) {
+  return keys(store.categories);
+}
+
+// Get store statistics
+pub fun get_stats(store) {
+  let total = len(keys(store.entries));
+  let by_category = {};
+
+  for (cat in keys(store.categories)) {
+    by_category[cat] = len(store.categories[cat]);
+  }
+
+  return {
+    total_entries: total,
+    categories: by_category,
+    category_count: len(keys(store.categories))
+  };
+}
+
+// Helper functions
+fun linear_search(store, query_embedding, top_k) {
+  let scored = [];
+
+  for (id in keys(store.entries)) {
+    let entry = store.entries[id];
+    let score = cosine_similarity(query_embedding, entry.embedding);
+    push(scored, { entry: entry, score: score });
+  }
+
+  scored = sort_by(scored, fun(a, b) { return b.score - a.score; });
+
+  return { ok: true, value: take(scored, top_k) };
+}
+
+fun generate_id() {
+  return "sem_" + str(now()) + "_" + str(random_int(10000));
+}
+
+fun cosine_similarity(a, b) {
+  let dot = 0;
+  let norm_a = 0;
+  let norm_b = 0;
+
+  for (let i = 0; i < len(a); i = i + 1) {
+    dot = dot + a[i] * b[i];
+    norm_a = norm_a + a[i] * a[i];
+    norm_b = norm_b + b[i] * b[i];
+  }
+
+  return dot / (sqrt(norm_a) * sqrt(norm_b));
+}

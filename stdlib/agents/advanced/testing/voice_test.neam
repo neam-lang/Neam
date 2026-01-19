@@ -1,0 +1,29 @@
+// Voice agent tests
+
+module std.agents.advanced.testing.voice_test;
+
+use std.agents.advanced.voice.agent;
+use std.agents.advanced.voice.config;
+use std.agents.special.testing.mocks;
+
+pub fun test_voice_build() {
+  let llm = mocks.mock_llm([]);
+  let builder = agent.voice_builder(llm);
+  let built = agent.build_voice_agent(builder);
+  return built.ok && built.value.kind == "VoiceAgent";
+}
+
+pub fun test_voice_dialogue_response() {
+  let llm = mocks.mock_llm([
+    { pattern: "Respond naturally", response: "Sure, I can help." },
+    { pattern: "Detect the primary emotion", response: "neutral 0.2" },
+    { pattern: "Extract entities", response: "{}" }
+  ]);
+
+  let builder = agent.voice_builder(llm);
+  let built = agent.build_voice_agent(builder);
+  if (!built.ok) { return false; }
+
+  let response = agent.process_text(built.value, "Hello there");
+  return response.ok && contains(response.value.response_text, "help");
+}

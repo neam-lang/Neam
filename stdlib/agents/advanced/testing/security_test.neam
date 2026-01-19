@@ -1,0 +1,26 @@
+// Security agent tests
+
+module std.agents.advanced.testing.security_test;
+
+use std.agents.advanced.security.agent;
+use std.agents.advanced.security.detector;
+use std.agents.advanced.security.config;
+use std.agents.special.testing.mocks;
+
+pub fun test_security_monitoring() {
+  let llm = mocks.mock_llm([]);
+  let builder = agent.security_builder(llm);
+  let built = agent.build_security_agent(builder);
+  if (!built.ok) { return false; }
+
+  detector.add_signature(built.value.detector, {
+    pattern: "MALWARE",
+    description: "Malware signature",
+    alert_type: config.alert_type_malware(),
+    threat_level: config.threat_high()
+  });
+
+  let events = [{ source: "endpoint", raw: "MALWARE detected", value: 1 }];
+  let result = agent.monitor(built.value, events);
+  return result.ok && len(result.value.alerts) == 1;
+}

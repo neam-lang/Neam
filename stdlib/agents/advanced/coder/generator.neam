@@ -1,0 +1,203 @@
+// Code generation functionality
+
+module std.agents.advanced.coder.generator;
+
+use std.agents.advanced.coder.config;
+
+// Code generation request
+pub fun generation_request(description, language) {
+  return {
+    description: description,
+    language: language,
+    context_files: [],
+    output_path: nil,
+    mode: config.mode_generate()
+  };
+}
+
+pub fun with_context_files(req, files) {
+  req.context_files = files;
+  return req;
+}
+
+pub fun with_output_path(req, path) {
+  req.output_path = path;
+  return req;
+}
+
+pub fun with_mode(req, mode) {
+  req.mode = mode;
+  return req;
+}
+
+// Code generation result
+pub fun generation_result(code, language, metadata) {
+  return {
+    code: code,
+    language: language,
+    metadata: metadata,
+    imports: [],
+    exports: [],
+    dependencies: []
+  };
+}
+
+// Generate code from description
+pub fun generate_code(llm, request) {
+  let prompt = build_generation_prompt(request);
+  let response = llm.generate(prompt);
+
+  let parsed = parse_code_response(response, request.language);
+  if (!parsed.ok) {
+    return parsed;
+  }
+
+  let validated = validate_syntax(parsed.value, request.language);
+  if (!validated.ok) {
+    return validated;
+  }
+
+  return {
+    ok: true,
+    value: generation_result(parsed.value.code, request.language, {
+      description: request.description,
+      mode: request.mode,
+      generated_at: now()
+    })
+  };
+}
+
+// Complete code at cursor position
+pub fun complete_code(llm, code, cursor_position, language) {
+  let before = substring(code, 0, cursor_position);
+  let after = substring(code, cursor_position, len(code));
+
+  let prompt = "Complete the following " + language.kind + " code:\n\n" +
+               before + "<CURSOR>" + after + "\n\nProvide only the completion:";
+
+  let completion = trim(llm.generate(prompt));
+
+  return {
+    ok: true,
+    value: {
+      completion: completion,
+      full_code: before + completion + after
+    }
+  };
+}
+
+// Edit code based on instructions
+pub fun edit_code(llm, code, instructions, language) {
+  let prompt = "Edit the following " + language.kind + " code according to the instructions.\n\n" +
+               "Code:\n```\n" + code + "\n```\n\n" +
+               "Instructions: " + instructions + "\n\n" +
+               "Provide the edited code:";
+
+  let response = llm.generate(prompt);
+  let edited = extract_code_block(response);
+
+  return {
+    ok: true,
+    value: {
+      original: code,
+      edited: edited,
+      instructions: instructions
+    }
+  };
+}
+
+// Refactor code
+pub fun refactor_code(llm, code, refactor_type, language) {
+  let prompt = "Refactor the following " + language.kind + " code.\n" +
+               "Refactoring type: " + refactor_type + "\n\n" +
+               "Code:\n```\n" + code + "\n```\n\n" +
+               "Provide the refactored code with explanation:";
+
+  let response = llm.generate(prompt);
+  let parts = split_code_and_explanation(response);
+
+  return {
+    ok: true,
+    value: {
+      original: code,
+      refactored: parts.code,
+      explanation: parts.explanation,
+      refactor_type: refactor_type
+    }
+  };
+}
+
+// Generate function from signature
+pub fun generate_function(llm, signature, description, language) {
+  let prompt = "Implement the following " + language.kind + " function:\n\n" +
+               "Signature: " + signature + "\n" +
+               "Description: " + description + "\n\n" +
+               "Provide the complete implementation:";
+
+  let response = llm.generate(prompt);
+  let code = extract_code_block(response);
+
+  return {
+    ok: true,
+    value: {
+      signature: signature,
+      implementation: code,
+      description: description
+    }
+  };
+}
+
+// Helper functions
+fun build_generation_prompt(request) {
+  let prompt = "Generate " + request.language.kind + " code for:\n" +
+               request.description + "\n\n";
+
+  if (len(request.context_files) > 0) {
+    prompt = prompt + "Context files:\n";
+    for (file in request.context_files) {
+      prompt = prompt + "--- " + file.path + " ---\n" + file.content + "\n\n";
+    }
+  }
+
+  prompt = prompt + "Provide clean, well-structured code:";
+  return prompt;
+}
+
+fun parse_code_response(response, language) {
+  let code = extract_code_block(response);
+  if (len(code) == 0) {
+    return { ok: false, error: config.coder_error("PARSE", "No code block found", nil) };
+  }
+  return { ok: true, value: { code: code } };
+}
+
+fun validate_syntax(parsed, language) {
+  if (len(parsed.code) == 0) {
+    return { ok: false, error: config.syntax_error("", 0, "Empty code") };
+  }
+  return { ok: true, value: parsed };
+}
+
+fun extract_code_block(text) {
+  let start = index_of(text, "```");
+  if (start < 0) {
+    return trim(text);
+  }
+
+  let after_fence = start + 3;
+  let newline = index_of(substring(text, after_fence, len(text)), "\n");
+  let code_start = after_fence + newline + 1;
+
+  let end = index_of(substring(text, code_start, len(text)), "```");
+  if (end < 0) {
+    return trim(substring(text, code_start, len(text)));
+  }
+
+  return trim(substring(text, code_start, code_start + end));
+}
+
+fun split_code_and_explanation(text) {
+  let code = extract_code_block(text);
+  let explanation = regex_replace(text, "```[\\s\\S]*?```", "");
+  return { code: code, explanation: trim(explanation) };
+}
