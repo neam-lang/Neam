@@ -1,0 +1,39 @@
+// MLflow exporter
+
+module std.observability.exporters.mlflow;
+
+pub fun create_exporter(config) {
+  let default_config = {
+    tracking_uri: "http://localhost:5000",
+    experiment_name: "neam-agents",
+    otlp_endpoint: "/v1/traces",
+    run_name_template: "{agent_name}-{timestamp}",
+    log_artifacts: true,
+    log_models: false
+  };
+  return merge(default_config, config);
+}
+
+pub fun map_run(agent, metrics, tags) {
+  return {
+    experiment: agent.experiment_name ?? "neam-agents",
+    run_name: format_name(agent, agent.run_name_template ?? "{agent_name}-{timestamp}"),
+    params: agent.params ?? {},
+    metrics: metrics ?? {},
+    tags: tags ?? {}
+  };
+}
+
+fun format_name(agent, template) {
+  let name = replace(template, "{agent_name}", agent.name ?? "agent");
+  name = replace(name, "{timestamp}", str(now()));
+  return name;
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

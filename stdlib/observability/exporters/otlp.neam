@@ -1,0 +1,22 @@
+// OTLP exporter configuration
+
+module std.observability.exporters.otlp;
+
+pub fun create_exporter(config) {
+  let default_config = {
+    protocol: "grpc",
+    endpoint: "http://localhost:4317",
+    headers: {},
+    tls: { enabled: false, cert: nil, key: nil, ca: nil },
+    compression: "none"
+  };
+  return merge(default_config, config);
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

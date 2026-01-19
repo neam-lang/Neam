@@ -1,0 +1,24 @@
+// Observability initialization
+
+module std.observability;
+
+use std.observability.core.tracer;
+use std.observability.core.meter;
+use std.observability.core.logger;
+use std.observability.core.resource;
+use std.observability.exporters.multi;
+use std.observability.config.programmatic;
+
+pub fun init(config) {
+  let cfg = programmatic.initialize(config ?? {});
+  let res = resource.resource_with_defaults({ "service.name": cfg.service_name });
+  return {
+    tracer: tracer.create_provider({ resource: res, exporters: cfg.exporters }),
+    meter: meter.create_provider({ resource: res, exporters: cfg.exporters, export_interval_ms: cfg.metrics.export_interval_ms }),
+    logger: logger.create_provider({ resource: res, exporters: cfg.exporters, level: cfg.logging.level })
+  };
+}
+
+pub fun pipeline(config) {
+  return multi.create_pipeline(config ?? {});
+}

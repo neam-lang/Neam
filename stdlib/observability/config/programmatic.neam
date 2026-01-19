@@ -1,0 +1,37 @@
+// Code-based configuration
+
+module std.observability.config.programmatic;
+
+pub fun initialize(config) {
+  let defaults = {
+    service_name: "neam-app",
+    tracing: {
+      enabled: true,
+      sampler: { type: "ratio", ratio: 0.1 },
+      capture_prompts: true,
+      capture_responses: true,
+      max_prompt_length: 10000
+    },
+    metrics: {
+      enabled: true,
+      export_interval_ms: 60000
+    },
+    logging: {
+      enabled: true,
+      level: "info"
+    },
+    exporters: {
+      primary: "otlp",
+      secondary: []
+    }
+  };
+  return merge(defaults, config);
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

@@ -1,0 +1,27 @@
+// Observability configuration helpers
+
+module std.observability.config;
+
+use std.observability.config.environment;
+use std.observability.config.programmatic;
+use std.observability.config.runtime;
+
+pub fun from_environment() {
+  return environment.load();
+}
+
+pub fun initialize(config) {
+  return programmatic.initialize(config);
+}
+
+pub fun set_sampling_rate(state, rate) {
+  return runtime.set_sampling_rate(state, rate);
+}
+
+pub fun set_agent_sampling(state, agent_name, rate) {
+  return runtime.set_agent_sampling(state, agent_name, rate);
+}
+
+pub fun set_features(state, features) {
+  return runtime.set_features(state, features);
+}

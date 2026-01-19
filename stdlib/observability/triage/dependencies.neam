@@ -1,0 +1,27 @@
+// Dependency analysis
+
+module std.observability.triage.dependencies;
+
+pub fun build_graph(traces) {
+  let graph = { nodes: {}, edges: [] };
+  for (trace in traces) {
+    let parent = trace.parent_component;
+    let child = trace.component;
+    if (parent != nil && child != nil) {
+      graph.nodes[parent] = true;
+      graph.nodes[child] = true;
+      push(graph.edges, { from: parent, to: child });
+    }
+  }
+  return graph;
+}
+
+pub fun analyze_failure_impact(config) {
+  return {
+    failed_component: config.failed_component,
+    time_range: config.time_range,
+    affected_agents: config.affected_agents ?? [],
+    cascading_failures: config.cascading_failures ?? [],
+    blast_radius: len(config.affected_agents ?? [])
+  };
+}

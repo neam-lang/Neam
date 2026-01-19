@@ -1,0 +1,11 @@
+// Aggregation helpers
+
+module std.observability.query.aggregations;
+
+pub fun metric(name, fn, field, value) {
+  return { name: name, fn: fn, field: field, value: value };
+}
+
+pub fun group_by(fields) {
+  return fields ?? [];
+}

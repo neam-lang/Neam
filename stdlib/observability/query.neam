@@ -1,0 +1,35 @@
+// Query facade
+
+module std.observability.query;
+
+use std.observability.query.interface;
+use std.observability.query.builder;
+use std.observability.query.aggregations;
+
+pub fun traces(config) {
+  return interface.traces(config);
+}
+
+pub fun aggregate(config) {
+  return interface.aggregate(config);
+}
+
+pub fun where_clause(filters) {
+  return builder.where_clause(filters);
+}
+
+pub fun order_by(fields) {
+  return builder.order_by(fields);
+}
+
+pub fun limit(count) {
+  return builder.limit(count);
+}
+
+pub fun metric(name, fn, field, value) {
+  return aggregations.metric(name, fn, field, value);
+}
+
+pub fun group_by(fields) {
+  return aggregations.group_by(fields);
+}

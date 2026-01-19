@@ -1,0 +1,29 @@
+// CLI trace viewer helpers
+
+module std.observability.visualization.cli;
+
+pub fun show(trace_id) {
+  return { command: "neam-trace show", args: [trace_id] };
+}
+
+pub fun tree(trace_id) {
+  return { command: "neam-trace tree", args: [trace_id] };
+}
+
+pub fun tail(agent_name) {
+  return { command: "neam-trace tail", args: ["--agent=" + agent_name] };
+}
+
+pub fun query(where_clause, limit) {
+  return {
+    command: "neam-trace query",
+    args: ["--where", where_clause, "--limit", str(limit ?? 10)]
+  };
+}
+
+pub fun report(trace_id, format) {
+  return {
+    command: "neam-trace report",
+    args: [trace_id, "--format=" + (format ?? "markdown")]
+  };
+}
