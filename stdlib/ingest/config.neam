@@ -1,0 +1,172 @@
+// Vector ingestion configuration helpers
+
+module std.ingest.config;
+
+pub fun dedup_content_hash() {
+  return { kind: "ContentHash" };
+}
+
+pub fun dedup_semantic(threshold) {
+  return { kind: "SemanticSimilarity", threshold: threshold };
+}
+
+pub fun dedup_hybrid(hash_first, threshold) {
+  return { kind: "Hybrid", hash_first: hash_first, similarity_threshold: threshold };
+}
+
+pub fun error_fail() {
+  return { kind: "Fail" };
+}
+
+pub fun error_skip() {
+  return { kind: "Skip" };
+}
+
+pub fun error_retry(max_attempts) {
+  return { kind: "Retry", max_attempts: max_attempts };
+}
+
+pub fun error_custom(handler) {
+  return { kind: "Custom", handler: handler };
+}
+
+pub fun action_fail() {
+  return { kind: "Fail" };
+}
+
+pub fun action_skip() {
+  return { kind: "Skip" };
+}
+
+pub fun action_retry() {
+  return { kind: "Retry" };
+}
+
+pub fun retry_config(max_attempts, initial_delay_ms, max_delay_ms, backoff_multiplier) {
+  return {
+    max_attempts: max_attempts,
+    initial_delay_ms: initial_delay_ms,
+    max_delay_ms: max_delay_ms,
+    backoff_multiplier: backoff_multiplier
+  };
+}
+
+pub fun default_retry() {
+  return retry_config(3, 1000, 30000, 2.0);
+}
+
+pub fun rate_limit_config(requests_per_minute, tokens_per_minute) {
+  return {
+    requests_per_minute: requests_per_minute,
+    tokens_per_minute: tokens_per_minute
+  };
+}
+
+pub fun default_rate_limit() {
+  return rate_limit_config(500, 150000);
+}
+
+pub fun pipeline_config(concurrency, embedding_batch_size, store_batch_size, deduplicate, dedup_strategy, retry, rate_limit, on_error) {
+  return {
+    concurrency: concurrency,
+    embedding_batch_size: embedding_batch_size,
+    store_batch_size: store_batch_size,
+    deduplicate: deduplicate,
+    dedup_strategy: dedup_strategy,
+    retry: retry,
+    rate_limit: rate_limit,
+    on_error: on_error,
+    on_progress: nil
+  };
+}
+
+pub fun with_progress(config, callback) {
+  config.on_progress = callback;
+  return config;
+}
+
+pub fun with_on_error(config, on_error) {
+  config.on_error = on_error;
+  return config;
+}
+
+pub fun with_deduplicate(config, deduplicate) {
+  config.deduplicate = deduplicate;
+  return config;
+}
+
+pub fun with_rate_limit(config, rate_limit) {
+  config.rate_limit = rate_limit;
+  return config;
+}
+
+pub fun default_pipeline_config() {
+  return pipeline_config(
+    10,
+    100,
+    100,
+    true,
+    dedup_content_hash(),
+    default_retry(),
+    nil,
+    error_skip()
+  );
+}
+
+pub fun parser_config(max_size_bytes, timeout_ms) {
+  return {
+    max_size_bytes: max_size_bytes,
+    timeout_ms: timeout_ms,
+    options: {}
+  };
+}
+
+pub fun with_option(config, key, value) {
+  config.options[key] = value;
+  return config;
+}
+
+pub fun default_parser_config() {
+  return parser_config(104857600, 60000);
+}
+
+pub fun index_config(name, dimensions, metric, index_type) {
+  return {
+    name: name,
+    dimensions: dimensions,
+    metric: metric,
+    index_type: index_type
+  };
+}
+
+pub fun metric_cosine() {
+  return { kind: "Cosine" };
+}
+
+pub fun metric_euclidean() {
+  return { kind: "Euclidean" };
+}
+
+pub fun metric_dot_product() {
+  return { kind: "DotProduct" };
+}
+
+pub fun index_flat() {
+  return { kind: "Flat" };
+}
+
+pub fun index_hnsw(m, ef_construction) {
+  return { kind: "HNSW", m: m, ef_construction: ef_construction };
+}
+
+pub fun index_ivf_flat(n_lists) {
+  return { kind: "IVFFlat", n_lists: n_lists };
+}
+
+pub fun index_auto() {
+  return { kind: "Auto" };
+}
+
+pub fun default_index_config(name, dimensions) {
+  return index_config(name, dimensions, metric_cosine(), index_auto());
+}
