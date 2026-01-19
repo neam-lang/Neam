@@ -1,0 +1,114 @@
+// Trading analysis utilities
+
+module std.agents.advanced.trading.analyzer;
+
+use std.agents.advanced.trading.config;
+
+pub fun market_analyzer(llm, data_feeds) {
+  return { llm: llm, data_feeds: data_feeds, indicators: {} };
+}
+
+pub fun analyze_fundamentals(analyzer, symbol) {
+  let prompt = "Provide fundamental analysis for " + symbol + " including P/E, revenue growth, and outlook.";
+  return { ok: true, value: { symbol: symbol, analysis: trim(analyzer.llm.generate(prompt)) } };
+}
+
+pub fun analyze_sentiment(analyzer, symbol, news_items) {
+  let news_text = "";
+  if (news_items == nil) { news_items = []; }
+
+  for (item in news_items) {
+    news_text = news_text + "- " + item.headline + "\n";
+  }
+
+  let prompt = "Analyze sentiment for " + symbol + ":\n" + news_text + "\n\nOverall sentiment (bullish/neutral/bearish):";
+  let response = lowercase(trim(analyzer.llm.generate(prompt)));
+
+  let score = 0;
+  if (contains(response, "bullish")) { score = 1; }
+  else if (contains(response, "bearish")) { score = -1; }
+
+  return { ok: true, value: { symbol: symbol, sentiment: score, analysis: response } };
+}
+
+pub fun calculate_sma(prices, period) {
+  if (prices == nil || len(prices) < period) { return nil; }
+  let sum = 0;
+  for (let i = len(prices) - period; i < len(prices); i = i + 1) {
+    sum = sum + prices[i];
+  }
+  return sum / period;
+}
+
+pub fun calculate_rsi(prices, period) {
+  if (prices == nil || len(prices) < period + 1) { return nil; }
+
+  let gains = 0;
+  let losses = 0;
+
+  for (let i = len(prices) - period; i < len(prices); i = i + 1) {
+    let change = prices[i] - prices[i - 1];
+    if (change > 0) { gains = gains + change; }
+    else { losses = losses + abs(change); }
+  }
+
+  let avg_gain = gains / period;
+  let avg_loss = losses / period;
+
+  if (avg_loss == 0) { return 100; }
+  let rs = avg_gain / avg_loss;
+  return 100 - (100 / (1 + rs));
+}
+
+pub fun get_technical_signals(analyzer, symbol, prices) {
+  if (prices == nil || len(prices) == 0) {
+    return {
+      ok: true,
+      value: { symbol: symbol, sma_20: nil, sma_50: nil, rsi: nil, current: nil, signals: [] }
+    };
+  }
+
+  let sma_20 = calculate_sma(prices, 20);
+  let sma_50 = calculate_sma(prices, 50);
+  let rsi = calculate_rsi(prices, 14);
+  let current = prices[len(prices) - 1];
+
+  let signals = [];
+  if (sma_20 != nil && sma_50 != nil && sma_20 > sma_50) { push(signals, "bullish_crossover"); }
+  if (rsi != nil && rsi < 30) { push(signals, "oversold"); }
+  if (rsi != nil && rsi > 70) { push(signals, "overbought"); }
+
+  return {
+    ok: true,
+    value: {
+      symbol: symbol,
+      sma_20: sma_20,
+      sma_50: sma_50,
+      rsi: rsi,
+      current: current,
+      signals: signals
+    }
+  };
+}
+
+pub fun collect_prices(data_feeds, symbol) {
+  let prices = [];
+  if (data_feeds == nil) { return prices; }
+
+  for (feed in data_feeds) {
+    if (feed == nil) { continue; }
+
+    if (feed.symbol == symbol && feed.prices != nil) {
+      for (price in feed.prices) { push(prices, price); }
+    }
+
+    if (feed.get_prices != nil) {
+      let result = feed.get_prices(symbol);
+      if (result != nil) {
+        for (price in result) { push(prices, price); }
+      }
+    }
+  }
+
+  return prices;
+}

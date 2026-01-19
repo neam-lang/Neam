@@ -1,0 +1,63 @@
+// Trading agent configuration
+
+module std.agents.advanced.trading.config;
+
+// Market types
+pub fun market_stock() { return { kind: "Stock", trading_hours: "09:30-16:00" }; }
+pub fun market_crypto() { return { kind: "Crypto", trading_hours: "24/7" }; }
+pub fun market_forex() { return { kind: "Forex", trading_hours: "24/5" }; }
+
+// Order types
+pub fun order_market() { return { kind: "Market" }; }
+pub fun order_limit(price) { return { kind: "Limit", price: price }; }
+pub fun order_stop(price) { return { kind: "Stop", trigger_price: price }; }
+pub fun order_stop_limit(stop, limit) {
+  return { kind: "StopLimit", stop_price: stop, limit_price: limit };
+}
+
+// Order sides
+pub fun side_buy() { return "Buy"; }
+pub fun side_sell() { return "Sell"; }
+
+// Risk settings
+pub fun risk_settings_default() {
+  return {
+    max_position_size: 0.1,
+    max_drawdown: 0.15,
+    stop_loss_pct: 0.05,
+    take_profit_pct: 0.1
+  };
+}
+
+// Trading order
+pub fun trading_order(symbol, side, quantity, order_type) {
+  return {
+    id: generate_id(),
+    symbol: symbol,
+    side: side,
+    quantity: quantity,
+    order_type: order_type,
+    status: "pending",
+    created_at: now()
+  };
+}
+
+// Position
+pub fun position(symbol, quantity, entry_price) {
+  return {
+    symbol: symbol,
+    quantity: quantity,
+    entry_price: entry_price,
+    current_price: entry_price,
+    unrealized_pnl: 0
+  };
+}
+
+// Error types
+pub fun trading_error(code, message) {
+  return { kind: "TradingError", code: code, message: message };
+}
+
+fun generate_id() {
+  return "ord_" + str(now()) + "_" + str(random_int(10000));
+}

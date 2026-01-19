@@ -1,0 +1,96 @@
+// Task decomposition utilities
+
+module std.agents.advanced.orchestrator.decomposer;
+
+use std.agents.advanced.orchestrator.config;
+
+pub fun task_decomposer(llm) {
+  return { llm: llm, templates: {} };
+}
+
+pub fun decompose(decomposer, goal) {
+  let prompt = "Break down this goal into subtasks:\n\nGoal: " + goal + "\n\nList subtasks with dependencies (format: task_id | description | depends_on):";
+  let response = decomposer.llm.generate(prompt);
+
+  let tasks = parse_tasks(response);
+  return { ok: true, value: tasks };
+}
+
+pub fun detect_dependencies(decomposer, tasks) {
+  let graph = {};
+  for (task in tasks) {
+    graph[task.id] = task.dependencies;
+  }
+  return graph;
+}
+
+pub fun get_execution_order(decomposer, tasks) {
+  let graph = detect_dependencies(decomposer, tasks);
+  let order = topological_sort(graph);
+  return { ok: true, value: order };
+}
+
+fun parse_tasks(response) {
+  let tasks = [];
+  let lines = split(response, "\n");
+  let id = 1;
+
+  for (line in lines) {
+    let parts = split(line, "|");
+    if (len(parts) >= 2) {
+      let deps = len(parts) > 2 ? normalize_dependencies(parts[2]) : [];
+      push(tasks, config.task("task_" + str(id), trim(parts[1]), deps));
+      id = id + 1;
+    }
+  }
+  return tasks;
+}
+
+fun normalize_dependencies(raw) {
+  let deps = [];
+  let parts = split(trim(raw), ",");
+  for (part in parts) {
+    let cleaned = trim(part);
+    if (len(cleaned) > 0) { push(deps, cleaned); }
+  }
+  return deps;
+}
+
+fun topological_sort(graph) {
+  let visited = {};
+  let visiting = {};
+  let order = [];
+
+  for (node in keys(graph)) {
+    if (visited[node] == nil) {
+      visit(node, graph, visited, visiting, order);
+    }
+  }
+
+  return reverse(order);
+}
+
+fun visit(node, graph, visited, visiting, order) {
+  if (visiting[node]) { return; }
+  if (visited[node]) { return; }
+
+  visiting[node] = true;
+  let deps = graph[node] || [];
+  for (dep in deps) {
+    if (graph[dep] != nil) {
+      visit(dep, graph, visited, visiting, order);
+    }
+  }
+  visiting[node] = false;
+
+  visited[node] = true;
+  push(order, node);
+}
+
+fun reverse(arr) {
+  let result = [];
+  for (let i = len(arr) - 1; i >= 0; i = i - 1) {
+    push(result, arr[i]);
+  }
+  return result;
+}

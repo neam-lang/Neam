@@ -1,0 +1,42 @@
+// Document analysis utilities
+
+module std.agents.advanced.document.analyzer;
+
+use std.agents.advanced.document.config;
+
+pub fun document_analyzer(llm) {
+  return { llm: llm, clause_patterns: {} };
+}
+
+pub fun analyze_document(analyzer, content, doc_type) {
+  let prompt = "Analyze this " + doc_type.kind + " document:\n\n" + content + "\n\nProvide:\n1. Summary\n2. Key clauses\n3. Obligations\n4. Risks";
+  let analysis = analyzer.llm.generate(prompt);
+
+  return { ok: true, value: { summary: analysis, doc_type: doc_type, analyzed_at: now() } };
+}
+
+pub fun extract_clauses(analyzer, content) {
+  let prompt = "Extract all legal clauses from this document:\n\n" + content + "\n\nFormat: [CLAUSE_TYPE]: clause text";
+  let response = analyzer.llm.generate(prompt);
+
+  let clauses = [];
+  let lines = split(response, "\n");
+  for (line in lines) {
+    let parts = split(line, "]:");
+    if (len(parts) == 2) {
+      push(clauses, { type: trim(regex_replace(parts[0], "\\[", "")), text: trim(parts[1]) });
+    }
+  }
+
+  return { ok: true, value: clauses };
+}
+
+pub fun identify_risks(analyzer, content) {
+  let prompt = "Identify legal and business risks in this document:\n\n" + content + "\n\nList risks with severity (high/medium/low):";
+  return { ok: true, value: trim(analyzer.llm.generate(prompt)) };
+}
+
+pub fun compare_documents(analyzer, doc1, doc2) {
+  let prompt = "Compare these two documents and identify differences:\n\nDocument 1:\n" + doc1 + "\n\nDocument 2:\n" + doc2;
+  return { ok: true, value: trim(analyzer.llm.generate(prompt)) };
+}

@@ -1,0 +1,178 @@
+// Trading strategies and backtesting
+
+module std.agents.advanced.trading.strategist;
+
+use std.agents.advanced.trading.config;
+
+pub fun strategy(name, entry_rules, exit_rules) {
+  return { name: name, entry_rules: entry_rules, exit_rules: exit_rules, parameters: {} };
+}
+
+pub fun backtest(strategy_def, historical_data, initial_capital) {
+  let capital = initial_capital;
+  let positions = {};
+  let trades = [];
+  let equity_curve = [initial_capital];
+
+  for (bar in historical_data) {
+    // Check exit rules for open positions
+    for (symbol in keys(positions)) {
+      let pos = positions[symbol];
+      if (should_exit(strategy_def, bar, pos)) {
+        let pnl = (bar.close - pos.entry_price) * pos.quantity;
+        capital = capital + (pos.quantity * bar.close);
+        push(trades, { symbol: symbol, entry: pos.entry_price, exit: bar.close, pnl: pnl });
+        delete positions[symbol];
+      }
+    }
+
+    // Check entry rules
+    if (should_enter(strategy_def, bar) && len(keys(positions)) == 0) {
+      let position_size = capital * 0.1;
+      let quantity = floor(position_size / bar.close);
+      if (quantity > 0) {
+        positions[bar.symbol] = config.position(bar.symbol, quantity, bar.close);
+        capital = capital - (quantity * bar.close);
+      }
+    }
+
+    push(equity_curve, capital + sum_positions_value(positions, bar.close));
+  }
+
+  return {
+    ok: true,
+    value: {
+      total_return: (equity_curve[len(equity_curve) - 1] / initial_capital - 1) * 100,
+      trades: trades,
+      win_rate: calculate_win_rate(trades),
+      max_drawdown: calculate_max_drawdown(equity_curve),
+      sharpe_ratio: calculate_sharpe(equity_curve)
+    }
+  };
+}
+
+pub fun optimize_parameters(strategy_def, historical_data, param_ranges) {
+  let best_result = nil;
+  let best_params = {};
+
+  // Simple grid search
+  for (param_combo in generate_param_combinations(param_ranges)) {
+    let test_strategy = clone_strategy(strategy_def, param_combo);
+    let result = backtest(test_strategy, historical_data, 100000);
+
+    if (best_result == nil || result.value.sharpe_ratio > best_result.sharpe_ratio) {
+      best_result = result.value;
+      best_params = param_combo;
+    }
+  }
+
+  return { ok: true, value: { best_params: best_params, performance: best_result } };
+}
+
+fun should_enter(strategy_def, bar) {
+  for (rule in strategy_def.entry_rules) {
+    if (!rule(bar)) { return false; }
+  }
+  return true;
+}
+
+fun should_exit(strategy_def, bar, position) {
+  for (rule in strategy_def.exit_rules) {
+    if (rule(bar, position)) { return true; }
+  }
+  return false;
+}
+
+fun sum_positions_value(positions, price) {
+  let total = 0;
+  for (sym in keys(positions)) { total = total + positions[sym].quantity * price; }
+  return total;
+}
+
+fun calculate_win_rate(trades) {
+  if (len(trades) == 0) { return 0; }
+  let wins = 0;
+  for (t in trades) { if (t.pnl > 0) { wins = wins + 1; } }
+  return (wins / len(trades)) * 100;
+}
+
+fun calculate_max_drawdown(curve) {
+  let peak = curve[0];
+  let max_dd = 0;
+  for (val in curve) {
+    if (val > peak) { peak = val; }
+    let dd = (peak - val) / peak;
+    if (dd > max_dd) { max_dd = dd; }
+  }
+  return max_dd * 100;
+}
+
+fun calculate_sharpe(curve) {
+  if (len(curve) < 2) { return 0; }
+  let returns = [];
+  for (let i = 1; i < len(curve); i = i + 1) {
+    push(returns, (curve[i] - curve[i - 1]) / curve[i - 1]);
+  }
+  let mean = sum(returns) / len(returns);
+  let variance = 0;
+  for (r in returns) { variance = variance + pow(r - mean, 2); }
+  let std = sqrt(variance / len(returns));
+  return std > 0 ? (mean / std) * sqrt(252) : 0;
+}
+
+fun generate_param_combinations(ranges) {
+  let keys_list = keys(ranges);
+  let results = [];
+
+  if (len(keys_list) == 0) {
+    push(results, {});
+    return results;
+  }
+
+  generate_param_combinations_inner(ranges, keys_list, 0, {}, results);
+  return results;
+}
+
+fun generate_param_combinations_inner(ranges, keys_list, index, current, results) {
+  if (index >= len(keys_list)) {
+    push(results, copy_map(current));
+    return;
+  }
+
+  let key = keys_list[index];
+  let values = ranges[key] || [];
+
+  if (len(values) == 0) {
+    current[key] = nil;
+    generate_param_combinations_inner(ranges, keys_list, index + 1, current, results);
+    delete current[key];
+    return;
+  }
+
+  for (val in values) {
+    current[key] = val;
+    generate_param_combinations_inner(ranges, keys_list, index + 1, current, results);
+  }
+  delete current[key];
+}
+
+fun clone_strategy(s, params) {
+  return {
+    name: s.name,
+    entry_rules: s.entry_rules,
+    exit_rules: s.exit_rules,
+    parameters: params
+  };
+}
+
+fun copy_map(source) {
+  let result = {};
+  for (key in keys(source)) { result[key] = source[key]; }
+  return result;
+}
+
+fun sum(arr) {
+  let t = 0;
+  for (v in arr) { t = t + v; }
+  return t;
+}
