@@ -1,0 +1,15 @@
+module std.project.manifest.defaults;
+
+pub fun base_manifest() {
+  return {
+    neam_version: "1.0",
+    project: {
+      name: "new-project",
+      version: "0.1.0",
+      type: "binary",
+      entry_points: { main: "src/main.neam" }
+    },
+    dependencies: {},
+    features: { default: [] }
+  };
+}

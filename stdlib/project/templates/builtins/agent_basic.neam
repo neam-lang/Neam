@@ -1,0 +1,13 @@
+module std.project.templates.builtins.agent_basic;
+
+pub fun definition() {
+  return {
+    name: "agent-basic",
+    description: "Basic agent template",
+    files: [
+      "neam.toml",
+      "src/main.neam",
+      "tests/test_agent.neam"
+    ]
+  };
+}

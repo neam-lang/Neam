@@ -1,0 +1,5 @@
+module std.project.build.hooks;
+
+pub fun run(pre, post) {
+  return { pre: pre ?? "", post: post ?? "" };
+}

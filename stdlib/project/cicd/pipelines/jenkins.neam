@@ -1,0 +1,5 @@
+module std.project.cicd.pipelines.jenkins;
+
+pub fun template() {
+  return project_cicd_template("jenkins");
+}

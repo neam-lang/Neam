@@ -1,0 +1,12 @@
+module std.project.templates.builtins.library;
+
+pub fun definition() {
+  return {
+    name: "library",
+    description: "Reusable library template",
+    files: [
+      "neam.toml",
+      "src/lib.neam"
+    ]
+  };
+}

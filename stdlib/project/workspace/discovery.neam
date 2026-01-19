@@ -1,0 +1,10 @@
+module std.project.workspace.discovery;
+
+pub fun discover(root, patterns) {
+  let args = {
+    root: root,
+    patterns: patterns ?? []
+  };
+
+  return project_workspace_discover(args.root, args.patterns);
+}

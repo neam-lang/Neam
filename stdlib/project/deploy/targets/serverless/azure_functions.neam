@@ -1,0 +1,5 @@
+module std.project.deploy.targets.serverless.azure_functions;
+
+pub fun run(config) {
+  return { ok: true, value: { target: "azure-functions", config: config ?? {} } };
+}
