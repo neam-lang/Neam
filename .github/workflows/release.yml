@@ -11,20 +11,14 @@ on:
         required: true
         type: string
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   # ============================================================================
   # Build Jobs
   # ============================================================================
 
   build-linux:
-    name: Build Linux
+    name: Build Linux (amd64)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,20 +35,12 @@ jobs:
             libssl-dev \
             pkg-config
 
-      - name: Install cross-compilation tools (arm64)
-        if: matrix.arch == 'arm64'
-        run: |
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu
-
       - name: Configure CMake
         run: |
           cmake -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
-            ${{ matrix.arch == 'arm64' && '-DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/linux-arm64.cmake' || '' }}
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
 
       - name: Build
         run: cmake --build build --config Release --parallel
@@ -70,26 +56,23 @@ jobs:
           cp -r install/bin/* package/bin/ || true
           cp -r install/lib/* package/lib/ || true
 
-          # Copy stdlib and packages
-          cp -r NeamC/stdlib/* package/stdlib/ || true
-          cp -r NeamPackage/packages/* package/packages/ || true
+          # Copy stdlib and packages (adjust paths based on repo structure)
+          if [ -d "NeamC/stdlib" ]; then cp -r NeamC/stdlib/* package/stdlib/ || true; fi
+          if [ -d "stdlib" ]; then cp -r stdlib/* package/stdlib/ || true; fi
 
           # Create archive
           cd package
-          tar -czf ../neam-${{ github.ref_name || inputs.version }}-linux-${{ matrix.arch }}.tar.gz .
+          tar -czf ../neam-${{ github.ref_name || inputs.version }}-linux-amd64.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: neam-linux-${{ matrix.arch }}
+          name: neam-linux-amd64
           path: neam-*.tar.gz
 
-  build-macos:
-    name: Build macOS
+  build-macos-arm64:
+    name: Build macOS (arm64)
     runs-on: macos-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -105,7 +88,7 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
-            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch == 'amd64' && 'x86_64' || 'arm64' }} \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
 
       - name: Build
@@ -122,26 +105,23 @@ jobs:
           cp -r install/bin/* package/bin/ || true
           cp -r install/lib/* package/lib/ || true
 
-          # Copy stdlib and packages
-          cp -r NeamC/stdlib/* package/stdlib/ || true
-          cp -r NeamPackage/packages/* package/packages/ || true
+          # Copy stdlib
+          if [ -d "NeamC/stdlib" ]; then cp -r NeamC/stdlib/* package/stdlib/ || true; fi
+          if [ -d "stdlib" ]; then cp -r stdlib/* package/stdlib/ || true; fi
 
           # Create archive
           cd package
-          tar -czf ../neam-${{ github.ref_name || inputs.version }}-darwin-${{ matrix.arch }}.tar.gz .
+          tar -czf ../neam-${{ github.ref_name || inputs.version }}-darwin-arm64.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: neam-darwin-${{ matrix.arch }}
+          name: neam-darwin-arm64
           path: neam-*.tar.gz
 
-  build-windows:
-    name: Build Windows
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        arch: [amd64]
+  build-macos-amd64:
+    name: Build macOS (amd64)
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
         with:
@@ -149,18 +129,59 @@ jobs:
 
       - name: Install dependencies
         run: |
-          choco install cmake ninja -y
+          brew install cmake ninja openssl curl
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Install
+        run: cmake --install build --config Release
+
+      - name: Package
+        run: |
+          mkdir -p package/{bin,lib,stdlib,packages,share/neam}
+
+          # Copy binaries
+          cp -r install/bin/* package/bin/ || true
+          cp -r install/lib/* package/lib/ || true
+
+          # Copy stdlib
+          if [ -d "NeamC/stdlib" ]; then cp -r NeamC/stdlib/* package/stdlib/ || true; fi
+          if [ -d "stdlib" ]; then cp -r stdlib/* package/stdlib/ || true; fi
+
+          # Create archive
+          cd package
+          tar -czf ../neam-${{ github.ref_name || inputs.version }}-darwin-amd64.tar.gz .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neam-darwin-amd64
+          path: neam-*.tar.gz
+
+  build-windows:
+    name: Build Windows (amd64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup MSVC
         uses: microsoft/setup-msbuild@v2
 
       - name: Configure CMake
         run: |
-          cmake -B build `
-            -G "Visual Studio 17 2022" `
-            -A ${{ matrix.arch == 'amd64' && 'x64' || 'ARM64' }} `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
+          cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/install"
 
       - name: Build
         run: cmake --build build --config Release --parallel
@@ -174,20 +195,20 @@ jobs:
           New-Item -ItemType Directory -Path package/bin,package/lib,package/stdlib,package/packages,package/share/neam -Force
 
           # Copy binaries
-          Copy-Item -Path install/bin/* -Destination package/bin/ -Recurse -ErrorAction SilentlyContinue
-          Copy-Item -Path install/lib/* -Destination package/lib/ -Recurse -ErrorAction SilentlyContinue
+          if (Test-Path install/bin) { Copy-Item -Path install/bin/* -Destination package/bin/ -Recurse -ErrorAction SilentlyContinue }
+          if (Test-Path install/lib) { Copy-Item -Path install/lib/* -Destination package/lib/ -Recurse -ErrorAction SilentlyContinue }
 
-          # Copy stdlib and packages
-          Copy-Item -Path NeamC/stdlib/* -Destination package/stdlib/ -Recurse -ErrorAction SilentlyContinue
-          Copy-Item -Path NeamPackage/packages/* -Destination package/packages/ -Recurse -ErrorAction SilentlyContinue
+          # Copy stdlib
+          if (Test-Path NeamC/stdlib) { Copy-Item -Path NeamC/stdlib/* -Destination package/stdlib/ -Recurse -ErrorAction SilentlyContinue }
+          if (Test-Path stdlib) { Copy-Item -Path stdlib/* -Destination package/stdlib/ -Recurse -ErrorAction SilentlyContinue }
 
           # Create archive
-          Compress-Archive -Path package/* -DestinationPath neam-${{ github.ref_name || inputs.version }}-windows-${{ matrix.arch }}.zip
+          Compress-Archive -Path package/* -DestinationPath "neam-${{ github.ref_name || inputs.version }}-windows-amd64.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: neam-windows-${{ matrix.arch }}
+          name: neam-windows-amd64
           path: neam-*.zip
 
   # ============================================================================
@@ -196,7 +217,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos-arm64, build-macos-amd64, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -218,29 +239,22 @@ jobs:
           sha256sum * > SHA256SUMS
 
       - name: Generate release notes
-        id: release_notes
         run: |
-          VERSION=${{ github.ref_name || inputs.version }}
           cat > release_notes.md << 'EOF'
-          ## Neam $VERSION
+          ## Installation
 
-          ### Installation
-
-          #### macOS / Linux
+          ### macOS / Linux
           ```bash
           curl -fsSL https://install.neam-lang.org | bash
           ```
 
-          #### Windows (PowerShell)
+          ### Windows (PowerShell)
           ```powershell
           iwr -useb https://install.neam-lang.org/win | iex
           ```
 
-          #### Manual Installation
+          ### Manual Installation
           Download the appropriate archive for your platform below, extract it, and add the `bin` directory to your PATH.
-
-          ### What's New
-          - See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details
 
           ### Verification
           All release files can be verified using the SHA256SUMS file:
@@ -259,82 +273,3 @@ jobs:
           prerelease: ${{ contains(github.ref_name || inputs.version, 'alpha') || contains(github.ref_name || inputs.version, 'beta') || contains(github.ref_name || inputs.version, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ============================================================================
-  # Docker Job
-  # ============================================================================
-
-  docker:
-    name: Build Docker Image
-    needs: [build-linux]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: neam-linux-amd64
-          path: docker-context
-
-      - name: Extract archive
-        run: |
-          cd docker-context
-          tar -xzf neam-*.tar.gz
-          rm neam-*.tar.gz
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: docker-context
-          file: docker/Dockerfile
-          push: true
-          tags: |
-            neamlang/neam:${{ github.ref_name || inputs.version }}
-            neamlang/neam:latest
-            ghcr.io/${{ github.repository_owner }}/neam:${{ github.ref_name || inputs.version }}
-            ghcr.io/${{ github.repository_owner }}/neam:latest
-          platforms: linux/amd64,linux/arm64
-
-  # ============================================================================
-  # Package Manager Updates
-  # ============================================================================
-
-  update-homebrew:
-    name: Update Homebrew Formula
-    needs: [release]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Update Homebrew formula
-        run: |
-          echo "TODO: Submit PR to homebrew-core or update tap"
-          # This would typically use a separate action or script to:
-          # 1. Fork/clone homebrew-core or your tap
-          # 2. Update the formula with new version and SHA256
-          # 3. Submit a PR
-
-  update-chocolatey:
-    name: Update Chocolatey Package
-    needs: [release]
-    runs-on: windows-latest
-    steps:
-      - name: Update Chocolatey package
-        run: |
-          echo "TODO: Update Chocolatey package"
-          # This would update the Chocolatey package nuspec and push
