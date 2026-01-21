@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Set CMake policies for compatibility
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
+# Allow older cmake_minimum_required in fetched projects
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version")
+
 project(NeamC LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -8,21 +16,30 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
+# Set default for DOWNLOAD_EXTRACT_TIMESTAMP
+if(POLICY CMP0135)
+    set(FETCHCONTENT_DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+endif()
+
 FetchContent_Declare(
     tree_sitter
     URL https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v0.22.6.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(tree_sitter)
 
 FetchContent_Declare(
     nlohmann_json
     URL https://github.com/nlohmann/json/archive/refs/tags/v3.11.3.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# Use newer version of json-schema-validator compatible with modern CMake
 FetchContent_Declare(
     nlohmann_json_schema_validator
-    URL https://github.com/pboettch/json-schema-validator/archive/refs/tags/2.1.0.tar.gz
+    URL https://github.com/pboettch/json-schema-validator/archive/refs/tags/2.3.0.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(nlohmann_json_schema_validator)
 if (TARGET nlohmann_json_schema_validator)
@@ -32,6 +49,7 @@ endif ()
 FetchContent_Declare(
     miniz
     URL https://github.com/richgel999/miniz/archive/refs/tags/3.0.2.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_GetProperties(miniz)
 if (NOT miniz_POPULATED)
@@ -53,20 +71,24 @@ endif ()
 FetchContent_Declare(
     usearch
     URL https://github.com/unum-cloud/usearch/archive/refs/tags/v2.6.0.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_Declare(
     lexbor
     URL https://github.com/lexbor/lexbor/archive/refs/tags/v2.2.0.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_Declare(
     googletest
     URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_Declare(
     benchmark
     URL https://github.com/google/benchmark/archive/refs/tags/v1.8.3.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_GetProperties(usearch)

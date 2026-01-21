@@ -55,7 +55,12 @@ TEST(ExecutorTest, RaceCombinator)
 
   auto fast = executor.spawn<int>([]() { return 2; });
 
-  auto race_future = executor.race(std::vector<Future<int>>{std::move(slow), std::move(fast)});
+  std::vector<Future<int>> race_futures;
+  race_futures.reserve(2);
+  race_futures.push_back(std::move(slow));
+  race_futures.push_back(std::move(fast));
+
+  auto race_future = executor.race(std::move(race_futures));
   auto result = race_future.wait().unwrap();
 
   EXPECT_EQ(result, 2);
