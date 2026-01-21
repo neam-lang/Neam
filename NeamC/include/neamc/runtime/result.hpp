@@ -21,16 +21,12 @@ public:
 
   static Result Ok(T value)
   {
-    Result out;
-    out.data_.template emplace<0>(std::move(value));
-    return out;
+    return Result(std::in_place_index<0>, std::move(value));
   }
 
   static Result Err(E error)
   {
-    Result out;
-    out.data_.template emplace<1>(std::move(error));
-    return out;
+    return Result(std::in_place_index<1>, std::move(error));
   }
 
   bool is_ok() const noexcept { return data_.index() == 0; }
@@ -105,8 +101,10 @@ public:
   }
 
 private:
-  Result() = default;
-  std::variant<T, E> data_{};
+  template <size_t I, typename U>
+  Result(std::in_place_index_t<I> tag, U&& value) : data_(tag, std::forward<U>(value)) {}
+
+  std::variant<T, E> data_;
 };
 
 // Specialization for void

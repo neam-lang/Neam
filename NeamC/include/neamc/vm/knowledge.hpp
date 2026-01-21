@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -29,6 +30,48 @@ struct SearchResult
   float score{0.0f};
 };
 
+// Retrieval strategy enum
+enum class Strategy
+{
+  kBasic = 0,
+  kMMR = 1,
+  kHybrid = 2,
+  kHyDE = 3,
+  kSelfRAG = 4,
+  kCRAG = 5,
+  kAgentic = 6,
+  kGraphRAG = 7
+};
+
+// Strategy options
+struct StrategyOptions
+{
+  std::size_t top_k{4};
+  double relevance_threshold{0.5};
+  double mmr_lambda{0.5};
+  std::size_t num_hypothetical{1};
+  bool enable_relevance_check{true};
+  bool enable_support_check{true};
+  bool enable_web_fallback{false};
+  bool enable_query_decomposition{true};
+  std::size_t max_corrections{2};
+  std::size_t max_iterations{5};
+  bool enable_reflection{true};
+  std::size_t search_depth{2};
+  bool include_communities{true};
+};
+
+// Retrieval result with metadata
+struct RetrievalResult
+{
+  std::vector<SearchResult> documents;
+  std::string strategy_used;
+  std::vector<std::string> hypothetical_docs;  // For HyDE
+  std::vector<std::string> sub_queries;        // For CRAG
+  bool relevance_checked{false};               // For Self-RAG
+  bool support_checked{false};                 // For Self-RAG
+};
+
 class VectorStore
 {
 public:
@@ -37,7 +80,21 @@ public:
   std::size_t size() const { return entries_.size(); }
 
   void add(const std::vector<float>& embedding, Chunk chunk);
+
+  // Basic similarity search
   std::vector<SearchResult> search(const std::vector<float>& embedding, std::size_t top_k) const;
+
+  // MMR (Maximal Marginal Relevance) search for diversity
+  std::vector<SearchResult> search_mmr(const std::vector<float>& embedding, std::size_t top_k,
+                                       double lambda = 0.5) const;
+
+  // Hybrid search (keyword + vector) - simplified version
+  std::vector<SearchResult> search_hybrid(const std::vector<float>& embedding,
+                                          const std::string& query_text, std::size_t top_k,
+                                          double vector_weight = 0.7) const;
+
+  // Get all entries for custom processing
+  const std::vector<std::pair<std::vector<float>, Chunk>>& entries() const;
 
 private:
   struct Entry
@@ -51,6 +108,14 @@ private:
 };
 
 std::vector<float> embed_text(const std::string& text, std::size_t dimensions);
+
+// LLM callback type for advanced strategies
+using LLMCallback = std::function<std::string(const std::string& prompt)>;
+
+// Strategy-aware retrieval
+RetrievalResult retrieve_with_strategy(VectorStore& store, const std::string& query,
+                                       Strategy strategy, const StrategyOptions& options,
+                                       LLMCallback llm_callback = nullptr);
 
 class Ingester
 {

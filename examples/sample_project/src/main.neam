@@ -1,0 +1,62 @@
+// ============================================
+// AI Assistant - Main Entry Point
+// ============================================
+// A sample Neam project demonstrating agent definitions
+
+// ============================================
+// Primary Assistant Agent
+// ============================================
+agent Assistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a helpful AI assistant. Provide clear, concise responses."
+}
+
+// ============================================
+// Code Expert Agent
+// ============================================
+agent CodeExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are an expert programmer. Provide clean, efficient code solutions."
+}
+
+// ============================================
+// Documentation Agent
+// ============================================
+agent DocHelper {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You answer documentation questions accurately and helpfully."
+}
+
+// ============================================
+// Router Agent - Classifies queries
+// ============================================
+agent Router {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Classify the user query into: GENERAL, CODE, or DOCS. Reply with only the category name."
+}
+
+// ============================================
+// Main Program
+// ============================================
+{
+  emit "=== AI Assistant Started ===";
+
+  let query = "How do I create an agent in Neam?";
+  emit "Query: " + query;
+
+  // Route the query
+  let category = Router.ask(query);
+  emit "Category: " + category;
+
+  // Get response from the general assistant
+  // (Note: Variable reassignment not yet supported, using single agent)
+  let final_response = Assistant.ask(query);
+
+  emit "Response:";
+  emit final_response;
+  emit "=== Done ===";
+}

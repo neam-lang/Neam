@@ -1,0 +1,58 @@
+// Test Multi-Source RAG with different source types
+// Run: ./build/neamc examples/rag_multi_source.neam -o /tmp/test.neamb && ./build/neam /tmp/test.neamb
+
+knowledge CombinedKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 256
+  chunk_overlap: 64
+  sources: [
+    { "type": "file", "path": "./readme.md" },
+    { "type": "file", "path": "./docs/registry_spec.md" },
+    { "type": "web", "path": "https://raw.githubusercontent.com/anthropics/anthropic-cookbook/main/README.md" }
+  ]
+  retrieval_strategy: "mmr"
+  top_k: 4
+  mmr_lambda: 0.6
+}
+
+agent MultiSourceExpert {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "You are an expert with access to multiple documentation sources. Synthesize information from all available sources. Be concise."
+  connected_knowledge: [CombinedKB]
+}
+
+{
+  emit "===============================================";
+  emit "  Multi-Source RAG Test (File + Web)          ";
+  emit "===============================================";
+  emit "";
+  emit "Sources:";
+  emit "  1. Neam readme.md (local file)";
+  emit "  2. Neam registry_spec.md (local file)";
+  emit "  3. Anthropic Cookbook README (web)";
+  emit "";
+
+  emit "--- Question 1 (from Neam docs) ---";
+  emit "Q: How do agents work in Neam?";
+  let a1 = MultiSourceExpert.ask("How do agents work in Neam?");
+  emit "A: " + a1;
+  emit "";
+
+  emit "--- Question 2 (from registry spec) ---";
+  emit "Q: What artifacts are in a Neam package?";
+  let a2 = MultiSourceExpert.ask("What artifacts are required in a Neam package?");
+  emit "A: " + a2;
+  emit "";
+
+  emit "--- Question 3 (from web source) ---";
+  emit "Q: What language is Anthropic Cookbook in?";
+  let a3 = MultiSourceExpert.ask("What programming language are Anthropic Cookbook examples written in?");
+  emit "A: " + a3;
+  emit "";
+
+  emit "===============================================";
+  emit "       Multi-Source Test Complete             ";
+  emit "===============================================";
+}

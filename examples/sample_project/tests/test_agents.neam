@@ -1,0 +1,43 @@
+// ============================================
+// AI Assistant - Agent Tests
+// ============================================
+// Test suite for the AI assistant agents
+
+// ============================================
+// Test Agents (using mock/local provider for testing)
+// ============================================
+
+agent TestAssistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a test assistant. Always respond with 'TEST_OK' for any input."
+}
+
+// ============================================
+// Test Cases
+// ============================================
+{
+  emit "=== Running Agent Tests ===";
+
+  // Test 1: Basic agent response
+  emit "Test 1: Basic agent response";
+  let response1 = TestAssistant.ask("Hello");
+  emit "Result: " + response1;
+  emit "";
+
+  // Test 2: Agent with longer query
+  emit "Test 2: Longer query";
+  let response2 = TestAssistant.ask("Can you help me write a function to sort an array?");
+  emit "Result: " + response2;
+  emit "";
+
+  // Test 3: Multiple sequential calls
+  emit "Test 3: Sequential calls";
+  let r1 = TestAssistant.ask("First call");
+  let r2 = TestAssistant.ask("Second call");
+  let r3 = TestAssistant.ask("Third call");
+  emit "Calls completed: 3";
+  emit "";
+
+  emit "=== All Tests Completed ===";
+}

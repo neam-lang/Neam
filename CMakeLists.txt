@@ -220,6 +220,21 @@ add_executable(neam-dap
 target_link_libraries(neam-dap PRIVATE neamc_core)
 target_link_libraries(neam-dap PRIVATE nlohmann_json_schema_validator)
 
+add_executable(neam-api
+    NeamC/src/neam_api.cpp
+    NeamC/src/api/http_server.cpp
+)
+target_link_libraries(neam-api PRIVATE neamc_core)
+target_link_libraries(neam-api PRIVATE nlohmann_json_schema_validator)
+
+add_executable(neam-pkg
+    NeamC/src/neam_pkg.cpp
+    NeamC/src/pkg/registry.cpp
+    NeamC/src/pkg/installer.cpp
+)
+target_link_libraries(neam-pkg PRIVATE neamc_core)
+target_link_libraries(neam-pkg PRIVATE nlohmann_json_schema_validator)
+
 enable_testing()
 
 add_executable(vm_test

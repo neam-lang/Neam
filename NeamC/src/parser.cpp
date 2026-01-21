@@ -311,13 +311,16 @@ StmtPtr make_agent_decl(Visibility visibility, std::string name, std::string pro
 StmtPtr make_knowledge_decl(Visibility visibility, std::string name, std::string vector_store,
                             std::string embedding_model,
                             std::size_t chunk_size, std::size_t chunk_overlap,
-                            std::vector<KnowledgeSource> sources, SourceSpan span)
+                            std::vector<KnowledgeSource> sources,
+                            RetrievalStrategy retrieval_strategy,
+                            RetrievalStrategyOptions strategy_options,
+                            SourceSpan span)
 {
   auto stmt = std::make_unique<Statement>();
   stmt->span = span;
   stmt->node = KnowledgeDecl{std::move(visibility), std::move(name), std::move(vector_store),
                              std::move(embedding_model), chunk_size, chunk_overlap,
-                             std::move(sources)};
+                             std::move(sources), retrieval_strategy, std::move(strategy_options)};
   return stmt;
 }
 
@@ -613,6 +616,20 @@ void Parser::tokenize()
       {"chunk_size", TokenType::ChunkSize},
       {"chunk_overlap", TokenType::ChunkOverlap},
       {"sources", TokenType::Sources},
+      {"retrieval_strategy", TokenType::RetrievalStrategy},
+      {"top_k", TokenType::TopK},
+      {"relevance_threshold", TokenType::RelevanceThreshold},
+      {"mmr_lambda", TokenType::MmrLambda},
+      {"num_hypothetical", TokenType::NumHypothetical},
+      {"enable_relevance_check", TokenType::EnableRelevanceCheck},
+      {"enable_support_check", TokenType::EnableSupportCheck},
+      {"enable_web_fallback", TokenType::EnableWebFallback},
+      {"enable_query_decomposition", TokenType::EnableQueryDecomposition},
+      {"max_corrections", TokenType::MaxCorrections},
+      {"max_iterations", TokenType::MaxIterations},
+      {"enable_reflection", TokenType::EnableReflection},
+      {"search_depth", TokenType::SearchDepth},
+      {"include_communities", TokenType::IncludeCommunities},
       {"provider", TokenType::Provider},
       {"model", TokenType::Model},
       {"endpoint", TokenType::Endpoint},
@@ -2614,6 +2631,19 @@ std::unique_ptr<TestSuiteDecl> Parser::parse_test_suite_node()
   return suite;
 }
 
+RetrievalStrategy parse_strategy_name(const std::string& name)
+{
+  if (name == "basic" || name == "similarity") return RetrievalStrategy::kBasic;
+  if (name == "mmr") return RetrievalStrategy::kMMR;
+  if (name == "hybrid") return RetrievalStrategy::kHybrid;
+  if (name == "hyde") return RetrievalStrategy::kHyDE;
+  if (name == "self_rag" || name == "self-rag") return RetrievalStrategy::kSelfRAG;
+  if (name == "crag" || name == "corrective") return RetrievalStrategy::kCRAG;
+  if (name == "agentic") return RetrievalStrategy::kAgentic;
+  if (name == "graph" || name == "graph_rag") return RetrievalStrategy::kGraphRAG;
+  return RetrievalStrategy::kBasic;
+}
+
 StmtPtr Parser::parse_knowledge(const Visibility& visibility)
 {
   SourceSpan span = span_from_token(previous());
@@ -2632,6 +2662,8 @@ StmtPtr Parser::parse_knowledge(const Visibility& visibility)
   std::optional<std::size_t> chunk_size;
   std::optional<std::size_t> chunk_overlap;
   std::vector<KnowledgeSource> sources;
+  RetrievalStrategy retrieval_strategy = RetrievalStrategy::kBasic;
+  RetrievalStrategyOptions strategy_options;
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -2696,6 +2728,232 @@ StmtPtr Parser::parse_knowledge(const Visibility& visibility)
       sources = parse_knowledge_sources();
       continue;
     }
+    // Parse retrieval_strategy
+    if (match(TokenType::RetrievalStrategy))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after retrieval_strategy");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for retrieval_strategy");
+      }
+      retrieval_strategy = parse_strategy_name(previous().lexeme);
+      continue;
+    }
+    // Parse strategy options
+    if (match(TokenType::TopK))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after top_k");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for top_k");
+      }
+      strategy_options.top_k = static_cast<std::size_t>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match(TokenType::RelevanceThreshold))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after relevance_threshold");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for relevance_threshold");
+      }
+      strategy_options.relevance_threshold = std::strtod(previous().lexeme.c_str(), nullptr);
+      continue;
+    }
+    if (match(TokenType::MmrLambda))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after mmr_lambda");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for mmr_lambda");
+      }
+      strategy_options.mmr_lambda = std::strtod(previous().lexeme.c_str(), nullptr);
+      continue;
+    }
+    if (match(TokenType::NumHypothetical))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after num_hypothetical");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for num_hypothetical");
+      }
+      strategy_options.num_hypothetical = static_cast<std::size_t>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match(TokenType::EnableRelevanceCheck))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after enable_relevance_check");
+      }
+      if (match(TokenType::True))
+      {
+        strategy_options.enable_relevance_check = true;
+      }
+      else if (match(TokenType::False))
+      {
+        strategy_options.enable_relevance_check = false;
+      }
+      else
+      {
+        error("Expected boolean for enable_relevance_check");
+      }
+      continue;
+    }
+    if (match(TokenType::EnableSupportCheck))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after enable_support_check");
+      }
+      if (match(TokenType::True))
+      {
+        strategy_options.enable_support_check = true;
+      }
+      else if (match(TokenType::False))
+      {
+        strategy_options.enable_support_check = false;
+      }
+      else
+      {
+        error("Expected boolean for enable_support_check");
+      }
+      continue;
+    }
+    if (match(TokenType::EnableWebFallback))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after enable_web_fallback");
+      }
+      if (match(TokenType::True))
+      {
+        strategy_options.enable_web_fallback = true;
+      }
+      else if (match(TokenType::False))
+      {
+        strategy_options.enable_web_fallback = false;
+      }
+      else
+      {
+        error("Expected boolean for enable_web_fallback");
+      }
+      continue;
+    }
+    if (match(TokenType::EnableQueryDecomposition))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after enable_query_decomposition");
+      }
+      if (match(TokenType::True))
+      {
+        strategy_options.enable_query_decomposition = true;
+      }
+      else if (match(TokenType::False))
+      {
+        strategy_options.enable_query_decomposition = false;
+      }
+      else
+      {
+        error("Expected boolean for enable_query_decomposition");
+      }
+      continue;
+    }
+    if (match(TokenType::MaxCorrections))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after max_corrections");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for max_corrections");
+      }
+      strategy_options.max_corrections = static_cast<std::size_t>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match(TokenType::MaxIterations))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after max_iterations");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for max_iterations");
+      }
+      strategy_options.max_iterations = static_cast<std::size_t>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match(TokenType::EnableReflection))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after enable_reflection");
+      }
+      if (match(TokenType::True))
+      {
+        strategy_options.enable_reflection = true;
+      }
+      else if (match(TokenType::False))
+      {
+        strategy_options.enable_reflection = false;
+      }
+      else
+      {
+        error("Expected boolean for enable_reflection");
+      }
+      continue;
+    }
+    if (match(TokenType::SearchDepth))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after search_depth");
+      }
+      if (!match(TokenType::Number))
+      {
+        error("Expected number literal for search_depth");
+      }
+      strategy_options.search_depth = static_cast<std::size_t>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match(TokenType::IncludeCommunities))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after include_communities");
+      }
+      if (match(TokenType::True))
+      {
+        strategy_options.include_communities = true;
+      }
+      else if (match(TokenType::False))
+      {
+        strategy_options.include_communities = false;
+      }
+      else
+      {
+        error("Expected boolean for include_communities");
+      }
+      continue;
+    }
     error("Unexpected token in knowledge block");
   }
 
@@ -2724,7 +2982,8 @@ StmtPtr Parser::parse_knowledge(const Visibility& visibility)
     error("Knowledge missing sources");
   }
   return make_knowledge_decl(visibility, name, *vector_store, *embedding_model, *chunk_size,
-                             *chunk_overlap, std::move(sources), span);
+                             *chunk_overlap, std::move(sources), retrieval_strategy,
+                             std::move(strategy_options), span);
 }
 
 SkillParam Parser::parse_skill_param()

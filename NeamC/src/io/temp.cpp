@@ -4,15 +4,52 @@
 
 #include "neamc/io/temp.hpp"
 
+#include <random>
+
 namespace neamc::io
 {
 namespace
 {
+std::string generate_random_hex(size_t length)
+{
+  static thread_local std::random_device rd;
+  static thread_local std::mt19937 gen(rd());
+  static thread_local std::uniform_int_distribution<> dis(0, 15);
+  static const char hex_chars[] = "0123456789abcdef";
+
+  std::string result;
+  result.reserve(length);
+  for (size_t i = 0; i < length; ++i)
+  {
+    result += hex_chars[dis(gen)];
+  }
+  return result;
+}
+
 fs::path unique_path(const std::string& prefix)
 {
   auto dir = fs::temp_directory_path();
-  auto pattern = prefix.empty() ? "neam-%%%%-%%%%-%%%%" : prefix + "-%%%%-%%%%-%%%%";
-  return dir / fs::unique_path(pattern);
+  auto name = prefix.empty() ? "neam-" : prefix + "-";
+  name += generate_random_hex(16);
+  return dir / name;
+}
+
+fs::path unique_path_with_pattern(const std::string& pattern)
+{
+  std::string result;
+  result.reserve(pattern.size());
+  for (char c : pattern)
+  {
+    if (c == '%')
+    {
+      result += generate_random_hex(1);
+    }
+    else
+    {
+      result += c;
+    }
+  }
+  return result;
 }
 
 }  // namespace
@@ -24,7 +61,7 @@ IoResult<TempFile> TempFile::create()
 
 IoResult<TempFile> TempFile::create_in(const fs::path& dir)
 {
-  auto path = dir / fs::unique_path("neam-%%%%-%%%%-%%%%.tmp");
+  auto path = dir / unique_path_with_pattern("neam-%%%%-%%%%-%%%%.tmp");
   auto file = File::create(path);
   if (file.is_err())
   {
@@ -102,7 +139,7 @@ IoResult<TempDir> TempDir::create()
 
 IoResult<TempDir> TempDir::create_in(const fs::path& parent)
 {
-  auto path = parent / fs::unique_path("neamdir-%%%%-%%%%-%%%%");
+  auto path = parent / unique_path_with_pattern("neamdir-%%%%-%%%%-%%%%");
   std::error_code ec;
   fs::create_directories(path, ec);
   if (ec)

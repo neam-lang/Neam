@@ -752,6 +752,8 @@ std::string opcode_name(OpCode op)
   return "OP_UNKNOWN";
 }
 
+}  // anonymous namespace
+
 bool VirtualMachine::BudgetTracker::is_exhausted() const
 {
   const int64_t now_ms = current_time_ms();
@@ -782,7 +784,6 @@ int64_t VirtualMachine::BudgetTracker::elapsed_ms(int64_t now_ms) const
   }
   return now_ms - start_time_ms;
 }
-}  // namespace
 
 VirtualMachine::VirtualMachine()
 {
@@ -1903,18 +1904,91 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                   {
                     continue;
                   }
-                  auto* knowledge = kb_it->second;
-                  output_stream() << "[RAG] Searching KB '" << kb_name << "' for: '" << user_prompt
-                                  << "'\n";
-                  auto embedding =
-                      knowledge::embed_text(user_prompt, knowledge->store.dimensions());
-                  auto results = knowledge->store.search(embedding, 3);
-                  if (!results.empty())
+                  auto* knowledge_obj = kb_it->second;
+
+                  // Map VM strategy enum to knowledge strategy enum
+                  knowledge::Strategy kb_strategy = knowledge::Strategy::kBasic;
+                  switch (knowledge_obj->retrieval_strategy)
                   {
-                    output_stream() << "[RAG] Found context: \"" << results.front().chunk.text
-                                    << "\"\n";
+                    case RetrievalStrategy::kBasic:
+                      kb_strategy = knowledge::Strategy::kBasic;
+                      break;
+                    case RetrievalStrategy::kMMR:
+                      kb_strategy = knowledge::Strategy::kMMR;
+                      break;
+                    case RetrievalStrategy::kHybrid:
+                      kb_strategy = knowledge::Strategy::kHybrid;
+                      break;
+                    case RetrievalStrategy::kHyDE:
+                      kb_strategy = knowledge::Strategy::kHyDE;
+                      break;
+                    case RetrievalStrategy::kSelfRAG:
+                      kb_strategy = knowledge::Strategy::kSelfRAG;
+                      break;
+                    case RetrievalStrategy::kCRAG:
+                      kb_strategy = knowledge::Strategy::kCRAG;
+                      break;
+                    case RetrievalStrategy::kAgentic:
+                      kb_strategy = knowledge::Strategy::kAgentic;
+                      break;
+                    case RetrievalStrategy::kGraphRAG:
+                      kb_strategy = knowledge::Strategy::kGraphRAG;
+                      break;
                   }
-                  const auto context = format_rag_context(results);
+
+                  // Map VM options to knowledge options
+                  knowledge::StrategyOptions kb_options;
+                  kb_options.top_k = knowledge_obj->strategy_options.top_k;
+                  kb_options.relevance_threshold = knowledge_obj->strategy_options.relevance_threshold;
+                  kb_options.mmr_lambda = knowledge_obj->strategy_options.mmr_lambda;
+                  kb_options.num_hypothetical = knowledge_obj->strategy_options.num_hypothetical;
+                  kb_options.enable_relevance_check = knowledge_obj->strategy_options.enable_relevance_check;
+                  kb_options.enable_support_check = knowledge_obj->strategy_options.enable_support_check;
+                  kb_options.enable_web_fallback = knowledge_obj->strategy_options.enable_web_fallback;
+                  kb_options.enable_query_decomposition = knowledge_obj->strategy_options.enable_query_decomposition;
+                  kb_options.max_corrections = knowledge_obj->strategy_options.max_corrections;
+                  kb_options.max_iterations = knowledge_obj->strategy_options.max_iterations;
+                  kb_options.enable_reflection = knowledge_obj->strategy_options.enable_reflection;
+                  kb_options.search_depth = knowledge_obj->strategy_options.search_depth;
+                  kb_options.include_communities = knowledge_obj->strategy_options.include_communities;
+
+                  // Create LLM callback for advanced strategies
+                  knowledge::LLMCallback llm_callback = nullptr;
+                  if (kb_strategy != knowledge::Strategy::kBasic &&
+                      kb_strategy != knowledge::Strategy::kMMR &&
+                      kb_strategy != knowledge::Strategy::kHybrid)
+                  {
+                    llm_callback = [&provider](const std::string& prompt) -> std::string {
+                      return provider->complete(prompt);
+                    };
+                  }
+
+                  const char* strategy_names[] = {"basic", "mmr", "hybrid", "hyde", "self_rag",
+                                                  "crag", "agentic", "graph_rag"};
+                  output_stream() << "[RAG] Searching KB '" << kb_name << "' with strategy '"
+                                  << strategy_names[static_cast<int>(kb_strategy)] << "' for: '"
+                                  << user_prompt << "'\n";
+
+                  auto retrieval_result = knowledge::retrieve_with_strategy(
+                      knowledge_obj->store, user_prompt, kb_strategy, kb_options, llm_callback);
+
+                  if (!retrieval_result.documents.empty())
+                  {
+                    output_stream() << "[RAG] Found " << retrieval_result.documents.size()
+                                    << " documents via " << retrieval_result.strategy_used << "\n";
+                    if (!retrieval_result.hypothetical_docs.empty())
+                    {
+                      output_stream() << "[RAG] HyDE generated " << retrieval_result.hypothetical_docs.size()
+                                      << " hypothetical doc(s)\n";
+                    }
+                    if (!retrieval_result.sub_queries.empty())
+                    {
+                      output_stream() << "[RAG] CRAG decomposed into " << retrieval_result.sub_queries.size()
+                                      << " sub-queries\n";
+                    }
+                  }
+
+                  const auto context = format_rag_context(retrieval_result.documents);
                   if (!context.empty())
                   {
                     combined_context += context;
@@ -2375,6 +2449,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             {
               throw std::runtime_error("list.find expects 1 argument");
             }
+            bool found = false;
             for (const auto& item : list->items)
             {
               Value call_args[] = {item};
@@ -2382,10 +2457,14 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               if (is_truthy(result))
               {
                 stack_.push_back(item);
-                return;
+                found = true;
+                break;
               }
             }
-            stack_.push_back(Value::Nil());
+            if (!found)
+            {
+              stack_.push_back(Value::Nil());
+            }
           }
           else
           {
@@ -2796,6 +2875,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       }
       case OpCode::OP_DEFINE_KNOWLEDGE:
       {
+        // Pop values in reverse order they were pushed
+        Value strategy_options_value = pop();
+        Value retrieval_strategy_value = pop();
         Value sources_value = pop();
         Value chunk_overlap_value = pop();
         Value chunk_size_value = pop();
@@ -2816,10 +2898,54 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         const std::size_t chunk_overlap =
             static_cast<std::size_t>(chunk_overlap_value.as_number());
 
+        // Parse retrieval strategy
+        RetrievalStrategy strategy = RetrievalStrategy::kBasic;
+        if (retrieval_strategy_value.is_number())
+        {
+          strategy = static_cast<RetrievalStrategy>(static_cast<int>(retrieval_strategy_value.as_number()));
+        }
+
+        // Parse strategy options
+        RetrievalStrategyOptions options;
+        if (is_obj_type(strategy_options_value, ObjType::OBJ_MAP))
+        {
+          auto* opts_map = as_map(strategy_options_value);
+          auto get_number = [&](const std::string& key, double default_val) -> double {
+            auto it = opts_map->entries.find(key);
+            if (it != opts_map->entries.end() && it->second.is_number())
+            {
+              return it->second.as_number();
+            }
+            return default_val;
+          };
+          auto get_bool = [&](const std::string& key, bool default_val) -> bool {
+            auto it = opts_map->entries.find(key);
+            if (it != opts_map->entries.end() && it->second.is_bool())
+            {
+              return it->second.as_bool();
+            }
+            return default_val;
+          };
+
+          options.top_k = static_cast<std::size_t>(get_number("top_k", 4));
+          options.relevance_threshold = get_number("relevance_threshold", 0.5);
+          options.mmr_lambda = get_number("mmr_lambda", 0.5);
+          options.num_hypothetical = static_cast<std::size_t>(get_number("num_hypothetical", 1));
+          options.enable_relevance_check = get_bool("enable_relevance_check", true);
+          options.enable_support_check = get_bool("enable_support_check", true);
+          options.enable_web_fallback = get_bool("enable_web_fallback", false);
+          options.enable_query_decomposition = get_bool("enable_query_decomposition", true);
+          options.max_corrections = static_cast<std::size_t>(get_number("max_corrections", 2));
+          options.max_iterations = static_cast<std::size_t>(get_number("max_iterations", 5));
+          options.enable_reflection = get_bool("enable_reflection", true);
+          options.search_depth = static_cast<std::size_t>(get_number("search_depth", 2));
+          options.include_communities = get_bool("include_communities", true);
+        }
+
         auto sources = parse_sources_list(sources_value);
         auto* knowledge_obj =
             new_knowledge(name, vector_store, embedding_model, chunk_size, chunk_overlap,
-                          std::move(sources));
+                          std::move(sources), strategy, options);
         knowledge::Ingester ingester(knowledge_obj->store, knowledge_obj->chunk_size,
                                      knowledge_obj->chunk_overlap,
                                      to_std_string(knowledge_obj->embedding_model));

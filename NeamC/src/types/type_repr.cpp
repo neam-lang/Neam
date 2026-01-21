@@ -319,16 +319,22 @@ bool types_equal(const Type& a, const Type& b)
   return std::visit(
       [&](auto&& left, auto&& right) -> bool
       {
-        using T = std::decay_t<decltype(left)>;
-        if constexpr (std::is_same_v<T, std::shared_ptr<TypeVariable>>)
+        using LT = std::decay_t<decltype(left)>;
+        using RT = std::decay_t<decltype(right)>;
+        // Only compare if types are the same (which they should be due to index check)
+        if constexpr (!std::is_same_v<LT, RT>)
+        {
+          return false;
+        }
+        else if constexpr (std::is_same_v<LT, std::shared_ptr<TypeVariable>>)
         {
           return left->id == right->id;
         }
-        else if constexpr (std::is_same_v<T, std::shared_ptr<ConcreteType>>)
+        else if constexpr (std::is_same_v<LT, std::shared_ptr<ConcreteType>>)
         {
           return left->kind == right->kind && left->name == right->name;
         }
-        else if constexpr (std::is_same_v<T, std::shared_ptr<FunctionType>>)
+        else if constexpr (std::is_same_v<LT, std::shared_ptr<FunctionType>>)
         {
           if (left->is_async != right->is_async || left->param_types.size() != right->param_types.size())
           {
@@ -343,7 +349,7 @@ bool types_equal(const Type& a, const Type& b)
           }
           return types_equal(left->return_type, right->return_type);
         }
-        else if constexpr (std::is_same_v<T, std::shared_ptr<GenericType>>)
+        else if constexpr (std::is_same_v<LT, std::shared_ptr<GenericType>>)
         {
           if (left->base_name != right->base_name || left->type_args.size() != right->type_args.size())
           {
@@ -358,11 +364,14 @@ bool types_equal(const Type& a, const Type& b)
           }
           return true;
         }
-        else if constexpr (std::is_same_v<T, std::shared_ptr<ConstrainedType>>)
+        else if constexpr (std::is_same_v<LT, std::shared_ptr<ConstrainedType>>)
         {
           return left->type_var->id == right->type_var->id && left->trait_bounds == right->trait_bounds;
         }
-        return false;
+        else
+        {
+          return false;
+        }
       },
       a, b);
 }

@@ -74,7 +74,8 @@ Type Substitution::apply(const Type& t) const
         }
         else if constexpr (std::is_same_v<T, std::shared_ptr<ConstrainedType>>)
         {
-          auto type_var = std::static_pointer_cast<TypeVariable>(apply(node->type_var));
+          Type applied_type_var = apply(node->type_var);
+          auto type_var = std::get<std::shared_ptr<TypeVariable>>(applied_type_var);
           return ConstrainedType::create(type_var, node->trait_bounds);
         }
         return node;

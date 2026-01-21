@@ -65,21 +65,24 @@ struct TestSuite
   std::optional<std::function<void()>> after_all;
 };
 
+struct TestRunnerConfig
+{
+  bool parallel = true;
+  size_t thread_count = std::thread::hardware_concurrency();
+  bool fail_fast = false;
+  std::optional<std::string> filter = std::nullopt;
+  bool verbose = false;
+  std::optional<std::string> output_file = std::nullopt;
+  std::string output_format = "text";
+};
+
 class TestRunner
 {
 public:
-  struct Config
-  {
-    bool parallel{true};
-    size_t thread_count{std::thread::hardware_concurrency()};
-    bool fail_fast{false};
-    std::optional<std::string> filter;
-    bool verbose{false};
-    std::optional<std::string> output_file;
-    std::string output_format{"text"};
-  };
+  using Config = TestRunnerConfig;
 
-  explicit TestRunner(Config config = {});
+  TestRunner();
+  explicit TestRunner(Config config);
 
   void register_suite(TestSuite suite);
   void register_test(TestCase test);
