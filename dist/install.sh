@@ -1,6 +1,6 @@
 #!/bin/bash
 # Neam One-Click Installer
-# Usage: curl -fsSL https://neam.lovable.app/install.sh | bash
+# Usage: curl -fsSL https://github.com/neam-lang/Neam/releases/download/v0.1/install.sh | bash
 
 set -e
 
@@ -73,7 +73,7 @@ main() {
     local platform=$(detect_platform)
 
     if [ "$platform" = "unsupported" ]; then
-        echo -e "${RED}Error: Unsupported platform$(uname -s)/$(uname -m)${NC}"
+        echo -e "${RED}Error: Unsupported platform $(uname -s)/$(uname -m)${NC}"
         echo "Please visit https://github.com/neam-lang/Neam/releases for manual installation."
         exit 1
     fi
@@ -147,7 +147,7 @@ main() {
     echo -e "Installed binaries:"
     echo -e "  ${BLUE}neamc${NC}     - Neam compiler"
     echo -e "  ${BLUE}neam${NC}      - Neam interpreter"
-    echo -e "  ${BLUE}neam-cli${NC}  - Command-line interface"
+    echo -e "  ${BLUE}neam-cli${NC}  - Interactive REPL with autocomplete"
     echo -e "  ${BLUE}neam-api${NC}  - API server"
     echo -e "  ${BLUE}neam-pkg${NC}  - Package manager"
     echo -e "  ${BLUE}neam-lsp${NC}  - Language server (IDE support)"
@@ -155,7 +155,8 @@ main() {
     echo -e "  ${BLUE}neam-gym${NC}  - Training environment"
     echo ""
     echo -e "Get started:"
-    echo -e "  ${YELLOW}neamc --help${NC}"
+    echo -e "  ${YELLOW}neamc --help${NC}    # Compile programs"
+    echo -e "  ${YELLOW}neam-cli${NC}        # Interactive REPL"
     echo ""
     echo -e "Documentation: ${BLUE}https://neam.lovable.app${NC}"
     echo -e "GitHub: ${BLUE}https://github.com/neam-lang/Neam${NC}"
