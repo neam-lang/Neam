@@ -420,7 +420,8 @@ done
 
 echo ""
 echo "Installation complete!"
-echo "Run 'neamc --help' to get started."
+echo "Run 'neamc --help' to compile programs."
+echo "Run 'neam-cli' for the interactive REPL with autocomplete."
 INSTALL_SCRIPT
 chmod +x "$DIST_DIR/install.sh"
 

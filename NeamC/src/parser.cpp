@@ -1064,7 +1064,8 @@ StmtPtr Parser::parse_statement()
   {
     error("Expected ';' after expression");
   }
-  return make_expression_stmt(std::move(expr), expr->span);
+  auto span = expr->span;  // Save span before moving
+  return make_expression_stmt(std::move(expr), span);
 }
 
 StmtPtr Parser::parse_return()
