@@ -1,0 +1,122 @@
+// Test Advanced RAG Strategies: HyDE, Self-RAG, CRAG, Agentic
+// Run: ./build/neamc examples/rag_advanced_strategies.neam -o /tmp/test.neamb && ./build/neam /tmp/test.neamb
+
+knowledge HyDEKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [
+    { "type": "file", "path": "./readme.md" }
+  ]
+  retrieval_strategy: "hyde"
+  top_k: 3
+  num_hypothetical: 1
+}
+
+knowledge SelfRAGKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [
+    { "type": "file", "path": "./readme.md" }
+  ]
+  retrieval_strategy: "self_rag"
+  top_k: 4
+  enable_relevance_check: true
+  enable_support_check: true
+}
+
+knowledge CRAGKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [
+    { "type": "file", "path": "./readme.md" }
+  ]
+  retrieval_strategy: "crag"
+  top_k: 3
+  enable_query_decomposition: true
+  max_corrections: 2
+}
+
+knowledge AgenticKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [
+    { "type": "file", "path": "./readme.md" }
+  ]
+  retrieval_strategy: "agentic"
+  top_k: 3
+  max_iterations: 2
+  enable_reflection: true
+}
+
+agent HyDEExpert {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Be concise. Answer in 2-3 sentences."
+  connected_knowledge: [HyDEKB]
+}
+
+agent SelfRAGExpert {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Be concise. Answer in 2-3 sentences."
+  connected_knowledge: [SelfRAGKB]
+}
+
+agent CRAGExpert {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Be concise. Answer in 2-3 sentences."
+  connected_knowledge: [CRAGKB]
+}
+
+agent AgenticExpert {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Be concise. Answer in 2-3 sentences."
+  connected_knowledge: [AgenticKB]
+}
+
+{
+  emit "===============================================";
+  emit "    Testing Advanced RAG Strategies           ";
+  emit "===============================================";
+  emit "";
+
+  let question = "What is Neam?";
+
+  emit "--- 1. HyDE RAG (Hypothetical Document) ---";
+  emit "Strategy: Generates hypothetical answer, uses it to find similar docs";
+  let a1 = HyDEExpert.ask(question);
+  emit "A: " + a1;
+  emit "";
+
+  emit "--- 2. Self-RAG (Relevance Checking) ---";
+  emit "Strategy: Checks document relevance before using";
+  let a2 = SelfRAGExpert.ask(question);
+  emit "A: " + a2;
+  emit "";
+
+  emit "--- 3. CRAG (Query Decomposition) ---";
+  emit "Strategy: Decomposes complex queries into sub-queries";
+  let a3 = CRAGExpert.ask(question);
+  emit "A: " + a3;
+  emit "";
+
+  emit "--- 4. Agentic RAG (Iterative Refinement) ---";
+  emit "Strategy: Iteratively refines retrieval with reflection";
+  let a4 = AgenticExpert.ask(question);
+  emit "A: " + a4;
+  emit "";
+
+  emit "===============================================";
+  emit "     Advanced Strategies Test Complete        ";
+  emit "===============================================";
+}

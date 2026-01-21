@@ -120,6 +120,37 @@ struct ObjEnv : Obj
   std::unordered_map<std::string, std::string> config;
 };
 
+// Retrieval strategy enum for the VM
+enum class RetrievalStrategy
+{
+  kBasic = 0,
+  kMMR = 1,
+  kHybrid = 2,
+  kHyDE = 3,
+  kSelfRAG = 4,
+  kCRAG = 5,
+  kAgentic = 6,
+  kGraphRAG = 7
+};
+
+// Strategy options for advanced RAG
+struct RetrievalStrategyOptions
+{
+  std::size_t top_k{4};
+  double relevance_threshold{0.5};
+  double mmr_lambda{0.5};
+  std::size_t num_hypothetical{1};
+  bool enable_relevance_check{true};
+  bool enable_support_check{true};
+  bool enable_web_fallback{false};
+  bool enable_query_decomposition{true};
+  std::size_t max_corrections{2};
+  std::size_t max_iterations{5};
+  bool enable_reflection{true};
+  std::size_t search_depth{2};
+  bool include_communities{true};
+};
+
 struct ObjKnowledge : Obj
 {
   ObjString* name{nullptr};
@@ -129,6 +160,8 @@ struct ObjKnowledge : Obj
   std::size_t chunk_overlap{0};
   std::vector<knowledge::Source> sources;
   knowledge::VectorStore store{8};
+  RetrievalStrategy retrieval_strategy{RetrievalStrategy::kBasic};
+  RetrievalStrategyOptions strategy_options;
 };
 
 struct ObjOption : Obj
@@ -158,7 +191,9 @@ ObjAgent* new_agent(ObjString* name, ObjString* provider, ObjString* model, ObjS
 ObjEnv* new_env();
 ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString* embedding_model,
                             std::size_t chunk_size, std::size_t chunk_overlap,
-                            std::vector<knowledge::Source> sources);
+                            std::vector<knowledge::Source> sources,
+                            RetrievalStrategy retrieval_strategy = RetrievalStrategy::kBasic,
+                            RetrievalStrategyOptions strategy_options = {});
 ObjOption* new_option(bool has_value, Value value);
 ObjFuture* new_future(std::shared_ptr<async::Future<Value>> future);
 

@@ -31,6 +31,7 @@ public:
   fs::path persist();
 
 private:
+  friend class TempDir;
   TempFile(fs::path path, File file);
 
   fs::path path_{};

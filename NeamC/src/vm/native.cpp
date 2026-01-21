@@ -30,6 +30,7 @@
 
 #include "neamc/vm/table.hpp"
 #include "neamc/vm/async/future.hpp"
+#include "neamc/vm/async/executor.hpp"
 #include "neamc/vm/runtime_type.hpp"
 #include "neamc/vm/vm.hpp"
 

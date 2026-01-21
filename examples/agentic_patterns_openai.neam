@@ -1,0 +1,232 @@
+// ============================================
+// NEAM AGENTIC PATTERNS - OpenAI Test Suite
+// ============================================
+// Tests all major agent orchestration patterns
+
+// ============================================
+// PATTERN 1: Single Agent (Basic Query)
+// ============================================
+
+agent SimpleAssistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a helpful assistant. Be concise, answer in 1-2 sentences."
+}
+
+// ============================================
+// PATTERN 2: Multi-Agent Collaboration
+// Specialized agents work on different aspects
+// ============================================
+
+agent Researcher {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a researcher. Provide factual information and key points. Be concise."
+}
+
+agent Writer {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a writer. Take research notes and create polished prose. Be concise."
+}
+
+agent Editor {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are an editor. Review and improve text for clarity. Output only the improved text."
+}
+
+// ============================================
+// PATTERN 3: Sequential Pipeline
+// Output of one agent feeds into the next
+// ============================================
+
+agent Translator {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Translate the given text to French. Output only the translation."
+}
+
+agent Summarizer {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Summarize the given text in exactly one sentence."
+}
+
+// ============================================
+// PATTERN 4: Supervisor/Worker
+// Supervisor delegates and validates
+// ============================================
+
+agent Supervisor {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a supervisor. Evaluate if the worker's response is complete and correct. Reply with 'APPROVED' or 'NEEDS_REVISION: <reason>'."
+}
+
+agent Worker {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a worker. Complete the assigned task thoroughly but concisely."
+}
+
+// ============================================
+// PATTERN 5: Router/Dispatcher
+// Routes queries to specialized agents
+// ============================================
+
+agent Router {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Classify the query into one category: MATH, CODE, or GENERAL. Reply with only the category name."
+}
+
+agent MathExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a math expert. Solve math problems step by step. Be concise."
+}
+
+agent CodeExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a coding expert. Provide code solutions with brief explanations."
+}
+
+agent GeneralExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a general knowledge expert. Answer questions concisely."
+}
+
+// ============================================
+// PATTERN 6: Debate/Adversarial
+// Multiple perspectives on a topic
+// ============================================
+
+agent Advocate {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You argue IN FAVOR of the given topic. Present 2-3 strong points."
+}
+
+agent Critic {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You argue AGAINST the given topic. Present 2-3 counterpoints."
+}
+
+agent Judge {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are an impartial judge. Given pro and con arguments, provide a balanced conclusion in 2 sentences."
+}
+
+// ============================================
+// MAIN TEST EXECUTION
+// ============================================
+
+{
+  emit "=======================================================";
+  emit "    NEAM AGENTIC PATTERNS TEST SUITE (OpenAI)         ";
+  emit "=======================================================";
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 1: Single Agent
+  // -------------------------------------------------
+  emit "--- PATTERN 1: Single Agent ---";
+  let single_response = SimpleAssistant.ask("What is the capital of France?");
+  emit "Q: What is the capital of France?";
+  emit "A: " + single_response;
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 2: Multi-Agent Collaboration
+  // -------------------------------------------------
+  emit "--- PATTERN 2: Multi-Agent Collaboration ---";
+  emit "Topic: Artificial Intelligence";
+
+  let research = Researcher.ask("Provide 3 key facts about artificial intelligence");
+  emit "Researcher: " + research;
+
+  let draft = Writer.ask("Write a short paragraph based on these notes: " + research);
+  emit "Writer: " + draft;
+
+  let final_text = Editor.ask("Edit and improve this text: " + draft);
+  emit "Editor: " + final_text;
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 3: Sequential Pipeline
+  // -------------------------------------------------
+  emit "--- PATTERN 3: Sequential Pipeline ---";
+  let original = "The quick brown fox jumps over the lazy dog.";
+  emit "Original: " + original;
+
+  let translated = Translator.ask(original);
+  emit "Translated (French): " + translated;
+
+  let summary = Summarizer.ask("Summarize this French text: " + translated);
+  emit "Summary: " + summary;
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 4: Supervisor/Worker
+  // -------------------------------------------------
+  emit "--- PATTERN 4: Supervisor/Worker ---";
+  let task = "List 3 benefits of exercise";
+  emit "Task: " + task;
+
+  let work_result = Worker.ask(task);
+  emit "Worker Output: " + work_result;
+
+  let validation = Supervisor.ask("Evaluate this response to '" + task + "': " + work_result);
+  emit "Supervisor: " + validation;
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 5: Router/Dispatcher
+  // -------------------------------------------------
+  emit "--- PATTERN 5: Router/Dispatcher ---";
+
+  let query1 = "What is 15 * 23?";
+  emit "Query: " + query1;
+  let route1 = Router.ask(query1);
+  emit "Route: " + route1;
+  let answer1 = MathExpert.ask(query1);
+  emit "MathExpert: " + answer1;
+  emit "";
+
+  let query2 = "Write a hello world in Python";
+  emit "Query: " + query2;
+  let route2 = Router.ask(query2);
+  emit "Route: " + route2;
+  let answer2 = CodeExpert.ask(query2);
+  emit "CodeExpert: " + answer2;
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 6: Debate/Adversarial
+  // -------------------------------------------------
+  emit "--- PATTERN 6: Debate Pattern ---";
+  let topic = "Remote work should be the default for knowledge workers";
+  emit "Topic: " + topic;
+  emit "";
+
+  let pro = Advocate.ask(topic);
+  emit "Advocate (PRO): " + pro;
+  emit "";
+
+  let con = Critic.ask(topic);
+  emit "Critic (CON): " + con;
+  emit "";
+
+  let verdict = Judge.ask("PRO arguments: " + pro + " --- CON arguments: " + con);
+  emit "Judge (VERDICT): " + verdict;
+  emit "";
+
+  emit "=======================================================";
+  emit "        ALL AGENTIC PATTERNS TEST COMPLETE            ";
+  emit "=======================================================";
+}

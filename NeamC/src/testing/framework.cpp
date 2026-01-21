@@ -45,6 +45,7 @@ std::string outcome_to_string(TestResult result)
 
 }  // namespace
 
+TestRunner::TestRunner() : config_() {}
 TestRunner::TestRunner(Config config) : config_(std::move(config)) {}
 
 void TestRunner::register_suite(TestSuite suite)

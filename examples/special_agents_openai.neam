@@ -1,0 +1,255 @@
+// NEAM SPECIAL AGENTS TEST SUITE (OpenAI)
+
+agent DeepSearchPlanner {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Generate 3 sub-questions for the given question."
+}
+
+agent DeepSearcher {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Answer with factual information. Be concise."
+}
+
+agent DeepSearchSynthesizer {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Synthesize findings into a comprehensive answer."
+}
+
+agent DeepSearchReflector {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Reply COMPLETE or GAPS with missing aspects."
+}
+
+agent ChainOfThought {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Solve step-by-step. Show work for each step."
+}
+
+agent ReActReasoner {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Output Thought, Action, or Answer."
+}
+
+agent ReActExecutor {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Execute Search or Calculate actions."
+}
+
+agent Creator {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Create content based on requirements."
+}
+
+agent SelfCritic {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Identify 2-3 improvements needed."
+}
+
+agent Refiner {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Improve content based on feedback."
+}
+
+agent GoalDecomposer {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Break goals into 3-5 actionable steps."
+}
+
+agent StepExecutor {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Execute steps and report outcomes."
+}
+
+agent PlanMonitor {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Assess: ON_TRACK, NEEDS_ADJUSTMENT, or BLOCKED."
+}
+
+agent SocraticTeacher {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Teach through probing questions."
+}
+
+agent StudentSimulator {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Answer as a curious student."
+}
+
+agent RedTeam {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Identify 3 security vulnerabilities."
+}
+
+agent BlueTeam {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Propose mitigations for vulnerabilities."
+}
+
+agent MemoryKeeper {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Extract key facts. Output FACTS with bullet points."
+}
+
+agent ContextualResponder {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Answer using provided context."
+}
+
+{
+  emit "=======================================================";
+  emit "    NEAM SPECIAL AGENTS TEST SUITE (OpenAI)           ";
+  emit "=======================================================";
+  emit "";
+
+  emit "=== SPECIAL AGENT 1: DeepSearch Agent ===";
+  emit "";
+
+  let research_q = "What factors made Apollo 11 successful?";
+  emit "Research Question: " + research_q;
+
+  let subquestions = DeepSearchPlanner.ask(research_q);
+  emit "Sub-Questions: " + subquestions;
+
+  let research_result = DeepSearcher.ask("What technology enabled Apollo 11?");
+  emit "Research: " + research_result;
+
+  let synthesis = DeepSearchSynthesizer.ask("Question: " + research_q + " Findings: " + research_result);
+  emit "Synthesis: " + synthesis;
+
+  let reflection = DeepSearchReflector.ask("Question: " + research_q + " Answer: " + synthesis);
+  emit "Reflection: " + reflection;
+  emit "";
+
+  emit "=== SPECIAL AGENT 2: Chain-of-Thought ===";
+  emit "";
+
+  let math_problem = "A train goes 60mph to B and 40mph back. 120 miles each way. Average speed?";
+  emit "Problem: " + math_problem;
+
+  let math_solution = ChainOfThought.ask(math_problem);
+  emit "Solution: " + math_solution;
+  emit "";
+
+  emit "=== SPECIAL AGENT 3: ReAct Agent ===";
+  emit "";
+
+  let react_q = "What is the population of Japan in millions?";
+  emit "Question: " + react_q;
+
+  let thought1 = ReActReasoner.ask(react_q);
+  emit "Thought 1: " + thought1;
+
+  let obs1 = ReActExecutor.ask("Search for population of Japan");
+  emit "Observation: " + obs1;
+
+  let thought2 = ReActReasoner.ask("Japan population is 125 million. Provide Answer:");
+  emit "Final: " + thought2;
+  emit "";
+
+  emit "=== SPECIAL AGENT 4: Self-Reflection ===";
+  emit "";
+
+  let create_task = "Write a tagline for a smart water bottle";
+  emit "Task: " + create_task;
+
+  let initial_draft = Creator.ask(create_task);
+  emit "Draft: " + initial_draft;
+
+  let review = SelfCritic.ask("Review: " + initial_draft);
+  emit "Critique: " + review;
+
+  let improved = Refiner.ask("Improve: " + initial_draft + " Based on: " + review);
+  emit "Refined: " + improved;
+  emit "";
+
+  emit "=== SPECIAL AGENT 5: Planning Agent ===";
+  emit "";
+
+  let main_goal = "Build a personal portfolio website";
+  emit "Goal: " + main_goal;
+
+  let task_plan = GoalDecomposer.ask(main_goal);
+  emit "Plan: " + task_plan;
+
+  let step_result = StepExecutor.ask("Choose a tech stack for portfolio");
+  emit "Step 1 Result: " + step_result;
+
+  let progress = PlanMonitor.ask("Goal: " + main_goal + " Done: Step 1. Result: " + step_result);
+  emit "Status: " + progress;
+  emit "";
+
+  emit "=== SPECIAL AGENT 6: Socratic Agent ===";
+  emit "";
+
+  let science_topic = "Why does ice float on water?";
+  emit "Student asks: " + science_topic;
+
+  let teacher_q1 = SocraticTeacher.ask(science_topic);
+  emit "Teacher: " + teacher_q1;
+
+  let student_a1 = StudentSimulator.ask(teacher_q1);
+  emit "Student: " + student_a1;
+
+  let teacher_q2 = SocraticTeacher.ask("Student said: " + student_a1 + " Guide further:");
+  emit "Teacher: " + teacher_q2;
+  emit "";
+
+  emit "=== SPECIAL AGENT 7: Red/Blue Team ===";
+  emit "";
+
+  let system_desc = "Web app with user file uploads to cloud bucket";
+  emit "System: " + system_desc;
+
+  let vulns = RedTeam.ask(system_desc);
+  emit "Vulnerabilities: " + vulns;
+
+  let mitigations = BlueTeam.ask("Mitigate: " + vulns);
+  emit "Mitigations: " + mitigations;
+  emit "";
+
+  emit "=== SPECIAL AGENT 8: Memory Agent ===";
+  emit "";
+
+  let msg1 = "I am John, a software developer at Google for 3 years.";
+  emit "User: " + msg1;
+
+  let facts1 = MemoryKeeper.ask(msg1);
+  emit "Memory: " + facts1;
+
+  let msg2 = "I am working on a search ranking algorithm.";
+  emit "User: " + msg2;
+
+  let facts2 = MemoryKeeper.ask(msg2);
+  emit "Memory: " + facts2;
+
+  let mem_ctx = facts1 + " " + facts2;
+  let mem_query = "What does John do?";
+  emit "Query: " + mem_query;
+
+  let mem_resp = ContextualResponder.ask("Context: " + mem_ctx + " Question: " + mem_query);
+  emit "Response: " + mem_resp;
+  emit "";
+
+  emit "=======================================================";
+  emit "      ALL SPECIAL AGENTS TESTS COMPLETE               ";
+  emit "=======================================================";
+}

@@ -1,0 +1,186 @@
+// Comprehensive test of ALL RAG retrieval strategies
+// Run: ./build/neamc examples/rag_all_strategies.neam -o /tmp/test.neamb && ./build/neam /tmp/test.neamb
+
+// ============================================
+// Knowledge Base Definitions - All Strategies
+// ============================================
+
+knowledge BasicKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "basic"
+  top_k: 3
+}
+
+knowledge MMRKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "mmr"
+  top_k: 3
+  mmr_lambda: 0.7
+}
+
+knowledge HybridKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "hybrid"
+  top_k: 3
+}
+
+knowledge HyDEKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "hyde"
+  top_k: 3
+  num_hypothetical: 1
+}
+
+knowledge SelfRAGKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "self_rag"
+  top_k: 4
+  enable_relevance_check: true
+}
+
+knowledge CRAGKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "crag"
+  top_k: 3
+  enable_query_decomposition: true
+}
+
+knowledge AgenticKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "agentic"
+  top_k: 3
+  max_iterations: 2
+  enable_reflection: true
+}
+
+// ============================================
+// Agent Definitions
+// ============================================
+
+agent BasicAgent {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Answer in exactly one sentence."
+  connected_knowledge: [BasicKB]
+}
+
+agent MMRAgent {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Answer in exactly one sentence."
+  connected_knowledge: [MMRKB]
+}
+
+agent HybridAgent {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Answer in exactly one sentence."
+  connected_knowledge: [HybridKB]
+}
+
+agent HyDEAgent {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Answer in exactly one sentence."
+  connected_knowledge: [HyDEKB]
+}
+
+agent SelfRAGAgent {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Answer in exactly one sentence."
+  connected_knowledge: [SelfRAGKB]
+}
+
+agent CRAGAgent {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Answer in exactly one sentence."
+  connected_knowledge: [CRAGKB]
+}
+
+agent AgenticAgent {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Answer in exactly one sentence."
+  connected_knowledge: [AgenticKB]
+}
+
+// ============================================
+// Main Test
+// ============================================
+
+{
+  emit "===============================================";
+  emit "  NEAM RAG STRATEGIES - COMPREHENSIVE TEST    ";
+  emit "===============================================";
+  emit "";
+  emit "Testing all 7 retrieval strategies with the";
+  emit "same question to compare results.";
+  emit "";
+
+  let q = "What is Neam?";
+  emit "Question: " + q;
+  emit "";
+  emit "-----------------------------------------------";
+
+  emit "1. BASIC (standard similarity):";
+  emit "   " + BasicAgent.ask(q);
+  emit "";
+
+  emit "2. MMR (diversity-focused):";
+  emit "   " + MMRAgent.ask(q);
+  emit "";
+
+  emit "3. HYBRID (keyword + vector):";
+  emit "   " + HybridAgent.ask(q);
+  emit "";
+
+  emit "4. HYDE (hypothetical document):";
+  emit "   " + HyDEAgent.ask(q);
+  emit "";
+
+  emit "5. SELF-RAG (relevance-checked):";
+  emit "   " + SelfRAGAgent.ask(q);
+  emit "";
+
+  emit "6. CRAG (query decomposition):";
+  emit "   " + CRAGAgent.ask(q);
+  emit "";
+
+  emit "7. AGENTIC (iterative refinement):";
+  emit "   " + AgenticAgent.ask(q);
+  emit "";
+
+  emit "===============================================";
+  emit "         ALL STRATEGIES TEST COMPLETE         ";
+  emit "===============================================";
+}

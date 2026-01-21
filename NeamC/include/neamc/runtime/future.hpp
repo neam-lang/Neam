@@ -22,6 +22,14 @@
 namespace neamc::runtime
 {
 class Executor;
+
+// Forward declaration of void specialization
+template <typename T>
+class Future;
+
+template <>
+class Future<void>;
+
 struct TimeoutError
 {
   std::chrono::milliseconds duration{0};
@@ -146,51 +154,7 @@ public:
   }
 
   template <typename F>
-  auto flat_map(F&& func) -> std::invoke_result_t<F, T>
-  {
-    using NextFuture = std::invoke_result_t<F, T>;
-    auto next = NextFuture();
-    add_continuation([next_state = next.state_, fn = std::forward<F>(func)](ResultType result) mutable {
-      if (result.is_ok())
-      {
-        try
-        {
-          NextFuture produced = fn(std::move(result).unwrap());
-          produced.add_continuation([next_state](typename NextFuture::ResultType inner_result) {
-            if (inner_result.is_ok())
-            {
-              if constexpr (std::is_same_v<typename NextFuture::ValueType, void>)
-              {
-                inner_result.unwrap();
-                Future<void>::resolve_shared(next_state);
-              }
-              else
-              {
-                Future<typename NextFuture::ValueType>::resolve_shared(next_state, std::move(inner_result).unwrap());
-              }
-            }
-            else
-            {
-              Future<typename NextFuture::ValueType>::reject_shared(next_state, std::move(inner_result).unwrap_err());
-            }
-          });
-        }
-        catch (const std::exception& ex)
-        {
-          Future<typename NextFuture::ValueType>::reject_shared(next_state, std::string(ex.what()));
-        }
-        catch (...)
-        {
-          Future<typename NextFuture::ValueType>::reject_shared(next_state, std::string("Unknown error"));
-        }
-      }
-      else
-      {
-        Future<typename NextFuture::ValueType>::reject_shared(next_state, std::move(result).unwrap_err());
-      }
-    });
-    return next;
-  }
+  auto flat_map(F&& func) -> std::invoke_result_t<F, T>;
 
   template <typename F>
   Future<T> on_error(F&& handler)
@@ -516,7 +480,7 @@ private:
   void add_continuation(std::function<void(ResultType)> cont)
   {
     bool run_now = false;
-    ResultType result;
+    std::optional<ResultType> result;
     {
       std::lock_guard<std::mutex> lock(state_->mutex);
       if (!state_->ready)
@@ -536,7 +500,7 @@ private:
     }
     if (run_now)
     {
-      cont(std::move(result));
+      cont(std::move(*result));
     }
   }
 
@@ -565,4 +529,54 @@ Future<void> make_error_future(E error)
 {
   return Future<void>(typename Future<void>::ErrorType{std::move(error)});
 }
+
+// Out-of-line definition of Future<T>::flat_map (needs Future<void> to be complete)
+template <typename T>
+template <typename F>
+auto Future<T>::flat_map(F&& func) -> std::invoke_result_t<F, T>
+{
+  using NextFuture = std::invoke_result_t<F, T>;
+  auto next = NextFuture();
+  add_continuation([next_state = next.state_, fn = std::forward<F>(func)](ResultType result) mutable {
+    if (result.is_ok())
+    {
+      try
+      {
+        NextFuture produced = fn(std::move(result).unwrap());
+        produced.add_continuation([next_state](typename NextFuture::ResultType inner_result) {
+          if (inner_result.is_ok())
+          {
+            if constexpr (std::is_same_v<typename NextFuture::ValueType, void>)
+            {
+              inner_result.unwrap();
+              Future<void>::resolve_shared(next_state);
+            }
+            else
+            {
+              Future<typename NextFuture::ValueType>::resolve_shared(next_state, std::move(inner_result).unwrap());
+            }
+          }
+          else
+          {
+            Future<typename NextFuture::ValueType>::reject_shared(next_state, std::move(inner_result).unwrap_err());
+          }
+        });
+      }
+      catch (const std::exception& ex)
+      {
+        Future<typename NextFuture::ValueType>::reject_shared(next_state, std::string(ex.what()));
+      }
+      catch (...)
+      {
+        Future<typename NextFuture::ValueType>::reject_shared(next_state, std::string("Unknown error"));
+      }
+    }
+    else
+    {
+      Future<typename NextFuture::ValueType>::reject_shared(next_state, std::move(result).unwrap_err());
+    }
+  });
+  return next;
+}
+
 }  // namespace neamc::runtime

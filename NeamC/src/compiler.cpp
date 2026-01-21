@@ -527,6 +527,79 @@ void Compiler::emit_statement(const Statement& stmt)
             emit_build_map(chunk_, 2);
           }
           emit_build_list(chunk_, node.sources.size());
+
+          // Emit retrieval strategy
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(static_cast<int>(node.retrieval_strategy))));
+
+          // Emit strategy options as a map
+          std::size_t option_count = 0;
+          // top_k
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "top_k")));
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(node.strategy_options.top_k)));
+          option_count++;
+          // relevance_threshold
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "relevance_threshold")));
+          chunk_.emit_constant(vm::Value::Number(node.strategy_options.relevance_threshold));
+          option_count++;
+          // mmr_lambda
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "mmr_lambda")));
+          chunk_.emit_constant(vm::Value::Number(node.strategy_options.mmr_lambda));
+          option_count++;
+          // num_hypothetical
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "num_hypothetical")));
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(node.strategy_options.num_hypothetical)));
+          option_count++;
+          // enable_relevance_check
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "enable_relevance_check")));
+          chunk_.emit_constant(vm::Value::Bool(node.strategy_options.enable_relevance_check));
+          option_count++;
+          // enable_support_check
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "enable_support_check")));
+          chunk_.emit_constant(vm::Value::Bool(node.strategy_options.enable_support_check));
+          option_count++;
+          // enable_web_fallback
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "enable_web_fallback")));
+          chunk_.emit_constant(vm::Value::Bool(node.strategy_options.enable_web_fallback));
+          option_count++;
+          // enable_query_decomposition
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "enable_query_decomposition")));
+          chunk_.emit_constant(vm::Value::Bool(node.strategy_options.enable_query_decomposition));
+          option_count++;
+          // max_corrections
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "max_corrections")));
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(node.strategy_options.max_corrections)));
+          option_count++;
+          // max_iterations
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "max_iterations")));
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(node.strategy_options.max_iterations)));
+          option_count++;
+          // enable_reflection
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "enable_reflection")));
+          chunk_.emit_constant(vm::Value::Bool(node.strategy_options.enable_reflection));
+          option_count++;
+          // search_depth
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "search_depth")));
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(node.strategy_options.search_depth)));
+          option_count++;
+          // include_communities
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "include_communities")));
+          chunk_.emit_constant(vm::Value::Bool(node.strategy_options.include_communities));
+          option_count++;
+
+          emit_build_map(chunk_, option_count);
           chunk_.write_op(OpCode::OP_DEFINE_KNOWLEDGE);
         }
         else if constexpr (std::is_same_v<T, BudgetDecl>)

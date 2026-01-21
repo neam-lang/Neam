@@ -40,6 +40,32 @@ int main(int argc, char** argv)
     neamc::vm::VirtualMachine vm;
     const auto result = vm.run(chunk);
 
+    // Print emitted values
+    for (const auto& emitted : vm.emitted())
+    {
+      if (emitted.is_string())
+      {
+        auto* str = neamc::vm::as_string(emitted);
+        std::cout << std::string(str->chars, str->length) << "\n";
+      }
+      else if (emitted.is_number())
+      {
+        std::cout << emitted.as_number() << "\n";
+      }
+      else if (emitted.is_bool())
+      {
+        std::cout << (emitted.as_bool() ? "true" : "false") << "\n";
+      }
+      else if (emitted.is_nil())
+      {
+        std::cout << "nil\n";
+      }
+      else
+      {
+        std::cout << "<object>\n";
+      }
+    }
+
     if (result.is_number())
     {
       std::cout << "Result: " << result.as_number() << "\n";

@@ -5,11 +5,14 @@
 #include "neamc/vm/knowledge.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <regex>
+#include <set>
 #include <sstream>
 
 #include <curl/curl.h>
@@ -123,6 +126,430 @@ std::vector<SearchResult> VectorStore::search(const std::vector<float>& embeddin
     results.resize(top_k);
   }
   return results;
+}
+
+std::vector<SearchResult> VectorStore::search_mmr(const std::vector<float>& embedding,
+                                                  std::size_t top_k, double lambda) const
+{
+  std::vector<SearchResult> results;
+  if (entries_.empty() || embedding.empty())
+  {
+    return results;
+  }
+  const auto query = normalize(embedding);
+
+  // Calculate all similarities to query
+  std::vector<std::pair<std::size_t, float>> candidates;
+  for (std::size_t i = 0; i < entries_.size(); ++i)
+  {
+    const float score = dot_product(query, entries_[i].embedding);
+    candidates.emplace_back(i, score);
+  }
+
+  // MMR selection
+  std::vector<std::size_t> selected_indices;
+  while (selected_indices.size() < top_k && !candidates.empty())
+  {
+    float best_mmr = -std::numeric_limits<float>::infinity();
+    std::size_t best_idx = 0;
+    std::size_t best_candidate_idx = 0;
+
+    for (std::size_t c = 0; c < candidates.size(); ++c)
+    {
+      const auto& [idx, query_sim] = candidates[c];
+
+      // Find max similarity to already selected documents
+      float max_selected_sim = 0.0f;
+      for (std::size_t sel_idx : selected_indices)
+      {
+        const float sim = dot_product(entries_[idx].embedding, entries_[sel_idx].embedding);
+        max_selected_sim = std::max(max_selected_sim, sim);
+      }
+
+      // MMR score = lambda * sim(d, q) - (1-lambda) * max(sim(d, d_selected))
+      const float mmr_score =
+          static_cast<float>(lambda) * query_sim - static_cast<float>(1.0 - lambda) * max_selected_sim;
+
+      if (mmr_score > best_mmr)
+      {
+        best_mmr = mmr_score;
+        best_idx = idx;
+        best_candidate_idx = c;
+      }
+    }
+
+    selected_indices.push_back(best_idx);
+    results.push_back(SearchResult{entries_[best_idx].chunk, candidates[best_candidate_idx].second});
+    candidates.erase(candidates.begin() + static_cast<std::ptrdiff_t>(best_candidate_idx));
+  }
+
+  return results;
+}
+
+std::vector<SearchResult> VectorStore::search_hybrid(const std::vector<float>& embedding,
+                                                     const std::string& query_text, std::size_t top_k,
+                                                     double vector_weight) const
+{
+  std::vector<SearchResult> results;
+  if (entries_.empty() || embedding.empty())
+  {
+    return results;
+  }
+
+  const auto query = normalize(embedding);
+  const auto query_words = split_words(query_text);
+
+  // Compute hybrid scores
+  std::vector<std::pair<std::size_t, float>> scores;
+  for (std::size_t i = 0; i < entries_.size(); ++i)
+  {
+    // Vector similarity
+    const float vector_score = dot_product(query, entries_[i].embedding);
+
+    // Keyword score (simple term frequency)
+    float keyword_score = 0.0f;
+    const auto doc_words = split_words(entries_[i].chunk.text);
+    for (const auto& qw : query_words)
+    {
+      for (const auto& dw : doc_words)
+      {
+        if (qw == dw)
+        {
+          keyword_score += 1.0f;
+        }
+      }
+    }
+    if (!doc_words.empty())
+    {
+      keyword_score /= static_cast<float>(doc_words.size());
+    }
+
+    // Hybrid score
+    const float hybrid_score =
+        static_cast<float>(vector_weight) * vector_score +
+        static_cast<float>(1.0 - vector_weight) * keyword_score;
+    scores.emplace_back(i, hybrid_score);
+  }
+
+  std::sort(scores.begin(), scores.end(),
+            [](const auto& a, const auto& b) { return a.second > b.second; });
+
+  for (std::size_t i = 0; i < std::min(top_k, scores.size()); ++i)
+  {
+    results.push_back(SearchResult{entries_[scores[i].first].chunk, scores[i].second});
+  }
+
+  return results;
+}
+
+const std::vector<std::pair<std::vector<float>, Chunk>>& VectorStore::entries() const
+{
+  // Note: This is a workaround - we return a reference to an empty static vector
+  // and the caller should use the search methods instead
+  static std::vector<std::pair<std::vector<float>, Chunk>> empty;
+  return empty;
+}
+
+RetrievalResult retrieve_with_strategy(VectorStore& store, const std::string& query,
+                                       Strategy strategy, const StrategyOptions& options,
+                                       LLMCallback llm_callback)
+{
+  RetrievalResult result;
+  const auto embedding = embed_text(query, store.dimensions());
+
+  switch (strategy)
+  {
+    case Strategy::kBasic:
+    {
+      result.documents = store.search(embedding, options.top_k);
+      result.strategy_used = "basic";
+      break;
+    }
+    case Strategy::kMMR:
+    {
+      result.documents = store.search_mmr(embedding, options.top_k, options.mmr_lambda);
+      result.strategy_used = "mmr";
+      break;
+    }
+    case Strategy::kHybrid:
+    {
+      result.documents = store.search_hybrid(embedding, query, options.top_k, 0.7);
+      result.strategy_used = "hybrid";
+      break;
+    }
+    case Strategy::kHyDE:
+    {
+      // HyDE: Generate hypothetical document, then search with that
+      if (llm_callback)
+      {
+        std::string hyde_prompt =
+            "Please write a passage that would answer the following question. "
+            "Write only the passage, no preamble.\n\nQuestion: " +
+            query + "\n\nPassage:";
+
+        for (std::size_t i = 0; i < options.num_hypothetical; ++i)
+        {
+          std::string hypothetical = llm_callback(hyde_prompt);
+          result.hypothetical_docs.push_back(hypothetical);
+        }
+
+        // Average embeddings of hypothetical docs
+        std::vector<float> combined_embedding(store.dimensions(), 0.0f);
+        for (const auto& hyp_doc : result.hypothetical_docs)
+        {
+          auto hyp_emb = embed_text(hyp_doc, store.dimensions());
+          for (std::size_t j = 0; j < combined_embedding.size(); ++j)
+          {
+            combined_embedding[j] += hyp_emb[j];
+          }
+        }
+        if (!result.hypothetical_docs.empty())
+        {
+          for (auto& val : combined_embedding)
+          {
+            val /= static_cast<float>(result.hypothetical_docs.size());
+          }
+        }
+
+        result.documents = store.search(combined_embedding, options.top_k);
+      }
+      else
+      {
+        // Fallback to basic if no LLM callback
+        result.documents = store.search(embedding, options.top_k);
+      }
+      result.strategy_used = "hyde";
+      break;
+    }
+    case Strategy::kSelfRAG:
+    {
+      // Self-RAG: Retrieve, check relevance, optionally regenerate
+      auto candidates = store.search(embedding, options.top_k * 2);  // Get more candidates
+
+      if (options.enable_relevance_check && llm_callback)
+      {
+        result.relevance_checked = true;
+        for (const auto& doc : candidates)
+        {
+          std::string relevance_prompt =
+              "Is this document relevant to the question?\n\n"
+              "Question: " +
+              query + "\n\nDocument: " + doc.chunk.text +
+              "\n\nRespond with only 'relevant' or 'not_relevant':";
+          std::string response = llm_callback(relevance_prompt);
+
+          // Simple check for "relevant" at start
+          std::string lower_response = response;
+          std::transform(lower_response.begin(), lower_response.end(), lower_response.begin(),
+                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+          if (lower_response.find("relevant") == 0 || lower_response.find("yes") == 0)
+          {
+            result.documents.push_back(doc);
+            if (result.documents.size() >= options.top_k)
+            {
+              break;
+            }
+          }
+        }
+      }
+      else
+      {
+        // No relevance check, just take top_k
+        for (std::size_t i = 0; i < std::min(options.top_k, candidates.size()); ++i)
+        {
+          result.documents.push_back(candidates[i]);
+        }
+      }
+      result.strategy_used = "self_rag";
+      break;
+    }
+    case Strategy::kCRAG:
+    {
+      // CRAG: Corrective RAG with query decomposition
+      auto initial_results = store.search(embedding, options.top_k);
+
+      // Check if results are sufficient
+      bool results_sufficient = false;
+      if (!initial_results.empty() && initial_results[0].score > options.relevance_threshold)
+      {
+        results_sufficient = true;
+      }
+
+      if (!results_sufficient && options.enable_query_decomposition && llm_callback)
+      {
+        // Decompose query into sub-queries
+        std::string decompose_prompt =
+            "Break down this complex question into 2-3 simpler sub-questions:\n\n"
+            "Question: " +
+            query + "\n\nSub-questions (one per line):";
+        std::string sub_queries_text = llm_callback(decompose_prompt);
+
+        // Parse sub-queries
+        std::istringstream stream(sub_queries_text);
+        std::string line;
+        while (std::getline(stream, line))
+        {
+          // Remove numbering and trim
+          while (!line.empty() && (std::isdigit(line[0]) || line[0] == '.' || line[0] == '-' ||
+                                   line[0] == ' '))
+          {
+            line.erase(0, 1);
+          }
+          if (line.length() > 10)
+          {
+            result.sub_queries.push_back(line);
+          }
+        }
+
+        // Search for each sub-query
+        std::set<std::string> seen_texts;
+        for (const auto& sub_query : result.sub_queries)
+        {
+          auto sub_emb = embed_text(sub_query, store.dimensions());
+          auto sub_results = store.search(sub_emb, options.top_k);
+          for (const auto& doc : sub_results)
+          {
+            if (seen_texts.find(doc.chunk.text) == seen_texts.end())
+            {
+              seen_texts.insert(doc.chunk.text);
+              result.documents.push_back(doc);
+            }
+          }
+        }
+
+        // Limit total results
+        if (result.documents.size() > options.top_k * 2)
+        {
+          result.documents.resize(options.top_k * 2);
+        }
+      }
+      else
+      {
+        result.documents = initial_results;
+      }
+      result.strategy_used = "crag";
+      break;
+    }
+    case Strategy::kAgentic:
+    {
+      // Agentic: Multi-step retrieval with planning
+      // Simplified version: iterative refinement
+      result.documents = store.search(embedding, options.top_k);
+
+      if (llm_callback && options.enable_reflection)
+      {
+        for (std::size_t iter = 0; iter < options.max_iterations; ++iter)
+        {
+          // Check if we have enough relevant info
+          std::string context;
+          for (const auto& doc : result.documents)
+          {
+            context += doc.chunk.text + "\n\n";
+          }
+
+          std::string reflection_prompt =
+              "Given this context and question, do we have enough information to answer? "
+              "Respond 'yes' or suggest a refined search query.\n\n"
+              "Question: " +
+              query + "\n\nContext:\n" + context.substr(0, 1000) + "\n\nResponse:";
+
+          std::string response = llm_callback(reflection_prompt);
+          std::string lower_response = response;
+          std::transform(lower_response.begin(), lower_response.end(), lower_response.begin(),
+                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+          if (lower_response.find("yes") != std::string::npos)
+          {
+            break;  // Have enough info
+          }
+
+          // Try refined query
+          auto refined_emb = embed_text(response, store.dimensions());
+          auto additional = store.search(refined_emb, options.top_k);
+
+          // Merge results
+          std::set<std::string> seen;
+          for (const auto& doc : result.documents)
+          {
+            seen.insert(doc.chunk.text);
+          }
+          for (const auto& doc : additional)
+          {
+            if (seen.find(doc.chunk.text) == seen.end())
+            {
+              result.documents.push_back(doc);
+              seen.insert(doc.chunk.text);
+            }
+          }
+        }
+      }
+      result.strategy_used = "agentic";
+      break;
+    }
+    case Strategy::kGraphRAG:
+    {
+      // Graph RAG: Simplified version using keyword extraction
+      // In a full implementation, this would use an actual knowledge graph
+      result.documents = store.search(embedding, options.top_k);
+
+      if (llm_callback)
+      {
+        // Extract entities from query
+        std::string entity_prompt =
+            "Extract the key entities (nouns, concepts) from this question. "
+            "List them one per line:\n\n" +
+            query;
+        std::string entities_text = llm_callback(entity_prompt);
+
+        // Search for each entity
+        std::istringstream stream(entities_text);
+        std::string entity;
+        std::set<std::string> seen;
+        for (const auto& doc : result.documents)
+        {
+          seen.insert(doc.chunk.text);
+        }
+
+        while (std::getline(stream, entity))
+        {
+          if (entity.length() < 3)
+            continue;
+          auto entity_emb = embed_text(entity, store.dimensions());
+          auto entity_results = store.search(entity_emb, 2);
+          for (const auto& doc : entity_results)
+          {
+            if (seen.find(doc.chunk.text) == seen.end())
+            {
+              result.documents.push_back(doc);
+              seen.insert(doc.chunk.text);
+            }
+          }
+        }
+      }
+      result.strategy_used = "graph_rag";
+      break;
+    }
+  }
+
+  // Filter by relevance threshold
+  if (options.relevance_threshold > 0.0)
+  {
+    std::vector<SearchResult> filtered;
+    for (const auto& doc : result.documents)
+    {
+      if (doc.score >= options.relevance_threshold)
+      {
+        filtered.push_back(doc);
+      }
+    }
+    if (!filtered.empty())
+    {
+      result.documents = filtered;
+    }
+  }
+
+  return result;
 }
 
 std::vector<float> embed_text(const std::string& text, std::size_t dimensions)

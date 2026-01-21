@@ -334,6 +334,49 @@ struct KnowledgeSource
   std::string path;
 };
 
+// Retrieval strategy types for advanced RAG
+enum class RetrievalStrategy
+{
+  kBasic,      // Standard vector similarity search
+  kMMR,        // Maximal Marginal Relevance (diversity-aware)
+  kHybrid,     // Keyword + vector hybrid search
+  kHyDE,       // Hypothetical Document Embeddings
+  kSelfRAG,    // Self-reflective RAG with relevance checks
+  kCRAG,       // Corrective RAG with query decomposition
+  kAgentic,    // Agentic RAG with tool-based planning
+  kGraphRAG    // Knowledge graph-based retrieval
+};
+
+struct RetrievalStrategyOptions
+{
+  // Common options
+  std::size_t top_k{4};
+  double relevance_threshold{0.5};
+
+  // MMR options
+  double mmr_lambda{0.5};  // Balance between relevance and diversity
+
+  // HyDE options
+  std::size_t num_hypothetical{1};
+
+  // Self-RAG options
+  bool enable_relevance_check{true};
+  bool enable_support_check{true};
+
+  // CRAG options
+  bool enable_web_fallback{false};
+  bool enable_query_decomposition{true};
+  std::size_t max_corrections{2};
+
+  // Agentic options
+  std::size_t max_iterations{5};
+  bool enable_reflection{true};
+
+  // Graph RAG options
+  std::size_t search_depth{2};
+  bool include_communities{true};
+};
+
 struct KnowledgeDecl
 {
   Visibility visibility;
@@ -343,6 +386,8 @@ struct KnowledgeDecl
   std::size_t chunk_size{0};
   std::size_t chunk_overlap{0};
   std::vector<KnowledgeSource> sources;
+  RetrievalStrategy retrieval_strategy{RetrievalStrategy::kBasic};
+  RetrievalStrategyOptions strategy_options;
 };
 
 struct BudgetDimension

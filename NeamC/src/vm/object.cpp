@@ -140,7 +140,9 @@ ObjEnv* new_env()
 
 ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString* embedding_model,
                             std::size_t chunk_size, std::size_t chunk_overlap,
-                            std::vector<knowledge::Source> sources)
+                            std::vector<knowledge::Source> sources,
+                            RetrievalStrategy retrieval_strategy,
+                            RetrievalStrategyOptions strategy_options)
 {
   auto* knowledge = allocate_object<ObjKnowledge>(ObjType::OBJ_KNOWLEDGE);
   knowledge->name = name;
@@ -149,6 +151,8 @@ ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString*
   knowledge->chunk_size = chunk_size;
   knowledge->chunk_overlap = chunk_overlap;
   knowledge->sources = std::move(sources);
+  knowledge->retrieval_strategy = retrieval_strategy;
+  knowledge->strategy_options = strategy_options;
   return knowledge;
 }
 
