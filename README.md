@@ -4,6 +4,9 @@
 
 Neam is a domain-specific language for building AI agent systems. Agents, knowledge bases, tools, and multi-agent orchestration are language-level constructs, not library APIs.
 
+🌐 [Neam site](https://neam.lovable.app/)
+
+
 ```
 .neam source → Parser → AST → Compiler → .neamb bytecode → VM → Output
 ```
