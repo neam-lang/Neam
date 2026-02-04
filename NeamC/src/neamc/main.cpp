@@ -1340,7 +1340,7 @@ int main(int argc, char** argv)
   std::string command = argv[1];
   if (command == "--version" || command == "-v")
   {
-    std::cout << "neamc 0.6.0\n";
+    std::cout << "neamc 0.6.2\n";
     return 0;
   }
   if (command == "test")

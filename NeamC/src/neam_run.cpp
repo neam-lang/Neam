@@ -33,7 +33,7 @@ int main(int argc, char** argv)
   const std::string input = argv[1];
   if (input == "--version" || input == "-v")
   {
-    std::cout << "neam 0.6.0\n";
+    std::cout << "neam 0.6.2\n";
     return 0;
   }
   std::ifstream in_file(input, std::ios::binary);

@@ -209,7 +209,7 @@ neamc::api::HttpResponse handle_health(const neamc::api::HttpRequest&)
   {
     return neamc::api::HttpResponse::json(g_health_manager->check_health());
   }
-  nlohmann::json response = {{"status", "healthy"}, {"version", "0.6.0"}, {"server", "neam-api"}};
+  nlohmann::json response = {{"status", "healthy"}, {"version", "0.6.2"}, {"server", "neam-api"}};
   return neamc::api::HttpResponse::json(response);
 }
 

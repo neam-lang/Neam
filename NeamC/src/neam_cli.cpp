@@ -40,7 +40,7 @@
 
 namespace
 {
-constexpr const char* kVersion = "0.6.0";
+constexpr const char* kVersion = "0.6.2";
 constexpr std::size_t kMaxHistorySize = 100;
 
 // ANSI escape codes

@@ -43,7 +43,7 @@ void McpClient::connect()
   nlohmann::json init_params;
   init_params["protocolVersion"] = "2024-11-05";
   init_params["capabilities"] = nlohmann::json::object();
-  init_params["clientInfo"] = {{"name", "neam"}, {"version", "0.6.0"}};
+  init_params["clientInfo"] = {{"name", "neam"}, {"version", "0.6.2"}};
 
   auto result = send_request("initialize", init_params);
   // We don't strictly validate the server response; just proceed

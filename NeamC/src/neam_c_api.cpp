@@ -37,8 +37,8 @@ namespace
 // Version information
 constexpr int kVersionMajor = 0;
 constexpr int kVersionMinor = 6;
-constexpr int kVersionPatch = 0;
-constexpr const char* kVersionString = "0.6.0";
+constexpr int kVersionPatch = 2;
+constexpr const char* kVersionString = "0.6.2";
 
 // Internal wrapper for NeamValue
 struct NeamValueInternal

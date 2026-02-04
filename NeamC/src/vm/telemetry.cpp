@@ -221,7 +221,7 @@ void TelemetryExporter::export_spans(const std::vector<Span>& spans)
   // Build OTLP JSON
   nlohmann::json resource_attrs = nlohmann::json::array();
   resource_attrs.push_back(make_attribute("service.name", config_.service_name));
-  resource_attrs.push_back(make_attribute("service.version", "0.6.0"));
+  resource_attrs.push_back(make_attribute("service.version", "0.6.2"));
   if (!config_.environment.empty())
   {
     resource_attrs.push_back(make_attribute("deployment.environment", config_.environment));
@@ -280,7 +280,7 @@ void TelemetryExporter::export_spans(const std::vector<Span>& spans)
       {"resourceSpans",
        {{{"resource", {{"attributes", resource_attrs}}},
          {"scopeSpans",
-          {{{"scope", {{"name", "neam"}, {"version", "0.6.0"}}}, {"spans", otlp_spans}}}}}}}};
+          {{{"scope", {{"name", "neam"}, {"version", "0.6.2"}}}, {"spans", otlp_spans}}}}}}}};
 
   // POST to OTLP endpoint
   std::string url = config_.endpoint;
@@ -330,7 +330,7 @@ void TelemetryExporter::export_metrics(const std::vector<MetricPoint>& metrics)
   // Build OTLP metrics JSON
   nlohmann::json resource_attrs = nlohmann::json::array();
   resource_attrs.push_back(make_attribute("service.name", config_.service_name));
-  resource_attrs.push_back(make_attribute("service.version", "0.6.0"));
+  resource_attrs.push_back(make_attribute("service.version", "0.6.2"));
 
   nlohmann::json metric_data = nlohmann::json::array();
   for (const auto& point : metrics)
@@ -361,7 +361,7 @@ void TelemetryExporter::export_metrics(const std::vector<MetricPoint>& metrics)
       {"resourceMetrics",
        {{{"resource", {{"attributes", resource_attrs}}},
          {"scopeMetrics",
-          {{{"scope", {{"name", "neam"}, {"version", "0.6.0"}}}, {"metrics", metric_data}}}}}}}};
+          {{{"scope", {{"name", "neam"}, {"version", "0.6.2"}}}, {"metrics", metric_data}}}}}}}};
 
   std::string url = config_.endpoint;
   if (url.back() != '/')

@@ -16,7 +16,7 @@ nlohmann::json HealthManager::check_liveness() const
 {
   nlohmann::json result;
   result["status"] = "alive";
-  result["version"] = "0.6.0";
+  result["version"] = "0.6.2";
 
   auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
                     std::chrono::steady_clock::now() - start_time_)
@@ -105,7 +105,7 @@ nlohmann::json HealthManager::check_health() const
                     .count();
 
   nlohmann::json result;
-  result["version"] = "0.6.0";
+  result["version"] = "0.6.2";
   result["uptime_seconds"] = uptime;
 
   nlohmann::json checks;

@@ -361,7 +361,7 @@ set(NEAM_C_API_SOURCES
 add_library(libneam SHARED ${NEAMC_CORE_SOURCES} ${NEAM_C_API_SOURCES})
 set_target_properties(libneam PROPERTIES
     OUTPUT_NAME "neam"
-    VERSION 0.6.0
+    VERSION 0.6.2
     SOVERSION 0
     PUBLIC_HEADER "NeamC/include/neamc/neam_c_api.h"
 )
