@@ -1,0 +1,5 @@
+
+[dependencies]
+neam_string_utils = "1.1.0"
+neam_jwt = "1.0.1"
+neam_scheduler = "1.0.0"

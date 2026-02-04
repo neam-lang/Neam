@@ -1,0 +1,5 @@
+module std.project.security.sast;
+
+pub fun scan(config) {
+  return project_security_scan("sast", config ?? {});
+}

@@ -1,0 +1,116 @@
+// ============================================
+// Runner Tracing Example (Phase 5)
+// Demonstrates execution tracing and results
+// ============================================
+
+// Simple agents for demonstrating tracing
+agent GreeterAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a friendly greeter. Greet the user warmly."
+}
+
+agent HelperAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a helpful assistant. Answer questions clearly and concisely."
+}
+
+agent RouterAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You route requests to appropriate agents.
+For greetings (hello, hi, hey), respond with: HANDOFF: greet
+For questions, respond with: HANDOFF: help
+Otherwise answer directly."
+
+  handoffs: [
+    handoff_to(GreeterAgent) {
+      tool_name: "greet"
+      description: "Handle greetings"
+    },
+    handoff_to(HelperAgent) {
+      tool_name: "help"
+      description: "Handle questions"
+    }
+  ]
+}
+
+// Runner with tracing enabled
+runner TracedRunner {
+  entry_agent: RouterAgent
+  max_turns: 5
+  tracing: enabled
+}
+
+// Main execution
+{
+  emit "=== Runner Tracing Demo (Phase 5) ===";
+  emit "";
+  emit "This example demonstrates:";
+  emit "  - Automatic execution tracing";
+  emit "  - Turn-by-turn timing information";
+  emit "  - Trace summary generation";
+  emit "  - Full result metadata";
+  emit "";
+  emit "=======================================";
+  emit "";
+
+  // Test 1: Greeting (should handoff to GreeterAgent)
+  emit "--- Test 1: Greeting ---";
+  emit "Input: Hello there!";
+  emit "";
+
+  let r1 = TracedRunner.run("Hello there!");
+
+  emit "=== Result ===";
+  emit "Final agent:";
+  emit r1["final_agent"];
+  emit "";
+  emit "Total turns:";
+  emit r1["total_turns"];
+  emit "";
+  emit "Duration (ms):";
+  emit r1["total_duration_ms"];
+  emit "";
+  emit "Completed:";
+  emit r1["completed"];
+  emit "";
+
+  emit "=== Trace Summary ===";
+  emit r1["trace_summary"];
+
+  emit "=== Detailed Trace ===";
+  let trace = r1["trace"];
+  let i = 0;
+  while (i < len(trace)) {
+    let entry = trace[i];
+    emit "Turn " + str(entry["turn"]) + ":";
+    emit "  Agent: " + entry["agent_name"];
+    emit "  Action: " + entry["action"];
+    emit "  Duration: " + str(entry["duration_ms"]) + "ms";
+    if (entry["was_handoff"]) {
+      emit "  Handoff to: " + entry["handoff_to"];
+    }
+    i = i + 1;
+  }
+  emit "";
+
+  // Test 2: Question (should handoff to HelperAgent)
+  emit "--- Test 2: Question ---";
+  emit "Input: What is the capital of France?";
+  emit "";
+
+  let r2 = TracedRunner.run("What is the capital of France?");
+
+  emit "Final agent:";
+  emit r2["final_agent"];
+  emit "";
+  emit "Trace Summary:";
+  emit r2["trace_summary"];
+
+  emit "=== Demo Complete ===";
+}

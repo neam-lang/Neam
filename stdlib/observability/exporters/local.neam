@@ -1,0 +1,19 @@
+// Local exporters facade
+
+module std.observability.exporters.local;
+
+use std.observability.exporters.local.file;
+use std.observability.exporters.local.sqlite;
+use std.observability.exporters.local.console;
+
+pub fun create_file_exporter(config) {
+  return file.create_file_exporter(config);
+}
+
+pub fun create_sqlite_exporter(config) {
+  return sqlite.create_exporter(config);
+}
+
+pub fun create_console_exporter(config) {
+  return console.create_exporter(config);
+}

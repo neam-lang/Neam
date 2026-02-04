@@ -1,0 +1,27 @@
+// Voice tracing helpers
+
+module std.voice.tracing;
+
+pub fun session_span(session_id) {
+  return voice_span("voice.session", { session_id: session_id });
+}
+
+pub fun turn_span(turn_id) {
+  return voice_span("voice.turn", { turn_id: turn_id });
+}
+
+pub fun stt_span() {
+  return voice_span("voice.stt", {});
+}
+
+pub fun tts_span(text_preview) {
+  return voice_span("voice.tts", { text_preview: text_preview });
+}
+
+pub fun tool_span(tool) {
+  return voice_span("voice.tool", { tool: tool });
+}
+
+pub fun with_voice_context(span, session) {
+  return voice_span_with_context(span, session);
+}

@@ -1,0 +1,39 @@
+//
+// Example 10: RAG (Retrieval Augmented Generation)
+// Demonstrates knowledge base integration with agents
+//
+// PREREQUISITE: Ollama with llama3.2:3b and nomic-embed-text
+//   ollama pull llama3.2:3b
+//   ollama pull nomic-embed-text
+//
+
+knowledge ProductDocs {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  retrieval_strategy: "basic"
+  top_k: 3
+  sources: [
+    { type: "text", content: "Neam is a programming language designed for AI agent orchestration. It supports agents, handoffs, guardrails, and runners. Neam compiles to bytecode and runs on a custom virtual machine." },
+    { type: "text", content: "To create an agent in Neam, use the 'agent' keyword followed by a name and configuration block. Agents can have a provider (openai, ollama), model, temperature, and system prompt." },
+    { type: "text", content: "Handoffs allow agents to transfer control to other agents. Use the handoffs property in an agent declaration. The runner orchestrates the handoff flow with a max_turns limit." }
+  ]
+}
+
+agent DocAssistant {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a documentation assistant. Answer questions using only the provided context. Be concise."
+  connected_knowledge: [ProductDocs]
+}
+
+{
+  emit "=== RAG Knowledge Base Demo ===";
+  emit "";
+
+  let answer = DocAssistant.ask("How do I create an agent in Neam?");
+  emit "Q: How do I create an agent in Neam?";
+  emit "A: " + answer;
+}

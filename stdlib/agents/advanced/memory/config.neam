@@ -1,0 +1,78 @@
+// Memory agent configuration types
+
+module std.agents.advanced.memory.config;
+
+// Memory types
+pub fun memory_type_semantic() { return { kind: "Semantic" }; }
+pub fun memory_type_episodic() { return { kind: "Episodic" }; }
+pub fun memory_type_working() { return { kind: "Working" }; }
+pub fun memory_type_procedural() { return { kind: "Procedural" }; }
+
+// Storage backends
+pub fun storage_vector() { return { kind: "Vector", provider: nil }; }
+pub fun storage_graph() { return { kind: "Graph", provider: nil }; }
+pub fun storage_hybrid() { return { kind: "Hybrid", vector: nil, graph: nil }; }
+
+pub fun with_storage_provider(storage, provider) {
+  storage.provider = provider;
+  return storage;
+}
+
+// Retention policies
+pub fun retention_forever() { return { kind: "Forever", ttl_days: nil }; }
+pub fun retention_days(days) { return { kind: "TimeBased", ttl_days: days }; }
+pub fun retention_count(max_items) { return { kind: "CountBased", max_items: max_items }; }
+pub fun retention_importance(threshold) { return { kind: "ImportanceBased", threshold: threshold }; }
+
+// Memory entry
+pub fun memory_entry(id, content, memory_type) {
+  return {
+    id: id,
+    content: content,
+    memory_type: memory_type,
+    embedding: nil,
+    importance: 0.5,
+    access_count: 0,
+    created_at: now(),
+    last_accessed: now(),
+    metadata: {},
+    relations: []
+  };
+}
+
+// Relation types for knowledge graph
+pub fun relation_type_is_a() { return "IS_A"; }
+pub fun relation_type_has() { return "HAS"; }
+pub fun relation_type_related_to() { return "RELATED_TO"; }
+pub fun relation_type_caused_by() { return "CAUSED_BY"; }
+pub fun relation_type_part_of() { return "PART_OF"; }
+pub fun relation_type_follows() { return "FOLLOWS"; }
+pub fun relation_type_similar_to() { return "SIMILAR_TO"; }
+
+// Memory relation
+pub fun memory_relation(source_id, target_id, relation_type, weight) {
+  return {
+    source_id: source_id,
+    target_id: target_id,
+    relation_type: relation_type,
+    weight: weight,
+    created_at: now()
+  };
+}
+
+// Error types
+pub fun memory_error(code, message, detail) {
+  return { kind: "MemoryError", code: code, message: message, detail: detail };
+}
+
+pub fun storage_error(message) {
+  return memory_error("STORAGE", message, nil);
+}
+
+pub fun retrieval_error(message) {
+  return memory_error("RETRIEVAL", message, nil);
+}
+
+pub fun consolidation_error(message) {
+  return memory_error("CONSOLIDATION", message, nil);
+}

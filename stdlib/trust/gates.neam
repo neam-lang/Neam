@@ -1,0 +1,22 @@
+// Promotion gates and validators
+
+module std.trust.gates;
+
+pub fun promote(untrusted, validator) {
+  if (validator == nil) {
+    panic("validator is nil");
+  }
+  let result = validator(untrusted);
+  if (result.ok) {
+    return { ok: true, value: { value: untrusted.value, provenance: result.value, trusted: true } };
+  }
+  return result;
+}
+
+pub fun gate_allow_all() {
+  return { kind: "AllowAll" };
+}
+
+pub fun gate_block_all() {
+  return { kind: "BlockAll" };
+}

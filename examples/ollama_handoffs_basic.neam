@@ -1,0 +1,132 @@
+// ============================================
+// Basic Handoff Example (Ollama Version)
+// Demonstrates agent-to-agent handoffs using local Ollama
+// ============================================
+
+// Triage agent - classifies and routes requests
+agent TriageAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a triage agent. Analyze customer requests and route them to the appropriate specialist. Reply with exactly one of: ROUTE:REFUND, ROUTE:BILLING, or ROUTE:SUPPORT based on the request type. Be concise."
+}
+
+// Specialized agents for different request types
+agent RefundAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a refund specialist. Process refund requests professionally and helpfully. Be concise."
+}
+
+agent BillingAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a billing specialist. Handle payment and invoice questions. Be concise."
+}
+
+agent SupportAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.6
+  system: "You are a customer support agent. Help with general issues and escalate complex problems. Be empathetic and concise."
+}
+
+// Main execution
+{
+  emit "=== Basic Handoff Example (Ollama) ===";
+  emit "";
+  emit "Using local Ollama with llama3.2:3b model";
+  emit "";
+  emit "================================================";
+
+  // Test Case 1: Refund Request
+  emit "";
+  emit "--- Customer Request 1 ---";
+  let query1 = "I want a refund for order #12345. The product arrived damaged.";
+  emit "Customer: " + query1;
+  emit "";
+
+  let triage1 = TriageAgent.ask(query1);
+  emit "Triage: " + triage1;
+
+  // Extract route decision
+  let route1 = "GENERAL";
+  if (triage1.contains("ROUTE:REFUND")) {
+    route1 = "REFUND";
+  }
+  if (triage1.contains("ROUTE:BILLING")) {
+    route1 = "BILLING";
+  }
+  if (triage1.contains("ROUTE:SUPPORT")) {
+    route1 = "SUPPORT";
+  }
+  emit "Route Decision: " + route1;
+  emit "";
+
+  // Handoff to appropriate agent
+  if (route1 == "REFUND") {
+    let response1 = RefundAgent.ask(query1);
+    emit "RefundAgent: " + response1;
+  }
+
+  // Test Case 2: Billing Question
+  emit "";
+  emit "--- Customer Request 2 ---";
+  let query2 = "Why was I charged twice this month?";
+  emit "Customer: " + query2;
+  emit "";
+
+  let triage2 = TriageAgent.ask(query2);
+  emit "Triage: " + triage2;
+
+  let route2 = "GENERAL";
+  if (triage2.contains("ROUTE:REFUND")) {
+    route2 = "REFUND";
+  }
+  if (triage2.contains("ROUTE:BILLING")) {
+    route2 = "BILLING";
+  }
+  if (triage2.contains("ROUTE:SUPPORT")) {
+    route2 = "SUPPORT";
+  }
+  emit "Route Decision: " + route2;
+  emit "";
+
+  if (route2 == "BILLING") {
+    let response2 = BillingAgent.ask(query2);
+    emit "BillingAgent: " + response2;
+  }
+
+  // Test Case 3: Support Request
+  emit "";
+  emit "--- Customer Request 3 ---";
+  let query3 = "I need help with my account settings.";
+  emit "Customer: " + query3;
+  emit "";
+
+  let triage3 = TriageAgent.ask(query3);
+  emit "Triage: " + triage3;
+
+  let route3 = "GENERAL";
+  if (triage3.contains("ROUTE:REFUND")) {
+    route3 = "REFUND";
+  }
+  if (triage3.contains("ROUTE:BILLING")) {
+    route3 = "BILLING";
+  }
+  if (triage3.contains("ROUTE:SUPPORT")) {
+    route3 = "SUPPORT";
+  }
+  emit "Route Decision: " + route3;
+  emit "";
+
+  if (route3 == "SUPPORT") {
+    let response3 = SupportAgent.ask(query3);
+    emit "SupportAgent: " + response3;
+  }
+
+  emit "";
+  emit "=== Handoff Example Complete ===";
+}

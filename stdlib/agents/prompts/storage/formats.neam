@@ -1,0 +1,49 @@
+// Prompt storage format detection and parsing
+
+module std.agents.prompts.storage.formats;
+
+use std.io.file;
+use std.agents.prompts.storage.markdown;
+use std.agents.prompts.storage.yaml;
+use std.agents.prompts.storage.json;
+use std.agents.prompts.storage.templates;
+
+pub fun detect_format(path) {
+  let parts = split(path, ".");
+  if (len(parts) < 2) { return "text"; }
+  let ext = parts[len(parts) - 1];
+  if (ext == "md" || ext == "markdown") { return "markdown"; }
+  if (ext == "yaml" || ext == "yml") { return "yaml"; }
+  if (ext == "json") { return "json"; }
+  if (ext == "jinja2" || ext == "j2") { return "jinja2"; }
+  if (ext == "prompt" || ext == "txt") { return "text"; }
+  return "text";
+}
+
+pub fun load_prompt(path) {
+  let format = detect_format(path);
+  if (format == "markdown") { return markdown.load(path); }
+  if (format == "yaml") { return yaml.load(path); }
+  if (format == "json") { return json.load(path); }
+  if (format == "jinja2") { return templates.load_template(path); }
+
+  let content = file.read_string(path);
+  return { ok: true, value: { content: content, metadata: {} } };
+}
+
+pub fun convert_prompt(prompt, target_format) {
+  if (target_format == "json") {
+    return { ok: true, value: json.stringify(prompt) };
+  }
+  if (target_format == "yaml") {
+    return { ok: true, value: yaml.stringify(prompt) };
+  }
+  if (target_format == "markdown") {
+    return markdown.stringify(prompt);
+  }
+  if (target_format == "text") {
+    return { ok: true, value: prompt.content != nil ? prompt.content : prompt };
+  }
+
+  return { ok: false, error: "Unsupported format: " + target_format };
+}

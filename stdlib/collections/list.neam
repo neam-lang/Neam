@@ -1,0 +1,72 @@
+// List<T> helpers
+
+module std.collections.list;
+
+pub fun push(list, value) {
+  return list.push(value);
+}
+
+pub fun pop(list) {
+  return list.pop();
+}
+
+pub fun map(list, func) {
+  return list.map(func);
+}
+
+pub fun filter(list, func) {
+  return list.filter(func);
+}
+
+pub fun fold(list, initial, func) {
+  return list.fold(initial, func);
+}
+
+pub fun len(list) {
+  return list.len();
+}
+
+pub fun get(list, index) {
+  return list[index];
+}
+
+pub fun set(list, index, value) {
+  return list.set(index, value);
+}
+
+pub fun concat(list, other) {
+  return list.concat(other);
+}
+
+pub fun reverse(list) {
+  return list.reverse();
+}
+
+pub fun sort(list) {
+  return list.sort();
+}
+
+pub fun find(list, func) {
+  return list.find(func);
+}
+
+// Legacy aliases
+pub fun list_push(list, value) {
+  return push(list, value);
+}
+
+pub fun list_pop(list) {
+  return pop(list);
+}
+
+pub fun list_map(list, func) {
+  return map(list, func);
+}
+
+pub fun list_filter(list, func) {
+  return filter(list, func);
+}
+
+pub fun list_fold(list, initial, func) {
+  return fold(list, initial, func);
+}

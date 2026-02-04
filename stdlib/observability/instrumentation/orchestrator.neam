@@ -1,0 +1,30 @@
+// Orchestrator instrumentation
+
+module std.observability.instrumentation.orchestrator;
+
+pub fun orchestration_spans(orchestrator_name, strategy, agent_count) {
+  return {
+    trace_name: "orchestration_run",
+    spans: [
+      {
+        name: "orchestrator.dispatch",
+        attributes: { orchestrator: orchestrator_name, strategy: strategy, agent_count: agent_count }
+      },
+      {
+        name: "orchestrator.aggregate",
+        attributes: { orchestrator: orchestrator_name, merge_strategy: strategy }
+      },
+      {
+        name: "orchestrator.respond",
+        attributes: { orchestrator: orchestrator_name }
+      }
+    ]
+  };
+}
+
+pub fun worker_span(orchestrator_name, worker_id, role) {
+  return {
+    name: "agent.worker[" + str(worker_id) + "]",
+    attributes: { orchestrator: orchestrator_name, role: role }
+  };
+}

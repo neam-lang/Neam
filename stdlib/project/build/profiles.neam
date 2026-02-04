@@ -1,0 +1,9 @@
+module std.project.build.profiles;
+
+pub fun defaults() {
+  return {
+    dev: { optimization: "none", debug: true, source_maps: true },
+    release: { optimization: "full", debug: false, source_maps: false, strip: true },
+    bench: { optimization: "full", debug: true }
+  };
+}

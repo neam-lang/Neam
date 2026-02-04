@@ -1,0 +1,49 @@
+// Test all literal types in Neam
+
+// Number literals
+emit 0;
+emit 42;
+emit -7;
+emit 3.14;
+emit 1.7976931348623157e+308;
+
+// String literals
+emit "hello";
+emit "world";
+emit "";
+emit "special chars: !@#$%^&*()";
+emit "escaped: \"quotes\"";
+
+// Boolean literals
+emit true;
+emit false;
+
+// Nil literal
+emit nil;
+
+// Combined in expressions
+let num = 100;
+let str = "neam";
+let flag = true;
+let nothing = nil;
+
+emit num;
+emit str;
+emit flag;
+emit nothing;
+
+// Number arithmetic
+emit 1 + 2;
+emit 10 - 3;
+emit 4 * 5;
+emit 15 / 3;
+emit 10 % 3;
+
+// String concatenation
+emit "hello" + " " + "world";
+
+// Boolean operations
+emit true and true;
+emit true and false;
+emit false or true;
+emit not false;

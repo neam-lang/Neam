@@ -1,0 +1,20 @@
+{"query": "What is the return policy?", "expected_strategy": "basic", "context": "simple lookup", "tags": ["rag", "basic"]}
+{"query": "Tell me about product features and pricing", "expected_strategy": "hybrid", "context": "multi-aspect query", "tags": ["rag", "hybrid"]}
+{"query": "Compare all laptop models", "expected_strategy": "mmr", "context": "diversity needed", "tags": ["rag", "mmr"]}
+{"query": "What would a customer say about battery life?", "expected_strategy": "hyde", "context": "hypothetical", "tags": ["rag", "hyde"]}
+{"query": "Is this information about shipping accurate?", "expected_strategy": "self_rag", "context": "verification needed", "tags": ["rag", "self_rag"]}
+{"query": "Find me the most relevant and correct warranty information", "expected_strategy": "crag", "context": "corrective retrieval", "tags": ["rag", "crag"]}
+{"query": "Research the market trends and give me a comprehensive analysis", "expected_strategy": "agentic", "context": "complex research", "tags": ["rag", "agentic"]}
+{"query": "How are products, categories, and suppliers related?", "expected_strategy": "graph_rag", "context": "relationship query", "tags": ["rag", "graph_rag"]}
+{"query": "What is 2+2?", "expected_strategy": "basic", "context": "no RAG needed", "tags": ["rag", "basic"]}
+{"query": "Show me different perspectives on this topic", "expected_strategy": "mmr", "context": "diversity needed", "tags": ["rag", "mmr"]}
+{"query": "What if the user wanted a budget laptop under $500?", "expected_strategy": "hyde", "context": "hypothetical scenario", "tags": ["rag", "hyde"]}
+{"query": "Verify this claim: our product has 99.9% uptime", "expected_strategy": "self_rag", "context": "fact checking", "tags": ["rag", "self_rag"]}
+{"query": "Give me a detailed analysis correcting any outdated info", "expected_strategy": "crag", "context": "correction needed", "tags": ["rag", "crag"]}
+{"query": "Plan a multi-step research project on AI trends", "expected_strategy": "agentic", "context": "multi-step research", "tags": ["rag", "agentic"]}
+{"query": "Map the connections between teams, projects, and deliverables", "expected_strategy": "graph_rag", "context": "graph traversal", "tags": ["rag", "graph_rag"]}
+{"query": "Find documents about machine learning and deep learning", "expected_strategy": "hybrid", "context": "keyword + semantic", "tags": ["rag", "hybrid"]}
+{"query": "What are the top 3 most different product categories?", "expected_strategy": "mmr", "context": "maximal diversity", "tags": ["rag", "mmr"]}
+{"query": "Summarize the FAQ", "expected_strategy": "basic", "context": "simple retrieval", "tags": ["rag", "basic"]}
+{"query": "Cross-reference sales data with customer feedback", "expected_strategy": "agentic", "context": "multi-source", "tags": ["rag", "agentic"]}
+{"query": "How does department A connect to department B through shared projects?", "expected_strategy": "graph_rag", "context": "path finding", "tags": ["rag", "graph_rag"]}

@@ -1,0 +1,69 @@
+// Speech-to-text interfaces
+
+module std.speech.stt;
+
+pub fun stt_config(language, punctuation, profanity_filter, diarization, domain_hints, phrase_boosts, endpointing, interim_results, word_timestamps) {
+  return {
+    language: language,
+    punctuation: punctuation,
+    profanity_filter: profanity_filter,
+    diarization: diarization,
+    domain_hints: domain_hints,
+    phrase_boosts: phrase_boosts,
+    endpointing: endpointing,
+    interim_results: interim_results,
+    word_timestamps: word_timestamps
+  };
+}
+
+pub fun diarization_config(max_speakers, speaker_labels) {
+  return { max_speakers: max_speakers, speaker_labels: speaker_labels };
+}
+
+pub fun phrase_boost(phrase, boost) {
+  return { phrase: phrase, boost: boost };
+}
+
+pub fun endpointing_mode_aggressive() {
+  return { kind: "Aggressive" };
+}
+
+pub fun endpointing_mode_normal() {
+  return { kind: "Normal" };
+}
+
+pub fun endpointing_mode_conservative() {
+  return { kind: "Conservative" };
+}
+
+pub fun endpointing_mode_manual() {
+  return { kind: "Manual" };
+}
+
+pub fun event_partial(text, confidence, time_range, is_final) {
+  return { kind: "Partial", text: text, confidence: confidence, time_range: time_range, is_final: is_final };
+}
+
+pub fun event_final(text, confidence, words, time_range, speaker_id) {
+  return { kind: "Final", text: text, confidence: confidence, words: words, time_range: time_range, speaker_id: speaker_id };
+}
+
+pub fun event_speech_start(timestamp) {
+  return { kind: "SpeechStart", timestamp: timestamp };
+}
+
+pub fun event_speech_end(timestamp) {
+  return { kind: "SpeechEnd", timestamp: timestamp };
+}
+
+pub fun event_error(code, message) {
+  return { kind: "Error", code: code, message: message };
+}
+
+pub fun provider(name) {
+  return speech_stt_provider(name);
+}
+
+pub fun providers() {
+  return speech_stt_providers();
+}

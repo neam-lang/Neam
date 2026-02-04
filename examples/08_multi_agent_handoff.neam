@@ -1,0 +1,43 @@
+//
+// Example 08: Multi-Agent with Handoffs
+// Demonstrates agent-to-agent handoffs (OpenAI Agents SDK style)
+//
+// PREREQUISITE: Ollama with llama3.2:3b
+//   ollama pull llama3.2:3b
+//
+
+agent TriageAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "You are a customer service triage agent. Route requests to the appropriate agent. For billing questions, say HANDOFF_BILLING. For technical issues, say HANDOFF_TECH."
+
+  handoffs: [BillingAgent, TechAgent]
+}
+
+agent BillingAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "You are a billing specialist. Help customers with billing inquiries, refunds, and payment issues. Be concise."
+}
+
+agent TechAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "You are a technical support specialist. Help customers with technical problems, bugs, and setup issues. Be concise."
+}
+
+runner CustomerService {
+  entry_agent: TriageAgent
+  max_turns: 5
+  tracing: enabled
+}
+
+{
+  emit "=== Multi-Agent Customer Service ===";
+  emit "";
+
+  let result = CustomerService.run("I was charged twice on my last invoice");
+  emit "Final Agent: " + result["final_agent"];
+  emit "Response: " + result["final_output"];
+  emit "Turns: " + str(result["total_turns"]);
+}

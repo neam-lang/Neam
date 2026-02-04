@@ -1,0 +1,8 @@
+module std.project.testing.fixtures;
+
+pub fun sample_manifest() {
+  return {
+    project: { name: "fixture", version: "0.1.0" },
+    dependencies: { "@neam/core": "^1.0.0" }
+  };
+}

@@ -1,0 +1,84 @@
+// ============================================
+// Handoffs with Callback Functions
+// Demonstrates callback definitions for handoffs
+// ============================================
+
+// Callback functions for handoffs
+fun on_tech_handoff(ctx) {
+  emit "[Callback] Tech support handoff triggered";
+}
+
+fun on_sales_handoff(ctx) {
+  emit "[Callback] Sales handoff triggered";
+}
+
+// Primary agent with callback functions
+agent DispatchAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You dispatch requests to appropriate handlers.
+For technical issues, respond with: HANDOFF: tech_support
+For sales questions, respond with: HANDOFF: sales_team
+Otherwise, answer directly."
+
+  handoffs: [
+    handoff_to(TechAgent) {
+      tool_name: "tech_support"
+      description: "Route technical support requests"
+      on_handoff: on_tech_handoff
+    },
+
+    handoff_to(SalesAgent) {
+      tool_name: "sales_team"
+      description: "Route sales inquiries"
+      on_handoff: on_sales_handoff
+    }
+  ]
+}
+
+agent TechAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You provide technical support. Be clear and helpful."
+}
+
+agent SalesAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.7
+  system: "You handle sales inquiries. Be friendly and informative."
+}
+
+runner DispatchRunner {
+  entry_agent: DispatchAgent
+  max_turns: 3
+}
+
+{
+  emit "=== Handoffs with Callbacks ===";
+  emit "";
+
+  // Test 1: Technical issue
+  emit "--- Tech Support Request ---";
+  emit "User: My software keeps crashing";
+  emit "";
+
+  let r1 = DispatchRunner.run("My software keeps crashing");
+  emit "Final agent:";
+  emit r1["final_agent"];
+  emit "";
+
+  // Test 2: Sales inquiry
+  emit "--- Sales Inquiry ---";
+  emit "User: How much does the premium plan cost?";
+  emit "";
+
+  let r2 = DispatchRunner.run("How much does the premium plan cost?");
+  emit "Final agent:";
+  emit r2["final_agent"];
+  emit "";
+
+  emit "=== Complete ===";
+}

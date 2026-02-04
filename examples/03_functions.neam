@@ -1,0 +1,26 @@
+//
+// Example 03: Functions
+// Demonstrates function declaration and calling
+//
+
+fun add(a, b) {
+  return a + b;
+}
+
+fun greet(name) {
+  return "Hello, " + name + "!";
+}
+
+fun factorial(n) {
+  if (n <= 1) {
+    return 1;
+  }
+  return n * factorial(n - 1);
+}
+
+{
+  emit greet("World");
+  emit "3 + 4 = " + str(add(3, 4));
+  emit "5! = " + str(factorial(5));
+  emit "10! = " + str(factorial(10));
+}

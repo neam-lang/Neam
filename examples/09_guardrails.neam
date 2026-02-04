@@ -1,0 +1,53 @@
+//
+// Example 09: Guardrails
+// Demonstrates input/output guardrails for agent safety
+//
+// PREREQUISITE: Ollama with llama3.2:3b
+//
+
+guard InputSanitizer {
+  description: "Sanitize user input before agent processing"
+
+  on_tool_input(input) {
+    if (input.contains("BLOCKED")) {
+      return "block";
+    }
+    return input;
+  }
+}
+
+guard OutputFilter {
+  description: "Filter agent output for safety"
+
+  on_tool_output(output) {
+    if (output.contains("SECRET")) {
+      return "[REDACTED]";
+    }
+    return output;
+  }
+}
+
+guardchain SafetyChain = [InputSanitizer];
+guardchain OutputChain = [OutputFilter];
+
+agent SafeAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "You are a safe, helpful assistant."
+}
+
+runner SafeRunner {
+  entry_agent: SafeAgent
+  max_turns: 3
+  input_guardrails: [SafetyChain]
+  output_guardrails: [OutputChain]
+}
+
+{
+  emit "=== Guardrails Demo ===";
+  emit "";
+
+  let result = SafeRunner.run("Tell me a joke about programming");
+  emit "Response: " + result["final_output"];
+  emit "Completed: " + str(result["completed"]);
+}

@@ -1,0 +1,68 @@
+// Audio stream traits
+
+module std.audio.stream;
+
+pub fun source_stream(source) {
+  if (source == nil || source.stream == nil) {
+    panic("audio source missing stream");
+  }
+  return source.stream();
+}
+
+pub fun source_format(source) {
+  if (source == nil || source.format == nil) {
+    panic("audio source missing format");
+  }
+  return source.format();
+}
+
+pub fun source_close(source) {
+  if (source == nil || source.close == nil) {
+    panic("audio source missing close");
+  }
+  return source.close();
+}
+
+pub fun sink_write(sink, frame) {
+  if (sink == nil || sink.write == nil) {
+    panic("audio sink missing write");
+  }
+  return sink.write(frame);
+}
+
+pub fun sink_flush(sink) {
+  if (sink == nil || sink.flush == nil) {
+    panic("audio sink missing flush");
+  }
+  return sink.flush();
+}
+
+pub fun sink_close(sink) {
+  if (sink == nil || sink.close == nil) {
+    panic("audio sink missing close");
+  }
+  return sink.close();
+}
+
+pub fun duplex_latency(duplex) {
+  if (duplex == nil || duplex.loopback_latency_ms == nil) {
+    return nil;
+  }
+  return duplex.loopback_latency_ms();
+}
+
+pub fun mic_default() {
+  return mic_default_source();
+}
+
+pub fun mic_device(name) {
+  return mic_device_source(name);
+}
+
+pub fun speaker_default() {
+  return speaker_default_sink();
+}
+
+pub fun speaker_device(name) {
+  return speaker_device_sink(name);
+}

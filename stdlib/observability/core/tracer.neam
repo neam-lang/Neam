@@ -1,0 +1,62 @@
+// OpenTelemetry tracer provider helpers
+
+module std.observability.core.tracer;
+
+pub fun create_provider(config) {
+  let default_config = {
+    name: "neam-otel",
+    version: "0.1.0",
+    resource: {},
+    sampler: { type: "parentbased_always_on" },
+    batch: { size: 512, interval_ms: 5000, queue_size: 2048 },
+    exporters: []
+  };
+  return merge_configs(default_config, config);
+}
+
+pub fun start_span(name, options) {
+  let attrs = options.attributes ?? {};
+  return {
+    kind: "Span",
+    name: name,
+    attributes: attrs,
+    start_time: options.start_time,
+    status: "unset",
+    events: [],
+    links: options.links ?? [],
+    context: options.context
+  };
+}
+
+pub fun add_event(span, name, attributes) {
+  span.events.push({ name: name, attributes: attributes, timestamp: now() });
+  return span;
+}
+
+pub fun set_status(span, status, message) {
+  span.status = status;
+  if (message != nil) {
+    span.status_message = message;
+  }
+  return span;
+}
+
+pub fun end_span(span, end_time) {
+  span.end_time = end_time ?? now();
+  return span;
+}
+
+pub fun merge_configs(base, override) {
+  if (override == nil) {
+    return base;
+  }
+  let merged = clone(base);
+  for (key in keys(override)) {
+    merged[key] = override[key];
+  }
+  return merged;
+}
+
+fun clone(value) {
+  return json_decode(json_encode(value));
+}

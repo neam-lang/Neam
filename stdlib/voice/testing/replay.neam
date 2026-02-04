@@ -1,0 +1,65 @@
+// Recording and replay helpers
+
+module std.voice.testing.replay;
+
+pub fun recorder(session_id) {
+  return { session_id: session_id, events: [], audio_chunks: [] };
+}
+
+pub fun record(recorder, event) {
+  recorder.events.push(event);
+  return recorder;
+}
+
+pub fun save(recorder, path) {
+  return voice_recording_save(recorder, path);
+}
+
+pub fun load(path) {
+  return voice_recording_load(path);
+}
+
+pub fun event_audio_input(frame, timestamp) {
+  return { kind: "AudioInput", frame: frame, timestamp: timestamp };
+}
+
+pub fun event_audio_output(frame, timestamp) {
+  return { kind: "AudioOutput", frame: frame, timestamp: timestamp };
+}
+
+pub fun event_stt(event, timestamp) {
+  return { kind: "SttEvent", event: event, timestamp: timestamp };
+}
+
+pub fun event_tts(event, timestamp) {
+  return { kind: "TtsEvent", event: event, timestamp: timestamp };
+}
+
+pub fun event_model(event, timestamp) {
+  return { kind: "ModelEvent", event: event, timestamp: timestamp };
+}
+
+pub fun event_tool_call(tool, args, result, timestamp) {
+  return { kind: "ToolCall", tool: tool, args: args, result: result, timestamp: timestamp };
+}
+
+pub fun replayer(recording) {
+  return { recording: recording, position: 0, speed: 1.0 };
+}
+
+pub fun play(replayer) {
+  return voice_replay_play(replayer);
+}
+
+pub fun pause(replayer) {
+  return voice_replay_pause(replayer);
+}
+
+pub fun seek(replayer, timestamp) {
+  return voice_replay_seek(replayer, timestamp);
+}
+
+pub fun set_speed(replayer, speed) {
+  replayer.speed = speed;
+  return replayer;
+}

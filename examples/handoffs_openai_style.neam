@@ -1,0 +1,94 @@
+// ============================================
+// OpenAI SDK-Style Handoffs Example
+// Demonstrates proper handoffs with tools
+// ============================================
+
+// Triage Agent - Routes requests to appropriate agents
+agent TriageAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a triage agent. Analyze the user's request and decide which agent should handle it.
+If the request is about refunds or returns, use HANDOFF: transfer_to_RefundAgent
+If the request is about billing or payments, use HANDOFF: transfer_to_BillingAgent
+Otherwise, provide a helpful response yourself."
+
+  // Declarative handoffs (OpenAI SDK style)
+  handoffs: [RefundAgent, BillingAgent]
+}
+
+// Refund Agent - Handles refunds
+agent RefundAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a refund specialist. Help customers with refund requests. Be empathetic and efficient."
+}
+
+// Billing Agent - Handles billing inquiries
+agent BillingAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a billing specialist. Help customers understand their bills and payments."
+}
+
+// Runner - Manages the agent loop
+runner CustomerServiceRunner {
+  entry_agent: TriageAgent
+  max_turns: 5
+}
+
+// Main execution
+{
+  emit "=== OpenAI SDK-Style Handoffs Demo ===";
+  emit "";
+  emit "This example demonstrates proper handoffs where:";
+  emit "  - Agents declare their handoff targets";
+  emit "  - Handoffs become callable tools";
+  emit "  - The LLM decides when to hand off";
+  emit "";
+  emit "================================================";
+  emit "";
+
+  // Test 1: Refund request (should trigger handoff)
+  emit "--- Test 1: Refund Request ---";
+  emit "User: I want a refund for my order #12345";
+  emit "";
+
+  let result1 = CustomerServiceRunner.run("I want a refund for my order #12345");
+
+  emit "Final agent:";
+  emit result1["final_agent"];
+  emit "Response:";
+  emit result1["final_output"];
+  emit "";
+
+  // Test 2: Billing question (should trigger handoff)
+  emit "--- Test 2: Billing Question ---";
+  emit "User: Can you explain the charges on my bill?";
+  emit "";
+
+  let result2 = CustomerServiceRunner.run("Can you explain the charges on my bill?");
+
+  emit "Final agent:";
+  emit result2["final_agent"];
+  emit "Response:";
+  emit result2["final_output"];
+  emit "";
+
+  // Test 3: General question (no handoff)
+  emit "--- Test 3: General Question ---";
+  emit "User: What are your business hours?";
+  emit "";
+
+  let result3 = CustomerServiceRunner.run("What are your business hours?");
+
+  emit "Final agent:";
+  emit result3["final_agent"];
+  emit "Response:";
+  emit result3["final_output"];
+  emit "";
+
+  emit "=== Demo Complete ===";
+}

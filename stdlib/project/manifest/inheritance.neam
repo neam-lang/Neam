@@ -1,0 +1,31 @@
+module std.project.manifest.inheritance;
+
+fun merge(base, override) {
+  let result = {};
+
+  for (key in keys(base)) {
+    result[key] = base[key];
+  }
+
+  for (key in keys(override ?? {})) {
+    result[key] = override[key];
+  }
+
+  return result;
+}
+
+pub fun apply(manifest, workspace) {
+  if (!workspace || !workspace.package) {
+    return manifest;
+  }
+
+  let pkg = merge(workspace.package, manifest.project ?? {});
+  let deps = merge(workspace.dependencies ?? {}, manifest.dependencies ?? {});
+
+  let result = merge(manifest, {
+    project: pkg,
+    dependencies: deps
+  });
+
+  return result;
+}

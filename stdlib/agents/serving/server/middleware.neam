@@ -1,0 +1,29 @@
+// Middleware chain utilities
+
+module std.agents.serving.server.middleware;
+
+pub fun apply_middleware(chain, handler) {
+  let composed = handler;
+  let idx = len(chain) - 1;
+  while (idx >= 0) {
+    let current = chain[idx];
+    let next_handler = composed;
+    composed = fun(req) { return current(req, next_handler); };
+    idx = idx - 1;
+  }
+  return composed;
+}
+
+pub fun with_middleware(endpoint, mw) {
+  push(endpoint.middleware, mw);
+  return endpoint;
+}
+
+pub fun compose_endpoint_middleware(global_chain, endpoint) {
+  let chain = [];
+  for (mw in global_chain) { push(chain, mw); }
+  if (endpoint.middleware != nil) {
+    for (mw in endpoint.middleware) { push(chain, mw); }
+  }
+  return chain;
+}

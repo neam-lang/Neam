@@ -1,0 +1,27 @@
+//
+// Example 02: Variables and Types
+// Demonstrates variable declaration, types, and basic operations
+//
+
+{
+  // String variables
+  let greeting = "Hello";
+  let name = "Neam";
+  let message = greeting + ", " + name + "!";
+  emit message;
+
+  // Number variables
+  let x = 42;
+  let y = 3.14;
+  let sum = x + y;
+  emit "Sum: " + str(sum);
+
+  // Boolean variables
+  let is_ready = true;
+  let is_done = false;
+  emit "Ready: " + str(is_ready);
+
+  // Nil value
+  let nothing = nil;
+  emit "Nothing: " + str(nothing);
+}

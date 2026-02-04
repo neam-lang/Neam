@@ -1,0 +1,19 @@
+// examples/ollama_basic.neam
+// Tests the ROBUST native connection to local Ollama.
+// Verification: The connector now RETURNS a string instead of printing it.
+
+print("--- Neam Phase 5: Return Value Integration ---");
+
+let model = "qwen3:1.7b";
+let prompt = "What is the capital of France? One word.";
+
+print("Asking " + model + ": " + prompt);
+
+// Capture the result!
+// Previously this returned nil. Now it returns a String.
+let result = native.connect_ollama(model, prompt);
+
+print("\nResponse Received:");
+print(result); 
+
+print("\n--- Test Complete ---");

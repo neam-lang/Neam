@@ -1,0 +1,7 @@
+// GitLab CI integration placeholder
+
+module std.agents.redteam.cicd.gitlab;
+
+pub fun generate_gitlab_ci(config) {
+  return "stages:\n  - redteam\n";
+}

@@ -1,0 +1,39 @@
+// Triage facade
+
+module std.observability.triage;
+
+use std.observability.triage.anomaly;
+use std.observability.triage.patterns;
+use std.observability.triage.compare;
+use std.observability.triage.dependencies;
+use std.observability.triage.gaps;
+use std.observability.triage.replay;
+use std.observability.triage.reports;
+
+pub fun create_detector(config) {
+  return anomaly.create_detector(config);
+}
+
+pub fun create_error_analyzer(config) {
+  return patterns.create_error_analyzer(config);
+}
+
+pub fun compare_traces(config) {
+  return compare.traces(config);
+}
+
+pub fun build_dependency_graph(traces) {
+  return dependencies.build_graph(traces);
+}
+
+pub fun analyze_gaps(config) {
+  return gaps.analyze(config);
+}
+
+pub fun load_session(session_id) {
+  return replay.load_session(session_id);
+}
+
+pub fun generate_diagnostic(config) {
+  return reports.generate_diagnostic(config);
+}

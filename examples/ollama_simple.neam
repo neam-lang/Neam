@@ -1,0 +1,24 @@
+// ============================================
+// Simple Ollama Example
+// Quick test to verify Ollama integration
+// ============================================
+
+agent Assistant {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.7
+  system: "You are a helpful assistant. Be concise and friendly."
+}
+
+{
+  emit "=== Simple Ollama Test ===";
+  emit "";
+  emit "Testing local Ollama with llama3.2:3b...";
+  emit "";
+
+  let response = Assistant.ask("Hello! Can you tell me a fun fact about programming?");
+
+  emit "Assistant: " + response;
+  emit "";
+  emit "=== Test Complete ===";
+}

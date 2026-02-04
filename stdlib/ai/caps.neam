@@ -1,0 +1,97 @@
+// Model capabilities validation helpers
+
+module std.ai.caps;
+
+pub fun modality_text() {
+  return { kind: "Text" };
+}
+
+pub fun modality_image() {
+  return { kind: "Image" };
+}
+
+pub fun modality_audio() {
+  return { kind: "Audio" };
+}
+
+pub fun modality_video() {
+  return { kind: "Video" };
+}
+
+pub fun feature_streaming() {
+  return { kind: "Streaming" };
+}
+
+pub fun feature_tool_use() {
+  return { kind: "ToolUse" };
+}
+
+pub fun feature_vision() {
+  return { kind: "Vision" };
+}
+
+pub fun feature_audio_input() {
+  return { kind: "AudioInput" };
+}
+
+pub fun feature_audio_output() {
+  return { kind: "AudioOutput" };
+}
+
+pub fun feature_realtime_session() {
+  return { kind: "RealtimeSession" };
+}
+
+pub fun feature_json_mode() {
+  return { kind: "JsonMode" };
+}
+
+pub fun feature_system_prompt() {
+  return { kind: "SystemPrompt" };
+}
+
+pub fun validate_request(request, caps) {
+  if (request == nil) {
+    return { ok: false, error: "request is nil" };
+  }
+  if (caps == nil) {
+    return { ok: false, error: "caps is nil" };
+  }
+
+  if (request.input_modality != nil) {
+    if (!caps.input_modalities.contains(request.input_modality)) {
+      return { ok: false, error: "input modality not supported" };
+    }
+  }
+
+  if (request.output_modality != nil) {
+    if (!caps.output_modalities.contains(request.output_modality)) {
+      return { ok: false, error: "output modality not supported" };
+    }
+  }
+
+  if (request.max_context_tokens != nil && caps.max_context_tokens != nil) {
+    if (request.max_context_tokens > caps.max_context_tokens) {
+      return { ok: false, error: "context length exceeds caps" };
+    }
+  }
+
+  if (request.max_output_tokens != nil && caps.max_output_tokens != nil) {
+    if (request.max_output_tokens > caps.max_output_tokens) {
+      return { ok: false, error: "output length exceeds caps" };
+    }
+  }
+
+  return { ok: true, value: true };
+}
+
+pub fun supports_audio_output(caps) {
+  if (caps == nil) {
+    return false;
+  }
+  return caps.output_modalities.contains(modality_audio());
+}
+
+pub fun select_model(request, available) {
+  panic("select_model is not implemented yet");
+}

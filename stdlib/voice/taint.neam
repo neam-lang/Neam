@@ -1,0 +1,22 @@
+// Transcript taint tracking
+
+module std.voice.taint;
+
+pub fun untrusted_transcript(text, source) {
+  return { value: text, source: source, trusted: false };
+}
+
+pub fun sanitized_transcript(text, policy) {
+  return { value: text, policy: policy, trusted: true };
+}
+
+pub fun sanitize(transcript, policy) {
+  return voice_sanitize_transcript(transcript, policy);
+}
+
+pub fun execute_with_transcript(transcript, func) {
+  if (transcript == nil || !transcript.trusted) {
+    panic("transcript is not trusted");
+  }
+  return func(transcript.value);
+}

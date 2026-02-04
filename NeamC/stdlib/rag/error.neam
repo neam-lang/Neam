@@ -1,0 +1,63 @@
+// RAG error helpers
+
+module std.rag.error;
+
+// Configuration errors
+pub fun config_error(field, message) {
+  return { kind: "Config", field: field, message: message };
+}
+
+pub fun validation_error(field, message) {
+  return { kind: "Validation", field: field, message: message };
+}
+
+// Operation errors with optional detail
+pub fun retrieval_error(message, detail) {
+  return { kind: "Retrieval", message: message, detail: detail };
+}
+
+pub fun reranker_error(message, detail) {
+  return { kind: "Reranker", message: message, detail: detail };
+}
+
+pub fun cache_error(message, detail) {
+  return { kind: "Cache", message: message, detail: detail };
+}
+
+pub fun chain_error(message, detail) {
+  return { kind: "Chain", message: message, detail: detail };
+}
+
+pub fun query_error(message, detail) {
+  return { kind: "Query", message: message, detail: detail };
+}
+
+pub fun memory_error(message, detail) {
+  return { kind: "Memory", message: message, detail: detail };
+}
+
+pub fun evaluation_error(message, detail) {
+  return { kind: "Evaluation", message: message, detail: detail };
+}
+
+pub fun integration_error(component, message) {
+  return { kind: "Integration", component: component, message: message };
+}
+
+// Special error types
+pub fun not_supported(feature) {
+  return { kind: "NotSupported", feature: feature };
+}
+
+pub fun missing_dependency(name) {
+  return { kind: "MissingDependency", name: name };
+}
+
+pub fun unknown_error(message) {
+  return { kind: "Unknown", message: message };
+}
+
+// Generic RAG error wrapper
+pub fun rag_error(component, error) {
+  return { kind: "RAG", component: component, error: error };
+}

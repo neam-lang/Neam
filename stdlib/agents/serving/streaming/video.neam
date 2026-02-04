@@ -1,0 +1,148 @@
+// Video streaming support
+
+module std.agents.serving.streaming.video;
+
+use std.agents.serving.streaming.codec;
+use std.agents.serving.streaming.buffer;
+
+pub fun video_format_h264(width, height, fps) {
+  return {
+    kind: "H264",
+    width: width || 1280,
+    height: height || 720,
+    fps: fps || 30,
+    bitrate: 2500000,
+    profile: "main"
+  };
+}
+
+pub fun video_format_vp8(width, height, fps) {
+  return {
+    kind: "VP8",
+    width: width || 1280,
+    height: height || 720,
+    fps: fps || 30,
+    bitrate: 2500000
+  };
+}
+
+pub fun video_format_jpeg(width, height, quality) {
+  return {
+    kind: "JPEG",
+    width: width || 1280,
+    height: height || 720,
+    quality: quality || 85
+  };
+}
+
+pub fun video_stream_config() {
+  return {
+    input_format: video_format_h264(1280, 720, 30),
+    output_format: video_format_jpeg(640, 480, 80),
+    frame_buffer_size: 30,
+    keyframe_interval: 60,
+    processing_fps: 5
+  };
+}
+
+pub fun video_stream_handler(config, vision_agent) {
+  return {
+    kind: "VideoStreamHandler",
+    config: config || video_stream_config(),
+    agent: vision_agent,
+    frame_buffer: buffer.frame_buffer(config.frame_buffer_size),
+    state: "idle",
+    frame_count: 0,
+    last_processed_frame: nil,
+    processing_interval: nil
+  };
+}
+
+pub fun process_frame(handler, frame_base64, timestamp) {
+  let frame = {
+    data: frame_base64,
+    timestamp: timestamp || now(),
+    index: handler.frame_count
+  };
+
+  handler.frame_count = handler.frame_count + 1;
+  buffer.append_frame(handler.frame_buffer, frame);
+
+  let ratio = handler.config.input_format.fps / handler.config.processing_fps;
+  let should_process = handler.frame_count % ratio == 0;
+
+  if (should_process) {
+    return analyze_frame(handler, frame);
+  }
+
+  return { ok: true, value: { state: handler.state, result: nil } };
+}
+
+fun analyze_frame(handler, frame) {
+  handler.state = "analyzing";
+  handler.last_processed_frame = frame.index;
+
+  let result = handler.agent.analyze_image({
+    format: handler.config.input_format.kind,
+    data: frame.data
+  });
+
+  handler.state = "idle";
+
+  if (result.ok) {
+    return {
+      ok: true,
+      value: {
+        state: handler.state,
+        frame_index: frame.index,
+        analysis: result.value
+      }
+    };
+  }
+
+  return result;
+}
+
+pub fun start_continuous_processing(handler, on_result) {
+  handler.state = "continuous";
+
+  let interval_ms = 1000 / handler.config.processing_fps;
+
+  handler.processing_interval = set_interval(fun() {
+    let frame = buffer.get_latest(handler.frame_buffer);
+    if (frame != nil && frame.index != handler.last_processed_frame) {
+      let result = analyze_frame(handler, frame);
+      if (result.ok && result.value.analysis != nil) {
+        on_result(result.value);
+      }
+    }
+  }, interval_ms);
+
+  return { ok: true, value: { state: handler.state } };
+}
+
+pub fun stop_continuous_processing(handler) {
+  if (handler.processing_interval != nil) {
+    clear_interval(handler.processing_interval);
+    handler.processing_interval = nil;
+  }
+  handler.state = "idle";
+  return handler;
+}
+
+pub fun extract_frames(handler, video_segment, fps) {
+  let frames = [];
+  return { ok: true, value: { frames: frames } };
+}
+
+pub fun create_video(handler, frames, output_format) {
+  return { ok: true, value: { video_base64: "" } };
+}
+
+fun set_interval(handler, ms) {
+  return { handler: handler, interval_ms: ms };
+}
+
+fun clear_interval(timer) {
+  return true;
+}

@@ -1,0 +1,174 @@
+// ============================================
+// RAG-ENHANCED AGENTIC PATTERNS (OpenAI)
+// Combining knowledge bases with agents
+// ============================================
+
+// Knowledge Bases with different strategies
+knowledge NeamBasicKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "basic"
+  top_k: 3
+}
+
+knowledge NeamHyDEKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [ { "type": "file", "path": "./readme.md" } ]
+  retrieval_strategy: "hyde"
+  top_k: 3
+  num_hypothetical: 1
+}
+
+// ============================================
+// PATTERN 7: Expert Retrieval Agent
+// Agent with domain knowledge
+// ============================================
+
+agent NeamExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a Neam programming language expert. Use the provided documentation context to answer accurately. Be concise."
+  connected_knowledge: [NeamBasicKB]
+}
+
+// ============================================
+// PATTERN 8: Research + RAG Pipeline
+// Researcher retrieves, Analyst processes
+// ============================================
+
+agent RAGResearcher {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a technical researcher. Extract and summarize relevant facts from the documentation context."
+  connected_knowledge: [NeamHyDEKB]
+}
+
+agent Analyst {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a technical analyst. Given research notes, provide insights and recommendations. Be concise."
+}
+
+// ============================================
+// PATTERN 9: QA Validator with RAG
+// Answer, then validate against docs
+// ============================================
+
+agent Responder {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Answer questions about Neam based on the documentation. Be concise."
+  connected_knowledge: [NeamBasicKB]
+}
+
+agent FactChecker {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a fact checker. Verify if the given answer is accurate based on the documentation. Reply: VERIFIED, PARTIALLY_CORRECT, or INCORRECT with brief explanation."
+  connected_knowledge: [NeamBasicKB]
+}
+
+// ============================================
+// PATTERN 10: Multi-KB Agent
+// Query routing to specialized knowledge
+// ============================================
+
+agent KBRouter {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Classify the query type: SYNTAX (code examples), CONCEPT (how things work), or SETUP (building/running). Reply with only the category."
+}
+
+agent SyntaxExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You explain Neam syntax and provide code examples from documentation."
+  connected_knowledge: [NeamBasicKB]
+}
+
+agent ConceptExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You explain Neam concepts and architecture based on documentation."
+  connected_knowledge: [NeamHyDEKB]
+}
+
+// ============================================
+// MAIN TEST EXECUTION
+// ============================================
+
+{
+  emit "=======================================================";
+  emit "    RAG-ENHANCED AGENTIC PATTERNS (OpenAI)            ";
+  emit "=======================================================";
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 7: Expert Retrieval Agent
+  // -------------------------------------------------
+  emit "--- PATTERN 7: Expert Retrieval Agent ---";
+  let q1 = "How do knowledge bases work in Neam?";
+  emit "Q: " + q1;
+  let a1 = NeamExpert.ask(q1);
+  emit "Expert: " + a1;
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 8: Research + RAG Pipeline
+  // -------------------------------------------------
+  emit "--- PATTERN 8: Research + RAG Pipeline ---";
+  let topic = "Neam agent declarations and methods";
+  emit "Topic: " + topic;
+
+  let research = RAGResearcher.ask("Explain " + topic);
+  emit "Researcher: " + research;
+
+  let analysis = Analyst.ask("Based on this research, what are the key capabilities and limitations: " + research);
+  emit "Analyst: " + analysis;
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 9: QA Validator with RAG
+  // -------------------------------------------------
+  emit "--- PATTERN 9: QA Validator with RAG ---";
+  let q3 = "What vector store does Neam use?";
+  emit "Q: " + q3;
+
+  let answer = Responder.ask(q3);
+  emit "Responder: " + answer;
+
+  let check = FactChecker.ask("Question: '" + q3 + "' Answer given: '" + answer + "' - Verify this.");
+  emit "FactChecker: " + check;
+  emit "";
+
+  // -------------------------------------------------
+  // PATTERN 10: Multi-KB Routing
+  // -------------------------------------------------
+  emit "--- PATTERN 10: Multi-KB Routing ---";
+
+  let syntax_q = "Show me a Neam agent declaration example";
+  emit "Query: " + syntax_q;
+  let route_s = KBRouter.ask(syntax_q);
+  emit "Route: " + route_s;
+  let syntax_a = SyntaxExpert.ask(syntax_q);
+  emit "SyntaxExpert: " + syntax_a;
+  emit "";
+
+  let concept_q = "How do agents communicate with knowledge bases?";
+  emit "Query: " + concept_q;
+  let route_c = KBRouter.ask(concept_q);
+  emit "Route: " + route_c;
+  let concept_a = ConceptExpert.ask(concept_q);
+  emit "ConceptExpert: " + concept_a;
+  emit "";
+
+  emit "=======================================================";
+  emit "      RAG-ENHANCED PATTERNS TEST COMPLETE             ";
+  emit "=======================================================";
+}

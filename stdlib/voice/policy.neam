@@ -1,0 +1,142 @@
+// Voice-specific policy helpers
+
+module std.voice.policy;
+
+pub fun voice_policy(consent, storage, pii, safety) {
+  return { consent: consent, storage: storage, pii: pii, safety: safety };
+}
+
+pub fun consent_policy(require_explicit_consent, consent_prompt, allow_recording, notify_on_recording) {
+  return {
+    require_explicit_consent: require_explicit_consent,
+    consent_prompt: consent_prompt,
+    allow_recording: allow_recording,
+    notify_on_recording: notify_on_recording
+  };
+}
+
+pub fun consent_require_consent() {
+  return consent_policy(true, nil, false, true);
+}
+
+pub fun consent_opt_out() {
+  return consent_policy(false, nil, true, true);
+}
+
+pub fun storage_policy(store_audio, store_transcripts, retention_days, allowed_regions, encryption) {
+  return {
+    store_audio: store_audio,
+    store_transcripts: store_transcripts,
+    retention_days: retention_days,
+    allowed_regions: allowed_regions,
+    encryption: encryption
+  };
+}
+
+pub fun encryption_none() {
+  return "None";
+}
+
+pub fun encryption_at_rest() {
+  return "AtRest";
+}
+
+pub fun encryption_in_transit() {
+  return "InTransit";
+}
+
+pub fun encryption_both() {
+  return "Both";
+}
+
+pub fun pii_policy(auto_redact, redact_types, redaction_mode) {
+  return {
+    auto_redact: auto_redact,
+    redact_types: redact_types,
+    redaction_mode: redaction_mode
+  };
+}
+
+pub fun pii_type_name() {
+  return "Name";
+}
+
+pub fun pii_type_email() {
+  return "Email";
+}
+
+pub fun pii_type_phone() {
+  return "Phone";
+}
+
+pub fun pii_type_address() {
+  return "Address";
+}
+
+pub fun pii_type_ssn() {
+  return "SSN";
+}
+
+pub fun pii_type_credit_card() {
+  return "CreditCard";
+}
+
+pub fun pii_type_dob() {
+  return "DateOfBirth";
+}
+
+pub fun pii_type_custom(label) {
+  return { kind: "Custom", label: label };
+}
+
+pub fun redaction_remove() {
+  return "Remove";
+}
+
+pub fun redaction_mask() {
+  return "Mask";
+}
+
+pub fun redaction_generalize() {
+  return "Generalize";
+}
+
+pub fun redaction_hash() {
+  return "Hash";
+}
+
+pub fun safety_policy(block_harmful, filter_categories, violation_action) {
+  return { block_harmful: block_harmful, filter_categories: filter_categories, violation_action: violation_action };
+}
+
+pub fun safety_category_violence() {
+  return "Violence";
+}
+
+pub fun safety_category_hate() {
+  return "Hate";
+}
+
+pub fun safety_category_self_harm() {
+  return "SelfHarm";
+}
+
+pub fun safety_category_sexual() {
+  return "Sexual";
+}
+
+pub fun safety_category_illegal() {
+  return "Illegal";
+}
+
+pub fun violation_warn() {
+  return "Warn";
+}
+
+pub fun violation_block() {
+  return "Block";
+}
+
+pub fun violation_end_session() {
+  return "EndSession";
+}

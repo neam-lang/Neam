@@ -1,0 +1,42 @@
+// Langfuse exporter
+
+module std.observability.exporters.langfuse;
+
+pub fun create_exporter(config) {
+  let default_config = {
+    public_key: env("LANGFUSE_PUBLIC_KEY"),
+    secret_key: env("LANGFUSE_SECRET_KEY"),
+    host: "https://cloud.langfuse.com",
+    release: "1.0.0",
+    debug: false,
+    enabled: true
+  };
+  return merge(default_config, config);
+}
+
+pub fun map_trace(trace, baggage) {
+  return {
+    trace_id: trace.trace_id,
+    name: trace.name ?? trace.attributes["gen_ai.agent.name"] ?? "trace",
+    user_id: baggage.items["neam.user.id"],
+    session_id: baggage.items["neam.session.id"],
+    metadata: trace.attributes,
+    tags: trace.resource
+  };
+}
+
+pub fun link_prompt(trace_id, prompt_name, prompt_version) {
+  return {
+    trace_id: trace_id,
+    prompt_name: prompt_name,
+    prompt_version: prompt_version
+  };
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

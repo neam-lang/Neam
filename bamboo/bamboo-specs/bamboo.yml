@@ -1,0 +1,168 @@
+---
+version: 2
+plan:
+  project-key: NEAM
+  key: BUILD
+  name: Neam Build Plan
+
+stages:
+  - Build:
+      manual: false
+      final: false
+      jobs:
+        - Build
+
+  - Test:
+      manual: false
+      final: false
+      jobs:
+        - Unit Tests
+        - Integration Tests
+
+  - Package:
+      manual: false
+      final: false
+      jobs:
+        - Package Artifacts
+
+Build:
+  key: BLD
+  tasks:
+    - checkout:
+        force-clean-build: false
+        description: Checkout source
+
+    - script:
+        interpreter: SHELL
+        description: Install dependencies
+        scripts:
+          - |
+            sudo apt-get update
+            sudo apt-get install -y cmake g++ libcurl4-openssl-dev libssl-dev libpq-dev
+
+    - script:
+        interpreter: SHELL
+        description: Configure CMake
+        scripts:
+          - |
+            cmake -B build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DNEAM_BACKEND_POSTGRES=ON
+
+    - script:
+        interpreter: SHELL
+        description: Build project
+        scripts:
+          - |
+            cmake --build build -j$(nproc)
+
+  artifacts:
+    - name: build-output
+      location: build
+      pattern: "neamc"
+      shared: true
+
+  requirements:
+    - system.os: Linux
+
+Unit Tests:
+  key: UT
+  tasks:
+    - checkout:
+        force-clean-build: false
+        description: Checkout source
+
+    - artifact-download:
+        description: Download build artifacts
+        source-plan: NEAM-BUILD
+
+    - script:
+        interpreter: SHELL
+        description: Install dependencies
+        scripts:
+          - |
+            sudo apt-get update
+            sudo apt-get install -y cmake g++ libcurl4-openssl-dev libssl-dev libpq-dev
+
+    - script:
+        interpreter: SHELL
+        description: Build and run unit tests
+        scripts:
+          - |
+            cmake -B build -DCMAKE_BUILD_TYPE=Release
+            cmake --build build -j$(nproc)
+            ctest --test-dir build --output-on-failure
+
+  requirements:
+    - system.os: Linux
+
+Integration Tests:
+  key: IT
+  tasks:
+    - checkout:
+        force-clean-build: false
+        description: Checkout source
+
+    - script:
+        interpreter: SHELL
+        description: Run integration tests
+        scripts:
+          - |
+            sudo apt-get update
+            sudo apt-get install -y cmake g++ libcurl4-openssl-dev libssl-dev libpq-dev
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEAM_BACKEND_POSTGRES=ON
+            cmake --build build -j$(nproc)
+            ctest --test-dir build --output-on-failure
+
+  requirements:
+    - system.os: Linux
+
+Package Artifacts:
+  key: PKG
+  tasks:
+    - checkout:
+        force-clean-build: false
+        description: Checkout source
+
+    - script:
+        interpreter: SHELL
+        description: Build release binary
+        scripts:
+          - |
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEAM_BACKEND_POSTGRES=ON
+            cmake --build build -j$(nproc)
+
+    - script:
+        interpreter: SHELL
+        description: Package release archive
+        scripts:
+          - |
+            mkdir -p dist
+            cp build/neamc dist/
+            cp build/neam dist/ 2>/dev/null || true
+            cp build/neam-cli dist/ 2>/dev/null || true
+            cp build/neam-api dist/ 2>/dev/null || true
+            tar czf neamc-linux-x64.tar.gz -C dist .
+
+  artifacts:
+    - name: release-archive
+      location: .
+      pattern: "neamc-linux-x64.tar.gz"
+      shared: true
+
+  requirements:
+    - system.os: Linux
+
+triggers:
+  - remote:
+      description: Source code change trigger
+branches:
+  create: for-new-branch
+  delete:
+    after-deleted-days: 7
+    after-inactive-days: 30
+notifications:
+  - events:
+      - plan-failed
+    recipients:
+      - committers

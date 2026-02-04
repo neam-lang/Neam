@@ -1,0 +1,150 @@
+// ============================================
+// A2A Agent Discovery Example
+// Demonstrates discovering and interacting with agents using A2A-style patterns
+// ============================================
+
+// Local agent with capabilities for discovery
+agent LocalAssistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a helpful assistant that can answer questions and coordinate tasks."
+}
+
+// Specialized agents with distinct capabilities
+agent DataAnalysisAgent {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a specialized agent for data analysis and visualization. Provide clear insights and recommendations."
+}
+
+agent RefundProcessorAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a specialized agent for processing refunds. Process refund requests according to company policy."
+}
+
+agent CodeReviewAgent {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a specialized agent for code review. Review code for issues and suggest improvements."
+}
+
+// Simulate an agent card/capability registry
+fun get_agent_capabilities(agent_name) {
+  if (agent_name == "LocalAssistant") {
+    return "question-answering, task-coordination, summarization";
+  }
+  if (agent_name == "DataAnalysisAgent") {
+    return "data-analysis, statistics, visualization, trend-detection";
+  }
+  if (agent_name == "RefundProcessorAgent") {
+    return "refund-processing, order-verification, policy-enforcement";
+  }
+  if (agent_name == "CodeReviewAgent") {
+    return "code-review, security-analysis, best-practices, performance-optimization";
+  }
+  return "unknown";
+}
+
+// Check if an agent has a specific capability
+fun has_capability(agent_name, cap_name) {
+  let caps = get_agent_capabilities(agent_name);
+  return caps.contains(cap_name);
+}
+
+// Route a task to the appropriate agent based on capability
+fun route_to_capable_agent(cap_name, the_task) {
+  emit "  Looking for agent with capability: " + cap_name;
+
+  if (cap_name == "data-analysis") {
+    emit "  Found: DataAnalysisAgent";
+    return DataAnalysisAgent.ask(the_task);
+  }
+
+  if (cap_name == "refund-processing") {
+    emit "  Found: RefundProcessorAgent";
+    return RefundProcessorAgent.ask(the_task);
+  }
+
+  if (cap_name == "code-review") {
+    emit "  Found: CodeReviewAgent";
+    return CodeReviewAgent.ask(the_task);
+  }
+
+  emit "  Fallback: LocalAssistant";
+  return LocalAssistant.ask(the_task);
+}
+
+// Main execution
+{
+  emit "=== A2A Agent Discovery Example ===";
+  emit "";
+  emit "This example demonstrates A2A-style agent discovery:";
+  emit "  - Agent capability registration";
+  emit "  - Capability-based agent lookup";
+  emit "  - Dynamic routing to capable agents";
+  emit "";
+  emit "================================================";
+
+  // 1. List all registered agents and their capabilities
+  emit "";
+  emit "--- Step 1: Discover All Agents ---";
+  emit "";
+
+  emit "Agent: LocalAssistant";
+  emit "  Capabilities: " + get_agent_capabilities("LocalAssistant");
+  emit "";
+
+  emit "Agent: DataAnalysisAgent";
+  emit "  Capabilities: " + get_agent_capabilities("DataAnalysisAgent");
+  emit "";
+
+  emit "Agent: RefundProcessorAgent";
+  emit "  Capabilities: " + get_agent_capabilities("RefundProcessorAgent");
+  emit "";
+
+  emit "Agent: CodeReviewAgent";
+  emit "  Capabilities: " + get_agent_capabilities("CodeReviewAgent");
+  emit "";
+
+  // 2. Route tasks based on required capabilities
+  emit "--- Step 2: Capability-Based Routing ---";
+  emit "";
+
+  emit "Task 1: Data Analysis Request";
+  emit "  Required capability: data-analysis";
+  let result1 = route_to_capable_agent("data-analysis", "Analyze this sales trend: Q1: $100k, Q2: $150k, Q3: $120k, Q4: $200k. What patterns do you see?");
+  emit "  Response: " + result1;
+  emit "";
+
+  emit "Task 2: Refund Processing Request";
+  emit "  Required capability: refund-processing";
+  let result2 = route_to_capable_agent("refund-processing", "Process refund for order #12345, amount $49.99, reason: item arrived damaged");
+  emit "  Response: " + result2;
+  emit "";
+
+  emit "Task 3: Code Review Request";
+  emit "  Required capability: code-review";
+  let result3 = route_to_capable_agent("code-review", "Review this function: function add(a, b) { return a + b; }");
+  emit "  Response: " + result3;
+  emit "";
+
+  // 3. Demonstrate capability validation
+  emit "--- Step 3: Capability Validation ---";
+  emit "";
+
+  emit "Checking if DataAnalysisAgent has 'statistics' capability...";
+  if (has_capability("DataAnalysisAgent", "statistics")) {
+    emit "  Result: YES - Agent can perform statistical analysis";
+  }
+  emit "";
+
+  emit "Checking if RefundProcessorAgent has 'code-review' capability...";
+  if (!has_capability("RefundProcessorAgent", "code-review")) {
+    emit "  Result: NO - Agent cannot perform code review";
+  }
+  emit "";
+
+  emit "================================================";
+  emit "=== A2A Discovery Example Complete ===";
+}

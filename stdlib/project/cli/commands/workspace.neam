@@ -1,0 +1,11 @@
+module std.project.cli.commands.workspace;
+
+use std.project.workspace.commands as ws_commands;
+
+pub fun list(root, patterns) {
+  return ws_commands.list_members(root, patterns ?? []);
+}
+
+pub fun graph(root, patterns) {
+  return ws_commands.graph_workspace(root, patterns ?? []);
+}

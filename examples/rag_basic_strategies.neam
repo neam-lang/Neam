@@ -1,0 +1,88 @@
+// Test Basic RAG Strategies: Basic, MMR, Hybrid
+// Run: ./build/neamc examples/rag_basic_strategies.neam -o /tmp/test.neamb && ./build/neam /tmp/test.neamb
+
+knowledge BasicKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [
+    { "type": "file", "path": "./readme.md" }
+  ]
+  retrieval_strategy: "basic"
+  top_k: 3
+}
+
+knowledge MMRKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [
+    { "type": "file", "path": "./readme.md" }
+  ]
+  retrieval_strategy: "mmr"
+  top_k: 3
+  mmr_lambda: 0.7
+}
+
+knowledge HybridKB {
+  vector_store: "usearch"
+  embedding_model: "nomic-embed-text"
+  chunk_size: 200
+  chunk_overlap: 50
+  sources: [
+    { "type": "file", "path": "./readme.md" }
+  ]
+  retrieval_strategy: "hybrid"
+  top_k: 3
+}
+
+agent BasicExpert {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Be concise. Answer in 2-3 sentences."
+  connected_knowledge: [BasicKB]
+}
+
+agent MMRExpert {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Be concise. Answer in 2-3 sentences."
+  connected_knowledge: [MMRKB]
+}
+
+agent HybridExpert {
+  provider: "ollama"
+  model: "qwen3:1.7b"
+  system: "Be concise. Answer in 2-3 sentences."
+  connected_knowledge: [HybridKB]
+}
+
+{
+  emit "===============================================";
+  emit "     Testing Basic RAG Strategies             ";
+  emit "===============================================";
+  emit "";
+
+  let question = "What is Neam and what are its main features?";
+
+  emit "--- 1. Basic RAG (Similarity Search) ---";
+  let a1 = BasicExpert.ask(question);
+  emit "A: " + a1;
+  emit "";
+
+  emit "--- 2. MMR RAG (Diversity-focused) ---";
+  let a2 = MMRExpert.ask(question);
+  emit "A: " + a2;
+  emit "";
+
+  emit "--- 3. Hybrid RAG (Keyword + Vector) ---";
+  let a3 = HybridExpert.ask(question);
+  emit "A: " + a3;
+  emit "";
+
+  emit "===============================================";
+  emit "       Basic Strategies Test Complete         ";
+  emit "===============================================";
+}

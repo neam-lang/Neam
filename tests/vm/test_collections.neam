@@ -1,0 +1,56 @@
+// Test list and map operations
+
+// List creation
+let nums = [1, 2, 3, 4, 5];
+emit nums;
+
+// Empty list
+let empty = [];
+emit empty;
+
+// List access
+emit nums[0];
+emit nums[4];
+
+// Nested list
+let matrix = [[1, 2], [3, 4]];
+emit matrix;
+
+// Map creation
+let person = {"name": "Alice", "age": 30};
+emit person;
+
+// Empty map
+let empty_map = {};
+emit empty_map;
+
+// Map access
+emit person["name"];
+
+// Nested map
+let company = {
+    "name": "Neam Corp",
+    "ceo": {"name": "Bob", "title": "CEO"}
+};
+emit company;
+
+// List of maps
+let users = [
+    {"name": "Alice", "role": "admin"},
+    {"name": "Bob", "role": "user"}
+];
+emit users;
+
+// Map of lists
+let groups = {
+    "admins": ["Alice", "Charlie"],
+    "users": ["Bob", "Dave"]
+};
+emit groups;
+
+// Mixed nesting
+let data = {
+    "items": [1, "two", true, nil],
+    "meta": {"count": 4}
+};
+emit data;

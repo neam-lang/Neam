@@ -1,0 +1,160 @@
+// ============================================
+// Batch TTS Provider Tests
+// Tests text-to-speech with OpenAI, Gemini, Kokoro, and Piper
+// ============================================
+
+agent assistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a helpful assistant."
+}
+
+// --- OpenAI TTS (3 models) ---
+
+voice openai_tts1 {
+  agent: assistant
+  stt_provider: "whisper"
+  stt_model: "whisper-1"
+  tts_provider: "openai"
+  tts_model: "tts-1"
+  tts_voice: "alloy"
+}
+
+voice openai_tts1_hd {
+  agent: assistant
+  stt_provider: "whisper"
+  stt_model: "whisper-1"
+  tts_provider: "openai"
+  tts_model: "tts-1-hd"
+  tts_voice: "nova"
+}
+
+voice openai_tts1_shimmer {
+  agent: assistant
+  stt_provider: "whisper"
+  stt_model: "whisper-1"
+  tts_provider: "openai"
+  tts_model: "tts-1"
+  tts_voice: "shimmer"
+  tts_speed: "1.2"
+  tts_format: "mp3"
+  tts_instructions: "Speak in a warm, friendly tone."
+}
+
+// --- Gemini TTS ---
+
+voice gemini_tts_pipe {
+  agent: assistant
+  stt_provider: "whisper"
+  stt_model: "whisper-1"
+  tts_provider: "gemini"
+  tts_model: "gemini-2.5-flash-preview-tts"
+  tts_voice: "Kore"
+}
+
+// --- Kokoro local TTS ---
+
+voice kokoro_tts_pipe {
+  agent: assistant
+  stt_provider: "whisper"
+  stt_model: "whisper-1"
+  tts_provider: "kokoro"
+  tts_model: "tts-1"
+  tts_voice: "af_heart"
+  tts_endpoint: "http://localhost:8880"
+}
+
+// --- Piper local TTS ---
+
+voice piper_tts_pipe {
+  agent: assistant
+  stt_provider: "whisper"
+  stt_model: "whisper-1"
+  tts_provider: "piper"
+  tts_model: "tts-1"
+  tts_voice: "alloy"
+  tts_endpoint: "http://localhost:5000"
+}
+
+// --- Main test execution ---
+{
+  emit "=== Batch TTS Provider Tests ===";
+  emit "";
+
+  // Test 1: OpenAI TTS-1 pipeline
+  emit "Test 1: OpenAI TTS-1 with alloy voice";
+  emit "  Pipeline 'openai_tts1' defined";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 2: OpenAI TTS-1-HD pipeline
+  emit "Test 2: OpenAI TTS-1-HD with nova voice";
+  emit "  Pipeline 'openai_tts1_hd' defined";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 3: OpenAI TTS with custom settings
+  emit "Test 3: OpenAI TTS with speed, format, instructions";
+  emit "  voice=shimmer, speed=1.2, format=mp3";
+  emit "  instructions='Speak in a warm, friendly tone.'";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 4: Gemini TTS pipeline
+  emit "Test 4: Gemini TTS with Kore voice";
+  emit "  Pipeline 'gemini_tts_pipe' defined";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 5: Kokoro local TTS pipeline
+  emit "Test 5: Kokoro local TTS with af_heart voice";
+  emit "  Pipeline 'kokoro_tts_pipe' defined";
+  emit "  endpoint=http://localhost:8880";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 6: Piper local TTS pipeline
+  emit "Test 6: Piper local TTS";
+  emit "  Pipeline 'piper_tts_pipe' defined";
+  emit "  endpoint=http://localhost:5000";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 7: Synthesize with OpenAI (requires OPENAI_API_KEY)
+  emit "Test 7: OpenAI synthesis (requires API key)";
+  try {
+    let result = voice_synthesize("openai_tts1", "Hello world", "/tmp/test_output.wav");
+    emit "  Output: " + str(result);
+    emit "  Result: PASSED";
+  } catch (e) {
+    emit "  Error: " + str(e);
+    emit "  Result: FAILED";
+  }
+  emit "";
+
+  // Test 8: Synthesize with Gemini (requires GEMINI_API_KEY)
+  emit "Test 8: Gemini synthesis (requires API key)";
+  try {
+    let result = voice_synthesize("gemini_tts_pipe", "Hello world", "/tmp/test_gemini.wav");
+    emit "  Output: " + str(result);
+    emit "  Result: PASSED";
+  } catch (e) {
+    emit "  Error: " + str(e);
+    emit "  Result: FAILED";
+  }
+  emit "";
+
+  // Test 9: Synthesize with Kokoro (requires running server)
+  emit "Test 9: Kokoro synthesis (requires server)";
+  // let result = voice_synthesize("kokoro_tts_pipe", "Hello world", "/tmp/test_kokoro.wav");
+  emit "  Skipped (no Kokoro server in CI)";
+  emit "";
+
+  // Test 10: Synthesize with Piper (requires running server)
+  emit "Test 10: Piper synthesis (requires server)";
+  // let result = voice_synthesize("piper_tts_pipe", "Hello world", "/tmp/test_piper.wav");
+  emit "  Skipped (no Piper server in CI)";
+  emit "";
+
+  emit "=== Batch TTS Tests Complete ===";
+}

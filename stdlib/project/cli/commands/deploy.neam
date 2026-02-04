@@ -1,0 +1,5 @@
+module std.project.cli.commands.deploy;
+
+pub fun run(target, env) {
+  return { ok: true, message: "Deploying to " + (target ?? "default"), value: { env: env } };
+}

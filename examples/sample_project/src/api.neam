@@ -1,0 +1,40 @@
+// ============================================
+// AI Assistant - API Entry Point
+// ============================================
+// Alternative entry point for API server mode
+
+// ============================================
+// API Agents
+// ============================================
+
+agent APIAssistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are an API assistant. Respond in JSON format when appropriate."
+}
+
+agent APICoder {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a code generation API. Return only code without explanations unless asked."
+}
+
+agent APIAnalyst {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a data analysis API. Provide structured insights and recommendations."
+}
+
+// ============================================
+// API Handler
+// ============================================
+{
+  emit "AI Assistant API Ready";
+  emit "Available agents: assistant, coder, analyst";
+
+  // In production, this would be exposed via neam-api
+  // neam-api --port 8080 --entry src/api.neam
+
+  let demo_response = APIAssistant.ask("What can you help with?");
+  emit demo_response;
+}

@@ -1,0 +1,19 @@
+// Jaeger exporter
+
+module std.observability.exporters.jaeger;
+
+pub fun create_exporter(config) {
+  let default_config = {
+    endpoint: "http://localhost:14268/api/traces",
+    otlp_endpoint: "http://localhost:4317"
+  };
+  return merge(default_config, config);
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

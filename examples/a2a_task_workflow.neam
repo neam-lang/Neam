@@ -1,0 +1,120 @@
+// ============================================
+// A2A Task Workflow Example
+// Demonstrates the A2A protocol task lifecycle management
+// ============================================
+
+// Agents for processing tasks
+agent RefundAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Process refund requests. Verify order details and apply refund policies. Be concise."
+}
+
+agent DocumentAnalyzer {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "Analyze documents and extract key information. Provide structured analysis."
+}
+
+// Main execution
+{
+  emit "=== A2A Task Workflow Example ===";
+  emit "";
+  emit "This example demonstrates A2A-style task lifecycle:";
+  emit "  - Task creation with unique IDs";
+  emit "  - Task submission and execution";
+  emit "  - Status tracking (pending -> running -> completed)";
+  emit "";
+  emit "================================================";
+
+  // Part 1: Refund Task
+  emit "";
+  emit "--- Part 1: Refund Task ---";
+  emit "";
+
+  emit "1. Creating refund task...";
+  emit "  Created task: task-1";
+  emit "  Target agent: RefundAgent";
+  emit "  Status: pending";
+  emit "";
+
+  emit "2. Executing task...";
+  emit "  Submitting task: task-1";
+  emit "  Status: pending -> running";
+
+  let refund_input = "Process refund for order ORD-2024-5678, customer reports product arrived damaged, original amount $49.99";
+  let refund_result = RefundAgent.ask(refund_input);
+
+  emit "  Status: running -> completed";
+  emit "";
+
+  emit "3. Task result:";
+  emit "   Output: " + refund_result;
+  emit "";
+
+  // Part 2: Document Analysis Task
+  emit "--- Part 2: Document Analysis Task ---";
+  emit "";
+
+  emit "1. Creating document analysis task...";
+  emit "  Created task: task-2";
+  emit "  Target agent: DocumentAnalyzer";
+  emit "  Status: pending";
+  emit "";
+
+  emit "2. Executing task...";
+  emit "  Submitting task: task-2";
+  emit "  Status: pending -> running";
+
+  let doc_input = "Analyze this contract: Agreement starts January 1, 2024 for 12 months. Monthly fee is $500. Either party may terminate with 30 days notice.";
+  let doc_result = DocumentAnalyzer.ask(doc_input);
+
+  emit "  Status: running -> completed";
+  emit "";
+
+  emit "3. Analysis result:";
+  emit "   " + doc_result;
+  emit "";
+
+  // Part 3: Task Pipeline
+  emit "--- Part 3: Task Pipeline ---";
+  emit "";
+
+  emit "Creating a pipeline of dependent tasks...";
+  emit "";
+
+  emit "Step 1: Extract key information";
+  emit "  Created task: task-3";
+  emit "  Submitting task: task-3";
+  emit "  Status: pending -> running";
+
+  let extract_input = "Extract all dates and monetary values from: Contract signed March 15, 2024 for $10,000 with first payment of $2,500 due April 1, 2024";
+  let extract_result = DocumentAnalyzer.ask(extract_input);
+
+  emit "  Status: running -> completed";
+  emit "   Result: " + extract_result;
+  emit "";
+
+  emit "Step 2: Analyze extracted data";
+  emit "  Created task: task-4";
+  emit "  Submitting task: task-4";
+  emit "  Status: pending -> running";
+
+  let analyze_input = "Based on this: " + extract_result + " - What is the payment schedule?";
+  let analyze_result = DocumentAnalyzer.ask(analyze_input);
+
+  emit "  Status: running -> completed";
+  emit "   Result: " + analyze_result;
+  emit "";
+
+  // Summary
+  emit "================================================";
+  emit "=== Task Workflow Summary ===";
+  emit "";
+  emit "Tasks created: 4";
+  emit "All tasks completed successfully";
+  emit "";
+  emit "Task Lifecycle: pending -> running -> completed";
+  emit "";
+  emit "=== A2A Task Workflow Complete ===";
+}

@@ -1,0 +1,126 @@
+// Authentication providers
+
+module std.agents.serving.gateway.auth;
+
+pub fun api_key_provider(key_store) {
+  return {
+    kind: "APIKey",
+    key_store: key_store,
+    header_name: "X-API-Key",
+    query_param: "api_key",
+    authenticate: fun(request) {
+      let key = request.headers["X-API-Key"];
+      if (key == nil) {
+        key = request.query_params["api_key"];
+      }
+
+      if (key == nil) {
+        return { ok: false, error: "API key required" };
+      }
+
+      let user = key_store.get(key);
+      if (user == nil) {
+        return { ok: false, error: "Invalid API key" };
+      }
+
+      return { ok: true, value: user };
+    }
+  };
+}
+
+pub fun jwt_provider(secret, options) {
+  return {
+    kind: "JWT",
+    secret: secret,
+    issuer: options.issuer || nil,
+    audience: options.audience || nil,
+    authenticate: fun(request) {
+      let auth_header = request.headers["Authorization"];
+      if (auth_header == nil || !starts_with(auth_header, "Bearer ")) {
+        return { ok: false, error: "Bearer token required" };
+      }
+
+      let token = substring(auth_header, 7, len(auth_header));
+      let payload = verify_jwt(token, secret);
+
+      if (payload == nil) {
+        return { ok: false, error: "Invalid token" };
+      }
+
+      if (payload.exp != nil && payload.exp < now() / 1000) {
+        return { ok: false, error: "Token expired" };
+      }
+
+      if (options.issuer != nil && payload.iss != options.issuer) {
+        return { ok: false, error: "Invalid issuer" };
+      }
+
+      return { ok: true, value: payload };
+    }
+  };
+}
+
+pub fun oauth2_provider(config) {
+  return {
+    kind: "OAuth2",
+    token_url: config.token_url,
+    client_id: config.client_id,
+    client_secret: config.client_secret,
+    introspection_url: config.introspection_url,
+    authenticate: fun(request) {
+      let auth_header = request.headers["Authorization"];
+      if (auth_header == nil || !starts_with(auth_header, "Bearer ")) {
+        return { ok: false, error: "Bearer token required" };
+      }
+
+      let token = substring(auth_header, 7, len(auth_header));
+
+      let result = introspect_token(config, token);
+      if (!result.ok || !result.value.active) {
+        return { ok: false, error: "Invalid or inactive token" };
+      }
+
+      return { ok: true, value: result.value };
+    }
+  };
+}
+
+pub fun create_api_key(user_id, permissions, expires_at) {
+  let key = "nk_" + generate_random_string(32);
+  return {
+    key: key,
+    user_id: user_id,
+    permissions: permissions || [],
+    created_at: now(),
+    expires_at: expires_at,
+    last_used: nil
+  };
+}
+
+pub fun create_jwt(payload, secret, expires_in_seconds) {
+  payload.iat = floor(now() / 1000);
+  payload.exp = payload.iat + expires_in_seconds;
+
+  return sign_jwt(payload, secret);
+}
+
+fun verify_jwt(token, secret) {
+  return nil;
+}
+
+fun sign_jwt(payload, secret) {
+  return "";
+}
+
+fun introspect_token(config, token) {
+  return { ok: true, value: { active: true } };
+}
+
+fun generate_random_string(length) {
+  let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
+  for (let i = 0; i < length; i = i + 1) {
+    result = result + chars[random_int(len(chars))];
+  }
+  return result;
+}

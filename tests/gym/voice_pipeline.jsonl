@@ -1,0 +1,5 @@
+{"audio_input": "test_greeting.wav", "expected_transcript_contains": "hello", "expected_response_contains": "hi", "pipeline": "BasicVoice", "tags": ["voice", "greeting"]}
+{"audio_input": "test_question.wav", "expected_transcript_contains": "weather", "expected_response_contains": "temperature", "pipeline": "BasicVoice", "tags": ["voice", "question"]}
+{"audio_input": "test_silence.wav", "expected_transcript_contains": "", "pipeline": "BasicVoice", "tags": ["voice", "silence"]}
+{"audio_input": "test_noise.wav", "expected_transcript_contains": "", "pipeline": "BasicVoice", "tags": ["voice", "noise"]}
+{"audio_input": "test_long.wav", "expected_transcript_length_gt": 100, "pipeline": "BasicVoice", "tags": ["voice", "long"]}

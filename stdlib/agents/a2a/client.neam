@@ -1,0 +1,250 @@
+/// A2A Protocol HTTP Client
+/// Provides functions for interacting with remote A2A agents
+
+module stdlib::agents::a2a::client
+
+import stdlib::agents::a2a::card
+import stdlib::agents::a2a::task
+import stdlib::agents::a2a::jsonrpc
+
+/// Creates an A2A client for a remote agent
+/// @param endpoint_url The base URL of the remote agent
+/// @param options Client configuration options
+/// @returns An A2A client instance
+pub fun create_client(endpoint_url: string, options: map = {}) {
+  return {
+    endpoint_url: endpoint_url,
+    auth: options.get("auth", nil),
+    timeout_ms: options.get("timeout_ms", 30000),
+    retry_count: options.get("retry_count", 3),
+    retry_delay_ms: options.get("retry_delay_ms", 1000),
+    agent_card: nil  // Populated after discovery
+  };
+}
+
+/// Discovers a remote agent's capabilities
+/// @param client The A2A client
+/// @returns The agent card or error
+pub fun discover(client: map) {
+  let discovery_url = card::get_discovery_url(client.endpoint_url);
+
+  let response = http_get(discovery_url, {
+    timeout_ms: client.timeout_ms,
+    headers: get_auth_headers(client)
+  });
+
+  if (response.status != 200) {
+    return {
+      success: false,
+      error: "Discovery failed: " + str(response.status),
+      card: nil
+    };
+  }
+
+  let agent_card = card::from_json(response.body);
+
+  // Update client with discovered card
+  let updated_client = client.copy();
+  updated_client["agent_card"] = agent_card;
+
+  return {
+    success: true,
+    error: nil,
+    card: agent_card,
+    client: updated_client
+  };
+}
+
+/// Creates a task on the remote agent
+/// @param client The A2A client
+/// @param input Task input data
+/// @returns Created task or error
+pub fun create_remote_task(client: map, input: map) {
+  let request = jsonrpc::create_request("tasks/create", {
+    input: input
+  });
+
+  let response = post_jsonrpc(client, request);
+
+  if (!response.success) {
+    return {
+      success: false,
+      error: response.error,
+      task: nil
+    };
+  }
+
+  return {
+    success: true,
+    error: nil,
+    task: response.result
+  };
+}
+
+/// Gets the status of a remote task
+/// @param client The A2A client
+/// @param task_id The task ID to check
+/// @returns Task status or error
+pub fun get_remote_task_status(client: map, task_id: string) {
+  let request = jsonrpc::create_request("tasks/get", {
+    id: task_id
+  });
+
+  let response = post_jsonrpc(client, request);
+
+  if (!response.success) {
+    return {
+      success: false,
+      error: response.error,
+      task: nil
+    };
+  }
+
+  return {
+    success: true,
+    error: nil,
+    task: response.result
+  };
+}
+
+/// Cancels a remote task
+/// @param client The A2A client
+/// @param task_id The task ID to cancel
+/// @returns Cancellation result
+pub fun cancel_remote_task(client: map, task_id: string) {
+  let request = jsonrpc::create_request("tasks/cancel", {
+    id: task_id
+  });
+
+  let response = post_jsonrpc(client, request);
+
+  return {
+    success: response.success,
+    error: response.error
+  };
+}
+
+/// Sends a message to a remote agent and waits for response
+/// @param client The A2A client
+/// @param message The message to send
+/// @returns The response or error
+pub fun send_message(client: map, message: map) {
+  let request = jsonrpc::create_request("message/send", message);
+  let response = post_jsonrpc(client, request);
+
+  if (!response.success) {
+    return {
+      success: false,
+      error: response.error,
+      response: nil
+    };
+  }
+
+  return {
+    success: true,
+    error: nil,
+    response: response.result
+  };
+}
+
+/// Streams responses from a remote agent (using SSE)
+/// @param client The A2A client
+/// @param task_id The task to stream
+/// @param on_event Callback for each event
+/// @returns Stream result
+pub fun stream_task(client: map, task_id: string, on_event: fun) {
+  let stream_url = client.endpoint_url + "/tasks/" + task_id + "/stream";
+
+  // Note: This would use actual SSE streaming
+  let events = [];
+  let done = false;
+
+  while (!done) {
+    let event = wait_for_event(stream_url, client.timeout_ms);
+    if (event == nil) {
+      break;
+    }
+
+    events.push(event);
+    on_event(event);
+
+    if (event.type == "complete" || event.type == "error") {
+      done = true;
+    }
+  }
+
+  return {
+    success: true,
+    events: events
+  };
+}
+
+/// Internal: Posts a JSON-RPC request to the agent
+fun post_jsonrpc(client: map, request: map) {
+  let response = http_post(client.endpoint_url, {
+    body: request,
+    headers: get_auth_headers(client),
+    timeout_ms: client.timeout_ms
+  });
+
+  if (response.status != 200) {
+    return {
+      success: false,
+      error: "HTTP error: " + str(response.status),
+      result: nil
+    };
+  }
+
+  let json_response = response.body;
+
+  if (json_response.contains("error")) {
+    return {
+      success: false,
+      error: json_response.error.message,
+      result: nil
+    };
+  }
+
+  return {
+    success: true,
+    error: nil,
+    result: json_response.result
+  };
+}
+
+/// Internal: Gets authentication headers for requests
+fun get_auth_headers(client: map) {
+  let headers = {
+    "Content-Type": "application/json"
+  };
+
+  if (client.auth == nil) {
+    return headers;
+  }
+
+  if (client.auth.type == "bearer") {
+    headers["Authorization"] = "Bearer " + client.auth.token;
+  } else if (client.auth.type == "api_key") {
+    headers[client.auth.header_name or "X-API-Key"] = client.auth.key;
+  }
+
+  return headers;
+}
+
+/// Placeholder for HTTP GET (would be native function)
+fun http_get(url: string, options: map) {
+  // Native implementation
+  return { status: 200, body: {} };
+}
+
+/// Placeholder for HTTP POST (would be native function)
+fun http_post(url: string, options: map) {
+  // Native implementation
+  return { status: 200, body: {} };
+}
+
+/// Placeholder for SSE event waiting (would be native function)
+fun wait_for_event(url: string, timeout_ms: number) {
+  // Native implementation
+  return nil;
+}

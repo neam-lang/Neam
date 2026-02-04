@@ -1,0 +1,115 @@
+//
+// Neam v0.5.0 Cognitive Features Demo
+// =====================================
+// Run with: ./build/neam-cli examples/cognitive/v050_cognitive_demo.neam
+//
+
+// ============================================================================
+// Step 1: Basic Agent with Reasoning Strategy
+// ============================================================================
+
+agent Analyst {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a data analyst. Break down complex questions step by step."
+  reasoning: chain_of_thought
+}
+
+// ============================================================================
+// Step 2: Agent with Goals (Autonomous)
+// ============================================================================
+
+agent Monitor {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You monitor system health."
+  reasoning: chain_of_thought
+  goals: ["Check metrics", "Report anomalies"]
+  triggers: {
+    on_schedule: "every 5m"
+  }
+  initiative: true
+}
+
+// ============================================================================
+// Main Execution Block
+// ============================================================================
+
+{
+  emit "=================================================================";
+  emit "     Neam v0.5.0 Cognitive Features Demo";
+  emit "=================================================================";
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Demo 1: Chain of Thought Reasoning
+  // ─────────────────────────────────────────────────────────────────────
+  emit "─── Demo 1: Chain of Thought Reasoning ───";
+  emit "Agent: Analyst (reasoning: chain_of_thought)";
+  emit "";
+
+  let analysis = Analyst.ask("What are three key factors for code quality?");
+  emit "Response:";
+  emit analysis;
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Demo 2: Autonomous Agent Goals
+  // ─────────────────────────────────────────────────────────────────────
+  emit "─── Demo 2: Autonomous Agent Goals ───";
+  emit "Agent: Monitor (with goals and triggers)";
+  emit "";
+
+  // Read current goals
+  let current_goals = agent_get_goals("Monitor");
+  emit "Current Goals:";
+  let i = 0;
+  while (i < len(current_goals)) {
+    emit "  " + str(i + 1) + ". " + current_goals[i];
+    i = i + 1;
+  }
+  emit "";
+
+  // Update goals dynamically
+  agent_set_goals("Monitor", ["Check CPU usage", "Monitor memory", "Alert on errors"]);
+  emit "Goals updated.";
+
+  // Verify update
+  let updated_goals = agent_get_goals("Monitor");
+  emit "New Goals:";
+  i = 0;
+  while (i < len(updated_goals)) {
+    emit "  " + str(i + 1) + ". " + updated_goals[i];
+    i = i + 1;
+  }
+  emit "";
+
+  // Check agent status
+  let agent_info = agent_status("Monitor");
+  emit "Agent Status:";
+  emit "  Reasoning mode: " + str(agent_info["reasoning_mode"]);
+  emit "  Goals: " + str(agent_info["goals"]);
+  emit "";
+
+  // Pause/Resume demo
+  agent_pause("Monitor");
+  emit "Monitor paused.";
+  agent_resume("Monitor");
+  emit "Monitor resumed.";
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Summary
+  // ─────────────────────────────────────────────────────────────────────
+  emit "=================================================================";
+  emit "     Demo Complete";
+  emit "=================================================================";
+  emit "";
+  emit "Features Demonstrated:";
+  emit "  1. Chain of Thought reasoning";
+  emit "  2. Autonomous goals with triggers";
+  emit "  3. Dynamic goal management";
+  emit "  4. Pause/Resume control";
+}

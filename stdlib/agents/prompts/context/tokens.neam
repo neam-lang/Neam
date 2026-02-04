@@ -1,0 +1,57 @@
+// Token counting utilities
+
+module std.agents.prompts.context.tokens;
+
+pub fun create_counter(model) {
+  let limits = model_limits();
+  let limit = limits[model] != nil ? limits[model] : 8192;
+  return { model: model, tokenizer: "approx", context_limit: limit, usage: 0 };
+}
+
+pub fun count_tokens(counter, text) {
+  let tokens = estimate_tokens(text, counter.tokenizer);
+  counter.usage = counter.usage + tokens;
+  return tokens;
+}
+
+pub fun count_messages(counter, messages) {
+  let total = 0;
+  for (message in messages) {
+    total = total + count_tokens(counter, message.content + " " + message.role);
+  }
+  return total;
+}
+
+pub fun estimate_response_tokens(counter, prompt_tokens) {
+  let remaining = counter.context_limit - prompt_tokens;
+  return remaining > 0 ? remaining : 0;
+}
+
+pub fun check_context_fit(counter, messages, max_response) {
+  let prompt_tokens = count_messages(counter, messages);
+  let total = prompt_tokens + max_response;
+  if (total > counter.context_limit) {
+    return { ok: false, error: "Context limit exceeded", value: { prompt_tokens: prompt_tokens, max_response: max_response, limit: counter.context_limit } };
+  }
+  return { ok: true, value: { prompt_tokens: prompt_tokens, max_response: max_response, limit: counter.context_limit } };
+}
+
+fun estimate_tokens(text, tokenizer) {
+  if (tokenizer == "word") {
+    let words = split(trim(text), " ");
+    return len(words);
+  }
+  let length = len(text);
+  return (length + 3) / 4;
+}
+
+fun model_limits() {
+  return {
+    "claude-opus-4.5": 200000,
+    "claude-sonnet-4": 200000,
+    "gpt-4-turbo": 128000,
+    "gpt-4o": 128000,
+    "gemini-1.5-pro": 1000000,
+    "llama-3": 8192
+  };
+}

@@ -1,0 +1,103 @@
+/// Handoff utilities for OpenAI Agents SDK-style agent transfers
+/// Provides functions for creating and managing handoffs between agents
+
+module stdlib::agents::handoffs::handoff
+
+/// Creates a handoff target with optional configuration
+/// @param agent_name The name of the target agent
+/// @param options Optional configuration for the handoff
+/// @returns A HandoffTarget configuration
+pub fun create_handoff(agent_name: string, options: map = {}) {
+  let target = {
+    agent: agent_name,
+    tool_name: options.get("tool_name", "transfer_to_" + agent_name),
+    description: options.get("description", "Transfer control to " + agent_name),
+    enabled: options.get("enabled", true)
+  };
+  return target;
+}
+
+/// Validates that a handoff is properly configured
+/// @param handoff The handoff configuration to validate
+/// @returns true if valid, false otherwise
+pub fun validate_handoff(handoff: map) {
+  if (!handoff.contains("agent")) {
+    return false;
+  }
+  if (handoff.get("agent") == "") {
+    return false;
+  }
+  return true;
+}
+
+/// Builds a list of tool definitions from handoffs for agent tool calling
+/// @param handoffs List of handoff configurations
+/// @returns List of tool definitions compatible with agent tool calling
+pub fun handoffs_to_tools(handoffs: list) {
+  let tools = [];
+  for (handoff in handoffs) {
+    if (!validate_handoff(handoff)) {
+      continue;
+    }
+    let tool = {
+      name: handoff.get("tool_name", "transfer_to_" + handoff.agent),
+      description: handoff.get("description", "Transfer to " + handoff.agent),
+      parameters: {
+        type: "object",
+        properties: {
+          context: {
+            type: "string",
+            description: "Context information to pass to the target agent"
+          }
+        },
+        required: ["context"]
+      }
+    };
+    tools.push(tool);
+  }
+  return tools;
+}
+
+/// Checks if a handoff is currently enabled
+/// @param handoff The handoff configuration
+/// @param context Current execution context
+/// @returns true if the handoff is enabled
+pub fun is_handoff_enabled(handoff: map, context: map = {}) {
+  if (!handoff.contains("enabled")) {
+    return true;  // Enabled by default
+  }
+  let enabled = handoff.get("enabled");
+  // If enabled is a function, call it with context
+  if (typeof(enabled) == "function") {
+    return enabled(context);
+  }
+  return enabled == true;
+}
+
+/// Applies input filter to context before handoff
+/// @param handoff The handoff configuration
+/// @param context The context to filter
+/// @returns Filtered context
+pub fun apply_input_filter(handoff: map, context: map) {
+  if (!handoff.contains("input_filter")) {
+    return context;
+  }
+  let filter = handoff.get("input_filter");
+  if (typeof(filter) == "function") {
+    return filter(context);
+  }
+  return context;
+}
+
+/// Executes on_handoff callback if defined
+/// @param handoff The handoff configuration
+/// @param context The handoff context
+pub fun execute_on_handoff(handoff: map, context: map) {
+  if (!handoff.contains("on_handoff")) {
+    return;
+  }
+  let callback = handoff.get("on_handoff");
+  if (typeof(callback) == "function") {
+    callback(context);
+  }
+}

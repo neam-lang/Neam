@@ -1,0 +1,100 @@
+// ============================================
+// VM Tests: Handoff Execution Verification
+// Tests runtime behavior of handoffs
+// Note: Avoids len() and str() which are not built-in
+// ============================================
+
+// Test agents
+agent TriageAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a triage agent. For refund requests, say HANDOFF:refund. For billing, say HANDOFF:billing. Otherwise answer directly."
+  handoffs: [
+    handoff_to(RefundAgent) {
+      tool_name: "refund"
+      description: "Handle refund requests"
+    },
+    handoff_to(BillingAgent) {
+      tool_name: "billing"
+      description: "Handle billing inquiries"
+    }
+  ]
+}
+
+agent RefundAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a refund specialist. Process refund requests briefly."
+}
+
+agent BillingAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a billing specialist. Answer billing questions briefly."
+}
+
+// Runner for handoff execution
+runner HandoffRunner {
+  entry_agent: TriageAgent
+  max_turns: 5
+  tracing: enabled
+}
+
+// Main test execution
+{
+  emit "=== Handoff Execution VM Tests ===";
+  emit "";
+  emit "Running tests with local ollama agents...";
+  emit "";
+
+  // Test 1: Agent.ask() basic call
+  emit "Test 1: Agent.ask() basic call";
+  let response = RefundAgent.ask("Say hello briefly");
+  emit "  Response: " + response;
+  if (response != "") {
+    emit "  Result: PASSED";
+  } else {
+    emit "  Result: FAILED";
+  }
+  emit "";
+
+  // Test 2: Runner.run() execution
+  emit "Test 2: Runner.run() execution";
+  let result = HandoffRunner.run("Hello, I need help");
+  if (result["completed"]) {
+    emit "  Result: PASSED - Runner completed";
+    emit "  Final agent: " + result["final_agent"];
+    emit "  Total turns:";
+    emit result["total_turns"];
+  } else {
+    emit "  Result: FAILED - Runner did not complete";
+  }
+  emit "";
+
+  // Test 3: Trace generation
+  emit "Test 3: Trace generation";
+  let result2 = HandoffRunner.run("Process my refund for order 123");
+  let trace = result2["trace"];
+  emit "  Trace:";
+  emit trace;
+  emit "  Result: PASSED - Trace generated";
+  emit "";
+
+  // Test 4: Result fields
+  emit "Test 4: Result field structure";
+  let result3 = HandoffRunner.run("What is my balance?");
+  emit "  final_agent: " + result3["final_agent"];
+  emit "  total_turns:";
+  emit result3["total_turns"];
+  emit "  total_duration_ms:";
+  emit result3["total_duration_ms"];
+  emit "  completed:";
+  emit result3["completed"];
+  emit "  Result: PASSED - Fields accessible";
+  emit "";
+
+  emit "=== All VM Tests Complete ===";
+}

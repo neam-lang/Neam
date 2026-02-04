@@ -1,0 +1,133 @@
+/// Input filters for handoff context transformation
+/// Provides built-in filters for modifying context before handoffs
+
+module stdlib::agents::handoffs::filters
+
+/// Removes tool call history from context
+/// Useful for preventing target agent from seeing previous tool interactions
+/// @param context The context to filter
+/// @returns Context with tool calls removed
+pub fun remove_tool_calls(context: map) {
+  let filtered = {};
+  for (key in context.keys()) {
+    if (key != "tool_calls" && key != "tool_results" && key != "function_calls") {
+      filtered[key] = context[key];
+    }
+  }
+  return filtered;
+}
+
+/// Removes sensitive information from context
+/// Strips PII, credentials, and other sensitive data
+/// @param context The context to filter
+/// @returns Context with sensitive data removed
+pub fun remove_sensitive(context: map) {
+  let sensitive_keys = [
+    "password", "api_key", "secret", "token", "credential",
+    "ssn", "social_security", "credit_card", "cc_number",
+    "auth", "authorization", "bearer", "private_key"
+  ];
+
+  let filtered = {};
+  for (key in context.keys()) {
+    let lower_key = key.lower();
+    let is_sensitive = false;
+
+    for (sensitive in sensitive_keys) {
+      if (lower_key.contains(sensitive)) {
+        is_sensitive = true;
+        break;
+      }
+    }
+
+    if (!is_sensitive) {
+      filtered[key] = context[key];
+    }
+  }
+  return filtered;
+}
+
+/// Summarizes conversation history to reduce context size
+/// @param context The context containing conversation history
+/// @param max_messages Maximum number of messages to keep
+/// @returns Context with summarized history
+pub fun summarize_history(context: map, max_messages: number = 5) {
+  if (!context.contains("history") && !context.contains("messages")) {
+    return context;
+  }
+
+  let filtered = {};
+  for (key in context.keys()) {
+    if (key == "history" || key == "messages") {
+      let messages = context[key];
+      if (len(messages) > max_messages) {
+        // Keep most recent messages
+        filtered[key] = messages.slice(-max_messages);
+        // Add summary marker
+        filtered["history_summarized"] = true;
+        filtered["original_message_count"] = len(messages);
+      } else {
+        filtered[key] = messages;
+      }
+    } else {
+      filtered[key] = context[key];
+    }
+  }
+  return filtered;
+}
+
+/// Extracts only specified fields from context
+/// @param context The context to filter
+/// @param fields List of field names to keep
+/// @returns Context with only specified fields
+pub fun extract_fields(context: map, fields: list) {
+  let filtered = {};
+  for (field in fields) {
+    if (context.contains(field)) {
+      filtered[field] = context[field];
+    }
+  }
+  return filtered;
+}
+
+/// Adds metadata to context for tracking handoffs
+/// @param context The context to augment
+/// @param from_agent Name of the source agent
+/// @param to_agent Name of the target agent
+/// @returns Context with handoff metadata added
+pub fun add_handoff_metadata(context: map, from_agent: string, to_agent: string) {
+  let filtered = context.copy();
+  filtered["_handoff"] = {
+    from_agent: from_agent,
+    to_agent: to_agent,
+    timestamp: now(),
+    chain: context.get("_handoff", {}).get("chain", []) + [from_agent]
+  };
+  return filtered;
+}
+
+/// Composes multiple filters into a single filter function
+/// @param filters List of filter functions to apply in order
+/// @returns A composed filter function
+pub fun compose_filters(filters: list) {
+  return fun(context) {
+    let result = context;
+    for (filter in filters) {
+      result = filter(result);
+    }
+    return result;
+  };
+}
+
+/// Creates a conditional filter that only applies if condition is met
+/// @param condition Function that returns true if filter should apply
+/// @param filter The filter to conditionally apply
+/// @returns A conditional filter function
+pub fun conditional_filter(condition: fun, filter: fun) {
+  return fun(context) {
+    if (condition(context)) {
+      return filter(context);
+    }
+    return context;
+  };
+}

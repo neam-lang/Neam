@@ -1,0 +1,103 @@
+// Incoming webhook handling
+
+module std.agents.serving.webhook.receiver;
+
+use std.agents.serving.config;
+use std.agents.serving.webhook.queue;
+
+pub fun webhook_receiver(secret) {
+  return {
+    kind: "WebhookReceiver",
+    secret: secret,
+    handlers: {},
+    queue: queue.event_queue(1000),
+    processing: false
+  };
+}
+
+pub fun on_event(receiver, event_type, handler) {
+  receiver.handlers[event_type] = handler;
+  return receiver;
+}
+
+pub fun handle_webhook(receiver, request) {
+  let signature = request.headers["X-Webhook-Signature"];
+  let timestamp = request.headers["X-Webhook-Timestamp"];
+
+  if (receiver.secret != nil) {
+    let expected_sig = "sha256=" + hmac_sha256(request.body, receiver.secret);
+    if (signature != expected_sig) {
+      return {
+        status: config.status_unauthorized(),
+        body: json_encode({ error: "Invalid signature" })
+      };
+    }
+
+    let ts = parse_int(timestamp);
+    if (abs(now() - ts) > 5 * 60 * 1000) {
+      return {
+        status: config.status_bad_request(),
+        body: json_encode({ error: "Timestamp too old" })
+      };
+    }
+  }
+
+  let event = json_decode(request.body);
+  if (event == nil || event.type == nil) {
+    return {
+      status: config.status_bad_request(),
+      body: json_encode({ error: "Invalid event format" })
+    };
+  }
+
+  queue.enqueue(receiver.queue, event);
+
+  return {
+    status: config.status_ok(),
+    body: json_encode({ received: true, event_id: event.id })
+  };
+}
+
+pub fun start_processing(receiver) {
+  receiver.processing = true;
+
+  while (receiver.processing) {
+    let event = queue.dequeue(receiver.queue);
+    if (event != nil) {
+      process_event(receiver, event);
+    } else {
+      sleep(100);
+    }
+  }
+}
+
+pub fun stop_processing(receiver) {
+  receiver.processing = false;
+  return receiver;
+}
+
+fun process_event(receiver, event) {
+  let handler = receiver.handlers[event.type];
+  if (handler == nil) {
+    handler = receiver.handlers["*"];
+  }
+
+  if (handler != nil) {
+    let result = handler(event);
+    if (!result.ok) {
+      log_error("Webhook handler error: " + result.error);
+    }
+  }
+}
+
+fun hmac_sha256(data, key) {
+  return "";
+}
+
+fun sleep(ms) {
+  return true;
+}
+
+fun log_error(msg) {
+  return true;
+}

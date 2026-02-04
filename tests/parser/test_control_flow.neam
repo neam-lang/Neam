@@ -1,0 +1,69 @@
+// Test control flow constructs
+
+// Simple if
+if (true) {
+    emit "if-true";
+}
+
+// If-else
+if (false) {
+    emit "should-not-emit";
+} else {
+    emit "else-branch";
+}
+
+// Nested if-else
+let x = 15;
+if (x > 20) {
+    emit "over-20";
+} else if (x > 10) {
+    emit "over-10";
+} else {
+    emit "10-or-less";
+}
+
+// While loop
+let counter = 0;
+while (counter < 5) {
+    emit counter;
+    counter = counter + 1;
+}
+
+// For loop
+for (let i = 0; i < 3; i = i + 1) {
+    emit i;
+}
+
+// Nested loops
+for (let i = 0; i < 3; i = i + 1) {
+    for (let j = 0; j < 2; j = j + 1) {
+        emit i * 10 + j;
+    }
+}
+
+// While with break condition
+let n = 100;
+while (n > 0) {
+    if (n < 50) {
+        emit "found-below-50";
+    }
+    n = n - 25;
+}
+
+// Deep nesting
+if (true) {
+    if (true) {
+        if (true) {
+            if (true) {
+                emit "deep-nest";
+            }
+        }
+    }
+}
+
+// Loop with accumulator
+let sum = 0;
+for (let i = 1; i <= 10; i = i + 1) {
+    sum = sum + i;
+}
+emit sum;

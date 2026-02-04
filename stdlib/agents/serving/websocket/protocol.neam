@@ -1,0 +1,118 @@
+// WebSocket message protocol
+
+module std.agents.serving.websocket.protocol;
+
+pub fun msg_type_session_create() { return "session.create"; }
+pub fun msg_type_session_update() { return "session.update"; }
+pub fun msg_type_agent_invoke() { return "agent.invoke"; }
+pub fun msg_type_agent_response() { return "agent.response"; }
+pub fun msg_type_agent_stream_start() { return "agent.stream.start"; }
+pub fun msg_type_agent_stream_chunk() { return "agent.stream.chunk"; }
+pub fun msg_type_agent_stream_end() { return "agent.stream.end"; }
+pub fun msg_type_audio_buffer_append() { return "audio.buffer.append"; }
+pub fun msg_type_audio_buffer_commit() { return "audio.buffer.commit"; }
+pub fun msg_type_audio_response() { return "audio.response"; }
+pub fun msg_type_error() { return "error"; }
+pub fun msg_type_ping() { return "ping"; }
+pub fun msg_type_pong() { return "pong"; }
+
+pub fun create_message(type, event_id, data) {
+  return {
+    type: type,
+    event_id: event_id || generate_event_id(),
+    timestamp: now(),
+    data: data
+  };
+}
+
+pub fun parse_message(raw) {
+  let parsed = json_decode(raw);
+  if (parsed == nil || parsed.type == nil) {
+    return nil;
+  }
+  return parsed;
+}
+
+pub fun serialize_message(message) {
+  return json_encode(message);
+}
+
+pub fun session_created(session_id, config) {
+  return create_message(msg_type_session_create(), nil, {
+    session_id: session_id,
+    config: config
+  });
+}
+
+pub fun agent_invoke(agent_id, input, stream) {
+  return create_message(msg_type_agent_invoke(), nil, {
+    agent_id: agent_id,
+    input: input,
+    stream: stream || false
+  });
+}
+
+pub fun agent_response(agent_id, output, metadata) {
+  return create_message(msg_type_agent_response(), nil, {
+    agent_id: agent_id,
+    output: output,
+    metadata: metadata
+  });
+}
+
+pub fun stream_start(stream_id, agent_id) {
+  return create_message(msg_type_agent_stream_start(), nil, {
+    stream_id: stream_id,
+    agent_id: agent_id
+  });
+}
+
+pub fun stream_chunk(stream_id, chunk, index) {
+  return create_message(msg_type_agent_stream_chunk(), nil, {
+    stream_id: stream_id,
+    chunk: chunk,
+    index: index
+  });
+}
+
+pub fun stream_end(stream_id, total_chunks) {
+  return create_message(msg_type_agent_stream_end(), nil, {
+    stream_id: stream_id,
+    total_chunks: total_chunks
+  });
+}
+
+pub fun audio_buffer_append(audio_base64) {
+  return create_message(msg_type_audio_buffer_append(), nil, {
+    audio: audio_base64
+  });
+}
+
+pub fun audio_buffer_commit() {
+  return create_message(msg_type_audio_buffer_commit(), nil, {});
+}
+
+pub fun audio_response(audio_base64, transcript, duration_ms) {
+  return create_message(msg_type_audio_response(), nil, {
+    audio: audio_base64,
+    transcript: transcript,
+    duration_ms: duration_ms
+  });
+}
+
+pub fun error_message(code, message, details) {
+  return create_message(msg_type_error(), nil, {
+    code: code,
+    message: message,
+    details: details
+  });
+}
+
+pub fun send_error(conn, code, message) {
+  let err_msg = error_message(code, message, nil);
+  conn.send(serialize_message(err_msg));
+}
+
+fun generate_event_id() {
+  return "evt_" + str(now()) + "_" + str(random_int(10000));
+}

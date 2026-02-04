@@ -1,0 +1,7 @@
+// Compliance preset interface
+
+module std.agents.redteam.compliance.preset;
+
+pub fun create_preset(name, categories, probes) {
+  return { name: name, categories: categories, probes: probes };
+}

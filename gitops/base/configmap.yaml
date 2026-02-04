@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neam-config
+  labels:
+    app.kubernetes.io/name: neam-agent
+data:
+  NEAM_ENV: "production"
+  NEAM_LOG_LEVEL: "info"
+  NEAM_PORT: "8080"
+  NEAM_TELEMETRY_ENABLED: "true"
+  NEAM_OTEL_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4318"

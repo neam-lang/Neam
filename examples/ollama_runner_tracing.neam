@@ -1,0 +1,101 @@
+// ============================================
+// Runner Tracing Example (Ollama Version)
+// Demonstrates agent loop execution with local Ollama
+// ============================================
+
+// Research coordinator agent
+agent ResearchCoordinator {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.4
+  system: "You are a research coordinator. When asked a question, provide a comprehensive answer. Start your final answer with 'FINAL:' followed by your complete response. Be thorough but concise."
+}
+
+// Main execution
+{
+  emit "=== Agent Runner with Tracing (Ollama) ===";
+  emit "";
+  emit "Using local Ollama with llama3.2:3b model";
+  emit "";
+  emit "This example demonstrates:";
+  emit "  1. Agent loop execution with turn limits";
+  emit "  2. Turn-by-turn tracing";
+  emit "  3. Response-based completion detection";
+  emit "";
+  emit "================================================";
+
+  // Research query
+  let query = "What are 3 key benefits of remote work?";
+
+  emit "";
+  emit "Research Query: " + query;
+  emit "";
+  emit "==================================================================";
+
+  // Execute Turn 1
+  emit "";
+  emit "+------------------------------------------------------------------+";
+  emit "  Turn 1 - Agent: ResearchCoordinator";
+  emit "+------------------------------------------------------------------+";
+
+  let response1 = ResearchCoordinator.ask(query + " Please start your answer with FINAL:");
+
+  emit "  Input:  " + query.substring(0, 40) + "...";
+  emit "  Output: " + response1.substring(0, 50) + "...";
+  emit "+------------------------------------------------------------------+";
+
+  let final_result = response1;
+  let completed = false;
+
+  if (response1.contains("FINAL:")) {
+    completed = true;
+  }
+
+  // Execute Turn 2 if needed
+  if (!completed) {
+    emit "";
+    emit "+------------------------------------------------------------------+";
+    emit "  Turn 2 - Agent: ResearchCoordinator";
+    emit "+------------------------------------------------------------------+";
+
+    let prompt2 = "Please provide your FINAL: answer to: " + query;
+    let response2 = ResearchCoordinator.ask(prompt2);
+
+    emit "  Input:  " + prompt2.substring(0, 40) + "...";
+    emit "  Output: " + response2.substring(0, 50) + "...";
+    emit "+------------------------------------------------------------------+";
+
+    final_result = response2;
+
+    if (response2.contains("FINAL:")) {
+      completed = true;
+    }
+  }
+
+  // Summary
+  emit "";
+  emit "+==================================================================+";
+  emit "                     EXECUTION COMPLETE                            ";
+  emit "+==================================================================+";
+  emit "  Final Agent:  ResearchCoordinator";
+
+  if (completed) {
+    emit "  Completed:    true";
+  }
+  if (!completed) {
+    emit "  Completed:    false (max turns reached)";
+  }
+
+  emit "+==================================================================+";
+
+  emit "";
+  emit "==================================================================";
+  emit "";
+
+  // Print the final output
+  emit "=== Final Research Output ===";
+  emit "";
+  emit final_result;
+  emit "";
+  emit "=== Runner Tracing Example Complete ===";
+}

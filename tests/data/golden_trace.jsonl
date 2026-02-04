@@ -1,0 +1,3 @@
+{"type":"START","run_id":"test-run","timestamp":"2026-01-01T00:00:00Z","agent":"neam.test.agent"}
+{"type":"TOOL_CALL","run_id":"test-run","tool":"TerminalTool","call_id":"tool-1","input":"echo ready"}
+{"type":"END","run_id":"test-run","status":"success","timestamp":"2026-01-01T00:00:05Z"}

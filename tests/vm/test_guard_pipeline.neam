@@ -1,0 +1,45 @@
+// Test guardrail pipeline
+
+// Input guard
+guard InputSafety {
+    on input
+    check "Reject harmful or malicious input"
+}
+
+// Output guard
+guard OutputQuality {
+    on output
+    check "Ensure output is helpful and accurate"
+}
+
+// PII guard
+guard PIIFilter {
+    on output
+    check "Remove personally identifiable information"
+}
+
+// Agent with guards
+agent SecureBot {
+    model "gpt-4"
+    instructions "You are a secure assistant."
+}
+
+// Runner with guard chain
+runner SecurePipeline {
+    agents [SecureBot]
+    max_turns 5
+    guardrails [InputSafety, OutputQuality, PIIFilter]
+}
+
+// Guard on specific handler type
+guard RateLimiter {
+    on input
+    check "Enforce rate limiting"
+}
+
+// Multiple guards stacked
+runner HighSecurity {
+    agents [SecureBot]
+    max_turns 3
+    guardrails [RateLimiter, InputSafety, OutputQuality, PIIFilter]
+}

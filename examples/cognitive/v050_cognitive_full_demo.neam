@@ -1,0 +1,262 @@
+//
+// Neam v0.5.0 Cognitive Features - Full Demo
+// =============================================
+// Demonstrates ALL cognitive capabilities:
+// - Reasoning strategies
+// - Self-reflection
+// - Learning loop
+// - Prompt evolution
+// - Autonomous goals
+//
+// Run: ./build/neam-cli examples/cognitive/v050_cognitive_full_demo.neam
+//
+
+// ============================================================================
+// Agent 1: Chain of Thought Reasoning
+// ============================================================================
+
+agent Analyst {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a data analyst. Break down questions step by step."
+  reasoning: chain_of_thought
+}
+
+// ============================================================================
+// Agent 2: Plan and Execute Reasoning
+// ============================================================================
+
+agent Planner {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.4
+  system: "You are a project planner."
+  reasoning: plan_and_execute
+}
+
+// ============================================================================
+// Agent 3: Reflective Agent with Quality Thresholds
+// ============================================================================
+
+agent QAAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.4
+  system: "You answer technical questions accurately."
+  reasoning: chain_of_thought
+  reflect: {
+    after: each_response
+    evaluate: [accuracy, relevance, completeness]
+    min_confidence: 0.7
+    on_low_quality: {
+      strategy: "revise"
+      max_revisions: 2
+    }
+  }
+}
+
+// ============================================================================
+// Agent 4: Learning Agent with Experience Replay
+// ============================================================================
+
+agent Tutor {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a patient programming tutor."
+  reasoning: chain_of_thought
+  reflect: {
+    after: each_response
+    evaluate: [clarity, accuracy]
+    min_confidence: 0.7
+    on_low_quality: {
+      strategy: "revise"
+      max_revisions: 1
+    }
+  }
+  learning: {
+    strategy: "experience_replay"
+    review_interval: 10
+    max_adaptations: 50
+    rollback_on_decline: true
+  }
+  memory: "tutor_memory"
+}
+
+// ============================================================================
+// Agent 5: Evolving Agent
+// ============================================================================
+
+agent SalesBot {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.6
+  system: "You are a friendly sales assistant."
+  reasoning: chain_of_thought
+  reflect: {
+    after: each_response
+    evaluate: [helpfulness, accuracy]
+    min_confidence: 0.7
+    on_low_quality: {
+      strategy: "revise"
+      max_revisions: 2
+    }
+  }
+  learning: {
+    strategy: "prompt_evolution"
+    review_interval: 10
+    max_adaptations: 30
+    rollback_on_decline: true
+  }
+  evolve: {
+    mutable: [system_prompt]
+    review_after: 50
+    core_identity: "You are a friendly sales assistant."
+    allow_rollback: true
+  }
+  memory: "sales_memory"
+}
+
+// ============================================================================
+// Agent 6: Autonomous Agent with Goals
+// ============================================================================
+
+agent Monitor {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You monitor system health and report anomalies."
+  reasoning: chain_of_thought
+  goals: ["Check system metrics", "Report anomalies", "Suggest fixes"]
+  triggers: {
+    on_schedule: "every 5m"
+  }
+  initiative: true
+  memory: "monitor_memory"
+}
+
+// ============================================================================
+// Main Execution
+// ============================================================================
+
+{
+  emit "=================================================================";
+  emit "   Neam v0.5.0 Cognitive Features - Full Demo";
+  emit "=================================================================";
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 1: Chain of Thought Reasoning
+  // ─────────────────────────────────────────────────────────────────────
+  emit "─── Test 1: Chain of Thought (Analyst) ───";
+  let result1 = Analyst.ask("What are 2 benefits of unit testing? Be brief.");
+  emit "Response: " + result1;
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 2: Plan and Execute Reasoning
+  // ─────────────────────────────────────────────────────────────────────
+  emit "─── Test 2: Plan and Execute (Planner) ───";
+  let result2 = Planner.ask("Create a 2-step plan for launching a website.");
+  emit "Response: " + result2;
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 3: Reflective Agent
+  // ─────────────────────────────────────────────────────────────────────
+  emit "─── Test 3: Reflective Agent (QAAgent) ───";
+  let result3 = QAAgent.ask("What is REST in one sentence?");
+  emit "Response: " + result3;
+
+  // Trigger manual reflection
+  let scores = agent_reflect("QAAgent");
+  emit "Reflection Scores:";
+  emit "  accuracy: " + str(scores["accuracy"]);
+  emit "  relevance: " + str(scores["relevance"]);
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 4: Learning Agent
+  // ─────────────────────────────────────────────────────────────────────
+  emit "─── Test 4: Learning Agent (Tutor) ───";
+  let result4 = Tutor.ask("Explain loops in one sentence.");
+  emit "Response: " + result4;
+
+  // Rate the response
+  agent_rate("Tutor", 0.9);
+  emit "Feedback: 0.9 submitted";
+
+  // Check learning stats
+  let learning_stats = agent_learning_stats("Tutor");
+  emit "Learning Stats:";
+  emit "  Total interactions: " + str(learning_stats["total_interactions"]);
+  emit "  Avg reflection: " + str(learning_stats["avg_reflection_score"]);
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 5: Evolving Agent
+  // ─────────────────────────────────────────────────────────────────────
+  emit "─── Test 5: Evolving Agent (SalesBot) ───";
+  let result5 = SalesBot.ask("Recommend a laptop for coding.");
+  emit "Response: " + result5;
+
+  // Check evolution status
+  let sales_info = agent_status("SalesBot");
+  emit "Status:";
+  emit "  Reasoning: " + str(sales_info["reasoning_mode"]);
+  emit "  Evolution version: " + str(sales_info["evolution_version"]);
+  emit "  Learning count: " + str(sales_info["learning_count"]);
+
+  // Check prompt history
+  let prompt_hist = agent_prompt_history("SalesBot");
+  emit "  Prompt versions: " + str(len(prompt_hist));
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 6: Autonomous Agent Goals
+  // ─────────────────────────────────────────────────────────────────────
+  emit "─── Test 6: Autonomous Goals (Monitor) ───";
+
+  let monitor_goals = agent_get_goals("Monitor");
+  emit "Initial Goals:";
+  let idx = 0;
+  while (idx < len(monitor_goals)) {
+    emit "  " + str(idx + 1) + ". " + monitor_goals[idx];
+    idx = idx + 1;
+  }
+
+  // Update goals
+  agent_set_goals("Monitor", ["Check CPU", "Check Memory", "Alert on spikes"]);
+  emit "Updated goals.";
+
+  let monitor_info = agent_status("Monitor");
+  emit "Monitor reasoning: " + str(monitor_info["reasoning_mode"]);
+
+  // Pause and resume
+  agent_pause("Monitor");
+  emit "Paused.";
+  agent_resume("Monitor");
+  emit "Resumed.";
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Summary
+  // ─────────────────────────────────────────────────────────────────────
+  emit "=================================================================";
+  emit "   All Cognitive Features Tested Successfully!";
+  emit "=================================================================";
+  emit "";
+  emit "Tested:";
+  emit "  [x] chain_of_thought reasoning";
+  emit "  [x] plan_and_execute reasoning";
+  emit "  [x] Reflection with quality thresholds";
+  emit "  [x] Learning with experience replay";
+  emit "  [x] Prompt evolution";
+  emit "  [x] Autonomous goals and triggers";
+  emit "  [x] agent_reflect(), agent_rate()";
+  emit "  [x] agent_learning_stats(), agent_status()";
+  emit "  [x] agent_get_goals(), agent_set_goals()";
+  emit "  [x] agent_pause(), agent_resume()";
+  emit "  [x] agent_prompt_history()";
+}

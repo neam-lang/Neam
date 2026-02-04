@@ -1,0 +1,134 @@
+// ============================================
+// A2A Protocol Tests
+// Tests A2A-style agent discovery and task management
+// Note: Avoids len() and str() which are not built-in
+// ============================================
+
+// Agents with capabilities
+agent AnalysisAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You analyze data and provide insights. Be brief."
+}
+
+agent ProcessingAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You process tasks and return results. Be brief."
+}
+
+// Capability lookup using simple string matching
+fun get_agent_capabilities(agent_name) {
+  if (agent_name == "AnalysisAgent") {
+    return "data-analysis,insights,reporting";
+  }
+  if (agent_name == "ProcessingAgent") {
+    return "task-processing,automation";
+  }
+  return "";
+}
+
+fun agent_has_capability(the_agent_name, the_cap) {
+  let caps = get_agent_capabilities(the_agent_name);
+  return caps.contains(the_cap);
+}
+
+// Main test execution
+{
+  emit "=== A2A Protocol Tests ===";
+  emit "";
+  emit "Testing A2A-style patterns:";
+  emit "  - Agent capability registration";
+  emit "  - Capability discovery";
+  emit "  - Task lifecycle management";
+  emit "";
+
+  // Test 1: Agent capability registration
+  emit "Test 1: Agent capability registration";
+  let analysis_caps = get_agent_capabilities("AnalysisAgent");
+  let processing_caps = get_agent_capabilities("ProcessingAgent");
+  emit "  AnalysisAgent: " + analysis_caps;
+  emit "  ProcessingAgent: " + processing_caps;
+  if (analysis_caps != "") {
+    if (processing_caps != "") {
+      emit "  Result: PASSED";
+    }
+  }
+  emit "";
+
+  // Test 2: Capability lookup
+  emit "Test 2: Capability lookup";
+  let has_analysis = agent_has_capability("AnalysisAgent", "data-analysis");
+  let has_wrong = agent_has_capability("AnalysisAgent", "cooking");
+  emit "  Has data-analysis:";
+  emit has_analysis;
+  emit "  Has cooking:";
+  emit has_wrong;
+  if (has_analysis) {
+    if (!has_wrong) {
+      emit "  Result: PASSED";
+    }
+  }
+  emit "";
+
+  // Test 3: Task lifecycle
+  emit "Test 3: Task lifecycle (pending -> running -> completed)";
+  let task_id = "task-001";
+  let task_status = "pending";
+  emit "  Task created: " + task_id;
+  emit "  Status: " + task_status;
+
+  task_status = "running";
+  emit "  Status: " + task_status;
+
+  let result = AnalysisAgent.ask("Analyze: 1, 2, 4, 8");
+  emit "  Response: " + result;
+
+  task_status = "completed";
+  emit "  Status: " + task_status;
+
+  if (task_status == "completed") {
+    if (result != "") {
+      emit "  Result: PASSED";
+    }
+  }
+  emit "";
+
+  // Test 4: Capability-based routing
+  emit "Test 4: Capability-based routing";
+  let found_agent = "";
+  if (agent_has_capability("AnalysisAgent", "data-analysis")) {
+    found_agent = "AnalysisAgent";
+  }
+  if (found_agent == "") {
+    if (agent_has_capability("ProcessingAgent", "data-analysis")) {
+      found_agent = "ProcessingAgent";
+    }
+  }
+  emit "  Found agent for data-analysis: " + found_agent;
+  if (found_agent == "AnalysisAgent") {
+    emit "  Result: PASSED";
+  }
+  emit "";
+
+  // Test 5: Multi-task pipeline
+  emit "Test 5: Multi-task pipeline";
+  let task1_result = AnalysisAgent.ask("What patterns in: 1, 2, 4, 8, 16?");
+  emit "  Task 1 completed";
+  emit "  Result: " + task1_result;
+
+  let task2_result = ProcessingAgent.ask("Summarize: " + task1_result);
+  emit "  Task 2 completed";
+  emit "  Result: " + task2_result;
+
+  if (task1_result != "") {
+    if (task2_result != "") {
+      emit "  Result: PASSED";
+    }
+  }
+  emit "";
+
+  emit "=== All A2A Protocol Tests Complete ===";
+}

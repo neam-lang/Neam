@@ -1,0 +1,115 @@
+// ============================================
+// Basic Handoff Example
+// Demonstrates OpenAI Agents SDK-style handoffs between agents
+// ============================================
+
+// Triage agent that routes to specialists
+agent TriageAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a triage agent. Analyze customer requests and route them to the appropriate specialist. For refunds say 'ROUTE:REFUND', for billing say 'ROUTE:BILLING', for support say 'ROUTE:SUPPORT'. Then provide a brief handoff message."
+}
+
+// Specialist agent for handling refunds
+agent RefundAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a refund specialist. Help customers with refund requests. Verify order details and process refunds according to company policy. Be helpful and concise."
+}
+
+// Specialist agent for billing inquiries
+agent BillingAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a billing specialist. Help customers understand their bills, payment methods, and billing cycles. Be clear and concise."
+}
+
+// General support agent
+agent SupportAgent {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a senior support agent. Handle complex customer issues that require human judgment. Be empathetic and thorough."
+}
+
+// Helper function to extract route from triage response
+fun extract_route(response) {
+  if (response.contains("ROUTE:REFUND")) {
+    return "REFUND";
+  }
+  if (response.contains("ROUTE:BILLING")) {
+    return "BILLING";
+  }
+  return "SUPPORT";
+}
+
+// Main execution block
+{
+  emit "=== Basic Handoff Example ===";
+  emit "";
+  emit "This example demonstrates agent-to-agent handoffs.";
+  emit "";
+  emit "The TriageAgent analyzes requests and routes to:";
+  emit "  - RefundAgent: for refund requests";
+  emit "  - BillingAgent: for billing questions";
+  emit "  - SupportAgent: for complex issues";
+  emit "";
+
+  // Example 1: Refund request
+  let query1 = "I want a refund for order #12345. The product arrived damaged.";
+  emit "--- Customer Request 1 ---";
+  emit "Customer: " + query1;
+  emit "";
+
+  let triage1 = TriageAgent.ask(query1);
+  emit "Triage: " + triage1;
+
+  let route1 = extract_route(triage1);
+  emit "Route Decision: " + route1;
+  emit "";
+
+  if (route1 == "REFUND") {
+    let response1 = RefundAgent.ask("Customer says: " + query1);
+    emit "RefundAgent: " + response1;
+  }
+  emit "";
+
+  // Example 2: Billing question
+  let query2 = "Why was I charged twice this month?";
+  emit "--- Customer Request 2 ---";
+  emit "Customer: " + query2;
+  emit "";
+
+  let triage2 = TriageAgent.ask(query2);
+  emit "Triage: " + triage2;
+
+  let route2 = extract_route(triage2);
+  emit "Route Decision: " + route2;
+  emit "";
+
+  if (route2 == "BILLING") {
+    let response2 = BillingAgent.ask("Customer says: " + query2);
+    emit "BillingAgent: " + response2;
+  }
+  emit "";
+
+  // Example 3: Complex support issue
+  let query3 = "I'm very frustrated! Nothing is working and I've tried everything!";
+  emit "--- Customer Request 3 ---";
+  emit "Customer: " + query3;
+  emit "";
+
+  let triage3 = TriageAgent.ask(query3);
+  emit "Triage: " + triage3;
+
+  let route3 = extract_route(triage3);
+  emit "Route Decision: " + route3;
+  emit "";
+
+  if (route3 == "SUPPORT") {
+    let response3 = SupportAgent.ask("Customer says: " + query3);
+    emit "SupportAgent: " + response3;
+  }
+
+  emit "";
+  emit "=== Handoff Example Complete ===";
+}

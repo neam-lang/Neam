@@ -1,0 +1,218 @@
+// Data extraction module
+
+module std.agents.advanced.vision.extractor;
+
+use std.agents.advanced.vision.config;
+
+pub fun data_extractor(llm) {
+  return {
+    kind: "DataExtractor",
+    llm: llm,
+    schemas: {}
+  };
+}
+
+pub fun register_schema(extractor, name, schema) {
+  extractor.schemas[name] = schema;
+  return extractor;
+}
+
+pub fun extract_with_schema(extractor, image_data, schema_name) {
+  let schema = extractor.schemas[schema_name];
+  if (schema == nil) {
+    return { ok: false, error: config.vision_error("SCHEMA", "Schema not found: " + schema_name) };
+  }
+
+  return extract_structured(extractor, image_data, schema);
+}
+
+pub fun extract_structured(extractor, image_data, schema) {
+  let schema_desc = format_schema(schema);
+
+  let prompt = "Extract data from this image according to the following schema:\n\n" +
+               schema_desc + "\n\n" +
+               "Return the extracted data as valid JSON matching the schema. " +
+               "Use null for fields that cannot be found.";
+
+  let response = extractor.llm.analyze_image(image_data, prompt);
+  let extracted = parse_json_response(response);
+
+  if (extracted == nil) {
+    return { ok: false, error: config.vision_error("PARSE", "Failed to parse extraction result") };
+  }
+
+  let validated = validate_against_schema(extracted, schema);
+
+  return {
+    ok: true,
+    value: {
+      data: extracted,
+      schema_name: schema.name,
+      validation: validated,
+      extracted_at: now()
+    }
+  };
+}
+
+pub fun extract_table(extractor, image_data) {
+  let prompt = "Extract the table from this image. " +
+               "Return as a JSON object with 'headers' (array of column names) and " +
+               "'rows' (array of row arrays).";
+
+  let response = extractor.llm.analyze_image(image_data, prompt);
+  let table_data = parse_json_response(response);
+
+  if (table_data == nil) {
+    return { ok: false, error: config.vision_error("PARSE", "Failed to parse table") };
+  }
+
+  return {
+    ok: true,
+    value: {
+      headers: table_data.headers || [],
+      rows: table_data.rows || [],
+      row_count: len(table_data.rows || [])
+    }
+  };
+}
+
+pub fun extract_form_fields(extractor, image_data) {
+  let prompt = "Extract all form fields from this image. " +
+               "Return as JSON with field names as keys and their values. " +
+               "Include checkboxes (true/false) and text fields.";
+
+  let response = extractor.llm.analyze_image(image_data, prompt);
+  let fields = parse_json_response(response);
+
+  return {
+    ok: true,
+    value: {
+      fields: fields || {},
+      field_count: len(keys(fields || {}))
+    }
+  };
+}
+
+pub fun extract_key_value_pairs(extractor, image_data) {
+  let prompt = "Extract all key-value pairs from this image. " +
+               "Look for labels and their corresponding values. " +
+               "Return as JSON object.";
+
+  let response = extractor.llm.analyze_image(image_data, prompt);
+  let pairs = parse_json_response(response);
+
+  return {
+    ok: true,
+    value: {
+      pairs: pairs || {},
+      count: len(keys(pairs || {}))
+    }
+  };
+}
+
+pub fun extract_receipt(extractor, image_data) {
+  let schema = {
+    name: "receipt",
+    fields: {
+      merchant: { type: "string", required: true },
+      date: { type: "string", required: true },
+      total: { type: "number", required: true },
+      subtotal: { type: "number", required: false },
+      tax: { type: "number", required: false },
+      items: {
+        type: "array",
+        items: {
+          name: { type: "string" },
+          quantity: { type: "number" },
+          price: { type: "number" }
+        }
+      },
+      payment_method: { type: "string", required: false }
+    }
+  };
+
+  return extract_structured(extractor, image_data, schema);
+}
+
+pub fun extract_invoice(extractor, image_data) {
+  let schema = {
+    name: "invoice",
+    fields: {
+      invoice_number: { type: "string", required: true },
+      date: { type: "string", required: true },
+      due_date: { type: "string", required: false },
+      vendor: { type: "string", required: true },
+      customer: { type: "string", required: true },
+      line_items: {
+        type: "array",
+        items: {
+          description: { type: "string" },
+          quantity: { type: "number" },
+          unit_price: { type: "number" },
+          amount: { type: "number" }
+        }
+      },
+      subtotal: { type: "number", required: false },
+      tax: { type: "number", required: false },
+      total: { type: "number", required: true }
+    }
+  };
+
+  return extract_structured(extractor, image_data, schema);
+}
+
+// Helper functions
+fun format_schema(schema) {
+  let desc = "Schema: " + (schema.name || "unnamed") + "\nFields:\n";
+
+  for (field_name in keys(schema.fields)) {
+    let field = schema.fields[field_name];
+    desc = desc + "- " + field_name + " (" + field.type + ")";
+    if (field.required) {
+      desc = desc + " [required]";
+    }
+    desc = desc + "\n";
+  }
+
+  return desc;
+}
+
+fun parse_json_response(response) {
+  // Find JSON in response
+  let start = index_of(response, "{");
+  if (start < 0) {
+    start = index_of(response, "[");
+  }
+  if (start < 0) {
+    return nil;
+  }
+
+  let end = last_index_of(response, "}");
+  if (end < 0) {
+    end = last_index_of(response, "]");
+  }
+  if (end < 0) {
+    return nil;
+  }
+
+  let json_str = substring(response, start, end + 1);
+  return json_decode(json_str);
+}
+
+fun validate_against_schema(data, schema) {
+  let errors = [];
+
+  for (field_name in keys(schema.fields)) {
+    let field = schema.fields[field_name];
+    let value = data[field_name];
+
+    if (field.required && (value == nil || value == "")) {
+      push(errors, "Missing required field: " + field_name);
+    }
+  }
+
+  return {
+    valid: len(errors) == 0,
+    errors: errors
+  };
+}

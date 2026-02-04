@@ -1,0 +1,89 @@
+// Vision document parsing utilities
+
+module std.agents.advanced.vision.parser;
+
+use std.agents.advanced.vision.config;
+
+pub fun document_parser(llm) {
+  return {
+    llm: llm,
+    supported_formats: [config.format_pdf(), config.format_png(), config.format_jpeg()]
+  };
+}
+
+pub fun parse_document(parser, image_data, doc_type) {
+  let prompt = "Parse this " + doc_type + " document and extract all text with structure.";
+  let response = parser.llm.analyze_image(image_data, prompt);
+
+  return {
+    ok: true,
+    value: {
+      text: response,
+      doc_type: doc_type,
+      pages: 1,
+      sections: extract_sections(response)
+    }
+  };
+}
+
+pub fun detect_layout(parser, image_data) {
+  let prompt = "Analyze the layout of this document. Identify headers, paragraphs, tables, and images.";
+  let response = parser.llm.analyze_image(image_data, prompt);
+
+  return { ok: true, value: parse_layout(response) };
+}
+
+pub fun extract_tables(parser, image_data) {
+  let prompt = "Extract all tables from this image. Format as CSV.";
+  let response = parser.llm.analyze_image(image_data, prompt);
+
+  return { ok: true, value: parse_csv(response) };
+}
+
+fun extract_sections(text) {
+  let sections = [];
+  let lines = split(text, "\n");
+  let current_section = nil;
+
+  for (line in lines) {
+    if (is_header(line)) {
+      if (current_section != nil) { push(sections, current_section); }
+      current_section = { title: trim(line), content: "" };
+    } else if (current_section != nil) {
+      current_section.content = current_section.content + line + "\n";
+    }
+  }
+
+  if (current_section != nil) { push(sections, current_section); }
+  return sections;
+}
+
+fun is_header(line) {
+  return starts_with(line, "#") || (len(line) < 50 && is_uppercase(line));
+}
+
+fun is_uppercase(str) {
+  return str == uppercase(str);
+}
+
+fun parse_layout(response) {
+  return { elements: [], raw: response };
+}
+
+fun parse_csv(response) {
+  let tables = [];
+  let lines = split(response, "\n");
+  let current_table = [];
+
+  for (line in lines) {
+    if (contains(line, ",")) {
+      push(current_table, split(line, ","));
+    } else if (len(current_table) > 0) {
+      push(tables, current_table);
+      current_table = [];
+    }
+  }
+
+  if (len(current_table) > 0) { push(tables, current_table); }
+  return tables;
+}

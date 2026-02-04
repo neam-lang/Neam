@@ -1,0 +1,13 @@
+module std.project.templates.builtins.workspace;
+
+pub fun definition() {
+  return {
+    name: "workspace",
+    description: "Workspace starter template",
+    files: [
+      "neam.toml",
+      "agents/.gitkeep",
+      "shared/.gitkeep"
+    ]
+  };
+}

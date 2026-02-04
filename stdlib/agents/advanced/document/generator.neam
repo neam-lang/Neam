@@ -1,0 +1,156 @@
+// Document generation module
+
+module std.agents.advanced.document.generator;
+
+use std.agents.advanced.document.config;
+
+pub fun document_generator(llm) {
+  return {
+    kind: "DocumentGenerator",
+    llm: llm,
+    templates: {},
+    clause_library: {}
+  };
+}
+
+pub fun register_template(generator, name, template) {
+  generator.templates[name] = template;
+  return generator;
+}
+
+pub fun register_clause(generator, clause_type, clause_text) {
+  if (generator.clause_library[clause_type] == nil) {
+    generator.clause_library[clause_type] = [];
+  }
+  push(generator.clause_library[clause_type], clause_text);
+  return generator;
+}
+
+pub fun generate_from_template(generator, template_name, data) {
+  let template = generator.templates[template_name];
+  if (template == nil) {
+    return { ok: false, error: config.document_error("TEMPLATE", "Template not found: " + template_name) };
+  }
+
+  let content = template;
+
+  // Replace placeholders
+  for (key in keys(data)) {
+    content = replace(content, "{{" + key + "}}", str(data[key]));
+  }
+
+  // Process conditional sections
+  content = process_conditionals(content, data);
+
+  return { ok: true, value: content };
+}
+
+pub fun generate_contract(generator, contract_type, parties, terms) {
+  let prompt = "Generate a " + contract_type + " contract between:\n";
+
+  for (party in parties) {
+    prompt = prompt + "- " + party.name + " (" + party.role + ")\n";
+  }
+
+  prompt = prompt + "\nKey terms:\n";
+  for (term in terms) {
+    prompt = prompt + "- " + term + "\n";
+  }
+
+  prompt = prompt + "\nGenerate a professional legal contract with all standard clauses:";
+
+  let content = generator.llm.generate(prompt);
+
+  return {
+    ok: true,
+    value: {
+      content: content,
+      contract_type: contract_type,
+      parties: parties,
+      generated_at: now()
+    }
+  };
+}
+
+pub fun compose_clauses(generator, clause_types) {
+  let composed = "";
+
+  for (clause_type in clause_types) {
+    let clauses = generator.clause_library[clause_type];
+    if (clauses != nil && len(clauses) > 0) {
+      composed = composed + "\n\n## " + clause_type + "\n\n";
+      composed = composed + clauses[0]; // Use first clause of each type
+    }
+  }
+
+  return { ok: true, value: trim(composed) };
+}
+
+pub fun customize_clause(generator, clause_type, customizations) {
+  let clauses = generator.clause_library[clause_type];
+  if (clauses == nil || len(clauses) == 0) {
+    return { ok: false, error: config.document_error("CLAUSE", "Clause type not found: " + clause_type) };
+  }
+
+  let base_clause = clauses[0];
+  let prompt = "Customize this legal clause:\n\n" + base_clause + "\n\nCustomizations:\n";
+
+  for (custom in customizations) {
+    prompt = prompt + "- " + custom + "\n";
+  }
+
+  prompt = prompt + "\nProvide the customized clause:";
+
+  let customized = generator.llm.generate(prompt);
+
+  return { ok: true, value: trim(customized) };
+}
+
+pub fun generate_summary(generator, document_content, summary_type) {
+  let prompt = "";
+
+  if (summary_type == "executive") {
+    prompt = "Provide an executive summary of this document in 2-3 paragraphs:\n\n";
+  } else if (summary_type == "bullet") {
+    prompt = "Summarize this document as bullet points:\n\n";
+  } else if (summary_type == "legal") {
+    prompt = "Provide a legal summary highlighting key obligations and risks:\n\n";
+  } else {
+    prompt = "Summarize this document:\n\n";
+  }
+
+  prompt = prompt + document_content;
+
+  return { ok: true, value: trim(generator.llm.generate(prompt)) };
+}
+
+// Helper function
+fun process_conditionals(content, data) {
+  // Process {{#if key}}...{{/if}} blocks
+  let result = content;
+
+  for (key in keys(data)) {
+    let if_start = "{{#if " + key + "}}";
+    let if_end = "{{/if}}";
+
+    let start_idx = index_of(result, if_start);
+    while (start_idx >= 0) {
+      let end_idx = index_of(result, if_end, start_idx);
+      if (end_idx < 0) { break; }
+
+      let block_content = substring(result, start_idx + len(if_start), end_idx);
+
+      if (data[key]) {
+        // Keep content, remove markers
+        result = substring(result, 0, start_idx) + block_content + substring(result, end_idx + len(if_end), len(result));
+      } else {
+        // Remove entire block
+        result = substring(result, 0, start_idx) + substring(result, end_idx + len(if_end), len(result));
+      }
+
+      start_idx = index_of(result, if_start);
+    }
+  }
+
+  return result;
+}

@@ -1,0 +1,35 @@
+// Async file helpers
+
+module std.io.file;
+
+pub fun read_string(path) {
+  return file_read_string(path);
+}
+
+pub fun write_string(path, content) {
+  return file_write_string(path, content);
+}
+
+pub fun read_bytes(path) {
+  return file_read_bytes(path);
+}
+
+pub fun write_bytes(path, bytes) {
+  return file_write_bytes(path, bytes);
+}
+
+pub fun exists(path) {
+  return file_exists(path);
+}
+
+pub fun remove(path) {
+  return file_remove(path);
+}
+
+pub fun copy(from, to) {
+  return file_copy(from, to);
+}
+
+pub fun rename(from, to) {
+  return file_rename(from, to);
+}

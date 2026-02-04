@@ -1,0 +1,32 @@
+// Resource detection and attribute helpers
+
+module std.observability.core.resource;
+
+pub fun default_resource() {
+  return {
+    "service.name": "neam-agent-app",
+    "service.version": "1.0.0",
+    "service.instance.id": uuid(),
+    "deployment.environment": env("DEPLOYMENT_ENVIRONMENT") ?? "production",
+    "host.name": hostname(),
+    "process.pid": process_id(),
+    "telemetry.sdk.name": "neam-otel",
+    "telemetry.sdk.version": "0.1.0"
+  };
+}
+
+pub fun merge_resource(base, override) {
+  let merged = clone(base ?? {});
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}
+
+pub fun resource_with_defaults(custom) {
+  return merge_resource(default_resource(), custom ?? {});
+}
+
+fun clone(value) {
+  return json_decode(json_encode(value));
+}

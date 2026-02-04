@@ -1,0 +1,102 @@
+// ============================================
+// Structured Input Handoffs (Phase 4)
+// Demonstrates typed input for handoffs
+// ============================================
+
+// Note: input_type specifies a type name that tells the LLM
+// what structured data format to use for the handoff.
+// The type name is informational - actual validation would
+// be done in a future type system enhancement.
+
+// Callback that receives structured input
+fun on_refund_handoff(input) {
+  emit "[Callback] Refund request received:";
+  emit input;
+}
+
+fun on_billing_handoff(input) {
+  emit "[Callback] Billing query received:";
+  emit input;
+}
+
+// Triage agent that routes with structured data
+agent TriageAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a customer service triage agent.
+When routing requests, provide structured data.
+For refunds: HANDOFF: process_refund followed by JSON with order_id, reason, amount fields.
+For billing: HANDOFF: billing_query followed by JSON with customer_id, invoice_id fields.
+For other questions, answer directly."
+
+  handoffs: [
+    handoff_to(RefundAgent) {
+      tool_name: "process_refund"
+      description: "Process a refund request with order details"
+      input_type: RefundRequest
+      on_handoff: on_refund_handoff
+    },
+
+    handoff_to(BillingAgent) {
+      tool_name: "billing_query"
+      description: "Handle billing and invoice questions"
+      input_type: BillingQuery
+      on_handoff: on_billing_handoff
+    }
+  ]
+}
+
+agent RefundAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a refund specialist. Process refund requests based on the provided order details. Be helpful and follow company policy."
+}
+
+agent BillingAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a billing specialist. Help with invoice and payment questions based on the provided customer and invoice details."
+}
+
+runner StructuredRunner {
+  entry_agent: TriageAgent
+  max_turns: 5
+}
+
+// Main execution
+{
+  emit "=== Structured Input Handoffs Demo (Phase 4) ===";
+  emit "";
+  emit "This example demonstrates:";
+  emit "  - input_type: Define expected structure for handoff data";
+  emit "  - Structured JSON passed with HANDOFF command";
+  emit "  - Type name informs LLM of expected schema";
+  emit "";
+  emit "================================================";
+  emit "";
+
+  // Test 1: Refund request (should trigger structured handoff)
+  emit "--- Test 1: Refund Request ---";
+  emit "User: I need a refund for order ORD-456, the item was damaged. It cost $50.";
+  emit "";
+
+  let r1 = StructuredRunner.run("I need a refund for order ORD-456, the item was damaged. It cost $50.");
+  emit "Final agent:";
+  emit r1["final_agent"];
+  emit "";
+
+  // Test 2: Billing question
+  emit "--- Test 2: Billing Question ---";
+  emit "User: I have a question about invoice INV-789 for customer CUST-123";
+  emit "";
+
+  let r2 = StructuredRunner.run("I have a question about invoice INV-789 for customer CUST-123");
+  emit "Final agent:";
+  emit r2["final_agent"];
+  emit "";
+
+  emit "=== Demo Complete ===";
+}

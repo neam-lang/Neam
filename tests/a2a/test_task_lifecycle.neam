@@ -1,0 +1,62 @@
+// Test A2A task create/run/complete lifecycle
+
+// Define agent
+agent Worker {
+    model "gpt-4"
+    instructions "You process tasks."
+}
+
+// Agent card for A2A protocol
+agent_card WorkerCard {
+    name "Worker"
+    description "Task processing agent"
+    version "1.0"
+    url "http://localhost:8080"
+}
+
+// Task definition
+task ProcessData {
+    agent Worker
+    input "Process the incoming data"
+}
+
+// Runner for task execution
+runner TaskRunner {
+    agents [Worker]
+    max_turns 5
+}
+
+// Multiple task types
+agent Analyzer {
+    model "gpt-4"
+    instructions "You analyze data."
+}
+
+agent Reporter {
+    model "gpt-4"
+    instructions "You generate reports."
+}
+
+handoff AnalyzeToReport {
+    from Analyzer
+    to Reporter
+    tool_name "send_to_reporter"
+    description "Send analysis results to reporter"
+}
+
+task AnalyzeAndReport {
+    agent Analyzer
+    input "Analyze the dataset and generate a report"
+}
+
+agent_card AnalyzerCard {
+    name "Analyzer"
+    description "Data analysis agent"
+    version "1.0"
+}
+
+agent_card ReporterCard {
+    name "Reporter"
+    description "Report generation agent"
+    version "1.0"
+}

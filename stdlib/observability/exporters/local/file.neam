@@ -1,0 +1,34 @@
+// Local file exporter
+
+module std.observability.exporters.local.file;
+
+pub fun create_file_exporter(config) {
+  let default_config = {
+    path: "./logs/traces",
+    format: "jsonl",
+    rotation: { max_size_mb: 100, max_files: 10, compress: true },
+    separate_signals: true
+  };
+  return merge(default_config, config);
+}
+
+pub fun format_record(record, format) {
+  if (format == "jsonl") {
+    return json_encode(record) + "\n";
+  }
+  if (format == "json") {
+    return json_encode(record);
+  }
+  if (format == "otlp_json") {
+    return json_encode({ resourceSpans: [record] });
+  }
+  return json_encode(record);
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

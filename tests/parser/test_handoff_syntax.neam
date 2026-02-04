@@ -1,0 +1,110 @@
+// ============================================
+// Parser Tests: Handoff Syntax Verification
+// Tests that all handoff-related syntax parses correctly
+// ============================================
+
+// Test 1: Basic agent declaration
+agent BasicAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "A basic test agent."
+}
+
+// Test 2: Agent with simple handoffs array
+agent AgentWithHandoffs {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "Agent with handoffs."
+  handoffs: [BasicAgent]
+}
+
+// Test 3: Agent with complex handoff_to syntax
+agent AgentWithComplexHandoff {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "Route requests appropriately."
+  handoffs: [
+    handoff_to(BasicAgent) {
+      tool_name: "route_to_basic"
+      description: "Route to basic agent for simple tasks"
+    }
+  ]
+}
+
+// Test 4: Agent with input type reference
+// Note: input_type is an identifier that tells the LLM the expected schema
+agent AgentWithInputType {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "Process with structured input."
+  handoffs: [
+    handoff_to(BasicAgent) {
+      tool_name: "process_refund"
+      description: "Process refund"
+      input_type: RefundRequest
+    }
+  ]
+}
+
+// Test 5: Agent with context_from (Phase 6)
+agent AgentWithContext {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "Use project context."
+  context_from: "./AGENTS.md"
+}
+
+// Test 6: Runner declaration
+runner TestRunner {
+  entry_agent: AgentWithHandoffs
+  max_turns: 5
+  tracing: enabled
+}
+
+// Test 7: Runner with guardrails
+guard InputGuard {
+  description: "Validates input"
+
+  on_tool_input(input) {
+    return input;
+  }
+}
+
+guard OutputGuard {
+  description: "Validates output"
+
+  on_tool_output(output) {
+    return output;
+  }
+}
+
+runner GuardedRunner {
+  entry_agent: BasicAgent
+  max_turns: 3
+  guardrails: [InputGuard, OutputGuard]
+}
+
+// Test 8: Runner with input/output guardrails
+runner SpecificGuardsRunner {
+  entry_agent: BasicAgent
+  max_turns: 3
+  input_guardrails: [InputGuard]
+  output_guardrails: [OutputGuard]
+}
+
+// Main execution - verifies all syntax parsed correctly
+{
+  emit "=== Handoff Syntax Parser Tests ===";
+  emit "";
+  emit "Test 1: Basic agent declaration - PASSED";
+  emit "Test 2: Agent with handoffs array - PASSED";
+  emit "Test 3: Agent with handoff_to syntax - PASSED";
+  emit "Test 4: Agent with input_type - PASSED";
+  emit "Test 5: Agent with context_from - PASSED";
+  emit "Test 6: Runner declaration - PASSED";
+  emit "Test 7: Runner with guardrails - PASSED";
+  emit "Test 8: Runner with input/output guardrails - PASSED";
+  emit "";
+  emit "All parser syntax tests PASSED!";
+  emit "(File parsed and compiled successfully)";
+}

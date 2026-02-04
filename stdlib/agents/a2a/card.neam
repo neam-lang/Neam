@@ -1,0 +1,182 @@
+/// A2A Agent Card utilities
+/// Provides functions for creating and managing A2A-compliant agent cards
+
+module stdlib::agents::a2a::card
+
+/// Creates a new agent card configuration
+/// @param name The agent's name
+/// @param version The agent card version
+/// @param description Human-readable description
+/// @returns An AgentCard configuration
+pub fun create_card(name: string, version: string = "1.0.0", description: string = "") {
+  return {
+    name: name,
+    version: version,
+    description: description,
+    capabilities: [],
+    input_schema: {},
+    output_schema: {},
+    url: nil,
+    authentication: nil,
+    provider: {
+      organization: "",
+      contact: ""
+    }
+  };
+}
+
+/// Adds capabilities to an agent card
+/// @param card The agent card to modify
+/// @param capabilities List of capability strings
+/// @returns Modified agent card
+pub fun with_capabilities(card: map, capabilities: list) {
+  let modified = card.copy();
+  modified["capabilities"] = capabilities;
+  return modified;
+}
+
+/// Sets the input schema for an agent card
+/// @param card The agent card to modify
+/// @param schema JSON Schema for input validation
+/// @returns Modified agent card
+pub fun with_input_schema(card: map, schema: map) {
+  let modified = card.copy();
+  modified["input_schema"] = schema;
+  return modified;
+}
+
+/// Sets the output schema for an agent card
+/// @param card The agent card to modify
+/// @param schema JSON Schema for output validation
+/// @returns Modified agent card
+pub fun with_output_schema(card: map, schema: map) {
+  let modified = card.copy();
+  modified["output_schema"] = schema;
+  return modified;
+}
+
+/// Sets the endpoint URL for remote access
+/// @param card The agent card to modify
+/// @param url The endpoint URL
+/// @returns Modified agent card
+pub fun with_endpoint(card: map, url: string) {
+  let modified = card.copy();
+  modified["url"] = url;
+  return modified;
+}
+
+/// Sets the authentication configuration
+/// @param card The agent card to modify
+/// @param auth_type Authentication type (bearer, api_key, oauth2)
+/// @param options Additional auth options
+/// @returns Modified agent card
+pub fun with_authentication(card: map, auth_type: string, options: map = {}) {
+  let modified = card.copy();
+  modified["authentication"] = {
+    type: auth_type,
+    options: options
+  };
+  return modified;
+}
+
+/// Validates an agent card against A2A spec
+/// @param card The agent card to validate
+/// @returns Validation result with errors if any
+pub fun validate_card(card: map) {
+  let errors = [];
+
+  if (!card.contains("name") || card.name == "") {
+    errors.push("Agent card must have a name");
+  }
+
+  if (!card.contains("version") || card.version == "") {
+    errors.push("Agent card must have a version");
+  }
+
+  if (!card.contains("capabilities") || len(card.capabilities) == 0) {
+    errors.push("Agent card should have at least one capability");
+  }
+
+  return {
+    valid: len(errors) == 0,
+    errors: errors
+  };
+}
+
+/// Converts an agent card to JSON for A2A discovery
+/// @param card The agent card
+/// @returns JSON representation
+pub fun to_json(card: map) {
+  let json = {
+    name: card.get("name", ""),
+    version: card.get("version", "1.0.0"),
+    description: card.get("description", ""),
+    capabilities: card.get("capabilities", [])
+  };
+
+  if (card.contains("input_schema")) {
+    json["input_schema"] = card.input_schema;
+  }
+
+  if (card.contains("output_schema")) {
+    json["output_schema"] = card.output_schema;
+  }
+
+  if (card.contains("url") && card.url != nil) {
+    json["url"] = card.url;
+  }
+
+  if (card.contains("authentication") && card.authentication != nil) {
+    json["authentication"] = card.authentication;
+  }
+
+  if (card.contains("provider")) {
+    json["provider"] = card.provider;
+  }
+
+  return json;
+}
+
+/// Parses an agent card from JSON
+/// @param json The JSON representation
+/// @returns An AgentCard configuration
+pub fun from_json(json: map) {
+  let card = create_card(
+    json.get("name", ""),
+    json.get("version", "1.0.0"),
+    json.get("description", "")
+  );
+
+  if (json.contains("capabilities")) {
+    card = with_capabilities(card, json.capabilities);
+  }
+
+  if (json.contains("input_schema")) {
+    card = with_input_schema(card, json.input_schema);
+  }
+
+  if (json.contains("output_schema")) {
+    card = with_output_schema(card, json.output_schema);
+  }
+
+  if (json.contains("url")) {
+    card = with_endpoint(card, json.url);
+  }
+
+  if (json.contains("authentication")) {
+    let auth = json.authentication;
+    card = with_authentication(card, auth.get("type", ""), auth.get("options", {}));
+  }
+
+  return card;
+}
+
+/// Gets the well-known URL for agent discovery
+/// @param base_url The base URL of the agent
+/// @returns The full discovery URL
+pub fun get_discovery_url(base_url: string) {
+  if (base_url.ends_with("/")) {
+    return base_url + ".well-known/agent.json";
+  }
+  return base_url + "/.well-known/agent.json";
+}

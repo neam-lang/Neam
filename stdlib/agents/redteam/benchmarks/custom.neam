@@ -1,0 +1,25 @@
+// Custom benchmark framework
+
+module std.agents.redteam.benchmarks.custom;
+
+use std.agents.redteam.benchmarks.loader;
+use std.agents.redteam.orchestrator.target;
+
+pub fun create_benchmark(name, dataset_path, evaluator) {
+  let dataset = loader.load_dataset(dataset_path);
+  return { name: name, description: "Custom benchmark", dataset: dataset, evaluator: evaluator, metrics: [] };
+}
+
+pub fun run_benchmark(benchmark, target_system) {
+  let results = [];
+  for (entry in benchmark.dataset) {
+    let response = target.invoke(target_system, entry.prompt != nil ? entry.prompt : entry);
+    let eval = benchmark.evaluator.evaluate != nil ? benchmark.evaluator.evaluate(response, entry.expected, entry.context) : { score: 0.0 };
+    push(results, { entry: entry, response: response, evaluation: eval });
+  }
+  return { name: benchmark.name, results: results };
+}
+
+pub fun compare_benchmarks(results) {
+  return { comparisons: results };
+}

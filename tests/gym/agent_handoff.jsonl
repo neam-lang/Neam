@@ -1,0 +1,15 @@
+{"input": "My internet is not working", "expected_handoff": "TechSupport", "context": "triage routing", "tags": ["handoff", "tech"]}
+{"input": "I want to cancel my subscription", "expected_handoff": "Billing", "context": "triage routing", "tags": ["handoff", "billing"]}
+{"input": "How do I reset my password?", "expected_handoff": "TechSupport", "context": "triage routing", "tags": ["handoff", "tech"]}
+{"input": "I was charged twice for my order", "expected_handoff": "Billing", "context": "triage routing", "tags": ["handoff", "billing"]}
+{"input": "The app crashes when I open it", "expected_handoff": "TechSupport", "context": "triage routing", "tags": ["handoff", "tech"]}
+{"input": "I need a refund", "expected_handoff": "Billing", "context": "triage routing", "tags": ["handoff", "billing"]}
+{"input": "My account is locked", "expected_handoff": "TechSupport", "context": "triage routing", "tags": ["handoff", "tech"]}
+{"input": "Can I upgrade my plan?", "expected_handoff": "Billing", "context": "triage routing", "tags": ["handoff", "billing"]}
+{"input": "The website is giving a 500 error", "expected_handoff": "TechSupport", "context": "triage routing", "tags": ["handoff", "tech"]}
+{"input": "I have a question about my invoice", "expected_handoff": "Billing", "context": "triage routing", "tags": ["handoff", "billing"]}
+{"input": "This is a very complex technical issue spanning multiple systems", "expected_handoff": "Escalation", "context": "escalation", "tags": ["handoff", "escalation"]}
+{"input": "I want to speak to a manager about my bill", "expected_handoff": "Escalation", "context": "escalation", "tags": ["handoff", "escalation"]}
+{"input": "Hello, I need help", "expected_handoff": "Triage", "context": "ambiguous", "tags": ["handoff", "triage"]}
+{"input": "What services do you offer?", "expected_handoff": "Triage", "context": "general inquiry", "tags": ["handoff", "triage"]}
+{"input": "Transfer me to billing immediately", "expected_handoff": "Billing", "context": "direct request", "tags": ["handoff", "billing"]}

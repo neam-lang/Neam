@@ -1,0 +1,239 @@
+/// A2A Task lifecycle management
+/// Provides functions for creating and managing A2A protocol tasks
+
+module stdlib::agents::a2a::task
+
+/// Task status enum values
+const STATUS_PENDING = "pending"
+const STATUS_RUNNING = "running"
+const STATUS_COMPLETED = "completed"
+const STATUS_FAILED = "failed"
+const STATUS_CANCELLED = "cancelled"
+
+/// Creates a new task instance
+/// @param agent_name The target agent for this task
+/// @param input The task input data
+/// @returns A new TaskInstance
+pub fun create_task(agent_name: string, input: map) {
+  return {
+    id: generate_task_id(),
+    status: STATUS_PENDING,
+    target_agent: agent_name,
+    input: input,
+    output: nil,
+    error: nil,
+    created_at: now(),
+    started_at: nil,
+    completed_at: nil,
+    history: []
+  };
+}
+
+/// Generates a unique task ID
+/// @returns A unique task identifier
+fun generate_task_id() {
+  return "task_" + str(random_int(1000000, 9999999)) + "_" + str(now());
+}
+
+/// Submits a task for execution
+/// @param task The task to submit
+/// @returns The updated task
+pub fun submit(task: map) {
+  if (task.status != STATUS_PENDING) {
+    return {
+      success: false,
+      error: "Task is not in pending state",
+      task: task
+    };
+  }
+
+  let updated = task.copy();
+  updated["status"] = STATUS_RUNNING;
+  updated["started_at"] = now();
+  updated["history"].push({
+    status: STATUS_RUNNING,
+    timestamp: now(),
+    message: "Task submitted for execution"
+  });
+
+  return {
+    success: true,
+    error: nil,
+    task: updated
+  };
+}
+
+/// Completes a task with result
+/// @param task The task to complete
+/// @param output The task output
+/// @returns The updated task
+pub fun complete(task: map, output: map) {
+  if (task.status != STATUS_RUNNING) {
+    return {
+      success: false,
+      error: "Task is not running",
+      task: task
+    };
+  }
+
+  let updated = task.copy();
+  updated["status"] = STATUS_COMPLETED;
+  updated["output"] = output;
+  updated["completed_at"] = now();
+  updated["history"].push({
+    status: STATUS_COMPLETED,
+    timestamp: now(),
+    message: "Task completed successfully"
+  });
+
+  return {
+    success: true,
+    error: nil,
+    task: updated
+  };
+}
+
+/// Fails a task with error
+/// @param task The task to fail
+/// @param error The error message
+/// @returns The updated task
+pub fun fail(task: map, error: string) {
+  let updated = task.copy();
+  updated["status"] = STATUS_FAILED;
+  updated["error"] = error;
+  updated["completed_at"] = now();
+  updated["history"].push({
+    status: STATUS_FAILED,
+    timestamp: now(),
+    message: error
+  });
+
+  return {
+    success: true,
+    error: nil,
+    task: updated
+  };
+}
+
+/// Cancels a task
+/// @param task The task to cancel
+/// @param reason Optional cancellation reason
+/// @returns The updated task
+pub fun cancel(task: map, reason: string = "Cancelled by user") {
+  if (task.status == STATUS_COMPLETED || task.status == STATUS_FAILED) {
+    return {
+      success: false,
+      error: "Cannot cancel a completed or failed task",
+      task: task
+    };
+  }
+
+  let updated = task.copy();
+  updated["status"] = STATUS_CANCELLED;
+  updated["completed_at"] = now();
+  updated["history"].push({
+    status: STATUS_CANCELLED,
+    timestamp: now(),
+    message: reason
+  });
+
+  return {
+    success: true,
+    error: nil,
+    task: updated
+  };
+}
+
+/// Gets the current status of a task
+/// @param task The task to check
+/// @returns Status information
+pub fun get_status(task: map) {
+  return {
+    id: task.id,
+    status: task.status,
+    progress: calculate_progress(task),
+    started_at: task.started_at,
+    completed_at: task.completed_at,
+    has_output: task.output != nil,
+    has_error: task.error != nil
+  };
+}
+
+/// Calculates task progress percentage
+/// @param task The task
+/// @returns Progress percentage (0-100)
+fun calculate_progress(task: map) {
+  if (task.status == STATUS_PENDING) {
+    return 0;
+  }
+  if (task.status == STATUS_RUNNING) {
+    return 50;  // Basic progress indicator
+  }
+  if (task.status == STATUS_COMPLETED || task.status == STATUS_FAILED || task.status == STATUS_CANCELLED) {
+    return 100;
+  }
+  return 0;
+}
+
+/// Gets the task result
+/// @param task The task
+/// @returns The task result if available
+pub fun get_result(task: map) {
+  if (task.status != STATUS_COMPLETED) {
+    return {
+      available: false,
+      output: nil,
+      error: "Task is not completed"
+    };
+  }
+
+  return {
+    available: true,
+    output: task.output,
+    error: nil
+  };
+}
+
+/// Converts task to A2A JSON-RPC response format
+/// @param task The task
+/// @returns JSON-RPC formatted response
+pub fun to_jsonrpc_response(task: map) {
+  return {
+    jsonrpc: "2.0",
+    id: task.id,
+    result: {
+      id: task.id,
+      status: task.status,
+      artifact: task.output,
+      history: task.history
+    }
+  };
+}
+
+/// Waits for task completion with timeout
+/// @param task The task to wait for
+/// @param timeout_ms Timeout in milliseconds
+/// @param poll_interval_ms Polling interval in milliseconds
+/// @returns The final task state
+pub fun await_completion(task: map, timeout_ms: number = 30000, poll_interval_ms: number = 100) {
+  let start_time = now();
+  let current = task;
+
+  while (current.status == STATUS_PENDING || current.status == STATUS_RUNNING) {
+    if (now() - start_time > timeout_ms) {
+      return {
+        success: false,
+        error: "Task timed out",
+        task: current
+      };
+    }
+    wait(poll_interval_ms);
+    // In real implementation, this would fetch updated task state
+  }
+
+  return {
+    success: current.status == STATUS_COMPLETED,
+    error: current.error,
+    task: current
+  };
+}

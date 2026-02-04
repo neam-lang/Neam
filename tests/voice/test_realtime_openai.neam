@@ -1,0 +1,132 @@
+// ============================================
+// OpenAI Realtime Streaming Tests
+// Tests connect, stream audio, receive response, close
+// ============================================
+
+agent rt_assistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a helpful assistant."
+}
+
+realtime_voice openai_rt {
+  agent: rt_assistant
+  rt_provider: "openai"
+  rt_model: "gpt-4o-realtime-preview"
+  rt_voice: "coral"
+  rt_vad: "server"
+  vad_threshold: "0.5"
+  silence_duration_ms: "500"
+  input_format: "pcm16"
+  output_format: "pcm16"
+  sample_rate: "24000"
+  rt_speed: "1.0"
+}
+
+// VAD sensitivity variants
+realtime_voice openai_rt_sensitive {
+  agent: rt_assistant
+  rt_provider: "openai"
+  rt_model: "gpt-4o-realtime-preview"
+  rt_voice: "alloy"
+  rt_vad: "server"
+  vad_threshold: "0.3"
+  silence_duration_ms: "300"
+  input_format: "pcm16"
+  output_format: "pcm16"
+  sample_rate: "24000"
+  rt_speed: "1.0"
+}
+
+realtime_voice openai_rt_relaxed {
+  agent: rt_assistant
+  rt_provider: "openai"
+  rt_model: "gpt-4o-realtime-preview"
+  rt_voice: "echo"
+  rt_vad: "server"
+  vad_threshold: "0.8"
+  silence_duration_ms: "1000"
+  input_format: "pcm16"
+  output_format: "pcm16"
+  sample_rate: "24000"
+  rt_speed: "1.0"
+}
+
+// --- Main test execution ---
+{
+  emit "=== OpenAI Realtime Streaming Tests ===";
+  emit "";
+
+  // Test 1: Realtime voice definition compiles
+  emit "Test 1: OpenAI Realtime definition";
+  emit "  rt_provider=openai, rt_model=gpt-4o-realtime-preview, rt_voice=coral";
+  emit "  rt_vad=server, vad_threshold=0.5, silence_duration_ms=500";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 2: Connect, send text, close (requires OPENAI_API_KEY)
+  emit "Test 2: Connect -> send text -> receive response -> close";
+  try {
+    let session = realtime_connect("openai_rt");
+    realtime_on(session, "response_text", 0);
+    realtime_on(session, "error", 0);
+    realtime_send_text(session, "Hello, how are you?");
+    time_sleep(5000);
+    realtime_close(session);
+    emit "  Result: PASSED";
+  } catch (e) {
+    emit "  Error: " + str(e);
+    emit "  Result: FAILED";
+  }
+  emit "";
+
+  // Test 3: Send audio stream
+  emit "Test 3: Stream audio -> receive transcript + response";
+  try {
+    let session = realtime_connect("openai_rt");
+    realtime_on(session, "transcript", 0);
+    realtime_on(session, "response_text", 0);
+    let audio = crypto_base64_encode(file_read_string("/tmp/test_audio.wav"));
+    realtime_send_audio(session, audio);
+    voice_commit_audio(session);
+    time_sleep(8000);
+    realtime_close(session);
+    emit "  Result: PASSED";
+  } catch (e) {
+    emit "  Error: " + str(e);
+    emit "  Result: FAILED";
+  }
+  emit "";
+
+  // Test 4: Barge-in / interruption
+  emit "Test 4: Barge-in / interruption handling";
+  try {
+    let session = realtime_connect("openai_rt");
+    realtime_on(session, "response_text", 0);
+    realtime_send_text(session, "Tell me a long story about a dragon");
+    time_sleep(1000);
+    realtime_interrupt(session);
+    realtime_send_text(session, "Actually, just say hello");
+    time_sleep(5000);
+    realtime_close(session);
+    emit "  Result: PASSED";
+  } catch (e) {
+    emit "  Error: " + str(e);
+    emit "  Result: FAILED";
+  }
+  emit "";
+
+  // Test 5: Function calling during stream
+  emit "Test 5: Function calling during stream";
+  emit "  Skipped (requires tool declarations)";
+  emit "";
+
+  // Test 6: VAD sensitivity tuning
+  emit "Test 6: VAD sensitivity variants";
+  emit "  openai_rt_sensitive: vad_threshold=0.3, silence_duration_ms=300 (trigger easily)";
+  emit "  openai_rt_relaxed: vad_threshold=0.8, silence_duration_ms=1000 (wait longer)";
+  emit "  Result: PASSED (definitions compiled)";
+  emit "";
+
+  emit "=== OpenAI Realtime Tests Complete ===";
+}

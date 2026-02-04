@@ -1,0 +1,9 @@
+module std.project.dependencies.registry;
+
+pub fun registry_info() {
+  return { url: "https://registry.neam.dev", auth: "token" };
+}
+
+pub fun fetch_package(name, version) {
+  return { name: name, version: version, source: "registry" };
+}

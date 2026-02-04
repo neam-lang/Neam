@@ -1,0 +1,16 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: neam
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/praveengovindaraj/Neam.git
+  ref:
+    branch: main
+  secretRef:
+    name: neam-git-credentials
+  ignore: |
+    # Exclude everything except gitops directory
+    /*
+    !/gitops/

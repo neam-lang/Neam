@@ -1,0 +1,10 @@
+{"input": "Help me debug my code", "expected_agent_sequence": ["Triage", "TechSupport"], "max_turns": 5, "tags": ["orchestration", "tech"]}
+{"input": "I need a refund and also my app is broken", "expected_agent_sequence": ["Triage", "Billing", "TechSupport"], "max_turns": 10, "tags": ["orchestration", "multi"]}
+{"input": "Simple greeting", "expected_agent_sequence": ["Triage"], "max_turns": 2, "tags": ["orchestration", "simple"]}
+{"input": "Escalate this complex billing dispute", "expected_agent_sequence": ["Triage", "Billing", "Escalation"], "max_turns": 8, "tags": ["orchestration", "escalation"]}
+{"input": "Technical issue that needs escalation", "expected_agent_sequence": ["Triage", "TechSupport", "Escalation"], "max_turns": 8, "tags": ["orchestration", "escalation"]}
+{"input": "Quick question about pricing", "expected_agent_sequence": ["Triage", "Billing"], "max_turns": 4, "tags": ["orchestration", "billing"]}
+{"input": "I have multiple issues across departments", "expected_agent_sequence": ["Triage", "TechSupport", "Billing"], "max_turns": 12, "tags": ["orchestration", "complex"]}
+{"input": "Please transfer me to tech support", "expected_agent_sequence": ["Triage", "TechSupport"], "max_turns": 3, "tags": ["orchestration", "direct"]}
+{"input": "My server is down and I need immediate help", "expected_agent_sequence": ["Triage", "TechSupport"], "max_turns": 5, "tags": ["orchestration", "urgent"]}
+{"input": "Can you help me understand my bill and fix a tech issue?", "expected_agent_sequence": ["Triage", "Billing", "TechSupport"], "max_turns": 10, "tags": ["orchestration", "multi"]}

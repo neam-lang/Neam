@@ -1,0 +1,28 @@
+//
+// Example 07: Agent with OpenAI
+// Demonstrates creating an AI agent using OpenAI's API
+//
+// PREREQUISITE: Set your OpenAI API key:
+//   set OPENAI_API_KEY=sk-your-key-here
+//
+
+agent SmartAssistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  temperature: 0.5
+  system: "You are a concise technical assistant. Answer in 1-2 sentences."
+}
+
+{
+  emit "=== OpenAI Agent Demo ===";
+  emit "";
+
+  let response = SmartAssistant.ask("What is a programming language?");
+  emit "Q: What is a programming language?";
+  emit "A: " + response;
+  emit "";
+
+  let response2 = SmartAssistant.ask("What are the benefits of static typing?");
+  emit "Q: What are the benefits of static typing?";
+  emit "A: " + response2;
+}

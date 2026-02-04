@@ -1,0 +1,82 @@
+// Agent routing and load balancing
+
+module std.agents.advanced.orchestrator.router;
+
+use std.agents.advanced.orchestrator.config;
+
+pub fun agent_router(strategy) {
+  return {
+    strategy: strategy,
+    agents: {},
+    capability_index: {},
+    round_robin_index: {}
+  };
+}
+
+pub fun register_agent(router, registration) {
+  router.agents[registration.id] = registration;
+
+  for (cap in registration.capabilities) {
+    if (router.capability_index[cap] == nil) {
+      router.capability_index[cap] = [];
+    }
+    push(router.capability_index[cap], registration.id);
+  }
+  return router;
+}
+
+pub fun route_task(router, task, required_capability) {
+  let candidates = router.capability_index[required_capability] || [];
+
+  if (len(candidates) == 0) {
+    return { ok: false, error: config.orchestrator_error("ROUTING", "No agent with capability: " + required_capability) };
+  }
+
+  let selected = nil;
+
+  if (router.strategy.kind == "RoundRobin") {
+    selected = select_round_robin(router, required_capability, candidates);
+  } else if (router.strategy.kind == "LoadBalanced") {
+    selected = find_least_loaded(router, candidates);
+  } else if (router.strategy.kind == "Capability") {
+    selected = candidates[0];
+  } else if (router.strategy.kind == "Adaptive") {
+    selected = find_least_loaded(router, candidates);
+    if (selected == nil) { selected = candidates[0]; }
+  }
+
+  if (selected == nil) { selected = candidates[0]; }
+
+  router.agents[selected].load = router.agents[selected].load + 1;
+  task.assigned_agent = selected;
+
+  return { ok: true, value: router.agents[selected] };
+}
+
+pub fun release_agent(router, agent_id) {
+  if (router.agents[agent_id] != nil) {
+    router.agents[agent_id].load = max(0, router.agents[agent_id].load - 1);
+  }
+  return router;
+}
+
+fun select_round_robin(router, capability, candidates) {
+  let index = router.round_robin_index[capability] || 0;
+  let selected = candidates[index % len(candidates)];
+  router.round_robin_index[capability] = (index + 1) % len(candidates);
+  return selected;
+}
+
+fun find_least_loaded(router, candidates) {
+  let min_load = 999999;
+  let selected = nil;
+
+  for (id in candidates) {
+    let agent = router.agents[id];
+    if (agent.available && agent.load < min_load) {
+      min_load = agent.load;
+      selected = id;
+    }
+  }
+  return selected;
+}

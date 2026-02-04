@@ -1,0 +1,167 @@
+// OpenAPI specification generator
+
+module std.agents.serving.schema.openapi;
+
+pub fun generate_openapi_spec(server, agents) {
+  return {
+    openapi: "3.0.3",
+    info: {
+      title: "Neam Agent API",
+      version: "1.0.0",
+      description: "REST API for Neam Advanced Agents"
+    },
+    servers: [
+      { url: "http://" + server.config.host + ":" + str(server.config.port) }
+    ],
+    paths: generate_paths(agents),
+    components: {
+      schemas: generate_schemas(agents),
+      securitySchemes: {
+        apiKey: {
+          type: "apiKey",
+          in: "header",
+          name: "X-API-Key"
+        },
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT"
+        }
+      }
+    },
+    security: [
+      { apiKey: [] },
+      { bearerAuth: [] }
+    ]
+  };
+}
+
+fun generate_paths(agents) {
+  let paths = {};
+
+  for (agent in agents) {
+    let base_path = "/agents/" + agent.id;
+
+    paths[base_path + "/invoke"] = {
+      post: {
+        summary: "Invoke " + agent.kind,
+        operationId: "invoke_" + agent.id,
+        tags: [agent.kind],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { "$ref": "#/components/schemas/" + agent.kind + "Input" }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Successful response",
+            content: {
+              "application/json": {
+                schema: { "$ref": "#/components/schemas/" + agent.kind + "Output" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    };
+
+    paths[base_path + "/stream"] = {
+      post: {
+        summary: "Stream " + agent.kind + " response",
+        operationId: "stream_" + agent.id,
+        tags: [agent.kind],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { "$ref": "#/components/schemas/" + agent.kind + "Input" }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "SSE stream",
+            content: {
+              "text/event-stream": {
+                schema: { type: "string" }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    paths[base_path + "/health"] = {
+      get: {
+        summary: "Health check for " + agent.kind,
+        operationId: "health_" + agent.id,
+        tags: [agent.kind],
+        responses: {
+          "200": {
+            description: "Agent is healthy",
+            content: {
+              "application/json": {
+                schema: { "$ref": "#/components/schemas/HealthStatus" }
+              }
+            }
+          }
+        }
+      }
+    };
+  }
+
+  return paths;
+}
+
+fun generate_schemas(agents) {
+  let schemas = {
+    Error: {
+      type: "object",
+      properties: {
+        code: { type: "string" },
+        message: { type: "string" },
+        timestamp: { type: "integer" }
+      }
+    },
+    HealthStatus: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["healthy", "unhealthy"] },
+        agent_id: { type: "string" }
+      }
+    }
+  };
+
+  for (agent in agents) {
+    schemas[agent.kind + "Input"] = get_agent_input_schema(agent);
+    schemas[agent.kind + "Output"] = get_agent_output_schema(agent);
+  }
+
+  return schemas;
+}
+
+fun get_agent_input_schema(agent) {
+  if (agent.kind == "VoiceAgent") {
+    return {
+      type: "object",
+      properties: {
+        audio: { type: "string", format: "base64", description: "Base64 encoded audio" },
+        text: { type: "string", description: "Text input (alternative to audio)" },
+        format: { type: "string", enum: ["pcm16", "opus", "mp3"] }
+      }
+    };
+  }
+
+  return { type: "object", additionalProperties: true };
+}
+
+fun get_agent_output_schema(agent) {
+  return { type: "object", additionalProperties: true };
+}

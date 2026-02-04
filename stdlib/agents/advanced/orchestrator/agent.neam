@@ -1,0 +1,91 @@
+// Orchestrator agent implementation
+
+module std.agents.advanced.orchestrator.agent;
+
+use std.agents.advanced.orchestrator.config;
+use std.agents.advanced.orchestrator.decomposer;
+use std.agents.advanced.orchestrator.router;
+
+pub fun orchestrator_builder(llm) {
+  return {
+    llm: llm,
+    routing_strategy: config.routing_adaptive(),
+    max_parallel: 5,
+    error_policy: config.error_retry(3)
+  };
+}
+
+pub fun with_routing_strategy(builder, strategy) { builder.routing_strategy = strategy; return builder; }
+pub fun with_max_parallel(builder, max) { builder.max_parallel = max; return builder; }
+pub fun with_error_policy(builder, policy) { builder.error_policy = policy; return builder; }
+
+pub fun build_orchestrator_agent(builder) {
+  if (builder.llm == nil) {
+    return { ok: false, error: config.orchestrator_error("CONFIG", "LLM is required") };
+  }
+
+  return {
+    ok: true,
+    value: {
+      kind: "OrchestratorAgent",
+      llm: builder.llm,
+      decomposer: decomposer.task_decomposer(builder.llm),
+      router: router.agent_router(builder.routing_strategy),
+      max_parallel: builder.max_parallel,
+      error_policy: builder.error_policy,
+      state: { tasks: {}, completed: [], failed: [] }
+    }
+  };
+}
+
+pub fun register_agent(orchestrator, id, agent, capabilities) {
+  let reg = config.agent_registration(id, agent, capabilities);
+  router.register_agent(orchestrator.router, reg);
+  return orchestrator;
+}
+
+pub fun execute(orchestrator, goal) {
+  // Decompose goal into tasks
+  let tasks_result = decomposer.decompose(orchestrator.decomposer, goal);
+  if (!tasks_result.ok) { return tasks_result; }
+
+  let tasks = tasks_result.value;
+  let order_result = decomposer.get_execution_order(orchestrator.decomposer, tasks);
+  if (!order_result.ok) { return order_result; }
+
+  // Execute tasks in order
+  let results = [];
+  for (task_id in order_result.value) {
+    let task = find_task(tasks, task_id);
+    if (task != nil) {
+      let result = execute_task(orchestrator, task);
+      push(results, { task_id: task_id, result: result });
+    }
+  }
+
+  return { ok: true, value: { goal: goal, tasks: len(tasks), results: results } };
+}
+
+fun execute_task(orchestrator, task) {
+  // Route to appropriate agent
+  let route_result = router.route_task(orchestrator.router, task, "general");
+  if (!route_result.ok) { return route_result; }
+
+  let agent = route_result.value.agent;
+  task.status = config.task_running();
+
+  // Execute on agent
+  let result = agent.execute(task.description);
+
+  task.status = config.task_completed();
+  task.result = result;
+
+  router.release_agent(orchestrator.router, route_result.value.id);
+
+  return result;
+}
+
+fun find_task(tasks, id) {
+  for (t in tasks) { if (t.id == id) { return t; } }
+  return nil;
+}

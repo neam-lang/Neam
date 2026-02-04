@@ -1,0 +1,21 @@
+// Tracer facade
+
+module std.observability.tracer;
+
+use std.observability.core.tracer;
+
+pub fun start_span(name, options) {
+  return tracer.start_span(name, options);
+}
+
+pub fun add_event(span, name, attributes) {
+  return tracer.add_event(span, name, attributes);
+}
+
+pub fun set_status(span, status, message) {
+  return tracer.set_status(span, status, message);
+}
+
+pub fun end_span(span) {
+  return tracer.end_span(span, nil);
+}

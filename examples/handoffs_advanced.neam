@@ -1,0 +1,136 @@
+// ============================================
+// Advanced Handoff Example (Phase 2)
+// Demonstrates complex handoff configuration
+// ============================================
+
+// Input filter function - removes sensitive info
+fun sanitize_input(input) {
+  // In a real scenario, this would filter PII, etc.
+  return input;
+}
+
+// Condition for enabling handoffs
+fun is_business_hours() {
+  // Always enabled for this demo
+  return true;
+}
+
+// Callback when handoff occurs
+fun log_handoff(context) {
+  emit "[Handoff Log] Transferring with context: " + context;
+}
+
+// Primary agent with advanced handoff configuration
+agent PrimaryAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a customer service agent. Route requests appropriately.
+For urgent issues, respond with: HANDOFF: urgent_support
+For billing issues, respond with: HANDOFF: billing_team
+For general questions, answer directly."
+
+  handoffs: [
+    // Simple handoff
+    GeneralAgent,
+
+    // Complex handoff with custom tool name and description
+    handoff_to(UrgentAgent) {
+      tool_name: "urgent_support"
+      description: "Escalate urgent issues to immediate support"
+      input_filter: sanitize_input
+      on_handoff: log_handoff
+    },
+
+    // Another complex handoff with is_enabled condition
+    handoff_to(BillingAgent) {
+      tool_name: "billing_team"
+      description: "Transfer billing inquiries to billing specialists"
+      is_enabled: is_business_hours()
+    }
+  ]
+}
+
+// Target agents
+agent UrgentAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You handle urgent customer issues with priority. Be empathetic and solution-focused."
+}
+
+agent BillingAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a billing specialist. Help with payment and billing questions."
+}
+
+agent GeneralAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.7
+  system: "You handle general inquiries. Be helpful and friendly."
+}
+
+// Runner
+runner AdvancedRunner {
+  entry_agent: PrimaryAgent
+  max_turns: 5
+}
+
+// Main execution
+{
+  emit "=== Advanced Handoffs Demo (Phase 2) ===";
+  emit "";
+  emit "This example demonstrates:";
+  emit "  - Custom tool names";
+  emit "  - Custom descriptions";
+  emit "  - Input filter functions";
+  emit "  - is_enabled conditions";
+  emit "  - on_handoff callbacks";
+  emit "";
+  emit "=========================================";
+  emit "";
+
+  // Test 1: Urgent issue (should use custom tool name)
+  emit "--- Test 1: Urgent Issue ---";
+  emit "User: URGENT! My account was hacked!";
+  emit "";
+
+  let result1 = AdvancedRunner.run("URGENT! My account was hacked!");
+
+  emit "Final agent:";
+  emit result1["final_agent"];
+  emit "Response:";
+  emit result1["final_output"];
+  emit "";
+
+  // Test 2: Billing question
+  emit "--- Test 2: Billing Question ---";
+  emit "User: Why was I charged twice this month?";
+  emit "";
+
+  let result2 = AdvancedRunner.run("Why was I charged twice this month?");
+
+  emit "Final agent:";
+  emit result2["final_agent"];
+  emit "Response:";
+  emit result2["final_output"];
+  emit "";
+
+  // Test 3: General question (no handoff)
+  emit "--- Test 3: General Question ---";
+  emit "User: What services do you offer?";
+  emit "";
+
+  let result3 = AdvancedRunner.run("What services do you offer?");
+
+  emit "Final agent:";
+  emit result3["final_agent"];
+  emit "Response:";
+  emit result3["final_output"];
+  emit "";
+
+  emit "=== Advanced Demo Complete ===";
+}

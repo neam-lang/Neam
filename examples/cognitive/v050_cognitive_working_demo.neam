@@ -1,0 +1,281 @@
+//
+// Neam v0.5.0 Cognitive Features - Working Demo
+// ==============================================
+// This demo showcases cognitive features that work correctly.
+//
+// Run: ./build/neam-cli examples/cognitive/v050_cognitive_working_demo.neam
+//
+// Note: Some reflect/learning/evolve multi-field parsing has known issues.
+// This demo focuses on working features.
+//
+
+// ============================================================================
+// Agent 1: Chain of Thought Reasoning
+// ============================================================================
+
+agent ChainOfThoughtAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a logical problem solver. Break down each question into clear steps before answering."
+  reasoning: chain_of_thought
+}
+
+// ============================================================================
+// Agent 2: Plan and Execute Reasoning
+// ============================================================================
+
+agent PlanExecuteAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.4
+  system: "You are a strategic planner. Create step-by-step plans."
+  reasoning: plan_and_execute
+}
+
+// ============================================================================
+// Agent 3: Tree of Thought Reasoning
+// ============================================================================
+
+agent TreeOfThoughtAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are a decision analyst. Explore multiple options and choose the best."
+  reasoning: tree_of_thought
+}
+
+// ============================================================================
+// Agent 4: Self Consistency Reasoning
+// ============================================================================
+
+agent SelfConsistencyAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.7
+  system: "You solve problems by generating multiple solutions and picking the consensus."
+  reasoning: self_consistency
+}
+
+// ============================================================================
+// Agent 5: Autonomous Agent with Goals
+// ============================================================================
+
+agent AutonomousMonitor {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a system monitor that checks health and reports issues."
+  reasoning: chain_of_thought
+  goals: ["Monitor system health", "Detect anomalies", "Suggest optimizations"]
+  triggers: {
+    on_schedule: "every 5m"
+  }
+  initiative: true
+}
+
+// ============================================================================
+// Agent 6: Simple Reflective Agent
+// ============================================================================
+
+agent ReflectiveAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.4
+  system: "You answer questions thoughtfully and can reflect on your responses."
+  reasoning: chain_of_thought
+  reflect: {
+    after: each_response
+  }
+}
+
+// ============================================================================
+// Main Execution
+// ============================================================================
+
+{
+  emit "═══════════════════════════════════════════════════════════════";
+  emit "       Neam v0.5.0 Cognitive Features Demo";
+  emit "═══════════════════════════════════════════════════════════════";
+  emit "";
+  emit "This demo showcases 4 reasoning strategies + autonomous goals.";
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 1: Chain of Thought Reasoning
+  // ─────────────────────────────────────────────────────────────────────
+  emit "───────────────────────────────────────────────────────────────";
+  emit "  TEST 1: Chain of Thought Reasoning";
+  emit "───────────────────────────────────────────────────────────────";
+  emit "";
+  emit "Agent: ChainOfThoughtAgent";
+  emit "Mode: chain_of_thought (step-by-step reasoning)";
+  emit "";
+  emit "Query: What are 3 benefits of code reviews?";
+  emit "";
+
+  let cot_response = ChainOfThoughtAgent.ask("What are 3 benefits of code reviews? Think step by step.");
+  emit "Response:";
+  emit cot_response;
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 2: Plan and Execute Reasoning
+  // ─────────────────────────────────────────────────────────────────────
+  emit "───────────────────────────────────────────────────────────────";
+  emit "  TEST 2: Plan and Execute Reasoning";
+  emit "───────────────────────────────────────────────────────────────";
+  emit "";
+  emit "Agent: PlanExecuteAgent";
+  emit "Mode: plan_and_execute (create plan, execute steps, synthesize)";
+  emit "";
+  emit "Query: Create a 3-step plan for deploying a web application.";
+  emit "";
+
+  let plan_response = PlanExecuteAgent.ask("Create a 3-step plan for deploying a web application.");
+  emit "Response:";
+  emit plan_response;
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 3: Tree of Thought Reasoning
+  // ─────────────────────────────────────────────────────────────────────
+  emit "───────────────────────────────────────────────────────────────";
+  emit "  TEST 3: Tree of Thought Reasoning";
+  emit "───────────────────────────────────────────────────────────────";
+  emit "";
+  emit "Agent: TreeOfThoughtAgent";
+  emit "Mode: tree_of_thought (explore branches, score, select best)";
+  emit "";
+  emit "Query: Should a startup focus on B2B or B2C market first?";
+  emit "";
+
+  let tot_response = TreeOfThoughtAgent.ask("Should a startup focus on B2B or B2C market first? Explore both options.");
+  emit "Response:";
+  emit tot_response;
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 4: Self Consistency Reasoning
+  // ─────────────────────────────────────────────────────────────────────
+  emit "───────────────────────────────────────────────────────────────";
+  emit "  TEST 4: Self Consistency Reasoning";
+  emit "───────────────────────────────────────────────────────────────";
+  emit "";
+  emit "Agent: SelfConsistencyAgent";
+  emit "Mode: self_consistency (multiple solutions, consensus answer)";
+  emit "";
+  emit "Query: What is 15% of 80?";
+  emit "";
+
+  let sc_response = SelfConsistencyAgent.ask("What is 15% of 80? Show your calculation.");
+  emit "Response:";
+  emit sc_response;
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 5: Autonomous Agent Goals Management
+  // ─────────────────────────────────────────────────────────────────────
+  emit "───────────────────────────────────────────────────────────────";
+  emit "  TEST 5: Autonomous Agent Goals";
+  emit "───────────────────────────────────────────────────────────────";
+  emit "";
+  emit "Agent: AutonomousMonitor";
+  emit "Features: goals, triggers (every 5m), initiative";
+  emit "";
+
+  // Get initial goals
+  let init_goals = agent_get_goals("AutonomousMonitor");
+  emit "Initial Goals:";
+  let idx = 0;
+  while (idx < len(init_goals)) {
+    emit "  " + str(idx + 1) + ". " + init_goals[idx];
+    idx = idx + 1;
+  }
+  emit "";
+
+  // Update goals dynamically
+  agent_set_goals("AutonomousMonitor", [
+    "Check CPU and memory usage",
+    "Monitor API latency",
+    "Alert on error rate > 1%",
+    "Generate hourly reports"
+  ]);
+  emit "Goals updated dynamically.";
+  emit "";
+
+  // Verify new goals
+  let new_goals = agent_get_goals("AutonomousMonitor");
+  emit "New Goals:";
+  idx = 0;
+  while (idx < len(new_goals)) {
+    emit "  " + str(idx + 1) + ". " + new_goals[idx];
+    idx = idx + 1;
+  }
+  emit "";
+
+  // Check agent status
+  let monitor_info = agent_status("AutonomousMonitor");
+  emit "Agent Status:";
+  emit "  Reasoning: " + str(monitor_info["reasoning_mode"]);
+  emit "  Goals: " + str(monitor_info["goals"]);
+  emit "";
+
+  // Pause/Resume control
+  agent_pause("AutonomousMonitor");
+  emit "Autonomous execution paused.";
+
+  agent_resume("AutonomousMonitor");
+  emit "Autonomous execution resumed.";
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 6: Reflective Agent
+  // ─────────────────────────────────────────────────────────────────────
+  emit "───────────────────────────────────────────────────────────────";
+  emit "  TEST 6: Reflective Agent";
+  emit "───────────────────────────────────────────────────────────────";
+  emit "";
+  emit "Agent: ReflectiveAgent";
+  emit "Features: reflect after each response";
+  emit "";
+
+  let reflect_response = ReflectiveAgent.ask("Define API in one sentence.");
+  emit "Response: " + reflect_response;
+  emit "";
+
+  // Trigger reflection
+  let scores = agent_reflect("ReflectiveAgent");
+  emit "Reflection triggered. Scores: " + str(scores);
+  emit "";
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Summary
+  // ─────────────────────────────────────────────────────────────────────
+  emit "═══════════════════════════════════════════════════════════════";
+  emit "       Demo Complete!";
+  emit "═══════════════════════════════════════════════════════════════";
+  emit "";
+  emit "Cognitive Features Demonstrated:";
+  emit "";
+  emit "  REASONING STRATEGIES:";
+  emit "    [✓] chain_of_thought - Step-by-step reasoning";
+  emit "    [✓] plan_and_execute - Plan then execute steps";
+  emit "    [✓] tree_of_thought  - Explore branches, select best";
+  emit "    [✓] self_consistency - Multiple solutions, consensus";
+  emit "";
+  emit "  AUTONOMOUS FEATURES:";
+  emit "    [✓] goals            - Define agent objectives";
+  emit "    [✓] triggers         - Schedule-based execution";
+  emit "    [✓] initiative       - Proactive behavior";
+  emit "";
+  emit "  COGNITIVE FUNCTIONS:";
+  emit "    [✓] agent_get_goals()    - Read current goals";
+  emit "    [✓] agent_set_goals()    - Update goals at runtime";
+  emit "    [✓] agent_status()       - Get cognitive state";
+  emit "    [✓] agent_pause()        - Pause autonomous execution";
+  emit "    [✓] agent_resume()       - Resume autonomous execution";
+  emit "    [✓] agent_reflect()      - Trigger self-reflection";
+  emit "";
+  emit "All features are opt-in and backward compatible with v0.4.x.";
+}

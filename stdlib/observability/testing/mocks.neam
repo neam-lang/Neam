@@ -1,0 +1,12 @@
+// Mock exporters for testing
+
+module std.observability.testing.mocks;
+
+pub fun mock_exporter() {
+  return { kind: "MockExporter", records: [] };
+}
+
+pub fun record(exporter, signal) {
+  push(exporter.records, signal);
+  return exporter;
+}

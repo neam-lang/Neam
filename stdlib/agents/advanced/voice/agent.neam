@@ -1,0 +1,234 @@
+// Voice Agent main implementation
+
+module std.agents.advanced.voice.agent;
+
+use std.agents.advanced.voice.config;
+use std.agents.advanced.voice.transcriber;
+use std.agents.advanced.voice.synthesizer;
+use std.agents.advanced.voice.dialogue;
+
+// Voice agent builder
+pub fun voice_builder(llm) {
+  return {
+    llm: llm,
+    stt_engine: config.engine_deepgram(),
+    tts_engine: config.tts_elevenlabs(),
+    language: config.lang_en_us(),
+    voice_id: nil,
+    voice_settings: config.voice_settings_default(),
+    system_prompt: "You are a helpful voice assistant.",
+    emotion_detection: true,
+    streaming: true
+  };
+}
+
+pub fun with_stt_engine(builder, engine) {
+  builder.stt_engine = engine;
+  return builder;
+}
+
+pub fun with_tts_engine(builder, engine) {
+  builder.tts_engine = engine;
+  return builder;
+}
+
+pub fun with_voice_language(builder, lang) {
+  builder.language = lang;
+  return builder;
+}
+
+pub fun with_voice_id(builder, voice_id) {
+  builder.voice_id = voice_id;
+  return builder;
+}
+
+pub fun with_voice_settings(builder, settings) {
+  builder.voice_settings = settings;
+  return builder;
+}
+
+pub fun with_system_prompt(builder, prompt) {
+  builder.system_prompt = prompt;
+  return builder;
+}
+
+pub fun with_emotion_detection(builder, enabled) {
+  builder.emotion_detection = enabled;
+  return builder;
+}
+
+pub fun with_streaming(builder, enabled) {
+  builder.streaming = enabled;
+  return builder;
+}
+
+// Build the voice agent
+pub fun build_voice_agent(builder) {
+  if (builder.llm == nil) {
+    return { ok: false, error: config.voice_error("CONFIG", "LLM is required", nil) };
+  }
+
+  let dialogue_mgr = dialogue.dialogue_manager(builder.llm, builder.system_prompt);
+
+  return {
+    ok: true,
+    value: {
+      kind: "VoiceAgent",
+      llm: builder.llm,
+      stt_engine: builder.stt_engine,
+      tts_engine: builder.tts_engine,
+      language: builder.language,
+      voice_id: builder.voice_id,
+      voice_settings: builder.voice_settings,
+      emotion_detection: builder.emotion_detection,
+      streaming: builder.streaming,
+      dialogue_manager: dialogue_mgr,
+      stt_client: nil,
+      tts_client: nil
+    }
+  };
+}
+
+// Initialize engine clients
+pub fun initialize(agent, stt_client, tts_client) {
+  agent.stt_client = stt_client;
+  agent.tts_client = tts_client;
+  return agent;
+}
+
+// Process audio input and return audio response
+pub fun process_audio(agent, audio_input) {
+  let stt_request = transcriber.transcription_request(audio_input);
+  stt_request = transcriber.with_transcription_language(stt_request, agent.language);
+  stt_request = transcriber.with_transcription_engine(stt_request, agent.stt_engine);
+
+  let transcription = transcriber.transcribe(agent.stt_client, stt_request);
+  if (!transcription.ok) {
+    return transcription;
+  }
+
+  let response = dialogue.process_turn(agent.dialogue_manager, transcription.value.text);
+  if (!response.ok) {
+    return response;
+  }
+
+  let tts_request = synthesizer.synthesis_request(response.value.content);
+  tts_request = synthesizer.with_voice_id(tts_request, agent.voice_id);
+  tts_request = synthesizer.with_tts_engine(tts_request, agent.tts_engine);
+  tts_request = synthesizer.with_synthesis_language(tts_request, agent.language);
+  tts_request = synthesizer.with_voice_settings(tts_request, agent.voice_settings);
+
+  if (agent.emotion_detection && response.value.emotion != nil) {
+    let emotional_text = synthesizer.with_emotion(
+      response.value.content,
+      response.value.emotion
+    );
+    tts_request.text = emotional_text;
+  }
+
+  let audio_response = synthesizer.synthesize(agent.tts_client, tts_request);
+  if (!audio_response.ok) {
+    return audio_response;
+  }
+
+  return {
+    ok: true,
+    value: {
+      transcription: transcription.value.text,
+      response_text: response.value.content,
+      audio: audio_response.value.audio,
+      emotion: response.value.emotion,
+      duration_ms: audio_response.value.duration_ms
+    }
+  };
+}
+
+// Process text input (skip STT)
+pub fun process_text(agent, text_input) {
+  let response = dialogue.process_turn(agent.dialogue_manager, text_input);
+  if (!response.ok) {
+    return response;
+  }
+
+  let tts_request = synthesizer.synthesis_request(response.value.content);
+  tts_request = synthesizer.with_voice_id(tts_request, agent.voice_id);
+
+  let audio = synthesizer.synthesize(agent.tts_client, tts_request);
+
+  return {
+    ok: true,
+    value: {
+      response_text: response.value.content,
+      audio: audio.ok ? audio.value.audio : nil,
+      emotion: response.value.emotion
+    }
+  };
+}
+
+// Streaming conversation
+pub fun create_conversation_stream(agent) {
+  return {
+    agent: agent,
+    stt_stream: transcriber.create_stream(agent.stt_client, agent.language),
+    tts_stream: synthesizer.create_synthesis_stream(
+      agent.tts_client, agent.voice_id, agent.voice_settings
+    ),
+    state: "listening"
+  };
+}
+
+pub fun stream_input(conv_stream, audio_chunk) {
+  let partial = transcriber.stream_audio(conv_stream.stt_stream, audio_chunk);
+
+  if (partial.ok && partial.value.is_final) {
+    conv_stream.state = "processing";
+
+    let response = dialogue.process_turn(
+      conv_stream.agent.dialogue_manager,
+      partial.value.text
+    );
+
+    if (response.ok) {
+      conv_stream.state = "speaking";
+      return {
+        ok: true,
+        value: {
+          transcription: partial.value.text,
+          response: response.value.content,
+          state: "speaking"
+        }
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      partial_transcription: partial.ok ? partial.value.text : "",
+      state: conv_stream.state
+    }
+  };
+}
+
+// Get conversation history
+pub fun get_history(agent) {
+  return agent.dialogue_manager.state.turns;
+}
+
+// Clear conversation
+pub fun clear_conversation(agent) {
+  dialogue.reset_conversation(agent.dialogue_manager);
+  return agent;
+}
+
+// Set conversation context
+pub fun set_context(agent, context) {
+  agent.dialogue_manager.state.context = context;
+  return agent;
+}
+
+// Register intents
+pub fun register_intents(agent, intents) {
+  agent.dialogue_manager = dialogue.with_intents(agent.dialogue_manager, intents);
+  return agent;
+}

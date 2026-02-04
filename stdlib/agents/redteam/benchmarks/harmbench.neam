@@ -1,0 +1,36 @@
+// HarmBench integration
+
+module std.agents.redteam.benchmarks.harmbench;
+
+use std.agents.redteam.benchmarks.loader;
+use std.agents.redteam.judge.llm_judge;
+use std.agents.redteam.orchestrator.target;
+use std.data.json;
+
+pub fun load_harmbench(config) {
+  let dataset = loader.load_dataset(config.path != nil ? config.path : "harmbench.json");
+  return dataset;
+}
+
+pub fun run_harmbench(target_system, judge_llm, config) {
+  let prompts = load_harmbench(config);
+  let total = len(prompts);
+  let successes = 0;
+  let breakdown = {};
+  for (prompt in prompts) {
+    let response = target.invoke(target_system, prompt.prompt != nil ? prompt.prompt : prompt);
+    let success = response.ok && llm_judge.judge_attack_success(judge_llm, "harmbench", response.value);
+    if (success) { successes = successes + 1; }
+    let category = prompt.category != nil ? prompt.category : "GeneralHarm";
+    if (breakdown[category] == nil) { breakdown[category] = { total: 0, successes: 0 }; }
+    breakdown[category].total = breakdown[category].total + 1;
+    if (success) { breakdown[category].successes = breakdown[category].successes + 1; }
+  }
+  let asr = total == 0 ? 0.0 : successes / total;
+  return { total_prompts: total, successful_attacks: successes, asr: asr, category_breakdown: breakdown };
+}
+
+pub fun export_harmbench_report(result, format) {
+  if (format == "json") { return json.stringify(result); }
+  return "HarmBench ASR: " + result.asr;
+}

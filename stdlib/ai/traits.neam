@@ -1,0 +1,24 @@
+// Model trait helpers (provider-agnostic)
+
+module std.ai.traits;
+
+pub fun ensure_model(model) {
+  if (model == nil) {
+    panic("model is nil");
+  }
+  return model;
+}
+
+pub fun generate(model, request) {
+  if (model == nil || model.generate == nil) {
+    panic("model does not implement generate");
+  }
+  return model.generate(request);
+}
+
+pub fun stream(model, request) {
+  if (model == nil || model.stream == nil) {
+    panic("model does not implement stream");
+  }
+  return model.stream(request);
+}

@@ -1,0 +1,89 @@
+// PII redaction utilities
+
+module std.agents.advanced.document.redactor;
+
+use std.agents.advanced.document.config;
+
+pub fun pii_redactor() {
+  return { patterns: config.pii_patterns(), custom_patterns: {}, replacement: "[REDACTED]" };
+}
+
+pub fun add_pattern(redactor, name, pattern) {
+  redactor.custom_patterns[name] = pattern;
+  return redactor;
+}
+
+pub fun redact(redactor, content) {
+  let redacted = content;
+  let findings = [];
+
+  // Apply standard patterns
+  for (name in keys(redactor.patterns)) {
+    let matches = regex_match_all(redacted, redactor.patterns[name]);
+    for (match in matches) {
+      push(findings, { type: name, value: match, position: index_of(redacted, match) });
+      redacted = replace(redacted, match, redactor.replacement);
+    }
+  }
+
+  // Apply custom patterns
+  for (name in keys(redactor.custom_patterns)) {
+    let matches = regex_match_all(redacted, redactor.custom_patterns[name]);
+    for (match in matches) {
+      push(findings, { type: name, value: match });
+      redacted = replace(redacted, match, redactor.replacement);
+    }
+  }
+
+  return { ok: true, value: { redacted_content: redacted, findings: findings, pii_count: len(findings) } };
+}
+
+pub fun detect_pii(redactor, content) {
+  let findings = [];
+
+  for (name in keys(redactor.patterns)) {
+    let matches = regex_match_all(content, redactor.patterns[name]);
+    for (match in matches) {
+      push(findings, { type: name, value: mask_value(match, name) });
+    }
+  }
+
+  return { ok: true, value: findings };
+}
+
+fun mask_value(value, type) {
+  if (type == "email") {
+    let parts = split(value, "@");
+    return parts[0][0] + "***@" + parts[1];
+  } else if (type == "ssn") {
+    return "***-**-" + substring(value, len(value) - 4, len(value));
+  }
+  return "****";
+}
+
+fun regex_match_all(text, pattern) {
+  let matches = [];
+  let remaining = text;
+  let safety = 0;
+
+  while (safety < 1000) {
+    let match = regex_match(remaining, pattern);
+    if (len(match) == 0) { break; }
+
+    let value = match[0];
+    if (len(value) == 0) { break; }
+
+    push(matches, value);
+
+    let index = index_of(remaining, value);
+    if (index < 0) { break; }
+
+    let prefix = substring(remaining, 0, index);
+    let suffix = substring(remaining, index + len(value), len(remaining));
+    remaining = prefix + suffix;
+
+    safety = safety + 1;
+  }
+
+  return matches;
+}

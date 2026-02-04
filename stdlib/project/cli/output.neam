@@ -1,0 +1,13 @@
+module std.project.cli.output;
+
+pub fun format(result) {
+  if (!result) {
+    return "";
+  }
+
+  if (result.ok) {
+    return result.message ?? "ok";
+  }
+
+  return result.error ?? "error";
+}

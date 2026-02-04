@@ -1,0 +1,10 @@
+// Orchestrator tests
+
+module std.agents.redteam.testing.orchestrator_test;
+
+use std.agents.redteam.orchestrator.engine as engine;
+
+pub fun run() {
+  let orch = engine.create_orchestrator(nil);
+  return orch != nil;
+}

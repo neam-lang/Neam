@@ -1,0 +1,106 @@
+// ============================================
+// A2A Task Workflow Example (Ollama Version)
+// Demonstrates task lifecycle with local Ollama
+// ============================================
+
+// Task processing agents
+agent SummaryAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You summarize content concisely. Provide clear, brief summaries in 2-3 sentences."
+}
+
+agent AnalysisAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.4
+  system: "You analyze information and extract key insights. Be thorough but concise."
+}
+
+// Main execution
+{
+  emit "=== A2A Task Workflow (Ollama) ===";
+  emit "";
+  emit "Using local Ollama with llama3.2:3b model";
+  emit "";
+  emit "This example demonstrates A2A-style task lifecycle:";
+  emit "  - Task creation with unique IDs";
+  emit "  - Task submission and execution";
+  emit "  - Status tracking (pending -> running -> completed)";
+  emit "";
+  emit "================================================";
+
+  // Task 1: Summarization
+  emit "";
+  emit "--- Task 1: Summarization ---";
+  emit "";
+
+  emit "Creating task: task-001";
+  emit "  Target agent: SummaryAgent";
+  emit "  Status: pending";
+  emit "";
+
+  emit "Executing task...";
+  emit "  Status: pending -> running";
+
+  let summary_input = "Remote work has transformed the modern workplace. Companies report increased productivity, reduced overhead costs, and access to global talent pools. However, challenges include maintaining team cohesion and work-life boundaries.";
+  let summary_result = SummaryAgent.ask("Summarize this: " + summary_input);
+
+  emit "  Status: running -> completed";
+  emit "";
+  emit "Task result:";
+  emit "  " + summary_result;
+
+  // Task 2: Analysis
+  emit "";
+  emit "--- Task 2: Analysis ---";
+  emit "";
+
+  emit "Creating task: task-002";
+  emit "  Target agent: AnalysisAgent";
+  emit "  Status: pending";
+  emit "";
+
+  emit "Executing task...";
+  emit "  Status: pending -> running";
+
+  let analysis_input = "Q1: $100k, Q2: $150k, Q3: $120k, Q4: $200k";
+  let analysis_result = AnalysisAgent.ask("Analyze this quarterly sales data and identify the trend: " + analysis_input);
+
+  emit "  Status: running -> completed";
+  emit "";
+  emit "Task result:";
+  emit "  " + analysis_result;
+
+  // Task 3: Chained task (analysis of summary)
+  emit "";
+  emit "--- Task 3: Chained Task ---";
+  emit "";
+
+  emit "Creating task: task-003 (depends on task-001)";
+  emit "  Target agent: AnalysisAgent";
+  emit "  Status: pending";
+  emit "";
+
+  emit "Executing chained task...";
+  emit "  Status: pending -> running";
+
+  let chained_result = AnalysisAgent.ask("What are the key implications of this summary for businesses? Summary: " + summary_result);
+
+  emit "  Status: running -> completed";
+  emit "";
+  emit "Task result:";
+  emit "  " + chained_result;
+
+  // Summary
+  emit "";
+  emit "================================================";
+  emit "=== Task Workflow Summary ===";
+  emit "";
+  emit "Tasks created: 3";
+  emit "Tasks completed: 3";
+  emit "Task chain: task-001 -> task-003";
+  emit "";
+  emit "=== A2A Task Workflow Complete ===";
+}

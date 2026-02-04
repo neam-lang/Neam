@@ -1,0 +1,11 @@
+// Console exporter
+
+module std.observability.exporters.local.console;
+
+pub fun create_exporter(config) {
+  return {
+    type: "console",
+    level: config.level ?? "info",
+    pretty: config.pretty ?? true
+  };
+}

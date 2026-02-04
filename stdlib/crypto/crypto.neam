@@ -1,0 +1,49 @@
+module std.crypto;
+
+pub fun sha256(data) {
+  return crypto_hash("sha256", data);
+}
+
+pub fun sha512(data) {
+  return crypto_hash("sha512", data);
+}
+
+pub fun md5(data) {
+  return crypto_hash("md5", data);
+}
+
+pub fun blake3(data) {
+  return crypto_hash("blake3", data);
+}
+
+pub fun hmac_sha256(key, data) {
+  return crypto_hmac("sha256", key, data);
+}
+
+pub fun hmac_sha512(key, data) {
+  return crypto_hmac("sha512", key, data);
+}
+
+pub fun random_bytes(length) {
+  return crypto_random_bytes(length);
+}
+
+pub fun uuid_v4() {
+  return crypto_uuid_v4();
+}
+
+pub fun base64_encode(data) {
+  return crypto_base64_encode(data);
+}
+
+pub fun base64_decode(data) {
+  return crypto_base64_decode(data);
+}
+
+pub fun hex_encode(data) {
+  return crypto_hex_encode(data);
+}
+
+pub fun hex_decode(data) {
+  return crypto_hex_decode(data);
+}

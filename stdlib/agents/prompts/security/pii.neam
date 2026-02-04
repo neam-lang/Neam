@@ -1,0 +1,28 @@
+// PII detection utilities
+
+module std.agents.prompts.security.pii;
+
+use std.agents.advanced.document.redactor;
+
+pub fun detect_pii(text, types) {
+  let pii_redactor = redactor.pii_redactor();
+  if (types != nil) {
+    let filtered = {};
+    for (name in keys(pii_redactor.patterns)) {
+      if (contains_type(types, name)) {
+        filtered[name] = pii_redactor.patterns[name];
+      }
+    }
+    pii_redactor.patterns = filtered;
+  }
+
+  let result = redactor.detect_pii(pii_redactor, text);
+  return result;
+}
+
+fun contains_type(types, name) {
+  for (item in types) {
+    if (item == name) { return true; }
+  }
+  return false;
+}

@@ -1,0 +1,29 @@
+//
+// Example 05: Lists and Maps
+// Demonstrates collection types
+//
+
+{
+  // Lists
+  let fruits = ["apple", "banana", "cherry", "date"];
+  emit "Fruits: " + str(fruits);
+  emit "First fruit: " + fruits[0];
+  emit "Number of fruits: " + str(len(fruits));
+
+  // Iterate over a list
+  let i = 0;
+  while (i < len(fruits)) {
+    emit "  " + str(i + 1) + ". " + fruits[i];
+    i = i + 1;
+  }
+
+  // Maps (dictionaries)
+  let person = {
+    "name": "Alice",
+    "age": 30,
+    "city": "London"
+  };
+  emit "Person: " + str(person);
+  emit "Name: " + person["name"];
+  emit "Age: " + str(person["age"]);
+}

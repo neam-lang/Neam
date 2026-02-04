@@ -1,0 +1,213 @@
+// ============================================
+// Full Customer Service Flow with Handoffs
+// Demonstrates a complete multi-agent customer service system
+// ============================================
+
+// ============================================
+// Customer Service Agents
+// ============================================
+
+agent CustomerServiceTriage {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  system: "You are a customer service triage agent for an e-commerce company. Your job is to:
+1. Greet customers professionally
+2. Understand their issue
+3. Route them to the appropriate specialist
+
+Analyze the request and respond with:
+- ROUTE:REFUND for damaged products, wrong items, returns
+- ROUTE:BILLING for payment issues, invoices, subscriptions
+- ROUTE:SHIPPING for tracking, delivery status, address changes
+- ROUTE:TECHNICAL for website issues, app problems
+- ROUTE:ESCALATION for angry customers or complex issues
+
+Always include a brief explanation of why you're routing to that specialist."
+}
+
+agent RefundSpecialist {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  temperature: 0.2
+  system: "You are a refund specialist. Help customers with:
+- Processing returns
+- Issuing refunds
+- Explaining refund policies
+- Handling damaged/wrong items
+
+Follow refund policy: Full refunds within 30 days, 50% after 30 days, no refunds after 60 days.
+If the refund amount exceeds $500, mention that supervisor approval is needed.
+Be empathetic and solution-oriented."
+}
+
+agent BillingSpecialist {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  temperature: 0.2
+  system: "You are a billing specialist. Help customers with:
+- Understanding their invoices
+- Payment method updates
+- Subscription management
+- Billing dispute resolution
+
+Be clear about charges and always offer to explain line items."
+}
+
+agent ShippingSpecialist {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  system: "You are a shipping specialist. Help customers with:
+- Package tracking
+- Delivery status updates
+- Address changes
+- Shipping options and timing
+
+Provide estimated delivery times and tracking information."
+}
+
+agent TechnicalSupport {
+  provider: "openai"
+  model: "gpt-4o"
+  temperature: 0.3
+  system: "You are a technical support specialist. Help customers with:
+- Website navigation issues
+- Mobile app problems
+- Account access
+- Browser compatibility
+
+Provide step-by-step troubleshooting instructions."
+}
+
+agent EscalationAgent {
+  provider: "openai"
+  model: "gpt-4o"
+  temperature: 0.4
+  system: "You are a senior customer service supervisor. Handle:
+- Complex or unusual cases
+- High-value transactions
+- Angry or upset customers
+- Policy exceptions
+
+You have authority to make decisions up to $1000 and can offer goodwill gestures like:
+- 10-20% discount on next order
+- Free expedited shipping
+- Extended return window
+
+Always de-escalate first, then offer solutions."
+}
+
+// Helper function to determine route
+fun get_route(response) {
+  if (response.contains("ROUTE:REFUND")) {
+    return "REFUND";
+  }
+  if (response.contains("ROUTE:BILLING")) {
+    return "BILLING";
+  }
+  if (response.contains("ROUTE:SHIPPING")) {
+    return "SHIPPING";
+  }
+  if (response.contains("ROUTE:TECHNICAL")) {
+    return "TECHNICAL";
+  }
+  if (response.contains("ROUTE:ESCALATION")) {
+    return "ESCALATION";
+  }
+  return "TRIAGE";
+}
+
+// Process a customer through the service flow
+fun process_customer(customer_message) {
+  emit "";
+  emit "Customer: " + customer_message;
+  emit "";
+
+  // Step 1: Triage
+  let triage_response = CustomerServiceTriage.ask(customer_message);
+  emit "[Triage] " + triage_response;
+
+  let route = get_route(triage_response);
+  emit "[Route Decision] -> " + route;
+  emit "";
+
+  // Step 2: Route to specialist
+  let context = "Previous triage notes: " + triage_response + "\n\nCustomer original message: " + customer_message;
+
+  if (route == "REFUND") {
+    let response = RefundSpecialist.ask(context);
+    emit "[RefundSpecialist] " + response;
+    return response;
+  }
+
+  if (route == "BILLING") {
+    let response = BillingSpecialist.ask(context);
+    emit "[BillingSpecialist] " + response;
+    return response;
+  }
+
+  if (route == "SHIPPING") {
+    let response = ShippingSpecialist.ask(context);
+    emit "[ShippingSpecialist] " + response;
+    return response;
+  }
+
+  if (route == "TECHNICAL") {
+    let response = TechnicalSupport.ask(context);
+    emit "[TechnicalSupport] " + response;
+    return response;
+  }
+
+  if (route == "ESCALATION") {
+    let response = EscalationAgent.ask(context);
+    emit "[EscalationAgent] " + response;
+    return response;
+  }
+
+  return triage_response;
+}
+
+// ============================================
+// Main execution
+// ============================================
+
+{
+  emit "=== Customer Service Multi-Agent System ===";
+  emit "";
+  emit "This example demonstrates a full customer service flow with:";
+  emit "  - Triage agent for initial classification";
+  emit "  - Specialist agents for different issue types";
+  emit "  - Escalation path for complex cases";
+  emit "";
+  emit "================================================";
+
+  // Test Case 1: Refund request
+  emit "";
+  emit "--- TEST CASE 1: Refund Request ---";
+  let result1 = process_customer("Hi, I received my order #ORD-2024-1234 but one of the items was damaged. The ceramic vase arrived cracked. I paid $75 for it and would like a refund please.");
+
+  // Test Case 2: Billing inquiry
+  emit "";
+  emit "--- TEST CASE 2: Billing Inquiry ---";
+  let result2 = process_customer("I noticed I was charged $49.99 twice this month for my subscription. Can you help me understand why?");
+
+  // Test Case 3: Shipping question
+  emit "";
+  emit "--- TEST CASE 3: Shipping Question ---";
+  let result3 = process_customer("Where is my package? I ordered it 5 days ago and the tracking hasn't updated. Order number is #SHIP-9876.");
+
+  // Test Case 4: Technical issue
+  emit "";
+  emit "--- TEST CASE 4: Technical Issue ---";
+  let result4 = process_customer("I can't log into my account. I've tried resetting my password three times but I never receive the reset email.");
+
+  // Test Case 5: Escalation needed
+  emit "";
+  emit "--- TEST CASE 5: Escalation Case ---";
+  let result5 = process_customer("This is absolutely unacceptable! I've been a customer for 10 years and this is the third time my order has been wrong! I want to speak to a manager right now!");
+
+  emit "";
+  emit "================================================";
+  emit "=== Customer Service Demo Complete ===";
+}

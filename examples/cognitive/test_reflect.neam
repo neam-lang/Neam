@@ -1,0 +1,15 @@
+// Test reflect block - adding evaluate
+
+agent TestAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  system: "Test agent."
+  reflect: {
+    after: each_response
+    evaluate: [accuracy]
+  }
+}
+
+{
+  emit "Test";
+}

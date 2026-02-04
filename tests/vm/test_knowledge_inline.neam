@@ -1,0 +1,29 @@
+// Test inline knowledge base
+
+knowledge ProductInfo {
+    source "inline"
+    strategy "basic"
+}
+
+knowledge CompanyFAQ {
+    source "inline"
+    strategy "mmr"
+}
+
+agent InfoBot {
+    model "gpt-4"
+    instructions "You answer questions about products and company info."
+    knowledge [ProductInfo, CompanyFAQ]
+}
+
+// Test multiple knowledge bases on same agent
+knowledge Docs {
+    source "inline"
+    strategy "hybrid"
+}
+
+agent DocBot {
+    model "gpt-4"
+    instructions "You help with documentation."
+    knowledge [Docs]
+}

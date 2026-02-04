@@ -1,0 +1,46 @@
+// Test skill definition and invocation
+
+// Basic skill
+skill add_numbers(a, b) {
+    return a + b;
+}
+
+// Skill with string processing
+skill format_greeting(name) {
+    return "Hello, " + name + "!";
+}
+
+// Skill with conditional logic
+skill classify_number(n) {
+    if (n > 0) { return "positive"; }
+    if (n < 0) { return "negative"; }
+    return "zero";
+}
+
+// Agent with skills
+agent MathBot {
+    model "gpt-4"
+    instructions "You are a math assistant."
+    skills [add_numbers, classify_number]
+}
+
+// Agent with custom instructions
+agent Greeter {
+    model "gpt-4"
+    instructions "You greet people warmly."
+    skills [format_greeting]
+}
+
+// Knowledge base
+knowledge FAQ {
+    source "inline"
+    strategy "basic"
+}
+
+// Agent with knowledge
+agent HelpBot {
+    model "gpt-4"
+    instructions "You help people using the FAQ."
+    knowledge [FAQ]
+    skills [add_numbers]
+}

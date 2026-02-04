@@ -1,0 +1,71 @@
+// ============================================
+// Cross-Provider Pipeline Test
+// Tests Gemini STT -> OpenAI Agent -> Kokoro TTS
+// ============================================
+
+agent openai_responder {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a helpful voice assistant. Keep responses brief."
+}
+
+// Cross-provider pipeline: Gemini for STT, OpenAI for LLM, Kokoro for TTS
+voice cross_provider {
+  agent: openai_responder
+  stt_provider: "gemini"
+  stt_model: "gemini-2.0-flash"
+  tts_provider: "kokoro"
+  tts_model: "tts-1"
+  tts_voice: "af_heart"
+  tts_endpoint: "http://localhost:8880"
+  stt_language: "en"
+  stt_format: "json"
+}
+
+// Second cross-provider: local whisper -> Gemini LLM -> Piper TTS
+agent gemini_responder {
+  provider: "gemini"
+  model: "gemini-2.0-flash"
+  system: "You are a helpful voice assistant."
+}
+
+voice cross_provider_local {
+  agent: gemini_responder
+  stt_provider: "whisper-local"
+  stt_model: "whisper-1"
+  stt_endpoint: "http://localhost:8080"
+  tts_provider: "piper"
+  tts_model: "tts-1"
+  tts_voice: "alloy"
+  tts_endpoint: "http://localhost:5000"
+}
+
+// --- Main test execution ---
+{
+  emit "=== Cross-Provider Pipeline Tests ===";
+  emit "";
+
+  // Test 1: Gemini STT -> OpenAI LLM -> Kokoro TTS
+  emit "Test 1: Cross-provider pipeline (Gemini STT -> OpenAI -> Kokoro TTS)";
+  emit "  stt_provider=gemini, agent=openai, tts_provider=kokoro";
+  emit "  stt_language=en, stt_format=json";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 2: Local whisper -> Gemini LLM -> Piper TTS
+  emit "Test 2: Cross-provider pipeline (whisper-local -> Gemini -> Piper TTS)";
+  emit "  stt_provider=whisper-local, agent=gemini, tts_provider=piper";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 3: Full pipeline run (requires all services running)
+  emit "Test 3: Full cross-provider pipeline run";
+  // let result = voice_pipeline_run("cross_provider", "/tmp/input.wav", "/tmp/output.wav");
+  // emit "  Input text: " + result.input_text;
+  // emit "  Response: " + result.response_text;
+  // emit "  Output: " + result.output_audio;
+  emit "  Skipped (requires API keys + local services)";
+  emit "";
+
+  emit "=== Cross-Provider Tests Complete ===";
+}

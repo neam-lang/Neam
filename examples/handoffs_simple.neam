@@ -1,0 +1,44 @@
+// ============================================
+// Simple Handoff Example
+// Minimal example to demonstrate handoffs
+// ============================================
+
+// First agent - always hands off to the second
+agent RouterAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.1
+  system: "You are a router. Your ONLY job is to hand off to the Responder agent.
+Always respond with EXACTLY: HANDOFF: transfer_to_ResponderAgent"
+
+  handoffs: [ResponderAgent]
+}
+
+// Second agent - handles the actual response
+agent ResponderAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.7
+  system: "You are a helpful assistant. Answer questions concisely."
+}
+
+// Runner
+runner SimpleRunner {
+  entry_agent: RouterAgent
+  max_turns: 3
+}
+
+{
+  emit "=== Simple Handoff Test ===";
+  emit "";
+  emit "Input: Hello, how are you?";
+  emit "";
+
+  let result = SimpleRunner.run("Hello, how are you?");
+
+  emit "--- Final Result ---";
+  emit "Final agent:";
+  emit result["final_agent"];
+  emit "Response:";
+  emit result["final_output"];
+}

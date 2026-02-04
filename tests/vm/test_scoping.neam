@@ -1,0 +1,52 @@
+// Test variable scoping rules
+
+// Global scope
+let global = "global";
+emit global;
+
+// Block scope
+{
+    let block_var = "block";
+    emit block_var;
+}
+
+// Shadowing
+let x = "outer";
+{
+    let x = "inner";
+    emit x;
+}
+emit x;
+
+// Nested blocks
+{
+    let a = 1;
+    {
+        let b = 2;
+        {
+            let c = 3;
+            emit a + b + c;
+        }
+    }
+}
+
+// Function scope
+fun scoped_fn() {
+    let local = "function-local";
+    emit local;
+}
+scoped_fn();
+
+// Reassignment in scope
+let counter = 0;
+{
+    counter = counter + 1;
+    counter = counter + 1;
+}
+emit counter;
+
+// Loop scoping
+for (let i = 0; i < 3; i = i + 1) {
+    let loop_var = i * 10;
+    emit loop_var;
+}

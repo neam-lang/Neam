@@ -1,0 +1,228 @@
+/// JSON-RPC 2.0 Codec for A2A Protocol
+/// Provides encoding/decoding for A2A JSON-RPC messages
+
+module stdlib::agents::a2a::jsonrpc
+
+/// JSON-RPC version constant
+const JSONRPC_VERSION = "2.0"
+
+/// Standard error codes
+const ERROR_PARSE_ERROR = -32700
+const ERROR_INVALID_REQUEST = -32600
+const ERROR_METHOD_NOT_FOUND = -32601
+const ERROR_INVALID_PARAMS = -32602
+const ERROR_INTERNAL_ERROR = -32603
+
+/// A2A specific error codes
+const ERROR_TASK_NOT_FOUND = -32001
+const ERROR_TASK_CANCELLED = -32002
+const ERROR_CAPABILITY_UNAVAILABLE = -32003
+const ERROR_AUTHENTICATION_REQUIRED = -32004
+const ERROR_RATE_LIMITED = -32005
+
+/// Creates a JSON-RPC request
+/// @param method The method name to call
+/// @param params The parameters for the method
+/// @param id Optional request ID (auto-generated if not provided)
+/// @returns A JSON-RPC request object
+pub fun create_request(method: string, params: map, id: string = nil) {
+  if (id == nil) {
+    id = generate_request_id();
+  }
+
+  return {
+    jsonrpc: JSONRPC_VERSION,
+    method: method,
+    params: params,
+    id: id
+  };
+}
+
+/// Creates a JSON-RPC notification (request without ID)
+/// @param method The method name to call
+/// @param params The parameters for the method
+/// @returns A JSON-RPC notification object
+pub fun create_notification(method: string, params: map) {
+  return {
+    jsonrpc: JSONRPC_VERSION,
+    method: method,
+    params: params
+  };
+}
+
+/// Creates a JSON-RPC success response
+/// @param id The request ID this responds to
+/// @param result The result data
+/// @returns A JSON-RPC response object
+pub fun create_response(id: string, result: map) {
+  return {
+    jsonrpc: JSONRPC_VERSION,
+    id: id,
+    result: result
+  };
+}
+
+/// Creates a JSON-RPC error response
+/// @param id The request ID this responds to
+/// @param code The error code
+/// @param message The error message
+/// @param data Optional additional error data
+/// @returns A JSON-RPC error response object
+pub fun create_error(id: string, code: number, message: string, data: map = nil) {
+  let error = {
+    code: code,
+    message: message
+  };
+
+  if (data != nil) {
+    error["data"] = data;
+  }
+
+  return {
+    jsonrpc: JSONRPC_VERSION,
+    id: id,
+    error: error
+  };
+}
+
+/// Parses a JSON-RPC message
+/// @param json The JSON object to parse
+/// @returns Parsed message with type information
+pub fun parse_message(json: map) {
+  // Validate JSON-RPC version
+  if (!json.contains("jsonrpc") || json.jsonrpc != JSONRPC_VERSION) {
+    return {
+      valid: false,
+      type: "error",
+      error: "Invalid JSON-RPC version"
+    };
+  }
+
+  // Determine message type
+  if (json.contains("method")) {
+    if (json.contains("id")) {
+      return {
+        valid: true,
+        type: "request",
+        message: json
+      };
+    } else {
+      return {
+        valid: true,
+        type: "notification",
+        message: json
+      };
+    }
+  } else if (json.contains("result")) {
+    return {
+      valid: true,
+      type: "response",
+      message: json
+    };
+  } else if (json.contains("error")) {
+    return {
+      valid: true,
+      type: "error_response",
+      message: json
+    };
+  }
+
+  return {
+    valid: false,
+    type: "unknown",
+    error: "Unrecognized JSON-RPC message format"
+  };
+}
+
+/// Validates a JSON-RPC request
+/// @param request The request to validate
+/// @returns Validation result
+pub fun validate_request(request: map) {
+  let errors = [];
+
+  if (!request.contains("jsonrpc") || request.jsonrpc != JSONRPC_VERSION) {
+    errors.push("Invalid or missing jsonrpc field");
+  }
+
+  if (!request.contains("method") || typeof(request.method) != "string") {
+    errors.push("Invalid or missing method field");
+  }
+
+  if (request.contains("params") && typeof(request.params) != "map" && typeof(request.params) != "list") {
+    errors.push("Params must be object or array");
+  }
+
+  return {
+    valid: len(errors) == 0,
+    errors: errors
+  };
+}
+
+/// Creates a batch request
+/// @param requests List of request objects
+/// @returns A batch request array
+pub fun create_batch(requests: list) {
+  return requests;
+}
+
+/// Parses a batch response
+/// @param responses The batch response array
+/// @returns Parsed batch with matched requests
+pub fun parse_batch_response(responses: list) {
+  let result = [];
+  for (response in responses) {
+    let parsed = parse_message(response);
+    result.push(parsed);
+  }
+  return result;
+}
+
+/// Gets an error message for a standard error code
+/// @param code The error code
+/// @returns Human-readable error message
+pub fun get_error_message(code: number) {
+  if (code == ERROR_PARSE_ERROR) {
+    return "Parse error: Invalid JSON";
+  }
+  if (code == ERROR_INVALID_REQUEST) {
+    return "Invalid request: Not a valid JSON-RPC request";
+  }
+  if (code == ERROR_METHOD_NOT_FOUND) {
+    return "Method not found";
+  }
+  if (code == ERROR_INVALID_PARAMS) {
+    return "Invalid parameters";
+  }
+  if (code == ERROR_INTERNAL_ERROR) {
+    return "Internal error";
+  }
+  if (code == ERROR_TASK_NOT_FOUND) {
+    return "Task not found";
+  }
+  if (code == ERROR_TASK_CANCELLED) {
+    return "Task was cancelled";
+  }
+  if (code == ERROR_CAPABILITY_UNAVAILABLE) {
+    return "Requested capability is unavailable";
+  }
+  if (code == ERROR_AUTHENTICATION_REQUIRED) {
+    return "Authentication required";
+  }
+  if (code == ERROR_RATE_LIMITED) {
+    return "Rate limit exceeded";
+  }
+  return "Unknown error";
+}
+
+/// Generates a unique request ID
+fun generate_request_id() {
+  return "req_" + str(random_int(1000000, 9999999)) + "_" + str(now());
+}
+
+/// A2A specific method names
+const METHOD_TASKS_CREATE = "tasks/create"
+const METHOD_TASKS_GET = "tasks/get"
+const METHOD_TASKS_CANCEL = "tasks/cancel"
+const METHOD_TASKS_SEND_SUBSCRIBE = "tasks/sendSubscribe"
+const METHOD_MESSAGE_SEND = "message/send"
+const METHOD_MESSAGE_STREAM = "message/stream"

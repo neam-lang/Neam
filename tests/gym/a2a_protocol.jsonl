@@ -1,0 +1,10 @@
+{"method": "tasks/send", "input": {"role": "user", "content": "Hello"}, "expected_status": "completed", "tags": ["a2a", "send"]}
+{"method": "tasks/send", "input": {"role": "user", "content": "Process this data"}, "expected_status": "completed", "tags": ["a2a", "send"]}
+{"method": "tasks/get", "task_id": "task-1", "expected_fields": ["id", "status"], "tags": ["a2a", "get"]}
+{"method": "tasks/cancel", "task_id": "task-1", "expected_status": "cancelled", "tags": ["a2a", "cancel"]}
+{"method": "tasks/send", "input": {"role": "user", "content": ""}, "expected_status": "failed", "tags": ["a2a", "edge"]}
+{"method": "agent/card", "expected_fields": ["name", "description", "version"], "tags": ["a2a", "card"]}
+{"method": "tasks/send", "input": {"role": "user", "content": "Long running task"}, "expected_status": "running", "tags": ["a2a", "async"]}
+{"method": "tasks/get", "task_id": "nonexistent", "expected_error": true, "tags": ["a2a", "error"]}
+{"method": "invalid/method", "expected_error": true, "tags": ["a2a", "error"]}
+{"method": "tasks/send", "input": {"role": "user", "content": "Multi-step task requiring handoff"}, "expected_status": "completed", "tags": ["a2a", "complex"]}

@@ -1,0 +1,247 @@
+// Chunking helpers and strategies
+
+module std.ingest.chunk;
+
+pub fun chunk_type_text() { return { kind: "Text" }; }
+pub fun chunk_type_code(language) { return { kind: "Code", language: language }; }
+pub fun chunk_type_table() { return { kind: "Table" }; }
+pub fun chunk_type_list_item() { return { kind: "ListItem" }; }
+pub fun chunk_type_header(level) { return { kind: "Header", level: level }; }
+pub fun chunk_type_image(caption) { return { kind: "Image", caption: caption }; }
+pub fun chunk_type_quote() { return { kind: "Quote" }; }
+
+pub fun chunk_metadata(index, start_offset, end_offset, page, section_path, chunk_type, token_count) {
+  return {
+    index: index,
+    start_offset: start_offset,
+    end_offset: end_offset,
+    page: page,
+    section_path: section_path,
+    chunk_type: chunk_type,
+    token_count: token_count,
+    document_metadata: {}
+  };
+}
+
+pub fun with_document_metadata(meta, key, value) {
+  meta.document_metadata[key] = value;
+  return meta;
+}
+
+pub fun chunk(id, document_id, content, chunk_meta) {
+  return {
+    id: id,
+    document_id: document_id,
+    content: content,
+    metadata: chunk_meta,
+    embedding: nil
+  };
+}
+
+pub fun with_embedding(chunk_item, embedding_vector) {
+  chunk_item.embedding = embedding_vector;
+  return chunk_item;
+}
+
+pub fun chunk_builder(id, document_id) {
+  return {
+    id: id,
+    document_id: document_id,
+    content: "",
+    metadata: nil,
+    embedding: nil
+  };
+}
+
+pub fun with_chunk_content(builder, content) {
+  builder.content = content;
+  return builder;
+}
+
+pub fun with_chunk_metadata(builder, meta) {
+  builder.metadata = meta;
+  return builder;
+}
+
+pub fun build_chunk(builder) {
+  return chunk(
+    builder.id,
+    builder.document_id,
+    builder.content,
+    builder.metadata
+  );
+}
+
+pub fun chunker_config(chunk_size, size_unit, overlap, min_size, max_size) {
+  return {
+    chunk_size: chunk_size,
+    size_unit: size_unit,
+    overlap: overlap,
+    min_size: min_size,
+    max_size: max_size
+  };
+}
+
+pub fun size_unit_characters() { return { kind: "Characters" }; }
+pub fun size_unit_tokens(tokenizer) { return { kind: "Tokens", tokenizer: tokenizer }; }
+pub fun size_unit_words() { return { kind: "Words" }; }
+
+pub fun tokenizer_tiktoken(model) { return { kind: "Tiktoken", model: model }; }
+pub fun tokenizer_sentencepiece(model_path) { return { kind: "SentencePiece", model_path: model_path }; }
+pub fun tokenizer_simple() { return { kind: "Simple" }; }
+
+pub fun default_config() {
+  return chunker_config(1000, size_unit_characters(), 200, 100, 2000);
+}
+
+pub fun fixed_chunker(chunk_size, overlap, separator) {
+  return {
+    kind: "Fixed",
+    chunk_size: chunk_size,
+    overlap: overlap,
+    separator: separator
+  };
+}
+
+pub fun sentence_chunker(max_sentences, max_size, overlap) {
+  return {
+    kind: "Sentence",
+    max_sentences: max_sentences,
+    max_size: max_size,
+    overlap: overlap
+  };
+}
+
+pub fun paragraph_chunker(max_paragraphs, max_size, overlap) {
+  return {
+    kind: "Paragraph",
+    max_paragraphs: max_paragraphs,
+    max_size: max_size,
+    overlap: overlap
+  };
+}
+
+pub fun recursive_chunker(chunk_size, overlap, separators, keep_separator) {
+  return {
+    kind: "Recursive",
+    chunk_size: chunk_size,
+    overlap: overlap,
+    separators: separators,
+    keep_separator: keep_separator
+  };
+}
+
+pub fun recursive_for_text() {
+  return recursive_chunker(1000, 200, ["\n\n", "\n", " ", ""], false);
+}
+
+pub fun recursive_for_markdown() {
+  return recursive_chunker(1000, 200, ["\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""], true);
+}
+
+pub fun recursive_for_code(language) {
+  return recursive_chunker(1500, 200, ["\n\n", "\nfun ", "\npub fun ", "\nclass ", "\n", " ", ""], true);
+}
+
+pub fun with_chunk_size(chunker, size) {
+  chunker.chunk_size = size;
+  return chunker;
+}
+
+pub fun with_overlap(chunker, overlap) {
+  chunker.overlap = overlap;
+  return chunker;
+}
+
+pub fun with_separators(chunker, separators) {
+  chunker.separators = separators;
+  return chunker;
+}
+
+pub fun semantic_chunker(similarity_threshold, min_size, max_size, buffer_size) {
+  return {
+    kind: "Semantic",
+    similarity_threshold: similarity_threshold,
+    min_chunk_size: min_size,
+    max_chunk_size: max_size,
+    buffer_size: buffer_size
+  };
+}
+
+pub fun default_semantic_chunker() {
+  return semantic_chunker(0.5, 100, 2000, 3);
+}
+
+pub fun with_similarity_threshold(chunker, threshold) {
+  chunker.similarity_threshold = threshold;
+  return chunker;
+}
+
+pub fun code_chunker(language, strategy, max_size, include_context) {
+  return {
+    kind: "Code",
+    language: language,
+    strategy: strategy,
+    max_chunk_size: max_size,
+    include_context: include_context
+  };
+}
+
+pub fun code_strategy_function() { return { kind: "Function" }; }
+pub fun code_strategy_class() { return { kind: "Class" }; }
+pub fun code_strategy_block() { return { kind: "Block" }; }
+pub fun code_strategy_mixed() { return { kind: "Mixed" }; }
+
+pub fun markdown_chunker(strategy, max_size, preserve_headers, code_handling) {
+  return {
+    kind: "Markdown",
+    strategy: strategy,
+    max_chunk_size: max_size,
+    preserve_headers: preserve_headers,
+    code_block_handling: code_handling
+  };
+}
+
+pub fun with_preserve_headers(chunker, preserve) {
+  chunker.preserve_headers = preserve;
+  return chunker;
+}
+
+pub fun markdown_strategy_header(max_level) { return { kind: "Header", max_level: max_level }; }
+pub fun markdown_strategy_paragraph() { return { kind: "Paragraph" }; }
+pub fun markdown_strategy_hybrid() { return { kind: "Hybrid" }; }
+
+pub fun code_block_intact() { return { kind: "Intact" }; }
+pub fun code_block_split(max_lines) { return { kind: "Split", max_lines: max_lines }; }
+pub fun code_block_separate() { return { kind: "Separate" }; }
+
+pub fun sliding_window_chunker(window_size, step_size, size_unit) {
+  return {
+    kind: "SlidingWindow",
+    window_size: window_size,
+    step_size: step_size,
+    size_unit: size_unit
+  };
+}
+
+pub fun hybrid_chunker() {
+  return {
+    kind: "Hybrid",
+    strategies: [],
+    default_chunker: nil
+  };
+}
+
+pub fun with_strategy(chunker, matcher, strategy_chunker) {
+  push(chunker.strategies, { matcher: matcher, chunker: strategy_chunker });
+  return chunker;
+}
+
+pub fun with_default(chunker, default_chunker) {
+  chunker.default_chunker = default_chunker;
+  return chunker;
+}
+
+pub fun matcher_mime_type(mime) { return { kind: "MimeType", value: mime }; }
+pub fun matcher_extension(ext) { return { kind: "Extension", value: ext }; }
+pub fun matcher_chunk_type(chunk_type) { return { kind: "ChunkType", value: chunk_type }; }

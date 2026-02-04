@@ -1,0 +1,20 @@
+// Multi-turn attacks
+
+module std.agents.redteam.strategies.multi_turn;
+
+use std.agents.redteam.orchestrator.target;
+use std.agents.redteam.judge.llm_judge;
+
+pub fun run_multi_turn(objective, prompts, target_system, judge_llm) {
+  let history = [];
+  let success = false;
+  for (prompt in prompts) {
+    let response = target.invoke(target_system, prompt);
+    push(history, { prompt: prompt, response: response });
+    if (judge_llm != nil && response.ok) {
+      success = llm_judge.judge_attack_success(judge_llm, objective, response.value);
+      if (success) { break; }
+    }
+  }
+  return { objective: objective, history: history, success: success };
+}

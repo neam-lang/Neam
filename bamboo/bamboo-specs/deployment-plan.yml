@@ -1,0 +1,148 @@
+---
+version: 2
+deployment:
+  name: Neam Deployment
+  source-plan: NEAM-BUILD
+
+environments:
+  - Dev
+  - Staging
+  - Production
+
+Dev:
+  triggers:
+    - build-success
+  tasks:
+    - artifact-download:
+        description: Download release archive
+        artifact: release-archive
+
+    - script:
+        interpreter: SHELL
+        description: Deploy to dev
+        scripts:
+          - |
+            echo "Deploying to dev environment..."
+            export KUBECONFIG=${bamboo.KUBECONFIG_DEV}
+            kubectl apply -k gitops/overlays/dev
+            kubectl rollout status deployment/neam-agent \
+              -n neam-dev --timeout=300s
+            echo "Dev deployment complete."
+
+  notifications:
+    - events:
+        - deployment-finished
+        - deployment-failed
+      recipients:
+        - committers
+
+Staging:
+  triggers:
+    - manual
+  tasks:
+    - artifact-download:
+        description: Download release archive
+        artifact: release-archive
+
+    - script:
+        interpreter: SHELL
+        description: Deploy to staging
+        scripts:
+          - |
+            echo "Deploying to staging environment..."
+            export KUBECONFIG=${bamboo.KUBECONFIG_STAGING}
+            kubectl apply -k gitops/overlays/staging
+            kubectl rollout status deployment/neam-agent \
+              -n neam-staging --timeout=300s
+            echo "Staging deployment complete."
+
+    - script:
+        interpreter: SHELL
+        description: Run smoke tests
+        scripts:
+          - |
+            echo "Running smoke tests against staging..."
+            STAGING_URL=${bamboo.STAGING_URL:-http://neam-agent.neam-staging.svc.cluster.local}
+            for i in 1 2 3 4 5; do
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL/health")
+              if [ "$HTTP_STATUS" = "200" ]; then
+                echo "Smoke test passed (attempt $i)"
+                exit 0
+              fi
+              echo "Waiting for service... (attempt $i, status=$HTTP_STATUS)"
+              sleep 10
+            done
+            echo "Smoke tests failed"
+            exit 1
+
+  notifications:
+    - events:
+        - deployment-finished
+        - deployment-failed
+      recipients:
+        - committers
+
+Production:
+  triggers:
+    - manual
+  tasks:
+    - artifact-download:
+        description: Download release archive
+        artifact: release-archive
+
+    - script:
+        interpreter: SHELL
+        description: Pre-deployment checks
+        scripts:
+          - |
+            echo "Running pre-deployment checks..."
+            export KUBECONFIG=${bamboo.KUBECONFIG_PRODUCTION}
+            kubectl get deployment neam-agent -n neam-production -o json \
+              | python3 -c "
+            import sys, json
+            d = json.load(sys.stdin)
+            ready = d['status'].get('readyReplicas', 0)
+            desired = d['spec']['replicas']
+            print(f'Current state: {ready}/{desired} replicas ready')
+            if ready < desired:
+                print('WARNING: Not all replicas are ready')
+            "
+
+    - script:
+        interpreter: SHELL
+        description: Deploy to production
+        scripts:
+          - |
+            echo "Deploying to production environment..."
+            export KUBECONFIG=${bamboo.KUBECONFIG_PRODUCTION}
+            kubectl apply -k gitops/overlays/production
+            kubectl rollout status deployment/neam-agent \
+              -n neam-production --timeout=600s
+            echo "Production deployment complete."
+
+    - script:
+        interpreter: SHELL
+        description: Post-deployment verification
+        scripts:
+          - |
+            export KUBECONFIG=${bamboo.KUBECONFIG_PRODUCTION}
+            PROD_URL=${bamboo.PRODUCTION_URL:-http://neam-agent.neam-production.svc.cluster.local}
+            for i in 1 2 3 4 5; do
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL/health")
+              if [ "$HTTP_STATUS" = "200" ]; then
+                echo "Production health check passed"
+                exit 0
+              fi
+              sleep 15
+            done
+            echo "Production health check failed - initiating rollback"
+            kubectl rollout undo deployment/neam-agent -n neam-production
+            kubectl rollout status deployment/neam-agent -n neam-production --timeout=300s
+            exit 1
+
+  notifications:
+    - events:
+        - deployment-finished
+        - deployment-failed
+      recipients:
+        - committers

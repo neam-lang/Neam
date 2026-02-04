@@ -1,0 +1,295 @@
+// Test generation and execution
+
+module std.agents.advanced.coder.tester;
+
+use std.agents.advanced.coder.config;
+
+// Test generation request
+pub fun test_request(code, language, framework) {
+  return {
+    code: code,
+    language: language,
+    framework: framework,
+    coverage_target: 80,
+    test_types: ["unit"]
+  };
+}
+
+pub fun with_coverage_target(req, target) {
+  req.coverage_target = target;
+  return req;
+}
+
+pub fun with_test_types(req, types) {
+  req.test_types = types;
+  return req;
+}
+
+// Test result
+pub fun test_result(tests, passed, failed, coverage) {
+  return {
+    tests: tests,
+    passed: passed,
+    failed: failed,
+    coverage: coverage,
+    duration_ms: 0
+  };
+}
+
+// Generate tests for code
+pub fun generate_tests(llm, request) {
+  let functions = extract_functions(request.code, request.language);
+  let tests = [];
+
+  for (func in functions) {
+    let func_tests = generate_function_tests(llm, func, request);
+    tests = concat(tests, func_tests);
+  }
+
+  return {
+    ok: true,
+    value: {
+      test_code: format_tests(tests, request.framework),
+      test_count: len(tests),
+      functions_covered: len(functions)
+    }
+  };
+}
+
+// Generate tests for a single function
+pub fun generate_function_tests(llm, func, request) {
+  let prompt = "Generate " + request.framework.kind + " tests for this " +
+               request.language.kind + " function:\n\n" +
+               "```\n" + func.code + "\n```\n\n" +
+               "Include: happy path, edge cases, error cases.\n" +
+               "Provide complete test code:";
+
+  let response = llm.generate(prompt);
+  let test_code = extract_code_block(response);
+
+  return [{
+    function_name: func.name,
+    test_code: test_code,
+    test_type: "unit"
+  }];
+}
+
+// Generate integration tests
+pub fun generate_integration_tests(llm, modules, request) {
+  let prompt = "Generate integration tests for these " + request.language.kind + " modules:\n\n";
+
+  for (mod in modules) {
+    prompt = prompt + "--- " + mod.name + " ---\n" + mod.code + "\n\n";
+  }
+
+  prompt = prompt + "Test the interactions between modules. Provide complete test code:";
+
+  let response = llm.generate(prompt);
+  let test_code = extract_code_block(response);
+
+  return {
+    ok: true,
+    value: {
+      test_code: test_code,
+      modules_tested: len(modules)
+    }
+  };
+}
+
+// Generate test data
+pub fun generate_test_data(llm, schema, count) {
+  let prompt = "Generate " + str(count) + " test data entries for this schema:\n\n" +
+               json_encode(schema) + "\n\n" +
+               "Provide realistic, varied data as JSON array:";
+
+  let response = llm.generate(prompt);
+  let data = json_decode(extract_json(response));
+
+  return {
+    ok: true,
+    value: {
+      data: data,
+      count: len(data)
+    }
+  };
+}
+
+// Analyze test coverage
+pub fun analyze_coverage(code, tests, language) {
+  let functions = extract_functions(code, language);
+  let tested_functions = extract_tested_functions(tests);
+
+  let covered = 0;
+  let uncovered = [];
+
+  for (func in functions) {
+    if (contains_any(tested_functions, func.name)) {
+      covered = covered + 1;
+    } else {
+      push(uncovered, func.name);
+    }
+  }
+
+  let coverage = len(functions) > 0 ? (covered * 100 / len(functions)) : 0;
+
+  return {
+    ok: true,
+    value: {
+      coverage_percent: coverage,
+      total_functions: len(functions),
+      covered_functions: covered,
+      uncovered_functions: uncovered
+    }
+  };
+}
+
+// Suggest missing tests
+pub fun suggest_missing_tests(llm, code, existing_tests, language) {
+  let prompt = "Analyze test coverage gaps.\n\n" +
+               "Code:\n```\n" + code + "\n```\n\n" +
+               "Existing tests:\n```\n" + existing_tests + "\n```\n\n" +
+               "What additional tests are needed?";
+
+  let response = llm.generate(prompt);
+
+  return {
+    ok: true,
+    value: {
+      suggestions: parse_test_suggestions(response),
+      gaps: extract_coverage_gaps(response)
+    }
+  };
+}
+
+// Helper functions
+fun extract_functions(code, language) {
+  let functions = [];
+  let lines = split(code, "\n");
+  let current_func = nil;
+  let brace_count = 0;
+
+  for (line in lines) {
+    if (contains(line, "function ") || contains(line, "fun ") ||
+        contains(line, "def ") || contains(line, "fn ")) {
+      let name = extract_function_name(line);
+      current_func = { name: name, code: line, start_line: len(functions) };
+    }
+
+    if (current_func != nil) {
+      current_func.code = current_func.code + "\n" + line;
+      brace_count = brace_count + count_char(line, '{') - count_char(line, '}');
+
+      if (brace_count <= 0 && len(current_func.code) > len(line)) {
+        push(functions, current_func);
+        current_func = nil;
+        brace_count = 0;
+      }
+    }
+  }
+
+  return functions;
+}
+
+fun extract_function_name(line) {
+  let cleaned = trim(line);
+  let parts = split(cleaned, "(");
+  if (len(parts) > 0) {
+    let name_part = parts[0];
+    let words = split(name_part, " ");
+    return words[len(words) - 1];
+  }
+  return "unknown";
+}
+
+fun extract_tested_functions(tests) {
+  let names = [];
+  let lines = split(tests, "\n");
+
+  for (line in lines) {
+    if (contains(line, "test") || contains(line, "it(") || contains(line, "describe(")) {
+      let matches = regex_match(line, "['\"].*?['\"]");
+      if (len(matches) > 0) {
+        push(names, matches[0]);
+      }
+    }
+  }
+
+  return names;
+}
+
+fun format_tests(tests, framework) {
+  let code = "";
+
+  for (test in tests) {
+    code = code + "// Tests for " + test.function_name + "\n";
+    code = code + test.test_code + "\n\n";
+  }
+
+  return code;
+}
+
+fun parse_test_suggestions(response) {
+  let suggestions = [];
+  let lines = split(response, "\n");
+
+  for (line in lines) {
+    if (starts_with(trim(line), "-") || starts_with(trim(line), "*") ||
+        regex_match(line, "^\\d+\\.")) {
+      push(suggestions, trim(regex_replace(line, "^[-*\\d.]+\\s*", "")));
+    }
+  }
+
+  return suggestions;
+}
+
+fun extract_coverage_gaps(response) {
+  let gaps = [];
+  let lower = lowercase(response);
+
+  if (contains(lower, "edge case")) { push(gaps, "edge_cases"); }
+  if (contains(lower, "error")) { push(gaps, "error_handling"); }
+  if (contains(lower, "null") || contains(lower, "undefined")) { push(gaps, "null_checks"); }
+  if (contains(lower, "boundary")) { push(gaps, "boundary_conditions"); }
+
+  return gaps;
+}
+
+fun extract_code_block(text) {
+  let start = index_of(text, "```");
+  if (start < 0) { return trim(text); }
+  let code_start = index_of(text, "\n", start) + 1;
+  let end = index_of(text, "```", code_start);
+  if (end < 0) { return trim(substring(text, code_start, len(text))); }
+  return trim(substring(text, code_start, end));
+}
+
+fun extract_json(text) {
+  let start = index_of(text, "[");
+  if (start < 0) { start = index_of(text, "{"); }
+  if (start < 0) { return "[]"; }
+
+  let end = last_index_of(text, "]");
+  if (end < 0) { end = last_index_of(text, "}"); }
+  if (end < 0) { return "[]"; }
+
+  return substring(text, start, end + 1);
+}
+
+fun contains_any(list, item) {
+  for (i in list) {
+    if (contains(i, item) || contains(item, i)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+fun count_char(str, char) {
+  let count = 0;
+  for (let i = 0; i < len(str); i = i + 1) {
+    if (char_at(str, i) == char) {
+      count = count + 1;
+    }
+  }
+  return count;
+}

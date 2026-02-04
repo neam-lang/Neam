@@ -1,0 +1,133 @@
+# Neam Project Manifest
+# This file defines the project configuration, dependencies, and build settings
+
+neam_version = "1.0"
+
+# ============================================
+# Project Metadata
+# ============================================
+[project]
+name = "ai-assistant"
+version = "0.1.0"
+type = "binary"
+description = "An AI-powered assistant using Neam"
+authors = ["Developer <dev@example.com>"]
+license = "MIT"
+
+[project.entry_points]
+main = "src/main.neam"
+api = "src/api.neam"
+
+# ============================================
+# Dependencies
+# ============================================
+[dependencies]
+# Version-based dependency
+# utils = "1.0.0"
+
+# Git-based dependency
+# ai-tools = { git = "https://github.com/neam/ai-tools" }
+
+# Dependency with features
+# ml-lib = { version = "2.0.0", features = ["gpu", "advanced"] }
+
+[dev-dependencies]
+# test-utils = "0.1.0"
+
+# ============================================
+# Scripts
+# ============================================
+[scripts]
+build = "neamc src/main.neam -o build/main.neamb"
+run = "neam build/main.neamb"
+test = "neam-cli test tests/**/*.neam"
+api = "neam-api --port 8080"
+clean = "rm -rf build/"
+
+# ============================================
+# Features (Conditional Compilation)
+# ============================================
+[features]
+default = ["basic-agents"]
+basic-agents = []
+advanced-rag = ["hyde", "self-rag"]
+multi-provider = ["openai", "ollama", "anthropic"]
+
+# ============================================
+# Agent Configuration
+# ============================================
+[agent]
+provider = "openai"
+model = "gpt-4o-mini"
+capabilities = ["text-generation", "code-generation"]
+
+[agent.limits]
+max-tokens-per-request = 4096
+max-concurrent-tools = 5
+timeout-seconds = 300
+max-retries = 3
+
+[agent.prompts]
+system = "You are a helpful AI assistant."
+error-recovery = "An error occurred. Please try rephrasing your request."
+
+# ============================================
+# Test Configuration
+# ============================================
+[test]
+timeout = 60
+parallel = true
+coverage = true
+coverage-threshold = 80
+include = ["tests/**/*.neam"]
+exclude = ["tests/fixtures/**"]
+
+# ============================================
+# Deployment Configuration
+# ============================================
+[deploy]
+default-target = "docker"
+
+[deploy.docker]
+image = "ai-assistant"
+registry = "ghcr.io/myorg"
+tag-format = "v{version}"
+
+[deploy.kubernetes]
+namespace = "ai-apps"
+replicas = 3
+cpu = "500m"
+memory = "1Gi"
+port = 8080
+
+[deploy.serverless]
+provider = "aws-lambda"
+memory = 1024
+timeout = 300
+
+# ============================================
+# Knowledge Base Configuration
+# ============================================
+[knowledge]
+default-vector-store = "usearch"
+default-embedding-model = "nomic-embed-text"
+chunk-size = 200
+chunk-overlap = 50
+
+# ============================================
+# Build Profiles
+# ============================================
+[profile.dev]
+optimization = "none"
+debug = true
+source-maps = true
+
+[profile.release]
+optimization = "full"
+debug = false
+source-maps = false
+strip = true
+
+[profile.bench]
+optimization = "full"
+debug = true

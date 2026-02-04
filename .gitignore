@@ -1,0 +1,7 @@
+/build/
+/.cmake/
+/.cache/
+/.claude/settings.local.json
+.env
+*.key
+*.pem

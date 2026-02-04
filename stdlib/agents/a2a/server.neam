@@ -1,0 +1,291 @@
+/// A2A Protocol Server/Endpoint Handler
+/// Provides functions for implementing an A2A-compliant agent endpoint
+
+module stdlib::agents::a2a::server
+
+import stdlib::agents::a2a::card
+import stdlib::agents::a2a::task
+import stdlib::agents::a2a::jsonrpc
+
+/// Creates an A2A server handler configuration
+/// @param agent_card The agent card for this server
+/// @param options Server configuration options
+/// @returns An A2A server configuration
+pub fun create_server(agent_card: map, options: map = {}) {
+  return {
+    agent_card: agent_card,
+    port: options.get("port", 8080),
+    host: options.get("host", "0.0.0.0"),
+    cors_enabled: options.get("cors_enabled", true),
+    auth_handler: options.get("auth_handler", nil),
+    rate_limiter: options.get("rate_limiter", nil),
+    task_handler: options.get("task_handler", nil),
+    message_handler: options.get("message_handler", nil),
+    tasks: {},  // In-memory task storage
+    running: false
+  };
+}
+
+/// Registers a task handler for processing tasks
+/// @param server The server configuration
+/// @param handler The task handler function
+/// @returns Updated server configuration
+pub fun with_task_handler(server: map, handler: fun) {
+  let updated = server.copy();
+  updated["task_handler"] = handler;
+  return updated;
+}
+
+/// Registers a message handler for direct messages
+/// @param server The server configuration
+/// @param handler The message handler function
+/// @returns Updated server configuration
+pub fun with_message_handler(server: map, handler: fun) {
+  let updated = server.copy();
+  updated["message_handler"] = handler;
+  return updated;
+}
+
+/// Registers an authentication handler
+/// @param server The server configuration
+/// @param handler The auth handler function
+/// @returns Updated server configuration
+pub fun with_auth_handler(server: map, handler: fun) {
+  let updated = server.copy();
+  updated["auth_handler"] = handler;
+  return updated;
+}
+
+/// Handles an incoming A2A request
+/// @param server The server configuration
+/// @param request The incoming HTTP request
+/// @returns The HTTP response
+pub fun handle_request(server: map, request: map) {
+  let path = request.path;
+  let method = request.method;
+
+  // Handle discovery endpoint
+  if (path == "/.well-known/agent.json" && method == "GET") {
+    return handle_discovery(server);
+  }
+
+  // Handle JSON-RPC endpoint
+  if (path == "/" && method == "POST") {
+    return handle_jsonrpc(server, request);
+  }
+
+  // Handle task streaming
+  if (path.starts_with("/tasks/") && path.ends_with("/stream") && method == "GET") {
+    let task_id = extract_task_id(path);
+    return handle_task_stream(server, task_id, request);
+  }
+
+  // 404 for unknown endpoints
+  return {
+    status: 404,
+    headers: { "Content-Type": "application/json" },
+    body: { error: "Not found" }
+  };
+}
+
+/// Handles the agent discovery endpoint
+fun handle_discovery(server: map) {
+  let card_json = card::to_json(server.agent_card);
+  return {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*"
+    },
+    body: card_json
+  };
+}
+
+/// Handles JSON-RPC requests
+fun handle_jsonrpc(server: map, request: map) {
+  // Authenticate if handler is configured
+  if (server.auth_handler != nil) {
+    let auth_result = server.auth_handler(request.headers);
+    if (!auth_result.authenticated) {
+      return {
+        status: 401,
+        body: jsonrpc::create_error(nil, jsonrpc::ERROR_AUTHENTICATION_REQUIRED,
+                                     "Authentication required")
+      };
+    }
+  }
+
+  // Parse JSON-RPC request
+  let parsed = jsonrpc::parse_message(request.body);
+  if (!parsed.valid) {
+    return {
+      status: 400,
+      body: jsonrpc::create_error(nil, jsonrpc::ERROR_INVALID_REQUEST, parsed.error)
+    };
+  }
+
+  let rpc_request = parsed.message;
+
+  // Route by method
+  if (rpc_request.method == jsonrpc::METHOD_TASKS_CREATE) {
+    return handle_tasks_create(server, rpc_request);
+  }
+  if (rpc_request.method == jsonrpc::METHOD_TASKS_GET) {
+    return handle_tasks_get(server, rpc_request);
+  }
+  if (rpc_request.method == jsonrpc::METHOD_TASKS_CANCEL) {
+    return handle_tasks_cancel(server, rpc_request);
+  }
+  if (rpc_request.method == jsonrpc::METHOD_MESSAGE_SEND) {
+    return handle_message_send(server, rpc_request);
+  }
+
+  // Method not found
+  return {
+    status: 200,
+    body: jsonrpc::create_error(rpc_request.id, jsonrpc::ERROR_METHOD_NOT_FOUND,
+                                "Method not found: " + rpc_request.method)
+  };
+}
+
+/// Handles tasks/create method
+fun handle_tasks_create(server: map, request: map) {
+  let params = request.params;
+
+  // Create the task
+  let new_task = task::create_task(server.agent_card.name, params.get("input", {}));
+
+  // Store the task
+  server.tasks[new_task.id] = new_task;
+
+  // Start processing if task handler is configured
+  if (server.task_handler != nil) {
+    // This would typically be async
+    process_task_async(server, new_task.id);
+  }
+
+  return {
+    status: 200,
+    body: jsonrpc::create_response(request.id, {
+      id: new_task.id,
+      status: new_task.status
+    })
+  };
+}
+
+/// Handles tasks/get method
+fun handle_tasks_get(server: map, request: map) {
+  let task_id = request.params.get("id", "");
+
+  if (!server.tasks.contains(task_id)) {
+    return {
+      status: 200,
+      body: jsonrpc::create_error(request.id, jsonrpc::ERROR_TASK_NOT_FOUND,
+                                  "Task not found: " + task_id)
+    };
+  }
+
+  let t = server.tasks[task_id];
+  return {
+    status: 200,
+    body: task::to_jsonrpc_response(t)
+  };
+}
+
+/// Handles tasks/cancel method
+fun handle_tasks_cancel(server: map, request: map) {
+  let task_id = request.params.get("id", "");
+
+  if (!server.tasks.contains(task_id)) {
+    return {
+      status: 200,
+      body: jsonrpc::create_error(request.id, jsonrpc::ERROR_TASK_NOT_FOUND,
+                                  "Task not found: " + task_id)
+    };
+  }
+
+  let result = task::cancel(server.tasks[task_id]);
+  if (result.success) {
+    server.tasks[task_id] = result.task;
+  }
+
+  return {
+    status: 200,
+    body: jsonrpc::create_response(request.id, {
+      id: task_id,
+      status: result.task.status
+    })
+  };
+}
+
+/// Handles message/send method
+fun handle_message_send(server: map, request: map) {
+  if (server.message_handler == nil) {
+    return {
+      status: 200,
+      body: jsonrpc::create_error(request.id, jsonrpc::ERROR_METHOD_NOT_FOUND,
+                                  "Message handling not configured")
+    };
+  }
+
+  let result = server.message_handler(request.params);
+  return {
+    status: 200,
+    body: jsonrpc::create_response(request.id, result)
+  };
+}
+
+/// Handles task streaming endpoint (SSE)
+fun handle_task_stream(server: map, task_id: string, request: map) {
+  if (!server.tasks.contains(task_id)) {
+    return {
+      status: 404,
+      body: { error: "Task not found" }
+    };
+  }
+
+  // Return SSE stream headers
+  return {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive"
+    },
+    stream: true,
+    task_id: task_id
+  };
+}
+
+/// Extracts task ID from path like /tasks/{id}/stream
+fun extract_task_id(path: string) {
+  let parts = path.split("/");
+  if (len(parts) >= 3) {
+    return parts[2];
+  }
+  return "";
+}
+
+/// Process task asynchronously (placeholder)
+fun process_task_async(server: map, task_id: string) {
+  // In real implementation, this would spawn async processing
+  // For now, synchronous processing
+  let t = server.tasks[task_id];
+
+  // Submit the task
+  let submit_result = task::submit(t);
+  server.tasks[task_id] = submit_result.task;
+
+  // Execute the task handler
+  if (server.task_handler != nil) {
+    let handler_result = server.task_handler(submit_result.task.input);
+
+    if (handler_result.success) {
+      let complete_result = task::complete(server.tasks[task_id], handler_result.output);
+      server.tasks[task_id] = complete_result.task;
+    } else {
+      let fail_result = task::fail(server.tasks[task_id], handler_result.error);
+      server.tasks[task_id] = fail_result.task;
+    }
+  }
+}

@@ -1,0 +1,114 @@
+// ============================================
+// Batch STT Provider Tests
+// Tests speech-to-text with OpenAI, Gemini, and local whisper.cpp
+// ============================================
+
+// --- OpenAI Whisper STT ---
+
+agent whisper_agent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "You are a helpful assistant."
+}
+
+voice openai_whisper {
+  agent: whisper_agent
+  stt_provider: "whisper"
+  stt_model: "whisper-1"
+  tts_provider: "openai"
+  tts_model: "tts-1"
+  tts_voice: "alloy"
+}
+
+// --- Gemini STT ---
+
+agent gemini_agent {
+  provider: "gemini"
+  model: "gemini-2.0-flash"
+  system: "You are a helpful assistant."
+}
+
+voice gemini_stt_pipe {
+  agent: gemini_agent
+  stt_provider: "gemini"
+  stt_model: "gemini-2.0-flash"
+  tts_provider: "openai"
+  tts_model: "tts-1"
+  tts_voice: "alloy"
+}
+
+// --- Local whisper.cpp STT ---
+
+agent local_agent {
+  provider: "ollama"
+  model: "llama3"
+  system: "You are a helpful assistant."
+}
+
+voice local_whisper {
+  agent: local_agent
+  stt_provider: "whisper-local"
+  stt_model: "whisper-1"
+  stt_endpoint: "http://localhost:8080"
+  tts_provider: "kokoro"
+  tts_model: "tts-1"
+  tts_voice: "af_heart"
+  tts_endpoint: "http://localhost:8880"
+}
+
+// --- Main test execution ---
+{
+  emit "=== Batch STT Provider Tests ===";
+  emit "";
+
+  // Test 1: OpenAI Whisper STT pipeline defined
+  emit "Test 1: OpenAI Whisper STT pipeline";
+  emit "  Pipeline 'openai_whisper' defined with stt_provider=whisper";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 2: Gemini STT pipeline defined
+  emit "Test 2: Gemini STT pipeline";
+  emit "  Pipeline 'gemini_stt_pipe' defined with stt_provider=gemini";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 3: Local whisper.cpp STT pipeline defined
+  emit "Test 3: Local whisper.cpp STT pipeline";
+  emit "  Pipeline 'local_whisper' defined with stt_provider=whisper-local";
+  emit "  stt_endpoint=http://localhost:8080";
+  emit "  Result: PASSED (definition compiled)";
+  emit "";
+
+  // Test 4: Transcribe with OpenAI (requires OPENAI_API_KEY + audio file)
+  emit "Test 4: OpenAI transcription (requires API key + audio)";
+  try {
+    let text = voice_transcribe("openai_whisper", "/tmp/test_audio.wav");
+    emit "  Transcribed: " + str(text);
+    emit "  Result: PASSED";
+  } catch (e) {
+    emit "  Error: " + str(e);
+    emit "  Result: FAILED";
+  }
+  emit "";
+
+  // Test 5: Transcribe with Gemini (requires GEMINI_API_KEY + audio file)
+  emit "Test 5: Gemini transcription (requires API key + audio)";
+  try {
+    let text = voice_transcribe("gemini_stt_pipe", "/tmp/test_audio.wav");
+    emit "  Transcribed: " + str(text);
+    emit "  Result: PASSED";
+  } catch (e) {
+    emit "  Error: " + str(e);
+    emit "  Result: FAILED";
+  }
+  emit "";
+
+  // Test 6: Transcribe with local whisper.cpp (requires running server)
+  emit "Test 6: Local whisper.cpp transcription (requires server)";
+  // let text = voice_transcribe("local_whisper", "/tmp/test_audio.wav");
+  emit "  Skipped (no whisper.cpp server in CI)";
+  emit "";
+
+  emit "=== Batch STT Tests Complete ===";
+}

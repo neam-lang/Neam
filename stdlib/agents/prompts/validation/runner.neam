@@ -1,0 +1,39 @@
+// Validation runner for prompt tests
+
+module std.agents.prompts.validation.runner;
+
+use std.agents.prompts.validation.validator;
+
+pub fun run_suite(suite, prompt_output) {
+  let results = [];
+  let failures = [];
+  let passed = true;
+
+  for (test_case in suite.test_cases) {
+    let output = test_case.expected_output != nil ? test_case.expected_output : prompt_output;
+    let assertions = test_case.assert != nil ? test_case.assert : test_case.assertions;
+    let validation = validator.validate_output(output, assertions);
+
+    let result = {
+      description: test_case.description,
+      passed: validation.value.passed,
+      results: validation.value.results
+    };
+    push(results, result);
+
+    if (!validation.value.passed) {
+      passed = false;
+      push(failures, result);
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      all_passed: passed,
+      results: results,
+      failures: failures,
+      summary: passed ? "All tests passed" : "Some tests failed"
+    }
+  };
+}

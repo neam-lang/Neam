@@ -1,0 +1,9 @@
+//
+// Example 01: Hello World
+// The simplest Neam program - prints a message using emit
+//
+
+{
+  emit "Hello, World!";
+  emit "Welcome to the Neam Programming Language!";
+}

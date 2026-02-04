@@ -1,0 +1,19 @@
+// Privacy helpers
+
+module std.observability.privacy;
+
+use std.observability.privacy.redaction;
+use std.observability.privacy.hashing;
+use std.observability.privacy.access;
+
+pub fun configure_redaction(config) {
+  return redaction.configure(config);
+}
+
+pub fun configure_hashing(config) {
+  return hashing.configure(config);
+}
+
+pub fun configure_access(config) {
+  return access.configure(config);
+}

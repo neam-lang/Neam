@@ -1,0 +1,39 @@
+// Document agent tests
+
+module std.agents.advanced.testing.document_test;
+
+use std.agents.advanced.document.agent;
+use std.agents.advanced.document.generator;
+use std.agents.advanced.document.compliance;
+use std.agents.advanced.document.config;
+use std.agents.special.testing.mocks;
+
+pub fun test_document_agent_generate_template() {
+  let llm = mocks.mock_llm([]);
+  let builder = agent.document_builder(llm);
+  builder = agent.with_templates(builder, { contract: "Hello {{name}}" });
+  let built = agent.build_document_agent(builder);
+  if (!built.ok) { return false; }
+
+  let result = agent.generate_document(built.value, "contract", { name: "Neam" });
+  return result.ok && contains(result.value, "Neam");
+}
+
+pub fun test_document_generator_template() {
+  let llm = mocks.mock_llm([]);
+  let gen = generator.document_generator(llm);
+  generator.register_template(gen, "basic", "Hi {{name}} {{#if include}}extra{{/if}}");
+
+  let result = generator.generate_from_template(gen, "basic", { name: "Team", include: true });
+  return result.ok && contains(result.value, "extra");
+}
+
+pub fun test_compliance_checker_report() {
+  let llm = mocks.mock_llm([
+    { pattern: "violation", response: "compliant" }
+  ]);
+  let checker = compliance.compliance_checker(llm);
+  let report = compliance.generate_compliance_report(checker, "content", [config.compliance_gdpr()]);
+
+  return report.ok && report.value.overall_compliant == true;
+}

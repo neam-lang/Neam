@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neam"
+version = "0.6.0"
+description = "Python bindings for the Neam agentic programming language"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Neam Team", email = "team@neam-lang.org"}
+]
+keywords = ["neam", "agents", "llm", "ai", "programming-language"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Interpreters",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "mypy>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/neam-lang/neam"
+Documentation = "https://neam-lang.org/docs/python"
+Repository = "https://github.com/neam-lang/neam"
+Issues = "https://github.com/neam-lang/neam/issues"
+
+[tool.setuptools]
+packages = ["neam"]
+package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+neam = ["py.typed", "*.pyi"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

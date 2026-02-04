@@ -1,0 +1,82 @@
+// Test runner with handoffs
+
+// Define agents
+agent Triage {
+    model "gpt-4"
+    instructions "You triage incoming requests and route them."
+}
+
+agent TechSupport {
+    model "gpt-4"
+    instructions "You handle technical questions."
+}
+
+agent Billing {
+    model "gpt-4"
+    instructions "You handle billing questions."
+}
+
+agent Escalation {
+    model "gpt-4"
+    instructions "You handle escalated issues."
+}
+
+// Define handoffs
+handoff TriageToTech {
+    from Triage
+    to TechSupport
+    tool_name "transfer_to_tech"
+    description "Transfer technical issues to tech support"
+}
+
+handoff TriageToBilling {
+    from Triage
+    to Billing
+    tool_name "transfer_to_billing"
+    description "Transfer billing issues to billing team"
+}
+
+handoff TechToEscalation {
+    from TechSupport
+    to Escalation
+    tool_name "escalate"
+    description "Escalate complex technical issues"
+}
+
+handoff BillingToEscalation {
+    from Billing
+    to Escalation
+    tool_name "escalate_billing"
+    description "Escalate billing disputes"
+}
+
+// Define guardrails
+guard ContentFilter {
+    on input
+    check "Filter harmful or inappropriate content"
+}
+
+guard ResponseQuality {
+    on output
+    check "Ensure responses are helpful and accurate"
+}
+
+// Multi-agent runner
+runner CustomerService {
+    agents [Triage, TechSupport, Billing, Escalation]
+    max_turns 15
+    guardrails [ContentFilter, ResponseQuality]
+}
+
+// Agent cards for A2A
+agent_card TriageCard {
+    name "Triage"
+    description "Customer service triage agent"
+    version "1.0"
+}
+
+agent_card TechCard {
+    name "TechSupport"
+    description "Technical support agent"
+    version "1.0"
+}

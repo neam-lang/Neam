@@ -1,0 +1,98 @@
+/**
+ * TypeScript type definitions for the Neam WebAssembly module.
+ */
+
+declare module 'neam-wasm' {
+  export interface NeamModule {
+    /** Initialize the Neam runtime */
+    neam_init(): number;
+
+    /** Shutdown the Neam runtime */
+    neam_shutdown(): void;
+
+    /** Run Neam source code */
+    neam_run(source: string): number;
+
+    /** Compile source to bytecode */
+    neam_compile(source: string): Uint8Array | null;
+
+    /** Run compiled bytecode */
+    neam_run_bytecode(bytecode: Uint8Array): number;
+
+    /** Get output from last run */
+    neam_get_output(): string;
+
+    /** Get error from last operation */
+    neam_get_error(): string;
+
+    /** Get value type */
+    neam_value_type(value: number): number;
+
+    /** Get number value */
+    neam_value_as_number(value: number): number;
+
+    /** Get string value */
+    neam_value_as_string(value: number): string;
+
+    /** Get boolean value */
+    neam_value_as_bool(value: number): number;
+
+    /** Convert value to JSON */
+    neam_value_to_json(value: number): string;
+
+    /** Free a result */
+    neam_free_result(result: number): void;
+
+    /** Memory allocation */
+    _malloc(size: number): number;
+    _free(ptr: number): void;
+
+    /** Helper functions */
+    ccall: typeof ccall;
+    cwrap: typeof cwrap;
+    UTF8ToString: (ptr: number) => string;
+    stringToUTF8: (str: string, outPtr: number, maxBytes: number) => void;
+    lengthBytesUTF8: (str: string) => number;
+  }
+
+  /** Load the Neam WebAssembly module */
+  export default function NeamModule(): Promise<NeamModule>;
+}
+
+/** Value types */
+export const enum ValueType {
+  NIL = 0,
+  BOOL = 1,
+  NUMBER = 2,
+  STRING = 3,
+  LIST = 4,
+  MAP = 5,
+  FUNCTION = 6,
+  AGENT = 7,
+  OBJECT = 8,
+}
+
+/**
+ * High-level wrapper for the Neam WASM module.
+ */
+export class Neam {
+  private module: NeamModule;
+
+  /** Create a new Neam instance */
+  static async create(): Promise<Neam>;
+
+  /** Run Neam source code and return output */
+  run(source: string): string;
+
+  /** Compile source to bytecode */
+  compile(source: string): Uint8Array;
+
+  /** Run compiled bytecode */
+  runBytecode(bytecode: Uint8Array): string;
+
+  /** Get the last error message */
+  getError(): string;
+
+  /** Shutdown and release resources */
+  shutdown(): void;
+}

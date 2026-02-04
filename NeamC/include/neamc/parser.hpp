@@ -1,0 +1,380 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// NeamC - Minimal parser for arithmetic expressions and blocks
+//
+
+#pragma once
+
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "neamc/ast.hpp"
+
+namespace neamc
+{
+enum class TokenType
+{
+  // Single-character tokens.
+  LeftParen,
+  RightParen,
+  LeftBrace,
+  RightBrace,
+  Comma,
+  Semicolon,
+  Colon,
+  Hash,
+  Minus,
+  Plus,
+  Slash,
+  Star,
+  Percent,
+  Dot,
+  LeftBracket,
+  RightBracket,
+  Question,
+  Dollar,
+
+  // One or two character tokens.
+  Bang,
+  BangEqual,
+  Equal,
+  EqualEqual,
+  Greater,
+  GreaterEqual,
+  Less,
+  LessEqual,
+
+  // Literals.
+  Identifier,
+  String,
+  Number,
+  PathLiteral,
+
+  // Keywords.
+  Let,
+  If,
+  Else,
+  While,
+  Fun,
+  Return,
+  Emit,
+  Module,
+  Import,
+  Use,
+  Pub,
+  Crate,
+  Super,
+  Const,
+  Type,
+  Panic,
+  CatchPanic,
+  Test,
+  Suite,
+  With,
+  As,
+  BeforeEach,
+  AfterEach,
+  BeforeAll,
+  AfterAll,
+  AssertEq,
+  AssertNe,
+  AssertTrue,
+  AssertFalse,
+  AssertSome,
+  AssertNone,
+  AssertOk,
+  AssertErr,
+  AssertThrows,
+  Ignore,
+  Async,
+  ShouldPanic,
+  Timeout,
+  Knowledge,
+  Skill,
+  Agent,
+  Description,
+  Params,
+  Impl,
+  VectorStore,
+  EmbeddingModel,
+  ChunkSize,
+  ChunkOverlap,
+  Sources,
+  RetrievalStrategy,
+  TopK,
+  RelevanceThreshold,
+  MmrLambda,
+  NumHypothetical,
+  EnableRelevanceCheck,
+  EnableSupportCheck,
+  EnableWebFallback,
+  EnableQueryDecomposition,
+  MaxCorrections,
+  MaxIterations,
+  EnableReflection,
+  SearchDepth,
+  IncludeCommunities,
+  Provider,
+  Model,
+  Endpoint,
+  ApiKeyEnv,
+  Temperature,
+  System,
+  Skills,
+  ConnectedKnowledge,
+  Budget,
+  Guard,
+  GuardChain,
+  Capability,
+  Grant,
+  Tool,
+  Memory,
+  Checkpoint,
+  Rewind,
+  Env,
+  Connector,
+  WorldModel,
+  Plan,
+  Subagent,
+  Requires,
+  Guards,
+  BudgetCost,
+  Capabilities,
+  Returns,
+  OnObservation,
+  OnAction,
+  OnToolInput,
+  OnToolOutput,
+  OnToolCall,
+  OnResult,
+  To,
+  True,
+  False,
+  Nil,
+  DocComment,
+
+  // NEW: Handoff keywords (OpenAI Agents SDK style)
+  Handoff,
+  HandoffTo,
+  Handoffs,
+  OnHandoff,
+  InputFilter,
+  IsEnabled,
+  ToolName,
+  InputType,  // Structured input type for handoff
+
+  // NEW: Agent Card keywords (A2A Protocol)
+  Card,
+  Version,
+  InputSchema,
+  OutputSchema,
+  AuthMethod,
+
+  // NEW: Task keywords (A2A Protocol)
+  Task,
+  Status,
+  OnStatusChange,
+
+  // NEW: Runner keywords (Agent Loop)
+  Runner,
+  MaxTurns,
+  Tracing,
+  EntryAgent,
+  OnTurn,
+  OnComplete,
+  Guardrails,
+  InputGuardrails,
+  OutputGuardrails,
+
+  // NEW: A2A Protocol keywords
+  A2AEndpoint,
+  A2AAuth,
+  OutputType,
+
+  // NEW: agents.md integration (Phase 6)
+  ContextFrom,
+
+  // NEW: MCP servers (Phase 3)
+  McpServers,
+
+  // Voice pipeline keywords
+  Voice,
+  SttProvider,
+  SttModel,
+  TtsProvider,
+  TtsModel,
+  TtsVoice,
+  SttEndpoint,
+  TtsEndpoint,
+  TtsFormat,
+  TtsSpeed,
+  TtsInstructions,
+  SttLanguage,
+  SttFormat,
+
+  // Realtime voice keywords
+  RealtimeVoice,
+  RtProvider,
+  RtModel,
+  RtVoice,
+  RtVad,
+  RtVadThreshold,
+  RtSilenceDurationMs,
+  RtInputFormat,
+  RtOutputFormat,
+  RtSampleRate,
+  RtSpeed,
+  RtSttEndpoint,
+  RtTtsEndpoint,
+  RtLlmEndpoint,
+
+  // Error handling keywords
+  Try,
+  Catch,
+  Throw,
+
+  // Cognitive keywords (v0.5.0)
+  Reasoning,
+  Reflect,
+  Learning,
+  Goals,
+  Triggers,
+  Initiative,
+  Evolve,
+  InnerModel,
+  EmbeddedConfig,
+  ModelPath,
+  CoreIdentity,
+  ReviewInterval,
+  ReviewAfter,
+  MinConfidence,
+  OnLowQuality,
+  MaxRevisions,
+  FeedbackSignal,
+  MaxAdaptations,
+  RollbackOnDecline,
+  MaxDailyCalls,
+  MaxDailyCost,
+  MaxDailyTokens,
+  OnSchedule,
+  AllowRollback,
+  MutableFields,
+
+  Eof
+};
+
+struct Token
+{
+  TokenType type;
+  std::string lexeme;
+  std::size_t position = 0;
+  std::size_t line = 0;
+  std::size_t column = 0;
+};
+
+class Parser
+{
+public:
+  explicit Parser(std::string source);
+
+  Program parse();
+
+private:
+  bool is_at_end() const;
+  const Token& peek() const;
+  const Token& previous() const;
+  const Token& advance();
+  bool check(TokenType type) const;
+  bool match(TokenType type);
+  [[noreturn]] void error(const std::string& message) const;
+
+  void tokenize();
+
+  StmtPtr parse_statement();
+  StmtPtr parse_declaration();
+  StmtPtr parse_return();
+  StmtPtr parse_emit();
+  StmtPtr parse_function(const Visibility& visibility);
+  StmtPtr parse_skill(const Visibility& visibility);
+  StmtPtr parse_knowledge(const Visibility& visibility);
+  StmtPtr parse_agent(const Visibility& visibility);
+  StmtPtr parse_budget(const Visibility& visibility);
+  StmtPtr parse_guard(const Visibility& visibility);
+  StmtPtr parse_guardchain(const Visibility& visibility);
+  StmtPtr parse_capability(const Visibility& visibility);
+  StmtPtr parse_tool(const Visibility& visibility);
+  StmtPtr parse_memory(const Visibility& visibility);
+  StmtPtr parse_env(const Visibility& visibility);
+  StmtPtr parse_connector(const Visibility& visibility);
+  StmtPtr parse_world_model(const Visibility& visibility);
+  StmtPtr parse_plan(const Visibility& visibility);
+  StmtPtr parse_subagent(const Visibility& visibility);
+  StmtPtr parse_module_decl();
+  StmtPtr parse_import_decl(const Visibility& visibility, bool is_reexport);
+  StmtPtr parse_const_decl(const Visibility& visibility);
+  StmtPtr parse_type_alias(const Visibility& visibility);
+  StmtPtr parse_doc_comment(Token first_token);
+  StmtPtr parse_test_decl_statement();
+  StmtPtr parse_test_suite_statement();
+  StmtPtr parse_with_statement();
+  StmtPtr parse_assert_statement(TokenType type);
+  StmtPtr parse_grant_statement();
+  StmtPtr parse_checkpoint_statement();
+  StmtPtr parse_rewind_statement();
+  StmtPtr parse_let();
+  StmtPtr parse_block();
+  BlockStmt parse_block_node();
+  StmtPtr parse_if();
+  StmtPtr parse_while();
+  TestAttribute parse_test_attribute();
+  std::vector<TestAttribute> parse_test_attributes();
+  std::unique_ptr<TestDecl> parse_test_decl_node(std::vector<TestAttribute> attributes);
+  std::unique_ptr<TestSuiteDecl> parse_test_suite_node();
+  SkillParam parse_skill_param();
+  ToolParam parse_tool_param();
+  BudgetCost parse_budget_cost();
+  std::unique_ptr<GuardHandler> parse_guard_handler();
+  std::vector<SkillParam> parse_skill_params();
+  std::vector<IdentifierRef> parse_identifier_list();
+  std::vector<KnowledgeSource> parse_knowledge_sources();
+  BudgetDimension parse_budget_dimension();
+  Visibility parse_visibility();
+  std::vector<std::string> parse_module_path();
+  std::vector<std::string> parse_import_items();
+  ExprPtr parse_expression();
+  ExprPtr parse_assignment();
+  ExprPtr parse_equality();
+  ExprPtr parse_comparison();
+  ExprPtr parse_term();
+  ExprPtr parse_factor();
+  ExprPtr parse_unary();
+  ExprPtr parse_call();
+  ExprPtr parse_primary();
+  std::unique_ptr<TypeExpression> parse_type_expression();
+
+  // NEW: Agentic Orchestration parsing methods
+  StmtPtr parse_handoff(const Visibility& visibility);
+  StmtPtr parse_agent_card(const Visibility& visibility);
+  StmtPtr parse_task(const Visibility& visibility);
+  StmtPtr parse_runner(const Visibility& visibility);
+  HandoffTarget parse_handoff_target();
+  AgentCardSchema parse_card_schema_field();
+  std::vector<AgentCardSchema> parse_card_schema();
+  std::vector<HandoffTarget> parse_handoff_list();
+
+  // Voice pipeline
+  StmtPtr parse_voice_pipeline(const Visibility& visibility);
+
+  // Realtime voice
+  StmtPtr parse_realtime_voice(const Visibility& visibility);
+
+  // Error handling
+  StmtPtr parse_try_catch();
+  StmtPtr parse_throw();
+
+  std::string source_;
+  std::vector<Token> tokens_{};
+  std::size_t current_ = 0;
+};
+}  // namespace neamc

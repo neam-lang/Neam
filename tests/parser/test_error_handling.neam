@@ -1,0 +1,35 @@
+// Test error handling constructs
+
+// Try-catch basic
+try {
+    emit "in-try";
+} catch (e) {
+    emit "caught";
+}
+
+// Try-catch with throw
+try {
+    throw "custom error";
+} catch (e) {
+    emit "caught-custom";
+}
+
+// Nested try-catch
+try {
+    try {
+        throw "inner";
+    } catch (e) {
+        emit "inner-catch";
+        throw "rethrow";
+    }
+} catch (e) {
+    emit "outer-catch";
+}
+
+// Try without error
+try {
+    let x = 1 + 2;
+    emit x;
+} catch (e) {
+    emit "should-not-reach";
+}

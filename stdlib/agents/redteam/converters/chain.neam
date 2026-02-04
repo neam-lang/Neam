@@ -1,0 +1,69 @@
+// Converter chaining
+
+module std.agents.redteam.converters.chain;
+
+use std.agents.redteam.converters.encoding as encoding;
+use std.agents.redteam.converters.unicode as unicode;
+use std.agents.redteam.converters.language as language;
+use std.agents.redteam.converters.noise as noise;
+
+pub fun chain_converters(converters) {
+  return { kind: "Chain", converters: converters };
+}
+
+pub fun apply_converters(input, converters) {
+  let current = input;
+  for (converter in converters) {
+    current = convert_any(converter, current);
+  }
+  return current;
+}
+
+pub fun convert(chain, input) {
+  return apply_converters(input, chain.converters != nil ? chain.converters : []);
+}
+
+pub fun revert(chain, input) {
+  let current = input;
+  let converters = chain.converters != nil ? chain.converters : [];
+  let i = len(converters) - 1;
+  while (i >= 0) {
+    current = revert_any(converters[i], current);
+    i = i - 1;
+  }
+  return current;
+}
+
+fun convert_any(converter, input) {
+  if (converter == nil) { return input; }
+  if (converter.kind == "Base64" || converter.kind == "ROT13" || converter.kind == "URLEncode" || converter.kind == "Morse") {
+    return encoding.convert(converter, input);
+  }
+  if (converter.kind == "Homoglyph") {
+    return unicode.convert(converter, input);
+  }
+  if (converter.kind == "Translate" || converter.kind == "Tone") {
+    return language.convert(converter, input);
+  }
+  if (converter.kind == "Whitespace" || converter.kind == "Typo") {
+    return noise.convert(converter, input);
+  }
+  return input;
+}
+
+fun revert_any(converter, input) {
+  if (converter == nil) { return input; }
+  if (converter.kind == "Base64" || converter.kind == "ROT13" || converter.kind == "URLEncode" || converter.kind == "Morse") {
+    return encoding.revert(converter, input);
+  }
+  if (converter.kind == "Homoglyph") {
+    return unicode.revert(converter, input);
+  }
+  if (converter.kind == "Translate" || converter.kind == "Tone") {
+    return language.revert(converter, input);
+  }
+  if (converter.kind == "Whitespace" || converter.kind == "Typo") {
+    return noise.revert(converter, input);
+  }
+  return input;
+}

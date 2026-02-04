@@ -1,0 +1,10 @@
+{"skill": "add_numbers", "params": {"a": 3, "b": 4}, "expected": 7, "tags": ["skill", "arithmetic"]}
+{"skill": "add_numbers", "params": {"a": -1, "b": 1}, "expected": 0, "tags": ["skill", "arithmetic"]}
+{"skill": "add_numbers", "params": {"a": 0, "b": 0}, "expected": 0, "tags": ["skill", "edge"]}
+{"skill": "add_numbers", "params": {"a": 999999, "b": 1}, "expected": 1000000, "tags": ["skill", "large"]}
+{"skill": "format_greeting", "params": {"name": "Alice"}, "expected": "Hello, Alice!", "tags": ["skill", "string"]}
+{"skill": "format_greeting", "params": {"name": ""}, "expected": "Hello, !", "tags": ["skill", "edge"]}
+{"skill": "classify_number", "params": {"n": 5}, "expected": "positive", "tags": ["skill", "classification"]}
+{"skill": "classify_number", "params": {"n": -3}, "expected": "negative", "tags": ["skill", "classification"]}
+{"skill": "classify_number", "params": {"n": 0}, "expected": "zero", "tags": ["skill", "classification"]}
+{"skill": "add_numbers", "params": {"a": 1.5, "b": 2.5}, "expected": 4.0, "tags": ["skill", "float"]}

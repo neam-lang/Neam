@@ -1,0 +1,61 @@
+// Test function declarations, closures, and recursion
+
+// Simple function
+fun greet(name) {
+    return "Hello " + name;
+}
+emit greet("World");
+
+// No-arg function
+fun get_pi() {
+    return 3.14159;
+}
+emit get_pi();
+
+// Multi-param function
+fun add(a, b) {
+    return a + b;
+}
+emit add(3, 4);
+
+// Function calling function
+fun double(x) {
+    return x * 2;
+}
+fun quadruple(x) {
+    return double(double(x));
+}
+emit quadruple(5);
+
+// Recursive factorial
+fun factorial(n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+emit factorial(10);
+
+// Recursive fibonacci
+fun fib(n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+emit fib(10);
+
+// Function with local variables
+fun compute(x) {
+    let temp = x * x;
+    let result = temp + 1;
+    return result;
+}
+emit compute(5);
+
+// Nested function calls in expression
+emit add(double(3), factorial(4));
+
+// Function as expression
+let result = add(1, 2) + add(3, 4);
+emit result;

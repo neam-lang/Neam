@@ -1,0 +1,30 @@
+// SQLite exporter
+
+module std.observability.exporters.local.sqlite;
+
+pub fun create_exporter(config) {
+  let default_config = {
+    database: "./observability.db",
+    schema: "otel_genai",
+    retention_days: 30,
+    vacuum_on_startup: true
+  };
+  return merge(default_config, config);
+}
+
+pub fun schema_definition() {
+  return {
+    spans_table: "otel_spans",
+    logs_table: "otel_logs",
+    metrics_table: "otel_metrics",
+    events_table: "otel_events"
+  };
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

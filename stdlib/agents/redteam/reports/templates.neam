@@ -1,0 +1,7 @@
+// Report templates
+
+module std.agents.redteam.reports.templates;
+
+pub fun default_template() {
+  return { name: "default", sections: ["summary", "findings", "metrics"] };
+}

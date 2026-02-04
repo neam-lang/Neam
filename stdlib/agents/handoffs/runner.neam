@@ -1,0 +1,148 @@
+/// Agent Runner for managing agent loop execution
+/// Implements the agent loop pattern with handoff support
+
+module stdlib::agents::handoffs::runner
+
+import stdlib::agents::handoffs::handoff
+
+/// Default maximum number of turns in agent loop
+const DEFAULT_MAX_TURNS = 10
+
+/// Creates a new runner configuration
+/// @param entry_agent The starting agent for the loop
+/// @param options Additional runner configuration
+/// @returns A RunnerConfig object
+pub fun create_runner(entry_agent: string, options: map = {}) {
+  let runner = {
+    entry_agent: entry_agent,
+    max_turns: options.get("max_turns", DEFAULT_MAX_TURNS),
+    tracing: options.get("tracing", false),
+    guardrails: options.get("guardrails", []),
+    on_turn: options.get("on_turn", nil),
+    on_complete: options.get("on_complete", nil),
+    trace: []
+  };
+  return runner;
+}
+
+/// Represents a single turn in the agent loop
+/// @param turn Turn number (0-indexed)
+/// @param agent_name Name of the agent executing
+/// @param input Input provided to the agent
+/// @param output Output from the agent
+/// @param was_handoff Whether this turn resulted in a handoff
+pub fun create_trace_entry(turn: number, agent_name: string, input: string, output: string, was_handoff: bool = false) {
+  return {
+    turn: turn,
+    agent_name: agent_name,
+    input: input,
+    output: output,
+    was_handoff: was_handoff,
+    handoff_to: "",
+    timestamp: now()
+  };
+}
+
+/// Runs the agent loop with the given input
+/// @param runner The runner configuration
+/// @param input The initial input to process
+/// @returns AgentLoopResult with final output and trace
+pub fun run(runner: map, input: string) {
+  let result = {
+    final_output: nil,
+    final_agent: runner.entry_agent,
+    trace: [],
+    total_turns: 0,
+    completed: false,
+    error_message: ""
+  };
+
+  let current_agent = runner.entry_agent;
+  let current_input = input;
+  let max_turns = runner.get("max_turns", DEFAULT_MAX_TURNS);
+
+  for (turn in range(0, max_turns)) {
+    let trace_entry = create_trace_entry(turn, current_agent, current_input, "");
+
+    // Apply guardrails before processing
+    for (guardrail in runner.get("guardrails", [])) {
+      let check_result = guardrail.check(current_input);
+      if (!check_result.passed) {
+        result.error_message = "Guardrail blocked: " + check_result.reason;
+        result.completed = false;
+        return result;
+      }
+    }
+
+    // Call on_turn callback if defined
+    if (runner.on_turn != nil) {
+      runner.on_turn(turn, current_agent, current_input);
+    }
+
+    // Execute the current agent (this would be the actual agent call)
+    let agent_response = execute_agent(current_agent, current_input);
+    trace_entry.output = agent_response.output;
+
+    // Check for handoff in response
+    if (agent_response.contains("handoff_to")) {
+      trace_entry.was_handoff = true;
+      trace_entry.handoff_to = agent_response.handoff_to;
+      current_agent = agent_response.handoff_to;
+      current_input = agent_response.get("handoff_context", agent_response.output);
+    } else {
+      // No handoff, loop is complete
+      result.final_output = agent_response.output;
+      result.final_agent = current_agent;
+      result.completed = true;
+    }
+
+    result.trace.push(trace_entry);
+    result.total_turns = turn + 1;
+
+    if (result.completed) {
+      break;
+    }
+  }
+
+  // Call on_complete callback if defined
+  if (runner.on_complete != nil && result.completed) {
+    runner.on_complete(result);
+  }
+
+  if (!result.completed && result.total_turns >= max_turns) {
+    result.error_message = "Max turns reached without completion";
+  }
+
+  return result;
+}
+
+/// Internal function to execute an agent
+/// This would be replaced with actual agent invocation
+fun execute_agent(agent_name: string, input: string) {
+  // Placeholder - actual implementation would call the agent
+  return {
+    output: "Agent " + agent_name + " processed: " + input,
+    handoff_to: nil,
+    handoff_context: nil
+  };
+}
+
+/// Formats the trace for display
+/// @param trace List of trace entries
+/// @returns Formatted string representation
+pub fun format_trace(trace: list) {
+  let output = "Agent Loop Trace:\n";
+  output = output + "================\n";
+
+  for (entry in trace) {
+    output = output + "Turn " + str(entry.turn) + ": " + entry.agent_name + "\n";
+    output = output + "  Input: " + entry.input + "\n";
+    output = output + "  Output: " + entry.output + "\n";
+    if (entry.was_handoff) {
+      output = output + "  -> Handoff to: " + entry.handoff_to + "\n";
+    }
+    output = output + "\n";
+  }
+
+  return output;
+}

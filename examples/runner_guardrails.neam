@@ -1,0 +1,93 @@
+// ============================================
+// Runner Guardrails Example (Phase 3)
+// Demonstrates input and output guardrails
+// ============================================
+
+// Input guardrail - filters/validates input before agent call
+guard InputSanitizer {
+  description: "Sanitizes and validates user input"
+
+  on_tool_input(input) {
+    // Check for blocked words
+    if (input.contains("BLOCKED")) {
+      emit "[Guard] Input contains blocked content";
+      return "block";
+    }
+
+    // Transform input (e.g., normalize)
+    emit "[Guard] Input sanitized";
+    return input;
+  }
+}
+
+// Output guardrail - filters/validates output before returning
+guard OutputFilter {
+  description: "Filters sensitive information from output"
+
+  on_tool_output(output) {
+    // Check for sensitive patterns
+    if (output.contains("SECRET")) {
+      emit "[Guard] Output contained sensitive data - redacting";
+      return "[REDACTED]";
+    }
+
+    emit "[Guard] Output validated";
+    return output;
+  }
+}
+
+// Guard chains for combining multiple guards
+guardchain InputChain = [InputSanitizer];
+guardchain OutputChain = [OutputFilter];
+
+// Simple echo agent for testing
+agent EchoAgent {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.5
+  system: "You are an echo agent. Simply repeat back what the user says, prefixed with 'Echo: '"
+}
+
+// Runner with input and output guardrails
+runner GuardedRunner {
+  entry_agent: EchoAgent
+  max_turns: 3
+  input_guardrails: [InputChain]
+  output_guardrails: [OutputChain]
+}
+
+// Main execution
+{
+  emit "=== Runner Guardrails Demo (Phase 3) ===";
+  emit "";
+  emit "This example demonstrates:";
+  emit "  - input_guardrails: run before first agent call";
+  emit "  - output_guardrails: run before returning final output";
+  emit "";
+  emit "=========================================";
+  emit "";
+
+  // Test 1: Normal input
+  emit "--- Test 1: Normal Input ---";
+  emit "Input: Hello world";
+  emit "";
+
+  let r1 = GuardedRunner.run("Hello world");
+  emit "Result:";
+  emit r1["final_output"];
+  emit "";
+
+  // Test 2: Blocked input (should fail at input guardrail)
+  emit "--- Test 2: Blocked Input ---";
+  emit "Input: This is BLOCKED content";
+  emit "";
+
+  let r2 = GuardedRunner.run("This is BLOCKED content");
+  emit "Completed:";
+  emit r2["completed"];
+  emit "Error:";
+  emit r2["error_message"];
+  emit "";
+
+  emit "=== Demo Complete ===";
+}

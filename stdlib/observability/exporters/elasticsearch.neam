@@ -1,0 +1,63 @@
+// Elasticsearch exporter
+
+module std.observability.exporters.elasticsearch;
+
+pub fun create_exporter(config) {
+  let default_config = {
+    nodes: ["http://localhost:9200"],
+    traces_index: "neam-traces",
+    metrics_index: "neam-metrics",
+    logs_index: "neam-logs",
+    index_pattern: "{index}-{date}",
+    ilm_policy: "neam-observability",
+    auth: { type: "api_key", api_key: env("ES_API_KEY") },
+    bulk_size: 1000,
+    flush_interval_ms: 5000
+  };
+  return merge(default_config, config);
+}
+
+pub fun index_mappings() {
+  return {
+    mappings: {
+      properties: {
+        trace_id: { type: "keyword" },
+        span_id: { type: "keyword" },
+        parent_span_id: { type: "keyword" },
+        timestamp: { type: "date" },
+        duration_ms: { type: "long" },
+        gen_ai: {
+          properties: {
+            system: { type: "keyword" },
+            operation_name: { type: "keyword" },
+            request_model: { type: "keyword" },
+            usage: {
+              properties: {
+                input_tokens: { type: "integer" },
+                output_tokens: { type: "integer" }
+              }
+            }
+          }
+        },
+        neam: {
+          properties: {
+            agent_name: { type: "keyword" },
+            agent_id: { type: "keyword" },
+            step_number: { type: "integer" },
+            error_type: { type: "keyword" }
+          }
+        },
+        prompt_content: { type: "text", analyzer: "standard" },
+        response_content: { type: "text", analyzer: "standard" }
+      }
+    }
+  };
+}
+
+fun merge(base, override) {
+  let merged = json_decode(json_encode(base));
+  for (key in keys(override ?? {})) {
+    merged[key] = override[key];
+  }
+  return merged;
+}

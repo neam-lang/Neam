@@ -1,0 +1,132 @@
+// Prompt registry with caching and labels
+
+module std.agents.prompts.versioning.registry;
+
+use std.time;
+use std.agents.prompts.versioning.managed;
+
+pub fun prompt_registry() {
+  return {
+    prompts: {},
+    cache: { entries: {}, ttl_ms: 300000 },
+    tenants: {}
+  };
+}
+
+pub fun register_prompt(registry, prompt) {
+  registry.prompts[prompt.name] = prompt;
+  return { ok: true, value: prompt.id };
+}
+
+pub fun get_prompt(registry, name, label) {
+  let cached = get_cached_prompt(registry, name, label);
+  if (cached.ok && cached.value != nil) {
+    return { ok: true, value: cached.value };
+  }
+
+  let prompt = registry.prompts[name];
+  if (prompt == nil) {
+    return { ok: false, error: "Prompt not found: " + name };
+  }
+
+  let version = managed.get_label({ prompts: { (prompt.id): prompt, (prompt.name): prompt } }, prompt.id, label);
+  if (!version.ok) { return version; }
+
+  let content = version.value.content;
+  cache_prompt(registry, name, label, content);
+  return { ok: true, value: content };
+}
+
+pub fun list_prompts(registry, filter) {
+  let results = [];
+  for (name in keys(registry.prompts)) {
+    let prompt = registry.prompts[name];
+    if (prompt == nil) { continue; }
+
+    if (filter != nil && filter.name != nil && prompt.name != filter.name) {
+      continue;
+    }
+
+    if (filter != nil && filter.tag != nil) {
+      let tags = prompt.metadata.tags != nil ? prompt.metadata.tags : [];
+      if (!contains_value(tags, filter.tag)) { continue; }
+    }
+
+    if (filter != nil && filter.agent != nil) {
+      let agent = prompt.metadata.agent;
+      if (agent != filter.agent) { continue; }
+    }
+
+    push(results, {
+      id: prompt.id,
+      name: prompt.name,
+      type: prompt.type,
+      labels: prompt.labels,
+      metadata: prompt.metadata
+    });
+  }
+  return { ok: true, value: results };
+}
+
+pub fun refresh_cache(registry, prompt_name) {
+  for (key in keys(registry.cache.entries)) {
+    if (starts_with(key, prompt_name + ":")) {
+      registry.cache.entries[key] = nil;
+    }
+  }
+  return { ok: true, value: true };
+}
+
+pub fun set_label(registry, prompt_name, label, version) {
+  let prompt = registry.prompts[prompt_name];
+  if (prompt == nil) { return { ok: false, error: "Prompt not found: " + prompt_name }; }
+  prompt.labels[label] = version;
+  refresh_cache(registry, prompt_name);
+  return { ok: true, value: label };
+}
+
+pub fun set_tenant(registry, tenant_id, prompt) {
+  if (registry.tenants[tenant_id] == nil) {
+    registry.tenants[tenant_id] = {};
+  }
+  registry.tenants[tenant_id][prompt.name] = prompt;
+  return { ok: true, value: prompt.id };
+}
+
+pub fun get_tenant_prompt(registry, tenant_id, name, label) {
+  let tenant_prompts = registry.tenants[tenant_id];
+  if (tenant_prompts == nil || tenant_prompts[name] == nil) {
+    return get_prompt(registry, name, label);
+  }
+
+  let prompt = tenant_prompts[name];
+  let version = managed.get_label({ prompts: { (prompt.id): prompt, (prompt.name): prompt } }, prompt.id, label);
+  if (!version.ok) { return version; }
+  return { ok: true, value: version.value.content };
+}
+
+fun cache_prompt(registry, name, label, content) {
+  let key = name + ":" + label;
+  registry.cache.entries[key] = { content: content, created_at: time.now() };
+}
+
+fun get_cached_prompt(registry, name, label) {
+  let key = name + ":" + label;
+  let entry = registry.cache.entries[key];
+  if (entry == nil) { return { ok: true, value: nil }; }
+
+  let age = time.now() - entry.created_at;
+  if (age > registry.cache.ttl_ms) {
+    registry.cache.entries[key] = nil;
+    return { ok: true, value: nil };
+  }
+
+  return { ok: true, value: entry.content };
+}
+
+fun contains_value(items, value) {
+  for (item in items) {
+    if (item == value) { return true; }
+  }
+  return false;
+}

@@ -1,0 +1,72 @@
+// ============================================
+// AGENTS.md Context Integration Example (Phase 6)
+// Demonstrates loading project context from AGENTS.md
+// ============================================
+
+// Create a sample AGENTS.md file for this example
+// In real usage, you would point to your project's AGENTS.md
+
+// Agent that loads context from AGENTS.md
+agent ProjectAssistant {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a helpful project assistant. Follow the project guidelines."
+
+  // NEW: Load project context from AGENTS.md file
+  context_from: "./examples/AGENTS.md"
+}
+
+// Agent without context (for comparison)
+agent BasicAssistant {
+  provider: "ollama"
+  model: "llama3.2:3b"
+  temperature: 0.3
+  system: "You are a basic assistant. Answer questions directly."
+}
+
+// Main execution
+{
+  emit "=== AGENTS.md Context Integration Demo (Phase 6) ===";
+  emit "";
+  emit "This example demonstrates how agents can load project context";
+  emit "from an AGENTS.md file to guide their behavior.";
+  emit "";
+  emit "===============================================";
+  emit "";
+
+  // Test 1: Ask about code style (context-aware agent should know the rules)
+  emit "--- Test 1: Context-Aware Agent ---";
+  emit "Question: What coding style should I follow?";
+  emit "";
+
+  let r1 = ProjectAssistant.ask("What coding style should I follow for this project? Keep your answer brief.");
+  emit "Response:";
+  emit r1;
+  emit "";
+
+  // Test 2: Ask about testing
+  emit "--- Test 2: Project Guidelines ---";
+  emit "Question: How should I run tests?";
+  emit "";
+
+  let r2 = ProjectAssistant.ask("How do I run tests for this project? Keep your answer brief.");
+  emit "Response:";
+  emit r2;
+  emit "";
+
+  // Test 3: Basic assistant (no context)
+  emit "--- Test 3: Basic Agent (No Context) ---";
+  emit "Question: What coding style should I follow?";
+  emit "";
+
+  let r3 = BasicAssistant.ask("What coding style should I follow for this project? Keep your answer brief.");
+  emit "Response:";
+  emit r3;
+  emit "";
+
+  emit "=== Demo Complete ===";
+  emit "";
+  emit "Note: The context-aware agent (ProjectAssistant) should reference";
+  emit "the guidelines from AGENTS.md, while the basic agent gives generic advice.";
+}

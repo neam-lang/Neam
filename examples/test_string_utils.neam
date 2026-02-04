@@ -1,0 +1,59 @@
+//
+// Test script demonstrating Neam string operations
+// Run with: ./build/neam-cli examples/test_string_utils.neam
+//
+
+fun repeat_str(s, n) {
+  let result = "";
+  let i = 0;
+  while (i < n) {
+    result = result + s;
+    i = i + 1;
+  }
+  return result;
+}
+
+{
+  emit "=== Neam String Utilities Test ===";
+  emit "";
+
+  // Test 1: String Length
+  emit "Test 1: String Length";
+  emit "  len('Hello'): " + str(len("Hello"));
+  emit "  len('Neam Programming'): " + str(len("Neam Programming"));
+  emit "";
+
+  // Test 2: String Concatenation
+  emit "Test 2: String Concatenation";
+  let first = "Hello";
+  let second = "World";
+  emit "  'Hello' + ' ' + 'World': " + first + " " + second;
+  emit "";
+
+  // Test 3: String Repeat
+  emit "Test 3: String Repeat";
+  emit "  repeat('ab', 3): " + repeat_str("ab", 3);
+  emit "  repeat('*', 10): " + repeat_str("*", 10);
+  emit "";
+
+  // Test 4: Lists of Strings
+  emit "Test 4: String Lists";
+  let words = ["apple", "banana", "cherry"];
+  emit "  Words: " + str(words);
+  emit "  First word: " + words[0];
+  emit "  Last word: " + words[2];
+  emit "";
+
+  // Test 5: Map with Strings
+  emit "Test 5: String Maps";
+  let info = {
+    "name": "Neam Language",
+    "version": "0.6.0",
+    "description": "AI-native programming language"
+  };
+  emit "  Name: " + info["name"];
+  emit "  Version: " + info["version"];
+  emit "";
+
+  emit "=== All Tests Complete ===";
+}
