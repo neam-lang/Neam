@@ -1,4 +1,7 @@
 /build/
+/build-*/
+/release-artifacts/
+/deps/
 /.cmake/
 /.cache/
 /.claude/settings.local.json
