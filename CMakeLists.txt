@@ -333,7 +333,7 @@ target_link_libraries(neamc_core
 )
 if (WIN32)
     # Windows static CURL requires additional dependencies
-    set(CURL_WIN_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/windows/curl-8.12.1_1-win64-mingw/lib")
+    set(CURL_WIN_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/windows/curl-8.11.1_1-win64-mingw/lib")
     target_link_libraries(neamc_core PUBLIC
         ${CURL_WIN_DEPS_DIR}/libnghttp2.a
         ${CURL_WIN_DEPS_DIR}/libnghttp3.a

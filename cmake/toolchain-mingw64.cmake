@@ -9,7 +9,7 @@ set(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)
 set(CMAKE_RC_COMPILER x86_64-w64-mingw32-windres)
 
 # Target environment - include pre-built Windows libraries
-set(CURL_WIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/windows/curl-8.12.1_1-win64-mingw")
+set(CURL_WIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/windows/curl-8.11.1_1-win64-mingw")
 
 set(CMAKE_FIND_ROOT_PATH
     /opt/homebrew/opt/mingw-w64
