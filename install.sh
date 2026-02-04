@@ -97,10 +97,9 @@ else
     exit 1
 fi
 
-# Extract
-echo -e "${GREEN}[4/5]${NC} Extracting to $INSTALL_DIR..."
-tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR" --strip-components=1 2>/dev/null || \
-tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"
+# Extract directly to bin directory
+echo -e "${GREEN}[4/5]${NC} Extracting to $BIN_DIR..."
+tar -xzf "$TEMP_FILE" -C "$BIN_DIR"
 rm -f "$TEMP_FILE"
 
 # Make binaries executable
