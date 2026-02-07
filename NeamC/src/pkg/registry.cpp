@@ -1,115 +1,22 @@
 //
 // Neam Package Manager - Registry Client Implementation
 //
+// v0.6.5: Replaced raw POSIX sockets with libcurl (via http_client),
+// replaced regex JSON parsing with nlohmann::json.
+//
 
 #include "neamc/pkg/registry.hpp"
 #include "neamc/llm/http_client.hpp"
+#include "neamc/version.hpp"
 
+#include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <sstream>
-#include <regex>
-#include <cstdlib>
-
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#endif
+#include <stdexcept>
 
 namespace neamc::pkg
 {
-
-// Simple JSON parser helpers
-namespace json
-{
-std::string get_string(const std::string& json, const std::string& key)
-{
-  std::regex pattern("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"");
-  std::smatch match;
-  if (std::regex_search(json, match, pattern) && match.size() > 1)
-  {
-    return match[1].str();
-  }
-  return "";
-}
-
-int get_int(const std::string& json, const std::string& key)
-{
-  std::regex pattern("\"" + key + "\"\\s*:\\s*(\\d+)");
-  std::smatch match;
-  if (std::regex_search(json, match, pattern) && match.size() > 1)
-  {
-    return std::stoi(match[1].str());
-  }
-  return 0;
-}
-
-bool get_bool(const std::string& json, const std::string& key)
-{
-  std::regex pattern("\"" + key + "\"\\s*:\\s*(true|false)");
-  std::smatch match;
-  if (std::regex_search(json, match, pattern) && match.size() > 1)
-  {
-    return match[1].str() == "true";
-  }
-  return false;
-}
-
-std::vector<std::string> get_string_array(const std::string& json, const std::string& key)
-{
-  std::vector<std::string> result;
-  std::regex array_pattern("\"" + key + "\"\\s*:\\s*\\[([^\\]]*)\\]");
-  std::smatch array_match;
-  if (std::regex_search(json, array_match, array_pattern) && array_match.size() > 1)
-  {
-    std::string array_content = array_match[1].str();
-    std::regex item_pattern("\"([^\"]*)\"");
-    auto items_begin = std::sregex_iterator(array_content.begin(), array_content.end(), item_pattern);
-    auto items_end = std::sregex_iterator();
-    for (auto i = items_begin; i != items_end; ++i)
-    {
-      result.push_back((*i)[1].str());
-    }
-  }
-  return result;
-}
-
-std::string to_json_string(const std::string& value)
-{
-  std::string result = "\"";
-  for (char c : value)
-  {
-    switch (c)
-    {
-    case '"':
-      result += "\\\"";
-      break;
-    case '\\':
-      result += "\\\\";
-      break;
-    case '\n':
-      result += "\\n";
-      break;
-    case '\r':
-      result += "\\r";
-      break;
-    case '\t':
-      result += "\\t";
-      break;
-    default:
-      result += c;
-    }
-  }
-  result += "\"";
-  return result;
-}
-}  // namespace json
 
 RegistryClient::RegistryClient(const std::string& registry_url) : registry_url_(registry_url)
 {
@@ -149,23 +56,34 @@ RegistryClient::RegistryClient(const std::string& registry_url) : registry_url_(
 
 bool RegistryClient::login(const std::string& username, const std::string& password)
 {
-  std::string body = "{\"username\":" + json::to_json_string(username) + ",\"password\":" +
-                     json::to_json_string(password) + "}";
+  nlohmann::json body;
+  body["username"] = username;
+  body["password"] = password;
 
-  std::string response = http_post("/api/v1/auth/login", body);
+  std::string response = http_post("/api/v1/auth/login", body.dump());
   if (response.empty())
   {
     return false;
   }
 
-  auth_token_ = json::get_string(response, "token");
-  if (auth_token_.empty())
+  try
   {
-    last_error_ = json::get_string(response, "error");
-    if (last_error_.empty())
+    auto json = nlohmann::json::parse(response);
+    if (json.contains("error"))
+    {
+      last_error_ = json["error"].get<std::string>();
+      return false;
+    }
+    auth_token_ = json.value("token", "");
+    if (auth_token_.empty())
     {
       last_error_ = "Login failed: invalid response";
+      return false;
     }
+  }
+  catch (const nlohmann::json::exception& e)
+  {
+    last_error_ = std::string("Login failed: invalid JSON: ") + e.what();
     return false;
   }
 
@@ -225,54 +143,60 @@ std::optional<PackageInfo> RegistryClient::get_package(const std::string& name)
     return std::nullopt;
   }
 
-  if (response.find("\"error\"") != std::string::npos)
+  try
   {
-    last_error_ = json::get_string(response, "error");
-    return std::nullopt;
-  }
-
-  PackageInfo info;
-  info.name = json::get_string(response, "name");
-  info.description = json::get_string(response, "description");
-  info.repository = json::get_string(response, "repository");
-  info.documentation = json::get_string(response, "documentation");
-  info.homepage = json::get_string(response, "homepage");
-  info.license = json::get_string(response, "license");
-  info.authors = json::get_string_array(response, "authors");
-  info.keywords = json::get_string_array(response, "keywords");
-  info.downloads = json::get_int(response, "downloads");
-
-  // Parse versions array (simplified)
-  // Find versions array manually since dotall is not supported
-  std::size_t versions_start = response.find("\"versions\"");
-  if (versions_start != std::string::npos)
-  {
-    std::size_t array_start = response.find('[', versions_start);
-    std::size_t array_end = response.find(']', array_start);
-    if (array_start != std::string::npos && array_end != std::string::npos)
+    auto json = nlohmann::json::parse(response);
+    if (json.contains("error"))
     {
-      std::string versions_content = response.substr(array_start + 1, array_end - array_start - 1);
+      last_error_ = json["error"].get<std::string>();
+      return std::nullopt;
+    }
 
-      std::regex version_obj_pattern("\\{([^}]+)\\}");
-      auto begin = std::sregex_iterator(versions_content.begin(), versions_content.end(), version_obj_pattern);
-      auto end = std::sregex_iterator();
+    PackageInfo info;
+    info.name = json.value("name", "");
+    info.description = json.value("description", "");
+    info.repository = json.value("repository", "");
+    info.documentation = json.value("documentation", "");
+    info.homepage = json.value("homepage", "");
+    info.license = json.value("license", "");
+    info.downloads = json.value("downloads", 0);
 
-      for (auto i = begin; i != end; ++i)
+    if (json.contains("authors") && json["authors"].is_array())
+    {
+      for (const auto& a : json["authors"])
       {
-        std::string ver_json = (*i)[1].str();
+        info.authors.push_back(a.get<std::string>());
+      }
+    }
+    if (json.contains("keywords") && json["keywords"].is_array())
+    {
+      for (const auto& k : json["keywords"])
+      {
+        info.keywords.push_back(k.get<std::string>());
+      }
+    }
+    if (json.contains("versions") && json["versions"].is_array())
+    {
+      for (const auto& v : json["versions"])
+      {
         VersionInfo ver;
-        ver.version = json::get_string(ver_json, "version");
-        ver.checksum = json::get_string(ver_json, "checksum");
-        ver.neam_version = json::get_string(ver_json, "neam_version");
-        ver.size_bytes = json::get_int(ver_json, "size_bytes");
-        ver.published_at = json::get_string(ver_json, "published_at");
-        ver.yanked = json::get_bool(ver_json, "yanked");
+        ver.version = v.value("version", "");
+        ver.checksum = v.value("checksum", "");
+        ver.neam_version = v.value("neam_version", "");
+        ver.size_bytes = v.value("size_bytes", 0);
+        ver.published_at = v.value("published_at", "");
+        ver.yanked = v.value("yanked", false);
         info.versions.push_back(ver);
       }
     }
-  }
 
-  return info;
+    return info;
+  }
+  catch (const nlohmann::json::exception& e)
+  {
+    last_error_ = std::string("Failed to parse package info: ") + e.what();
+    return std::nullopt;
+  }
 }
 
 std::optional<VersionInfo> RegistryClient::get_version(const std::string& name, const std::string& version)
@@ -283,21 +207,30 @@ std::optional<VersionInfo> RegistryClient::get_version(const std::string& name, 
     return std::nullopt;
   }
 
-  if (response.find("\"error\"") != std::string::npos)
+  try
   {
-    last_error_ = json::get_string(response, "error");
+    auto json = nlohmann::json::parse(response);
+    if (json.contains("error"))
+    {
+      last_error_ = json["error"].get<std::string>();
+      return std::nullopt;
+    }
+
+    VersionInfo info;
+    info.version = json.value("version", "");
+    info.checksum = json.value("checksum", "");
+    info.neam_version = json.value("neam_version", "");
+    info.size_bytes = json.value("size_bytes", 0);
+    info.published_at = json.value("published_at", "");
+    info.yanked = json.value("yanked", false);
+
+    return info;
+  }
+  catch (const nlohmann::json::exception& e)
+  {
+    last_error_ = std::string("Failed to parse version info: ") + e.what();
     return std::nullopt;
   }
-
-  VersionInfo info;
-  info.version = json::get_string(response, "version");
-  info.checksum = json::get_string(response, "checksum");
-  info.neam_version = json::get_string(response, "neam_version");
-  info.size_bytes = json::get_int(response, "size_bytes");
-  info.published_at = json::get_string(response, "published_at");
-  info.yanked = json::get_bool(response, "yanked");
-
-  return info;
 }
 
 std::vector<SearchResult> RegistryClient::search(const std::string& query, int limit)
@@ -321,29 +254,35 @@ std::vector<SearchResult> RegistryClient::get_recent(int limit)
 std::vector<SearchResult> RegistryClient::parse_search_results(const std::string& response)
 {
   std::vector<SearchResult> results;
-
   if (response.empty())
   {
     return results;
   }
 
-  std::regex result_pattern("\\{([^}]+)\\}");
-  auto begin = std::sregex_iterator(response.begin(), response.end(), result_pattern);
-  auto end = std::sregex_iterator();
-
-  for (auto i = begin; i != end; ++i)
+  try
   {
-    std::string item_json = (*i)[1].str();
-    SearchResult result;
-    result.name = json::get_string(item_json, "name");
-    result.description = json::get_string(item_json, "description");
-    result.latest_version = json::get_string(item_json, "latest_version");
-    result.downloads = json::get_int(item_json, "downloads");
-
-    if (!result.name.empty())
+    auto json = nlohmann::json::parse(response);
+    if (!json.is_array())
     {
-      results.push_back(result);
+      return results;
     }
+
+    for (const auto& item : json)
+    {
+      SearchResult result;
+      result.name = item.value("name", "");
+      result.description = item.value("description", "");
+      result.latest_version = item.value("latest_version", "");
+      result.downloads = item.value("downloads", 0);
+      if (!result.name.empty())
+      {
+        results.push_back(result);
+      }
+    }
+  }
+  catch (const nlohmann::json::exception&)
+  {
+    // Graceful degradation — return empty results on parse failure
   }
 
   return results;
@@ -361,11 +300,22 @@ bool RegistryClient::download_package(const std::string& name, const std::string
     return false;
   }
 
-  // Check if it's an error response
-  if (response.find("\"error\"") != std::string::npos)
+  // Check if it's a JSON error response
+  if (response.size() < 4096 && response.find('{') == 0)
   {
-    last_error_ = json::get_string(response, "error");
-    return false;
+    try
+    {
+      auto json = nlohmann::json::parse(response);
+      if (json.contains("error"))
+      {
+        last_error_ = json["error"].get<std::string>();
+        return false;
+      }
+    }
+    catch (const nlohmann::json::exception&)
+    {
+      // Not JSON — treat as binary package data
+    }
   }
 
   // Write to file
@@ -376,7 +326,7 @@ bool RegistryClient::download_package(const std::string& name, const std::string
     return false;
   }
 
-  out.write(response.data(), response.size());
+  out.write(response.data(), static_cast<std::streamsize>(response.size()));
   return true;
 }
 
@@ -403,10 +353,18 @@ bool RegistryClient::publish_package(const std::string& package_path)
   // POST to registry
   std::string response = http_post("/api/v1/packages", package_data);
 
-  if (response.find("\"error\"") != std::string::npos)
+  try
   {
-    last_error_ = json::get_string(response, "error");
-    return false;
+    auto json = nlohmann::json::parse(response);
+    if (json.contains("error"))
+    {
+      last_error_ = json["error"].get<std::string>();
+      return false;
+    }
+  }
+  catch (const nlohmann::json::exception&)
+  {
+    // Not JSON — assume success if no error
   }
 
   return true;
@@ -422,10 +380,21 @@ bool RegistryClient::yank_version(const std::string& name, const std::string& ve
 
   std::string response = http_delete("/api/v1/packages/" + name + "/" + version);
 
-  if (response.find("\"error\"") != std::string::npos)
+  if (!response.empty())
   {
-    last_error_ = json::get_string(response, "error");
-    return false;
+    try
+    {
+      auto json = nlohmann::json::parse(response);
+      if (json.contains("error"))
+      {
+        last_error_ = json["error"].get<std::string>();
+        return false;
+      }
+    }
+    catch (const nlohmann::json::exception&)
+    {
+      // Not JSON — assume success
+    }
   }
 
   return true;
@@ -449,130 +418,36 @@ std::string RegistryClient::http_delete(const std::string& endpoint)
 std::string RegistryClient::make_request(const std::string& method, const std::string& endpoint,
                                          const std::string& body)
 {
-  // Parse URL
-  std::string host;
-  int port = 443;
-  bool use_https = true;
+  std::string url = registry_url_ + endpoint;
 
-  std::string url = registry_url_;
-  if (url.find("https://") == 0)
-  {
-    url = url.substr(8);
-    use_https = true;
-    port = 443;
-  }
-  else if (url.find("http://") == 0)
-  {
-    url = url.substr(7);
-    use_https = false;
-    port = 80;
-  }
-
-  std::size_t port_pos = url.find(':');
-  std::size_t path_pos = url.find('/');
-  if (port_pos != std::string::npos && (path_pos == std::string::npos || port_pos < path_pos))
-  {
-    host = url.substr(0, port_pos);
-    std::size_t port_end = (path_pos != std::string::npos) ? path_pos : url.length();
-    port = std::stoi(url.substr(port_pos + 1, port_end - port_pos - 1));
-  }
-  else
-  {
-    host = (path_pos != std::string::npos) ? url.substr(0, path_pos) : url;
-  }
-
-  // For now, use a simple HTTP implementation
-  // In production, you'd want to use libcurl or similar
-#ifdef _WIN32
-  WSADATA wsaData;
-  WSAStartup(MAKEWORD(2, 2), &wsaData);
-#endif
-
-  struct hostent* server = gethostbyname(host.c_str());
-  if (!server)
-  {
-    last_error_ = "Failed to resolve host: " + host;
-    return "";
-  }
-
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd < 0)
-  {
-    last_error_ = "Failed to create socket";
-    return "";
-  }
-
-  struct sockaddr_in serv_addr;
-  memset(&serv_addr, 0, sizeof(serv_addr));
-  serv_addr.sin_family = AF_INET;
-  memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-  serv_addr.sin_port = htons(port);
-
-  if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0)
-  {
-    last_error_ = "Failed to connect to " + host + ":" + std::to_string(port);
-#ifdef _WIN32
-    closesocket(sockfd);
-#else
-    close(sockfd);
-#endif
-    return "";
-  }
-
-  // Build HTTP request
-  std::stringstream request;
-  request << method << " " << endpoint << " HTTP/1.1\r\n";
-  request << "Host: " << host << "\r\n";
-  request << "User-Agent: neam-pkg/1.0\r\n";
-  request << "Accept: application/json\r\n";
+  std::vector<std::string> headers;
+  headers.push_back("Accept: application/json");
+  headers.push_back("User-Agent: neam-pkg/" NEAM_VERSION);
 
   if (!auth_token_.empty())
   {
-    request << "Authorization: Bearer " << auth_token_ << "\r\n";
+    headers.push_back("Authorization: Bearer " + auth_token_);
   }
 
   if (!body.empty())
   {
-    request << "Content-Type: application/json\r\n";
-    request << "Content-Length: " << body.size() << "\r\n";
+    headers.push_back("Content-Type: application/json");
   }
 
-  request << "Connection: close\r\n\r\n";
-
-  if (!body.empty())
+  try
   {
-    request << body;
+    auto result = neamc::llm::http_request(method, url, body, headers, 30000);
+    if (result.status >= 400)
+    {
+      last_error_ = "HTTP " + std::to_string(result.status) + ": " + result.body;
+    }
+    return result.body;
   }
-
-  std::string req_str = request.str();
-  send(sockfd, req_str.c_str(), req_str.size(), 0);
-
-  // Read response
-  std::string response;
-  char buffer[4096];
-  int bytes_read;
-
-  while ((bytes_read = recv(sockfd, buffer, sizeof(buffer) - 1, 0)) > 0)
+  catch (const std::exception& e)
   {
-    buffer[bytes_read] = '\0';
-    response += buffer;
+    last_error_ = e.what();
+    return "";
   }
-
-#ifdef _WIN32
-  closesocket(sockfd);
-  WSACleanup();
-#else
-  close(sockfd);
-#endif
-
-  // Extract body from HTTP response
-  std::size_t body_start = response.find("\r\n\r\n");
-  if (body_start != std::string::npos)
-  {
-    return response.substr(body_start + 4);
-  }
-
-  return response;
 }
 
 }  // namespace neamc::pkg

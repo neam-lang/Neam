@@ -44,12 +44,13 @@ std::size_t emit_string_constant(vm::Chunk& chunk, const std::string& value)
 
 void emit_build_list(vm::Chunk& chunk, std::size_t count)
 {
-  if (count > std::numeric_limits<uint8_t>::max())
+  if (count > std::numeric_limits<uint16_t>::max())
   {
-    throw std::runtime_error("List literal too large");
+    throw std::runtime_error("List literal too large (max " +
+        std::to_string(std::numeric_limits<uint16_t>::max()) + " elements)");
   }
   chunk.write_op(OpCode::OP_BUILD_LIST);
-  chunk.write_byte(static_cast<uint8_t>(count));
+  chunk.write_short(static_cast<uint16_t>(count));
 }
 
 void emit_identifier_list(vm::Chunk& chunk, const std::vector<IdentifierRef>& values)
@@ -74,12 +75,13 @@ void emit_string_list(vm::Chunk& chunk, const std::vector<std::string>& values)
 
 void emit_build_map(vm::Chunk& chunk, std::size_t count)
 {
-  if (count > std::numeric_limits<uint8_t>::max())
+  if (count > std::numeric_limits<uint16_t>::max())
   {
-    throw std::runtime_error("Map literal too large");
+    throw std::runtime_error("Map literal too large (max " +
+        std::to_string(std::numeric_limits<uint16_t>::max()) + " entries)");
   }
   chunk.write_op(OpCode::OP_BUILD_MAP);
-  chunk.write_byte(static_cast<uint8_t>(count));
+  chunk.write_short(static_cast<uint16_t>(count));
 }
 
 void emit_json_value(vm::Chunk& chunk, const nlohmann::json& value)
