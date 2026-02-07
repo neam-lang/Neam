@@ -148,6 +148,7 @@ double map_number_value(const ObjMap* map, const std::string& key)
   return it->second.as_number();
 }
 
+[[maybe_unused]]
 bool map_bool_value(const ObjMap* map, const std::string& key, bool fallback = false)
 {
   if (!map)
@@ -1030,7 +1031,7 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
   emitted_.clear();
   trace_logger_.start_run();
   trace_logger_.log_start();
-  frames_.push_back(CallFrame{&chunk, nullptr, 0, 0});
+  frames_.push_back(CallFrame{&chunk, nullptr, 0, 0, false, {}});
   return run_frames(0);
 }
 
@@ -1245,7 +1246,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             throw std::runtime_error("Argument count mismatch for function call");
           }
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-          frames_.push_back(CallFrame{&fn->chunk, fn, 0, callee_index});
+          frames_.push_back(CallFrame{&fn->chunk, fn, 0, callee_index, false, {}});
         }
         else if (is_obj_type(callee, ObjType::OBJ_NATIVE))
         {
@@ -1294,10 +1295,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           }
           validate_skill_args(skill, args);
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-          CallFrame tool_frame{&skill->impl->chunk, skill->impl, 0, callee_index};
-          tool_frame.is_tool = true;
-          tool_frame.tool_name = skill_name;
-          frames_.push_back(std::move(tool_frame));
+          frames_.push_back(CallFrame{&skill->impl->chunk, skill->impl, 0, callee_index, true, skill_name});
         }
         else
         {
@@ -3201,9 +3199,7 @@ Value VirtualMachine::call_function(ObjFunction* fn, const std::vector<Value>& a
   {
     stack_.push_back(arg);
   }
-  frames_.push_back(CallFrame{&fn->chunk, fn, 0, stack_start});
-  frames_.back().is_tool = is_tool;
-  frames_.back().tool_name = tool_name;
+  frames_.push_back(CallFrame{&fn->chunk, fn, 0, stack_start, is_tool, tool_name});
   return run_frames(target_frame_count);
 }
 

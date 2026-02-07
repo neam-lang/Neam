@@ -34,12 +34,13 @@
 
 #include "neamc/compiler.hpp"
 #include "neamc/parser.hpp"
+#include "neamc/version.hpp"
 #include "neamc/vm/object.hpp"
 #include "neamc/vm/vm.hpp"
 
 namespace
 {
-constexpr const char* kVersion = "0.2.0";
+constexpr const char* kVersion = NEAM_VERSION;
 constexpr std::size_t kMaxHistorySize = 100;
 
 // ANSI escape codes
