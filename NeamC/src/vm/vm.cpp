@@ -767,8 +767,9 @@ std::string opcode_name(OpCode op)
       return "OP_CHECKPOINT";
     case OpCode::OP_REWIND:
       return "OP_REWIND";
+    default:
+      return "OP_UNKNOWN";
   }
-  return "OP_UNKNOWN";
 }
 
 }  // anonymous namespace
