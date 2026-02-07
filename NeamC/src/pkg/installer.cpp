@@ -5,9 +5,12 @@
 #include "neamc/pkg/installer.hpp"
 #include "neamc/pkg/registry.hpp"
 
+#include <openssl/evp.h>
+
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <regex>
 #include <sstream>
@@ -820,14 +823,68 @@ bool Installer::link_package(const ResolvedDependency& dep)
 
 bool Installer::verify_checksum(const std::filesystem::path& file, const std::string& expected)
 {
-  // Simplified checksum verification
-  // In a real implementation, compute SHA256 and compare
   if (expected.empty())
   {
     return true;
   }
 
-  // TODO: Implement actual SHA256 checksum verification
+  std::ifstream input(file, std::ios::binary);
+  if (!input.is_open())
+  {
+    last_error_ = "Cannot open file for checksum verification: " + file.string();
+    return false;
+  }
+
+  EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+  if (!ctx)
+  {
+    last_error_ = "Failed to create digest context";
+    return false;
+  }
+
+  if (EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) != 1)
+  {
+    EVP_MD_CTX_free(ctx);
+    last_error_ = "Failed to initialize SHA256 digest";
+    return false;
+  }
+
+  char buffer[8192];
+  while (input.read(buffer, sizeof(buffer)) || input.gcount() > 0)
+  {
+    if (EVP_DigestUpdate(ctx, buffer, static_cast<size_t>(input.gcount())) != 1)
+    {
+      EVP_MD_CTX_free(ctx);
+      last_error_ = "Failed to update SHA256 digest";
+      return false;
+    }
+  }
+
+  unsigned char hash[EVP_MAX_MD_SIZE];
+  unsigned int hash_len = 0;
+  if (EVP_DigestFinal_ex(ctx, hash, &hash_len) != 1)
+  {
+    EVP_MD_CTX_free(ctx);
+    last_error_ = "Failed to finalize SHA256 digest";
+    return false;
+  }
+  EVP_MD_CTX_free(ctx);
+
+  std::ostringstream hex_stream;
+  hex_stream << std::hex << std::setfill('0');
+  for (unsigned int i = 0; i < hash_len; ++i)
+  {
+    hex_stream << std::setw(2) << static_cast<int>(hash[i]);
+  }
+
+  const std::string computed = hex_stream.str();
+  if (computed != expected)
+  {
+    last_error_ = "Checksum mismatch for " + file.filename().string() +
+                  ": expected " + expected + ", got " + computed;
+    return false;
+  }
+
   return true;
 }
 
