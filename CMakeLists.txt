@@ -382,6 +382,36 @@ elseif (TARGET nlohmann_json_schema_validator::nlohmann_json_schema_validator)
 endif ()
 
 # ============================================================================
+# v0.6.5 Test Targets
+# ============================================================================
+
+add_executable(llm_adapter_test
+    tests/llm/adapter_test.cpp
+)
+target_link_libraries(llm_adapter_test PRIVATE neamc_core gtest_main)
+add_test(NAME llm_adapter_test COMMAND llm_adapter_test)
+
+add_executable(http_client_test
+    tests/llm/http_client_test.cpp
+)
+target_link_libraries(http_client_test PRIVATE neamc_core gtest_main)
+add_test(NAME http_client_test COMMAND http_client_test)
+
+add_executable(package_manager_test
+    tests/pkg/package_manager_test.cpp
+    NeamC/src/pkg/installer.cpp
+    NeamC/src/pkg/registry.cpp
+)
+target_link_libraries(package_manager_test PRIVATE neamc_core gtest_main)
+add_test(NAME package_manager_test COMMAND package_manager_test)
+
+add_executable(compile_run_test
+    tests/integration/compile_run_test.cpp
+)
+target_link_libraries(compile_run_test PRIVATE neamc_core gtest_main)
+add_test(NAME compile_run_test COMMAND compile_run_test)
+
+# ============================================================================
 # Install targets (v0.6.5)
 # ============================================================================
 
