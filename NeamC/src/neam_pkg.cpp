@@ -21,6 +21,7 @@
 
 #include "neamc/pkg/installer.hpp"
 #include "neamc/pkg/registry.hpp"
+#include "neamc/version.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -82,7 +83,7 @@ void print_usage()
 
 void print_version()
 {
-  std::cout << "neam-pkg 1.0.0\n";
+  std::cout << "neam-pkg " << NEAM_VERSION << "\n";
 }
 
 void print_error(const std::string& msg)

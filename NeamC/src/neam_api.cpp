@@ -6,6 +6,7 @@
 
 #include "neamc/api/http_server.hpp"
 #include "neamc/pipeline.hpp"
+#include "neamc/version.hpp"
 #include "neamc/vm/vm.hpp"
 
 #include <cstdlib>
@@ -262,7 +263,7 @@ std::string execute_neam_program(const std::string& source)
 // GET /api/v1/health
 neamc::api::HttpResponse handle_health(const neamc::api::HttpRequest&)
 {
-  nlohmann::json response = {{"status", "healthy"}, {"version", "1.0.0"}, {"server", "neam-api"}};
+  nlohmann::json response = {{"status", "healthy"}, {"version", NEAM_VERSION}, {"server", "neam-api"}};
   return neamc::api::HttpResponse::json(response);
 }
 
