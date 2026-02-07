@@ -6,6 +6,7 @@
 
 #include <curl/curl.h>
 
+#include <cstdlib>
 #include <sstream>
 #include <stdexcept>
 
@@ -53,6 +54,19 @@ std::string http_post_json(const std::string& url, const std::string& body,
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, timeout_ms);
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_callback);
   curl_easy_setopt(handle, CURLOPT_WRITEDATA, &response);
+
+  // TLS certificate verification (v0.6.5 security fix)
+  const char* skip_verify = std::getenv("NEAM_TLS_SKIP_VERIFY");
+  if (skip_verify && std::string(skip_verify) == "1")
+  {
+    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 0L);
+  }
+  else
+  {
+    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(handle, CURLOPT_SSL_VERIFYHOST, 2L);
+  }
 
   struct curl_slist* header_list = nullptr;
   for (const auto& header : headers)
