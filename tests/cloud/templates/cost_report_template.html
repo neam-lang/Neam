@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{REPORT_TITLE}} - Neam v0.6.4</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #22c55e;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --border-color: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+            color: white;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border-radius: 12px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        header .meta {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+        }
+
+        .card h3 {
+            color: var(--secondary-color);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        .card .change {
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .card .change.positive {
+            color: var(--success-color);
+        }
+
+        .card .change.negative {
+            color: var(--danger-color);
+        }
+
+        .section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+        }
+
+        .section h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 1rem 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--bg-color);
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        tr:hover {
+            background: var(--bg-color);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-aws {
+            background: #ff9900;
+            color: #232f3e;
+        }
+
+        .badge-gcp {
+            background: #4285f4;
+            color: white;
+        }
+
+        .badge-azure {
+            background: #0078d4;
+            color: white;
+        }
+
+        .badge-alibaba {
+            background: #ff6a00;
+            color: white;
+        }
+
+        .badge-cheapest {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .badge-fastest {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .recommendation {
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            border: 1px solid #86efac;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .recommendation h4 {
+            color: #166534;
+            margin-bottom: 0.5rem;
+        }
+
+        .recommendation p {
+            color: #15803d;
+            font-size: 0.9rem;
+        }
+
+        .recommendation .savings {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #166534;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .provider-comparison {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .provider-card {
+            text-align: center;
+            padding: 1.5rem;
+            border-radius: 8px;
+            background: var(--bg-color);
+        }
+
+        .provider-card .logo {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .provider-card .name {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .provider-card .cost {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .provider-card .per-request {
+            font-size: 0.75rem;
+            color: var(--secondary-color);
+        }
+
+        .heatmap {
+            display: grid;
+            gap: 2px;
+        }
+
+        .heatmap-cell {
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.75rem;
+            border-radius: 4px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--secondary-color);
+            font-size: 0.875rem;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>{{REPORT_TITLE}}</h1>
+            <div class="meta">
+                Generated: {{GENERATED_AT}} | Test Duration: {{TEST_DURATION}} | Total Requests: {{TOTAL_REQUESTS}}
+            </div>
+        </header>
+
+        <div class="export-buttons">
+            <button class="btn btn-primary" onclick="exportJSON()">Export JSON</button>
+            <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
+            <button class="btn btn-secondary" onclick="window.print()">Print PDF</button>
+        </div>
+
+        <!-- Executive Summary -->
+        <section class="section">
+            <h2>📊 Executive Summary</h2>
+            <div class="summary-cards">
+                <div class="card">
+                    <h3>Most Cost-Effective</h3>
+                    <div class="value">{{CHEAPEST_PROVIDER}}</div>
+                    <div class="change positive">{{CHEAPEST_SAVINGS}}% cheaper than baseline</div>
+                </div>
+                <div class="card">
+                    <h3>Lowest Latency</h3>
+                    <div class="value">{{FASTEST_PROVIDER}}</div>
+                    <div class="change">{{FASTEST_LATENCY}}ms p95</div>
+                </div>
+                <div class="card">
+                    <h3>Highest Throughput</h3>
+                    <div class="value">{{HIGHEST_THROUGHPUT_PROVIDER}}</div>
+                    <div class="change">{{HIGHEST_THROUGHPUT}} req/s</div>
+                </div>
+                <div class="card">
+                    <h3>Total Test Cost</h3>
+                    <div class="value">${{TOTAL_TEST_COST}}</div>
+                    <div class="change">{{TOTAL_REQUESTS}} requests tested</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Provider Comparison -->
+        <section class="section">
+            <h2>☁️ Provider Cost Comparison</h2>
+            <div class="provider-comparison">
+                <div class="provider-card">
+                    <div class="logo">🟠</div>
+                    <div class="name">AWS</div>
+                    <div class="cost">${{AWS_COST_PER_REQUEST}}</div>
+                    <div class="per-request">per request</div>
+                </div>
+                <div class="provider-card">
+                    <div class="logo">🔵</div>
+                    <div class="name">GCP</div>
+                    <div class="cost">${{GCP_COST_PER_REQUEST}}</div>
+                    <div class="per-request">per request</div>
+                </div>
+                <div class="provider-card">
+                    <div class="logo">🟦</div>
+                    <div class="name">Azure</div>
+                    <div class="cost">${{AZURE_COST_PER_REQUEST}}</div>
+                    <div class="per-request">per request</div>
+                </div>
+                <div class="provider-card">
+                    <div class="logo">🟧</div>
+                    <div class="name">Alibaba</div>
+                    <div class="cost">${{ALIBABA_COST_PER_REQUEST}}</div>
+                    <div class="per-request">per request</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="costComparisonChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Cost Breakdown -->
+        <section class="section">
+            <h2>💰 Cost Breakdown by Category</h2>
+            <div class="grid-2">
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="costBreakdownChart"></canvas>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>AWS</th>
+                            <th>GCP</th>
+                            <th>Azure</th>
+                            <th>Alibaba</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Compute</td>
+                            <td>${{AWS_COMPUTE}}</td>
+                            <td>${{GCP_COMPUTE}}</td>
+                            <td>${{AZURE_COMPUTE}}</td>
+                            <td>${{ALIBABA_COMPUTE}}</td>
+                        </tr>
+                        <tr>
+                            <td>LLM API</td>
+                            <td>${{AWS_LLM}}</td>
+                            <td>${{GCP_LLM}}</td>
+                            <td>${{AZURE_LLM}}</td>
+                            <td>${{ALIBABA_LLM}}</td>
+                        </tr>
+                        <tr>
+                            <td>Data Transfer</td>
+                            <td>${{AWS_TRANSFER}}</td>
+                            <td>${{GCP_TRANSFER}}</td>
+                            <td>${{AZURE_TRANSFER}}</td>
+                            <td>${{ALIBABA_TRANSFER}}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Total</strong></td>
+                            <td><strong>${{AWS_TOTAL}}</strong></td>
+                            <td><strong>${{GCP_TOTAL}}</strong></td>
+                            <td><strong>${{AZURE_TOTAL}}</strong></td>
+                            <td><strong>${{ALIBABA_TOTAL}}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Latency Analysis -->
+        <section class="section">
+            <h2>⚡ Latency Analysis</h2>
+            <div class="chart-container">
+                <canvas id="latencyChart"></canvas>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Region</th>
+                        <th>P50 (ms)</th>
+                        <th>P95 (ms)</th>
+                        <th>P99 (ms)</th>
+                        <th>Cold Start (ms)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{LATENCY_ROWS}}
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Compute Type Comparison -->
+        <section class="section">
+            <h2>🖥️ Compute Type Comparison</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Compute Type</th>
+                        <th>Cost/Request</th>
+                        <th>Latency P95</th>
+                        <th>Throughput</th>
+                        <th>Best For</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Serverless</td>
+                        <td>${{SERVERLESS_COST}}</td>
+                        <td>{{SERVERLESS_LATENCY}}ms</td>
+                        <td>{{SERVERLESS_THROUGHPUT}} req/s</td>
+                        <td>Variable workloads, cost optimization</td>
+                    </tr>
+                    <tr>
+                        <td>Containers</td>
+                        <td>${{CONTAINER_COST}}</td>
+                        <td>{{CONTAINER_LATENCY}}ms</td>
+                        <td>{{CONTAINER_THROUGHPUT}} req/s</td>
+                        <td>Consistent workloads, low latency</td>
+                    </tr>
+                    <tr>
+                        <td>VMs</td>
+                        <td>${{VM_COST}}</td>
+                        <td>{{VM_LATENCY}}ms</td>
+                        <td>{{VM_THROUGHPUT}} req/s</td>
+                        <td>High throughput, custom requirements</td>
+                    </tr>
+                    <tr>
+                        <td>GPU VMs</td>
+                        <td>${{GPU_COST}}</td>
+                        <td>{{GPU_LATENCY}}ms</td>
+                        <td>{{GPU_THROUGHPUT}} req/s</td>
+                        <td>Local inference, embedding search</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Monthly Projections -->
+        <section class="section">
+            <h2>📈 Monthly Cost Projections</h2>
+            <p style="margin-bottom: 1rem; color: var(--secondary-color);">
+                Based on {{PROJECTED_DAILY_REQUESTS}} requests/day with average {{PROJECTED_AVG_TOKENS}} tokens/request
+            </p>
+            <div class="chart-container">
+                <canvas id="projectionChart"></canvas>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Compute Type</th>
+                        <th>Daily Cost</th>
+                        <th>Monthly Cost</th>
+                        <th>Yearly Cost</th>
+                        <th>vs Baseline</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{PROJECTION_ROWS}}
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Recommendations -->
+        <section class="section">
+            <h2>💡 Recommendations</h2>
+            {{RECOMMENDATIONS}}
+        </section>
+
+        <!-- Detailed Results -->
+        <section class="section">
+            <h2>📋 Detailed Test Results</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Compute</th>
+                        <th>Region</th>
+                        <th>Requests</th>
+                        <th>Success Rate</th>
+                        <th>Avg Latency</th>
+                        <th>Cost/Request</th>
+                        <th>Total Cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{DETAILED_ROWS}}
+                </tbody>
+            </table>
+        </section>
+
+        <footer class="footer">
+            <p>Generated by Neam v0.6.4 Cloud Test Runner</p>
+            <p>Report ID: {{REPORT_ID}}</p>
+        </footer>
+    </div>
+
+    <script>
+        // Cost Comparison Chart
+        const costCtx = document.getElementById('costComparisonChart').getContext('2d');
+        new Chart(costCtx, {
+            type: 'bar',
+            data: {
+                labels: ['AWS', 'GCP', 'Azure', 'Alibaba'],
+                datasets: [{
+                    label: 'Cost per 1K Requests ($)',
+                    data: [{{AWS_COST_1K}}, {{GCP_COST_1K}}, {{AZURE_COST_1K}}, {{ALIBABA_COST_1K}}],
+                    backgroundColor: ['#ff9900', '#4285f4', '#0078d4', '#ff6a00']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Cost ($)' }
+                    }
+                }
+            }
+        });
+
+        // Cost Breakdown Pie Chart
+        const breakdownCtx = document.getElementById('costBreakdownChart').getContext('2d');
+        new Chart(breakdownCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Compute', 'LLM API', 'Data Transfer', 'Other'],
+                datasets: [{
+                    data: [{{BREAKDOWN_COMPUTE}}, {{BREAKDOWN_LLM}}, {{BREAKDOWN_TRANSFER}}, {{BREAKDOWN_OTHER}}],
+                    backgroundColor: ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        // Latency Chart
+        const latencyCtx = document.getElementById('latencyChart').getContext('2d');
+        new Chart(latencyCtx, {
+            type: 'bar',
+            data: {
+                labels: ['AWS', 'GCP', 'Azure', 'Alibaba'],
+                datasets: [
+                    {
+                        label: 'P50',
+                        data: [{{AWS_P50}}, {{GCP_P50}}, {{AZURE_P50}}, {{ALIBABA_P50}}],
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)'
+                    },
+                    {
+                        label: 'P95',
+                        data: [{{AWS_P95}}, {{GCP_P95}}, {{AZURE_P95}}, {{ALIBABA_P95}}],
+                        backgroundColor: 'rgba(34, 197, 94, 0.5)'
+                    },
+                    {
+                        label: 'P99',
+                        data: [{{AWS_P99}}, {{GCP_P99}}, {{AZURE_P99}}, {{ALIBABA_P99}}],
+                        backgroundColor: 'rgba(239, 68, 68, 0.5)'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Latency (ms)' }
+                    }
+                }
+            }
+        });
+
+        // Monthly Projection Chart
+        const projectionCtx = document.getElementById('projectionChart').getContext('2d');
+        new Chart(projectionCtx, {
+            type: 'bar',
+            data: {
+                labels: ['AWS', 'GCP', 'Azure', 'Alibaba'],
+                datasets: [{
+                    label: 'Monthly Cost ($)',
+                    data: [{{AWS_MONTHLY}}, {{GCP_MONTHLY}}, {{AZURE_MONTHLY}}, {{ALIBABA_MONTHLY}}],
+                    backgroundColor: ['#ff9900', '#4285f4', '#0078d4', '#ff6a00']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Monthly Cost ($)' }
+                    }
+                }
+            }
+        });
+
+        // Export functions
+        function exportJSON() {
+            const data = {{FULL_DATA_JSON}};
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'cost_comparison_report.json';
+            a.click();
+        }
+
+        function exportCSV() {
+            // CSV export logic
+            alert('CSV export - data will be downloaded');
+        }
+    </script>
+</body>
+</html>
