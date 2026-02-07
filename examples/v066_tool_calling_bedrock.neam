@@ -1,0 +1,207 @@
+//
+// Neam v0.6.6 — Bedrock Claude Tool Calling Demo
+//
+// Tests the native Claude tool use protocol via AWS Bedrock.
+// Claude natively selects skills to call without text-based parsing.
+//
+// Required env vars:
+//   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+//
+// Usage:
+//   neam examples/v066_tool_calling_bedrock.neam
+//
+
+// --- Skills that Claude will discover and use ---
+
+skill lookup_capital {
+  description: "Look up the capital city of a country. Returns the capital name and population."
+  params: {
+    country: string
+  }
+  impl(country) {
+    if (country == "France") {
+      return "Paris (population: 2.1 million)";
+    }
+    if (country == "Japan") {
+      return "Tokyo (population: 13.9 million)";
+    }
+    if (country == "Brazil") {
+      return "Brasilia (population: 3.0 million)";
+    }
+    if (country == "Australia") {
+      return "Canberra (population: 0.45 million)";
+    }
+    if (country == "Germany") {
+      return "Berlin (population: 3.6 million)";
+    }
+    if (country == "India") {
+      return "New Delhi (population: 32.9 million metro)";
+    }
+    return country + ": Unknown capital";
+  }
+}
+
+skill calculate_distance {
+  description: "Calculate the approximate flight distance in kilometers between two cities."
+  params: {
+    from_city: string,
+    to_city: string
+  }
+  impl(from_city, to_city) {
+    let key = from_city + "->" + to_city;
+
+    if (key == "Paris->Tokyo") {
+      return "9713 km";
+    }
+    if (key == "Tokyo->Paris") {
+      return "9713 km";
+    }
+    if (key == "New York->London") {
+      return "5570 km";
+    }
+    if (key == "London->New York") {
+      return "5570 km";
+    }
+    if (key == "Sydney->Tokyo") {
+      return "7823 km";
+    }
+    if (key == "Berlin->New Delhi") {
+      return "5764 km";
+    }
+    return "Distance unknown for " + from_city + " to " + to_city;
+  }
+}
+
+skill get_timezone {
+  description: "Get the current timezone and UTC offset for a city."
+  params: {
+    city: string
+  }
+  impl(city) {
+    if (city == "Tokyo") {
+      return "JST (UTC+9)";
+    }
+    if (city == "Paris") {
+      return "CET (UTC+1)";
+    }
+    if (city == "New York") {
+      return "EST (UTC-5)";
+    }
+    if (city == "London") {
+      return "GMT (UTC+0)";
+    }
+    if (city == "Sydney") {
+      return "AEST (UTC+11)";
+    }
+    if (city == "New Delhi") {
+      return "IST (UTC+5:30)";
+    }
+    if (city == "Berlin") {
+      return "CET (UTC+1)";
+    }
+    if (city == "Brasilia") {
+      return "BRT (UTC-3)";
+    }
+    if (city == "Canberra") {
+      return "AEST (UTC+11)";
+    }
+    return city + ": Unknown timezone";
+  }
+}
+
+skill calculate {
+  description: "Evaluate a mathematical expression. Supports basic arithmetic."
+  params: {
+    expression: string
+  }
+  impl(expression) {
+    if (expression == "9713 / 900") {
+      return "10.79 hours";
+    }
+    if (expression == "5570 / 900") {
+      return "6.19 hours";
+    }
+    if (expression == "9 - (-5)") {
+      return "14 hours difference";
+    }
+    if (expression == "9 + 5") {
+      return "14";
+    }
+    return "Computed: " + expression;
+  }
+}
+
+// --- Agent wired to Bedrock Claude with all skills ---
+
+agent TravelAssistant {
+  provider: "bedrock"
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  system: "You are a travel planning assistant. Use your tools to look up real data about capitals, distances, timezones, and calculations. Always use tools rather than guessing. Be concise."
+  skills: [lookup_capital, calculate_distance, get_timezone, calculate]
+}
+
+// --- Test scenarios ---
+
+{
+  emit "====================================================================";
+  emit "  Neam v0.6.6 — Bedrock Claude Native Tool Calling";
+  emit "====================================================================";
+  emit "";
+
+  // Test 1: Simple single-tool call
+  emit "--- Test 1: Capital Lookup ---";
+  emit "Q: What is the capital of Japan?";
+  let a1 = TravelAssistant.ask("What is the capital of Japan?");
+  emit "A: " + a1;
+  emit "";
+
+  // Test 2: Two sequential tool calls
+  emit "--- Test 2: Capital + Timezone ---";
+  emit "Q: What is the capital of France and what timezone is it in?";
+  let a2 = TravelAssistant.ask("What is the capital of France and what timezone is it in?");
+  emit "A: " + a2;
+  emit "";
+
+  // Test 3: Multi-tool chain — capitals, distance, then calculation
+  emit "--- Test 3: Travel Planning (Multi-Tool Chain) ---";
+  emit "Q: I want to fly from Paris to Tokyo. How far is it and how long at 900 km/h?";
+  let a3 = TravelAssistant.ask("I want to fly from Paris to Tokyo. What is the distance, and how long would the flight take at 900 km/h? Use the tools to look up the distance and calculate the flight time.");
+  emit "A: " + a3;
+  emit "";
+
+  // Test 4: Compare two cities — timezone difference
+  emit "--- Test 4: Timezone Comparison ---";
+  emit "Q: What is the time difference between Tokyo and New York?";
+  let a4 = TravelAssistant.ask("What is the time difference between Tokyo and New York? Look up both timezones first.");
+  emit "A: " + a4;
+  emit "";
+
+  // Test 5: Complex multi-step — find capitals, get timezones, compare
+  emit "--- Test 5: Complex Multi-Step ---";
+  emit "Q: Compare the capitals of Germany and India — distances, timezones";
+  let a5 = TravelAssistant.ask("Look up the capitals of Germany and India, find the distance between them, and compare their timezones.");
+  emit "A: " + a5;
+  emit "";
+
+  // Test 6: Conversational follow-up (tests context retention)
+  emit "--- Test 6: Multi-Turn Conversation ---";
+  emit "Q1: What is the capital of Australia?";
+  let t1 = TravelAssistant.ask("What is the capital of Australia?");
+  emit "A1: " + t1;
+  emit "";
+  emit "Q2: What timezone is that city in?";
+  let t2 = TravelAssistant.ask("What timezone is that city in?");
+  emit "A2: " + t2;
+  emit "";
+
+  // Test 7: No tool needed — plain response
+  emit "--- Test 7: Plain Response (No Tool Needed) ---";
+  emit "Q: Thank you for the help!";
+  let a7 = TravelAssistant.ask("Thank you for the help!");
+  emit "A: " + a7;
+  emit "";
+
+  emit "====================================================================";
+  emit "  All Bedrock tests complete!";
+  emit "====================================================================";
+}
