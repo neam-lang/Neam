@@ -1458,7 +1458,10 @@ Value crypto_hash_native(VirtualMachine&, int arg_count, Value* args)
   else if (algorithm == "md5")
   {
     digest.resize(MD5_DIGEST_LENGTH);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MD5(reinterpret_cast<const unsigned char*>(data.data()), data.size(), digest.data());
+#pragma GCC diagnostic pop
   }
   else if (algorithm == "blake3")
   {

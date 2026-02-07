@@ -20,6 +20,10 @@ std::size_t next_gc = 1024 * 1024;
 Obj* objects = nullptr;
 VirtualMachine* current_vm = nullptr;
 
+// GC reentrancy guard — prevents heap corruption if GC triggers
+// during allocation within a GC cycle (v0.6.5 reliability fix)
+static bool gc_in_progress = false;
+
 namespace
 {
 void free_object(Obj* object)
@@ -285,7 +289,7 @@ void* reallocate(void* pointer, std::size_t old_size, std::size_t new_size)
   {
     bytes_allocated -= old_size;
   }
-  if (new_size > old_size && bytes_allocated > next_gc && current_vm)
+  if (new_size > old_size && bytes_allocated > next_gc && current_vm && !gc_in_progress)
   {
     collect_garbage(*current_vm);
   }
@@ -325,6 +329,20 @@ void mark_value(const Value& value)
 
 void collect_garbage(VirtualMachine& vm)
 {
+  if (gc_in_progress)
+  {
+    return;  // Skip if already collecting (reentrancy guard)
+  }
+
+  // RAII guard — ensures gc_in_progress is reset even on exception
+  struct GCGuard
+  {
+    bool& flag;
+    explicit GCGuard(bool& f) : flag(f) { flag = true; }
+    ~GCGuard() { flag = false; }
+  };
+  GCGuard guard(gc_in_progress);
+
   std::vector<Obj*> gray_stack;
   for (const auto& value : vm.stack())
   {

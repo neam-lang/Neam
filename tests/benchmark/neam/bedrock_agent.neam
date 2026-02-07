@@ -1,0 +1,39 @@
+// Neam v0.6.4 Benchmark Agent — AWS Bedrock Claude 3.5 Sonnet
+//
+// Usage: neam bedrock_agent.neam
+// Env:   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+
+agent QA {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "Answer concisely in one sentence."
+}
+
+// Read prompts from shared JSONL file
+let prompts = io.read_lines(env.get("PROMPTS_FILE", "../prompts.jsonl"));
+let results = [];
+let start_time = time.now();
+
+for (let i = 0; i < prompts.length; i += 1) {
+  let line = json.parse(prompts[i]);
+  let t0 = time.now();
+  let answer = QA.ask(line["prompt"]);
+  let t1 = time.now();
+  results.push({
+    "id": line["id"],
+    "prompt": line["prompt"],
+    "response": answer,
+    "latency_ms": (t1 - t0) * 1000
+  });
+}
+
+let total_time = (time.now() - start_time) * 1000;
+
+emit json.encode({
+  "language": "neam",
+  "version": "0.6.4",
+  "total_requests": results.length,
+  "total_time_ms": total_time,
+  "avg_latency_ms": total_time / results.length,
+  "results": results
+});

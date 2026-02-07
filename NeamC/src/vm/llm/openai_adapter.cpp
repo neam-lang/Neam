@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "neamc/llm/http_client.hpp"
+#include "neamc/llm/llm_logger.hpp"
 #include "neamc/vm/async/executor.hpp"
 
 namespace neamc::llm
@@ -77,6 +78,9 @@ public:
 
   std::string chat(const std::vector<Message>& messages) override
   {
+    LLMLogger::info("openai", "Chat request: model=" + config_.model +
+                                  ", messages=" + std::to_string(messages.size()));
+
     nlohmann::json payload;
     payload["model"] = config_.model;
     payload["messages"] = message_list_to_json(messages);
@@ -85,11 +89,22 @@ public:
       payload["temperature"] = config_.temperature;
     }
 
-    const std::string response = http_post_json(
-        config_.endpoint, payload.dump(),
-        {"Content-Type: application/json",
-         "Authorization: Bearer " + config_.api_key});
-    return extract_response_text(nlohmann::json::parse(response));
+    try
+    {
+      const std::string response = http_post_json(
+          config_.endpoint, payload.dump(),
+          {"Content-Type: application/json",
+           "Authorization: Bearer " + config_.api_key});
+      auto parsed = nlohmann::json::parse(response);
+      auto text = extract_response_text(parsed);
+      LLMLogger::debug("openai", "Response: " + std::to_string(text.size()) + " chars");
+      return text;
+    }
+    catch (const std::exception& e)
+    {
+      LLMLogger::error("openai", "Chat failed: " + std::string(e.what()));
+      throw;
+    }
   }
 
 private:

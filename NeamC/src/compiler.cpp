@@ -4,6 +4,7 @@
 
 #include "neamc/compiler.hpp"
 
+#include <iostream>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
@@ -43,12 +44,13 @@ std::size_t emit_string_constant(vm::Chunk& chunk, const std::string& value)
 
 void emit_build_list(vm::Chunk& chunk, std::size_t count)
 {
-  if (count > std::numeric_limits<uint8_t>::max())
+  if (count > std::numeric_limits<uint16_t>::max())
   {
-    throw std::runtime_error("List literal too large");
+    throw std::runtime_error("List literal too large (max " +
+        std::to_string(std::numeric_limits<uint16_t>::max()) + " elements)");
   }
   chunk.write_op(OpCode::OP_BUILD_LIST);
-  chunk.write_byte(static_cast<uint8_t>(count));
+  chunk.write_short(static_cast<uint16_t>(count));
 }
 
 void emit_identifier_list(vm::Chunk& chunk, const std::vector<IdentifierRef>& values)
@@ -73,12 +75,13 @@ void emit_string_list(vm::Chunk& chunk, const std::vector<std::string>& values)
 
 void emit_build_map(vm::Chunk& chunk, std::size_t count)
 {
-  if (count > std::numeric_limits<uint8_t>::max())
+  if (count > std::numeric_limits<uint16_t>::max())
   {
-    throw std::runtime_error("Map literal too large");
+    throw std::runtime_error("Map literal too large (max " +
+        std::to_string(std::numeric_limits<uint16_t>::max()) + " entries)");
   }
   chunk.write_op(OpCode::OP_BUILD_MAP);
-  chunk.write_byte(static_cast<uint8_t>(count));
+  chunk.write_short(static_cast<uint16_t>(count));
 }
 
 void emit_json_value(vm::Chunk& chunk, const nlohmann::json& value)
@@ -386,6 +389,10 @@ void Compiler::emit_statement(const Statement& stmt)
             case AssertStmt::Kind::kThrows:
               name = "assert_throws";
               break;
+            default:
+              throw std::runtime_error(
+                  "Unhandled assert kind: " +
+                  std::to_string(static_cast<int>(node.kind)));
           }
           chunk_.write_op(OpCode::OP_GET_GLOBAL);
           chunk_.write_short(
@@ -433,26 +440,44 @@ void Compiler::emit_statement(const Statement& stmt)
         }
         else if constexpr (std::is_same_v<T, TestDecl>)
         {
-          (void)node;
+          std::cerr << "[warning] 'test' declarations are not yet compiled. "
+                       "Test '" << node.name << "' will be ignored.\n";
         }
         else if constexpr (std::is_same_v<T, TestSuiteDecl>)
         {
-          (void)node;
+          std::cerr << "[warning] 'test suite' declarations are not yet compiled. "
+                       "Suite '" << node.name << "' will be ignored.\n";
         }
         else if constexpr (std::is_same_v<T, ModuleDecl>)
         {
-          (void)node;
+          std::string path;
+          for (std::size_t i = 0; i < node.path.size(); ++i)
+          {
+            if (i > 0) path += ".";
+            path += node.path[i];
+          }
+          std::cerr << "[warning] 'module' declarations are not yet compiled. "
+                       "Module '" << path << "' will be ignored.\n";
         }
         else if constexpr (std::is_same_v<T, ImportDecl>)
         {
-          (void)node;
+          std::string path;
+          for (std::size_t i = 0; i < node.path.size(); ++i)
+          {
+            if (i > 0) path += ".";
+            path += node.path[i];
+          }
+          std::cerr << "[warning] 'import' statements are not yet compiled. "
+                       "Import of '" << path << "' will be ignored.\n";
         }
         else if constexpr (std::is_same_v<T, TypeAlias>)
         {
-          (void)node;
+          std::cerr << "[warning] 'type' aliases are not yet compiled. "
+                       "Type alias '" << node.name << "' will be ignored.\n";
         }
         else if constexpr (std::is_same_v<T, DocComment>)
         {
+          // Doc comments are safely ignorable — no warning needed
           (void)node;
         }
         else if constexpr (std::is_same_v<T, FunctionDecl>)
@@ -658,6 +683,10 @@ void Compiler::emit_statement(const Statement& stmt)
               case GuardHandler::Type::kOnResult:
                 type_name = "on_result";
                 break;
+              default:
+                throw std::runtime_error(
+                    "Unhandled guard handler type: " +
+                    std::to_string(static_cast<int>(handler->type)));
             }
             chunk_.write_op(OpCode::OP_CONST);
             chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, type_name)));
@@ -1239,6 +1268,10 @@ void Compiler::emit_expression(const Expression& expr)
               chunk_.write_op(OpCode::OP_EQUAL);
               chunk_.write_op(OpCode::OP_NOT);
               break;
+            default:
+              throw std::runtime_error(
+                  "Unhandled binary operator: " +
+                  std::to_string(static_cast<int>(node.op)));
           }
         }
         else if constexpr (std::is_same_v<T, CallExpr>)

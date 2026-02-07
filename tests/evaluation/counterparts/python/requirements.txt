@@ -1,0 +1,10 @@
+boto3>=1.34.0
+# Full multimodal dependencies (not installed by default for benchmark):
+# openai-whisper>=20231117    # STT — 300MB model, requires ffmpeg
+# openai>=1.12.0              # TTS API
+# opencv-python>=4.9.0        # Video/image processing — 50MB
+# Pillow>=10.0                # Image manipulation
+# torch>=2.2.0                # GPU acceleration — 2GB+
+# numpy>=1.26.0               # Array operations
+# torchaudio>=2.2.0           # Audio processing
+# torchvision>=0.17.0         # Vision transforms

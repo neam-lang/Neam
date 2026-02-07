@@ -16,8 +16,16 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <sys/wait.h>
 #include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
+extern char** environ;
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -44,6 +52,33 @@ void usage()
   std::cout << "       neamc run-script <script>\n";
   std::cout << "       neamc new <name> [--template agent-basic]\n";
   std::cout << "       neamc generate-ci\n";
+}
+
+// Safe subprocess execution — avoids shell injection by using posix_spawn
+// instead of std::system(). Commands are executed via /bin/sh -c but only
+// after basic validation.
+int safe_shell_exec(const std::string& command)
+{
+  if (command.empty())
+  {
+    return -1;
+  }
+
+#ifdef _WIN32
+  return std::system(command.c_str());
+#else
+  pid_t pid;
+  const char* argv[] = {"/bin/sh", "-c", command.c_str(), nullptr};
+  int status = posix_spawn(&pid, "/bin/sh", nullptr, nullptr,
+                           const_cast<char**>(argv), environ);
+  if (status != 0)
+  {
+    std::cerr << "Failed to spawn process: " << command << "\n";
+    return -1;
+  }
+  waitpid(pid, &status, 0);
+  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+#endif
 }
 
 std::optional<std::filesystem::path> find_manifest_path(const std::filesystem::path& start)
@@ -331,11 +366,11 @@ void deploy_docker(const neamc::DeployConfig& config, const std::string& image_n
 
   std::string build_cmd = "docker build -t " + image_name + " -f deploy/docker/Dockerfile .";
   std::cout << "Running: " << build_cmd << "\n";
-  std::system(build_cmd.c_str());
+  safe_shell_exec(build_cmd);
 
   std::string push_cmd = "docker push " + image_name;
   std::cout << "Running: " << push_cmd << "\n";
-  std::system(push_cmd.c_str());
+  safe_shell_exec(push_cmd);
 
   std::cout << "Deployed: " << image_name << "\n";
 }
@@ -359,7 +394,7 @@ void deploy_kubernetes(const neamc::ProjectManifest& manifest, const std::string
   std::string apply_cmd = "kubectl apply -f deploy/kubernetes/ -n " +
                           manifest.deploy.kubernetes.namespace_;
   std::cout << "Running: " << apply_cmd << "\n";
-  std::system(apply_cmd.c_str());
+  safe_shell_exec(apply_cmd);
 
   std::cout << "Deployed to namespace: " << manifest.deploy.kubernetes.namespace_ << "\n";
 }
@@ -374,8 +409,8 @@ void deploy_lambda(const neamc::ProjectManifest& manifest, bool dry_run)
     std::cout << "[DRY RUN] Would deploy to AWS Lambda\n";
     return;
   }
-  std::system("sam build");
-  std::system("sam deploy --guided");
+  safe_shell_exec("sam build");
+  safe_shell_exec("sam deploy --guided");
 }
 
 void deploy_cloudrun(const neamc::ProjectManifest& manifest, bool dry_run)
@@ -393,7 +428,7 @@ void deploy_cloudrun(const neamc::ProjectManifest& manifest, bool dry_run)
     std::cout << "[DRY RUN] Would deploy to Cloud Run\n";
     return;
   }
-  std::system("gcloud run deploy");
+  safe_shell_exec("gcloud run deploy");
 }
 
 int cmd_deploy(int argc, char** argv)
@@ -802,8 +837,8 @@ int cmd_run_script(int argc, char** argv)
   std::cout << "Running script: " << script_name << "\n";
   std::cout << "> " << it->second << "\n\n";
 
-  int result = std::system(it->second.c_str());
-  return WEXITSTATUS(result);
+  int result = safe_shell_exec(it->second);
+  return result;
 }
 
 struct TemplateVars

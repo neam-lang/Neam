@@ -34,13 +34,24 @@
 
 #include "neamc/compiler.hpp"
 #include "neamc/parser.hpp"
+#include "neamc/version.hpp"
 #include "neamc/vm/object.hpp"
 #include "neamc/vm/vm.hpp"
 
 namespace
 {
-constexpr const char* kVersion = "0.2.0";
-constexpr std::size_t kMaxHistorySize = 100;
+constexpr const char* kVersion = NEAM_VERSION;
+std::size_t get_max_history()
+{
+  const char* env = std::getenv("NEAM_REPL_HISTORY");
+  if (env)
+  {
+    int val = std::atoi(env);
+    if (val >= 10 && val <= 100000) return static_cast<std::size_t>(val);
+  }
+  return 1000;
+}
+const std::size_t kMaxHistorySize = get_max_history();
 
 // ANSI escape codes
 namespace ansi
