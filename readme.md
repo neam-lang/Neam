@@ -621,3 +621,19 @@ agent Toolbelt { }
   emit notes;
 }
 ```
+
+## Known Limitations (v0.6.5)
+
+### Type System
+The Hindley-Milner type inference system is **parsed but not yet enforced**.
+Type annotations are accepted by the parser but type checking is not performed
+at compile time. This means type errors will manifest at runtime rather than
+compile time. Full type inference is planned for v0.7.0.
+
+### Module System
+`module` and `import` declarations are parsed but not yet compiled. Code
+organization should use file-based separation for now.
+
+### Test Framework
+`test` and `test suite` declarations are parsed but the built-in test runner
+is not yet implemented. Use the external evaluation framework in `tests/`.
