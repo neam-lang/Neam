@@ -21,6 +21,7 @@
 #include <stdexcept>
 
 #include "neamc/llm/http_client.hpp"
+#include "neamc/llm/llm_logger.hpp"
 #include "neamc/vm/async/executor.hpp"
 
 namespace neamc::llm
@@ -290,6 +291,10 @@ public:
 
   std::string chat(const std::vector<Message>& messages) override
   {
+    LLMLogger::info("bedrock", "Chat request: model=" + config_.model +
+                                    ", region=" + creds_.region +
+                                    ", messages=" + std::to_string(messages.size()));
+
     nlohmann::json payload;
     payload["anthropic_version"] = "bedrock-2023-10-31";
     payload["max_tokens"] = 1024;
@@ -302,9 +307,20 @@ public:
     const std::string body = payload.dump();
     const auto signed_req = sign_request(creds_, config_.model, body);
 
-    const std::string response =
-        http_post_json(signed_req.url, body, signed_req.headers, 60000);
-    return extract_response_text(nlohmann::json::parse(response));
+    try
+    {
+      const std::string response =
+          http_post_json(signed_req.url, body, signed_req.headers, 60000);
+      auto parsed = nlohmann::json::parse(response);
+      auto text = extract_response_text(parsed);
+      LLMLogger::debug("bedrock", "Response: " + std::to_string(text.size()) + " chars");
+      return text;
+    }
+    catch (const std::exception& e)
+    {
+      LLMLogger::error("bedrock", "Chat failed: " + std::string(e.what()));
+      throw;
+    }
   }
 
 private:

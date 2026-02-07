@@ -29,6 +29,24 @@ namespace neamc::vm
 {
 namespace
 {
+// Maximum call stack depth — prevents native stack overflow (SIGSEGV) from
+// infinite recursion. Configurable via NEAM_MAX_CALL_DEPTH env var.
+int get_max_call_depth()
+{
+  const char* env = std::getenv("NEAM_MAX_CALL_DEPTH");
+  if (env)
+  {
+    int val = std::atoi(env);
+    if (val > 0 && val <= 100000)
+    {
+      return val;
+    }
+  }
+  return 1000;
+}
+
+const int kMaxCallDepth = get_max_call_depth();
+
 std::string to_std_string(const Value& value)
 {
   if (!value.is_string())
@@ -1203,6 +1221,14 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         if (frame.ip >= code.size())
         {
           throw std::runtime_error("OP_CALL missing argument count");
+        }
+        // Stack depth protection (v0.6.5 reliability fix)
+        if (static_cast<int>(frames_.size()) >= kMaxCallDepth)
+        {
+          throw std::runtime_error(
+              "Stack overflow: maximum call depth (" +
+              std::to_string(kMaxCallDepth) +
+              ") exceeded. Check for infinite recursion.");
         }
         const auto arg_count = code[frame.ip++];
         const auto callee_index = stack_.size() - 1 - arg_count;
