@@ -1,0 +1,421 @@
+//
+// Neam v0.6.6 — Native Tool Calling Demo
+//
+// Demonstrates the new Claude/OpenAI/Ollama tool calling integration where
+// Neam skills are automatically exposed as native LLM tools. No text-based
+// ReAct parsing — the LLM decides which skill to call via its native
+// function-calling protocol.
+//
+// Usage:
+//   neam examples/v066_native_tool_calling.neam
+//
+// Required env vars (pick one provider section):
+//
+//   Bedrock:  AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+//   OpenAI:   OPENAI_API_KEY
+//   Ollama:   (none, runs locally on localhost:11434)
+//
+
+// =============================================================================
+// 1. SKILLS — These become LLM tools automatically
+// =============================================================================
+
+// --- Math skills ---
+
+skill calculate {
+  description: "Evaluate a mathematical expression and return the numeric result. Supports +, -, *, /, and parentheses."
+  params: {
+    expression: string
+  }
+  impl(expression) {
+    // Simple expression evaluator for demo purposes
+    // In production, this would use a proper math parser
+    let result = "Evaluated: " + expression;
+
+    if (expression == "15 * 23") {
+      result = "345";
+    }
+    if (expression == "100 / 4") {
+      result = "25";
+    }
+    if (expression == "2 + 2") {
+      result = "4";
+    }
+    if (expression == "sqrt(144)") {
+      result = "12";
+    }
+    if (expression == "1000 * 0.15") {
+      result = "150";
+    }
+    if (expression == "1000 + 150") {
+      result = "1150";
+    }
+    if (expression == "3.14159 * 5 * 5") {
+      result = "78.53975";
+    }
+
+    return result;
+  }
+}
+
+skill unit_convert {
+  description: "Convert a value from one unit to another. Supports temperature (celsius/fahrenheit/kelvin), distance (km/miles), and weight (kg/lbs)."
+  params: {
+    value: number,
+    from_unit: string,
+    to_unit: string
+  }
+  impl(value, from_unit, to_unit) {
+    let result = 0;
+    let key = from_unit + "_to_" + to_unit;
+
+    if (key == "celsius_to_fahrenheit") {
+      result = value * 9 / 5 + 32;
+    }
+    if (key == "fahrenheit_to_celsius") {
+      result = (value - 32) * 5 / 9;
+    }
+    if (key == "km_to_miles") {
+      result = value * 0.621371;
+    }
+    if (key == "miles_to_km") {
+      result = value * 1.60934;
+    }
+    if (key == "kg_to_lbs") {
+      result = value * 2.20462;
+    }
+    if (key == "lbs_to_kg") {
+      result = value * 0.453592;
+    }
+
+    return "" + result + " " + to_unit;
+  }
+}
+
+// --- Data lookup skills ---
+
+skill get_weather {
+  description: "Get the current weather conditions for a city. Returns temperature, conditions, and humidity."
+  params: {
+    city: string
+  }
+  impl(city) {
+    // Simulated weather data
+    if (city == "Tokyo") {
+      return "Tokyo: 22C, Partly Cloudy, Humidity 65%";
+    }
+    if (city == "London") {
+      return "London: 14C, Overcast, Humidity 78%";
+    }
+    if (city == "New York") {
+      return "New York: 28C, Sunny, Humidity 55%";
+    }
+    if (city == "Sydney") {
+      return "Sydney: 19C, Clear, Humidity 60%";
+    }
+    if (city == "Paris") {
+      return "Paris: 18C, Light Rain, Humidity 72%";
+    }
+    return city + ": 20C, Clear, Humidity 50%";
+  }
+}
+
+skill get_stock_price {
+  description: "Get the current stock price for a given ticker symbol. Returns price in USD and daily change percentage."
+  params: {
+    ticker: string
+  }
+  impl(ticker) {
+    if (ticker == "AAPL") {
+      return "AAPL: $198.50 (+1.2%)";
+    }
+    if (ticker == "GOOGL") {
+      return "GOOGL: $175.30 (-0.5%)";
+    }
+    if (ticker == "MSFT") {
+      return "MSFT: $420.15 (+0.8%)";
+    }
+    if (ticker == "AMZN") {
+      return "AMZN: $185.60 (+2.1%)";
+    }
+    if (ticker == "TSLA") {
+      return "TSLA: $245.80 (-1.5%)";
+    }
+    return ticker + ": Not found";
+  }
+}
+
+skill search_knowledge {
+  description: "Search an internal knowledge base for information about a topic. Returns relevant facts and summaries."
+  params: {
+    query: string
+  }
+  impl(query) {
+    if (query == "Neam programming language") {
+      return "Neam is a compiled DSL for AI agents (v0.6.6). Features: native skill/tool system, multi-cloud LLM routing (Bedrock/OpenAI/Ollama), SIMD execution, built-in RAG, guard chains, and budget management. Written in C++ with zero-copy string handling.";
+    }
+    if (query == "quantum computing") {
+      return "Quantum computing uses quantum bits (qubits) that can exist in superposition. Key concepts: entanglement, quantum gates, decoherence. Current leaders: IBM (1121 qubits), Google (Willow processor), IonQ (trapped ions). Primary applications: cryptography, drug discovery, optimization.";
+    }
+    if (query == "climate change") {
+      return "Global average temperature has risen approx 1.1C since pre-industrial times. Main drivers: CO2 emissions (36.8 Gt/year), methane, deforestation. Paris Agreement target: limit to 1.5C. Key solutions: renewable energy, carbon capture, electrification of transport.";
+    }
+    return "No results found for: " + query;
+  }
+}
+
+// --- Text processing skills ---
+
+skill translate {
+  description: "Translate text from one language to another. Returns the translated text."
+  params: {
+    text: string,
+    target_language: string
+  }
+  impl(text, target_language) {
+    // Simulated translations — use compound key to avoid && operator
+    let key = target_language + ":" + text;
+
+    if (key == "Spanish:Hello, how are you?") {
+      return "Hola, como estas?";
+    }
+    if (key == "French:Hello, how are you?") {
+      return "Bonjour, comment allez-vous?";
+    }
+    if (key == "Japanese:Hello, how are you?") {
+      return "Konnichiwa, ogenki desu ka?";
+    }
+    return "[" + target_language + "] " + text;
+  }
+}
+
+skill summarize_text {
+  description: "Summarize a block of text into a concise version. Specify the desired length: short (1 sentence), medium (2-3 sentences), or long (paragraph)."
+  params: {
+    text: string,
+    length: string
+  }
+  impl(text, length) {
+    if (length == "short") {
+      return "Summary: The text discusses key points about the given topic in a condensed form.";
+    }
+    if (length == "medium") {
+      return "Summary: The provided text covers several important aspects. It presents both factual information and analysis. The key takeaway relates to the main theme discussed.";
+    }
+    return "Detailed summary of the provided text with full context preservation: " + text;
+  }
+}
+
+
+// =============================================================================
+// 2. GUARD — Input/output validation for tool calls
+// =============================================================================
+
+guard SafetyGuard {
+  description: "Validates tool inputs and outputs for safety"
+
+  on_tool_input(input) {
+    // Block any inputs containing potential injection patterns
+    if (input == "block") {
+      return "block";
+    }
+    return input;
+  }
+
+  on_tool_output(output) {
+    // Pass through all outputs in this demo
+    return output;
+  }
+}
+
+guardchain AgentSafety = [SafetyGuard];
+
+
+// =============================================================================
+// 3. BUDGET — Cost controls for the agent
+// =============================================================================
+
+budget DemoBudget {
+  api_calls: 20
+  tokens: 50000
+}
+
+
+// =============================================================================
+// 4. AGENTS — Each wired with different skill sets
+// =============================================================================
+
+// Agent with math + data skills — uses Bedrock Claude
+agent MathDataAgent {
+  provider: "bedrock"
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  system: "You are a helpful assistant with access to calculation and data lookup tools. Always use your tools when the user asks for specific data or calculations. Be concise in your responses."
+  skills: [calculate, unit_convert, get_weather, get_stock_price]
+  guards: [AgentSafety]
+  budget: DemoBudget
+}
+
+// Agent with research + text skills — uses OpenAI
+agent ResearchAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a research assistant with access to knowledge search, translation, and summarization tools. Use your tools to provide accurate, well-sourced answers. Combine multiple tools when needed."
+  skills: [search_knowledge, translate, summarize_text]
+  guards: [AgentSafety]
+}
+
+// Full-featured agent with ALL skills — uses Ollama for local testing
+agent LocalAssistant {
+  provider: "ollama"
+  model: "qwen3:8b"
+  system: "You are a versatile assistant with access to math, weather, stocks, knowledge search, translation, and text tools. Use the most appropriate tool(s) for each request. When multiple tools are needed, use them in sequence."
+  skills: [calculate, unit_convert, get_weather, get_stock_price, search_knowledge, translate, summarize_text]
+}
+
+// Agent with NO skills — falls back to plain chat (backward compat test)
+agent PlainAgent {
+  provider: "ollama"
+  model: "qwen3:8b"
+  system: "You are a simple chat assistant with no tools. Answer from your training data."
+}
+
+
+// =============================================================================
+// 5. TEST SCENARIOS
+// =============================================================================
+
+{
+  emit "====================================================================";
+  emit "  Neam v0.6.6 — Native Tool Calling Integration Test";
+  emit "====================================================================";
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 1: Single tool call — math calculation
+  // -----------------------------------------------------------------------
+  emit "--- Test 1: Single Tool Call (Math) ---";
+  emit "Q: What is 15 * 23?";
+  let answer1 = LocalAssistant.ask("What is 15 * 23? Use the calculate tool.");
+  emit "A: " + answer1;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 2: Single tool call — data lookup
+  // -----------------------------------------------------------------------
+  emit "--- Test 2: Single Tool Call (Weather) ---";
+  emit "Q: What's the weather in Tokyo?";
+  let answer2 = LocalAssistant.ask("What is the current weather in Tokyo?");
+  emit "A: " + answer2;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 3: Multi-step tool calls — chained reasoning
+  // The LLM should call get_weather twice and then compare
+  // -----------------------------------------------------------------------
+  emit "--- Test 3: Multi-Step Tool Calls (Compare Weather) ---";
+  emit "Q: Compare weather in Tokyo and London";
+  let answer3 = LocalAssistant.ask("Compare the current weather in Tokyo and London. Get both and tell me which is warmer.");
+  emit "A: " + answer3;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 4: Cross-domain tool calls — math + data
+  // The LLM should get stock price, then calculate
+  // -----------------------------------------------------------------------
+  emit "--- Test 4: Cross-Domain Tool Calls (Stock + Math) ---";
+  emit "Q: How much would 100 shares of AAPL cost?";
+  let answer4 = LocalAssistant.ask("Look up the current price of AAPL stock, then calculate how much 100 shares would cost.");
+  emit "A: " + answer4;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 5: Unit conversion tool
+  // -----------------------------------------------------------------------
+  emit "--- Test 5: Unit Conversion ---";
+  emit "Q: Convert 100F to Celsius";
+  let answer5 = LocalAssistant.ask("Convert 100 degrees Fahrenheit to Celsius using the unit_convert tool.");
+  emit "A: " + answer5;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 6: Knowledge search + summarize pipeline
+  // LLM should search, then summarize the results
+  // -----------------------------------------------------------------------
+  emit "--- Test 6: Search + Summarize Pipeline ---";
+  emit "Q: What is Neam? Give me a short summary.";
+  let answer6 = LocalAssistant.ask("Search for information about 'Neam programming language' and then summarize what you find in a short summary.");
+  emit "A: " + answer6;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 7: Translation
+  // -----------------------------------------------------------------------
+  emit "--- Test 7: Translation ---";
+  emit "Q: How do you say 'Hello, how are you?' in Japanese?";
+  let answer7 = LocalAssistant.ask("Translate 'Hello, how are you?' to Japanese.");
+  emit "A: " + answer7;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 8: No tool needed — verify the agent can still do plain responses
+  // -----------------------------------------------------------------------
+  emit "--- Test 8: Plain Response (No Tool Needed) ---";
+  emit "Q: What color is the sky?";
+  let answer8 = LocalAssistant.ask("What color is the sky? Just answer directly, no tools needed.");
+  emit "A: " + answer8;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 9: Agent with NO skills — backward compatibility
+  // Should use plain chat(), not chat_with_tools()
+  // -----------------------------------------------------------------------
+  emit "--- Test 9: Plain Agent (No Skills, Backward Compat) ---";
+  emit "Q: Say hello";
+  let answer9 = PlainAgent.ask("Say hello in one sentence.");
+  emit "A: " + answer9;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 10: Multi-turn conversation with tool memory
+  // Agent should remember context from previous turns
+  // -----------------------------------------------------------------------
+  emit "--- Test 10: Multi-Turn Conversation ---";
+  emit "Q (turn 1): What's the weather in New York?";
+  let turn1 = LocalAssistant.ask("What is the current weather in New York?");
+  emit "A: " + turn1;
+  emit "";
+  emit "Q (turn 2): And how about Sydney?";
+  let turn2 = LocalAssistant.ask("And what about Sydney?");
+  emit "A: " + turn2;
+  emit "";
+  emit "Q (turn 3): Which of those two cities is warmer?";
+  let turn3 = LocalAssistant.ask("Based on what you just told me, which city is warmer — New York or Sydney?");
+  emit "A: " + turn3;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 11: Complex multi-tool query
+  // Agent needs to orchestrate multiple tools to answer
+  // -----------------------------------------------------------------------
+  emit "--- Test 11: Complex Multi-Tool Query ---";
+  emit "Q: Research quantum computing, translate the summary to Spanish";
+  let answer11 = LocalAssistant.ask("Search for information about quantum computing, summarize it in a short summary, and then translate that summary to Spanish.");
+  emit "A: " + answer11;
+  emit "";
+
+  // -----------------------------------------------------------------------
+  // Test 12: Tool with numeric parameters
+  // Tests json_to_value() conversion for non-string types
+  // -----------------------------------------------------------------------
+  emit "--- Test 12: Numeric Parameters ---";
+  emit "Q: Convert 42 km to miles";
+  let answer12 = LocalAssistant.ask("Convert 42 kilometers to miles. Use the unit_convert tool with value 42, from_unit 'km', to_unit 'miles'.");
+  emit "A: " + answer12;
+  emit "";
+
+  emit "====================================================================";
+  emit "  All tests complete!";
+  emit "====================================================================";
+}
