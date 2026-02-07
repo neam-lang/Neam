@@ -1,6 +1,8 @@
 //
 // Neam LLM - Ollama adapter
 //
+// v0.6.6: Added chat_with_tools() for Ollama tool calling (OpenAI-compatible format).
+//
 
 #include "neamc/llm/ollama_adapter.hpp"
 
@@ -69,14 +71,109 @@ std::string extract_response_text(const nlohmann::json& json)
   throw std::runtime_error("Ollama response missing content");
 }
 
-nlohmann::json message_list_to_json(const std::vector<Message>& messages)
+// Build messages array supporting tool call history.
+nlohmann::json build_messages_json(const std::vector<Message>& messages)
 {
-  nlohmann::json json = nlohmann::json::array();
-  for (const auto& message : messages)
+  nlohmann::json arr = nlohmann::json::array();
+  for (const auto& msg : messages)
   {
-    json.push_back({{"role", message.role}, {"content", message.content}});
+    nlohmann::json entry;
+    entry["role"] = msg.role;
+
+    if (!msg.content_blocks.is_null() && msg.content_blocks.is_array() &&
+        !msg.content_blocks.empty())
+    {
+      // Assistant message with tool_calls (Ollama uses OpenAI-compatible format)
+      if (msg.role == "assistant" && msg.content_blocks.front().contains("type") &&
+          msg.content_blocks.front().at("type") == "function")
+      {
+        entry["content"] = msg.content.empty() ? nlohmann::json(nullptr) : nlohmann::json(msg.content);
+        nlohmann::json tool_calls = nlohmann::json::array();
+        for (const auto& block : msg.content_blocks)
+        {
+          nlohmann::json tc;
+          tc["id"] = block.value("id", "");
+          tc["type"] = "function";
+          tc["function"] = {
+              {"name", block.value("name", "")},
+              {"arguments", block.value("arguments", "")}};
+          tool_calls.push_back(std::move(tc));
+        }
+        entry["tool_calls"] = std::move(tool_calls);
+      }
+      else if (msg.role == "tool")
+      {
+        entry["content"] = msg.content;
+        if (msg.content_blocks.front().contains("tool_call_id"))
+        {
+          entry["tool_call_id"] = msg.content_blocks.front().at("tool_call_id");
+        }
+      }
+      else
+      {
+        entry["content"] = msg.content;
+      }
+    }
+    else
+    {
+      entry["content"] = msg.content;
+    }
+    arr.push_back(std::move(entry));
   }
-  return json;
+  return arr;
+}
+
+// Parse Ollama chat response with tool call detection.
+ChatResponse parse_ollama_response(const nlohmann::json& parsed)
+{
+  ChatResponse resp;
+
+  if (parsed.contains("message"))
+  {
+    const auto& message = parsed.at("message");
+
+    if (message.contains("content") && !message.at("content").is_null())
+    {
+      resp.text = message.value("content", "");
+    }
+
+    // Ollama tool calls (same format as OpenAI)
+    if (message.contains("tool_calls") && message.at("tool_calls").is_array())
+    {
+      for (const auto& tc : message.at("tool_calls"))
+      {
+        ToolCall tool_call;
+        tool_call.id = tc.value("id", "");
+        if (tc.contains("function"))
+        {
+          const auto& fn = tc.at("function");
+          tool_call.name = fn.value("name", "");
+          if (fn.contains("arguments"))
+          {
+            if (fn.at("arguments").is_string())
+            {
+              try
+              {
+                tool_call.input = nlohmann::json::parse(fn.at("arguments").get<std::string>());
+              }
+              catch (...)
+              {
+                tool_call.input = nlohmann::json::object();
+              }
+            }
+            else
+            {
+              tool_call.input = fn.at("arguments");
+            }
+          }
+        }
+        resp.tool_calls.push_back(std::move(tool_call));
+      }
+    }
+  }
+
+  resp.stop_reason = resp.tool_calls.empty() ? "end_turn" : "tool_use";
+  return resp;
 }
 }  // namespace
 
@@ -128,7 +225,7 @@ public:
 
     nlohmann::json payload;
     payload["model"] = config_.model;
-    payload["messages"] = message_list_to_json(messages);
+    payload["messages"] = build_messages_json(messages);
     payload["stream"] = false;
     if (config_.temperature > 0.0)
     {
@@ -147,6 +244,64 @@ public:
     catch (const std::exception& e)
     {
       LLMLogger::error("ollama", "Chat failed: " + std::string(e.what()));
+      throw;
+    }
+  }
+
+  // v0.6.6: Ollama tool calling via chat API (OpenAI-compatible format)
+  ChatResponse chat_with_tools(const std::vector<Message>& messages,
+                               const std::vector<ToolDefinition>& tools,
+                               const std::string& tool_choice) override
+  {
+    if (tools.empty())
+    {
+      ChatResponse resp;
+      resp.text = chat(messages);
+      resp.stop_reason = "end_turn";
+      return resp;
+    }
+
+    LLMLogger::info("ollama", "Tool-aware chat: model=" + config_.model +
+                                    ", tools=" + std::to_string(tools.size()) +
+                                    ", messages=" + std::to_string(messages.size()));
+
+    nlohmann::json payload;
+    payload["model"] = config_.model;
+    payload["messages"] = build_messages_json(messages);
+    payload["stream"] = false;
+    if (config_.temperature > 0.0)
+    {
+      payload["options"] = { {"temperature", config_.temperature} };
+    }
+
+    // Build tools array in OpenAI-compatible format
+    nlohmann::json tools_json = nlohmann::json::array();
+    for (const auto& tool : tools)
+    {
+      tools_json.push_back(
+          {{"type", "function"},
+           {"function",
+            {{"name", tool.name},
+             {"description", tool.description},
+             {"parameters", tool.input_schema}}}});
+    }
+    payload["tools"] = std::move(tools_json);
+    (void)tool_choice;  // Ollama does not support tool_choice parameter
+
+    try
+    {
+      const std::string response = http_post_json(
+          build_url(config_.endpoint, "/api/chat"), payload.dump(),
+          {"Content-Type: application/json"});
+      auto parsed = nlohmann::json::parse(response);
+      auto chat_resp = parse_ollama_response(parsed);
+      LLMLogger::debug("ollama", "Tool response: stop_reason=" + chat_resp.stop_reason +
+                                       ", tool_calls=" + std::to_string(chat_resp.tool_calls.size()));
+      return chat_resp;
+    }
+    catch (const std::exception& e)
+    {
+      LLMLogger::error("ollama", "Tool chat failed: " + std::string(e.what()));
       throw;
     }
   }
