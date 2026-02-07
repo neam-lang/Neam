@@ -147,6 +147,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/native.cpp
     NeamC/src/vm/llm/http_client.cpp
     NeamC/src/vm/llm/message_codec.cpp
+    NeamC/src/vm/llm/bedrock_adapter.cpp
     NeamC/src/vm/llm/ollama_adapter.cpp
     NeamC/src/vm/llm/openai_adapter.cpp
     NeamC/src/vm/llm/provider_factory.cpp

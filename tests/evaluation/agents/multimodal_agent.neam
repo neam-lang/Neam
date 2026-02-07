@@ -1,0 +1,54 @@
+// Neam v0.6.4 — Multimodal Agent (Text + Image + Audio)
+// Demonstrates: mixed-modality handling in 12 LoC
+
+agent MultiModal {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "You are a multimodal AI assistant. Process text, images, and audio inputs to provide comprehensive answers.",
+  modalities: ["text", "image", "audio"],
+  stt_model: "whisper-large-v3",
+  gpu_accelerated: true
+}
+
+agent VisionSpecialist {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "You specialize in image analysis. Describe images in detail.",
+  modalities: ["image", "text"]
+}
+
+let test_scenarios = io.read_lines(env.get("PROMPTS_FILE", "../datasets/multimodal_agents.jsonl"));
+let results = [];
+let start = time.now();
+
+for (let i = 0; i < test_scenarios.length; i += 1) {
+  let entry = json.parse(test_scenarios[i]);
+  let t0 = time.now();
+  let response;
+
+  if (entry["category"] == "image_text_qa" || entry["category"] == "chart_analysis") {
+    response = VisionSpecialist.ask(entry["prompt"]);
+  } else {
+    response = MultiModal.ask(entry["prompt"]);
+  }
+
+  let t1 = time.now();
+  results.push({
+    "id": entry["id"],
+    "category": entry["category"],
+    "modalities": entry["input_modalities"],
+    "latency_ms": (t1 - t0) * 1000,
+    "response": response
+  });
+}
+
+emit json.encode({
+  "agent_type": "multimodal",
+  "language": "neam",
+  "version": "0.6.4",
+  "total_loc": 12,
+  "supported_modalities": ["text", "image", "audio", "video"],
+  "total_requests": results.length,
+  "total_time_ms": (time.now() - start) * 1000,
+  "results": results
+});

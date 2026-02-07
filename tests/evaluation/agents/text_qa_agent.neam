@@ -1,0 +1,37 @@
+// Neam v0.6.4 — Text Q&A Agent (Simple)
+// Demonstrates: 5 LoC agent definition, built-in tracing, prompt loop
+
+agent QA {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "Answer concisely and accurately."
+}
+
+let prompts = io.read_lines(env.get("PROMPTS_FILE", "../datasets/text_agents.jsonl"));
+let results = [];
+let start = time.now();
+
+for (let i = 0; i < prompts.length; i += 1) {
+  let entry = json.parse(prompts[i]);
+  if (entry["category"] == "simple_qa" || entry["category"] == "reasoning" || entry["category"] == "math") {
+    let t0 = time.now();
+    let answer = QA.ask(entry["prompt"]);
+    let t1 = time.now();
+    results.push({
+      "id": entry["id"],
+      "latency_ms": (t1 - t0) * 1000,
+      "response": answer,
+      "tokens": answer.length
+    });
+  }
+}
+
+emit json.encode({
+  "agent_type": "text_qa",
+  "language": "neam",
+  "version": "0.6.4",
+  "total_loc": 5,
+  "total_requests": results.length,
+  "total_time_ms": (time.now() - start) * 1000,
+  "results": results
+});

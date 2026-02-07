@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <stdexcept>
 
+#include "neamc/llm/bedrock_adapter.hpp"
 #include "neamc/llm/ollama_adapter.hpp"
 #include "neamc/llm/openai_adapter.hpp"
 
@@ -77,6 +78,10 @@ std::unique_ptr<LLMProvider> create_provider(const std::string& provider,
       with_key.endpoint = default_openai_endpoint();
     }
     return create_openai_provider(with_key);
+  }
+  if (normalized == "bedrock")
+  {
+    return create_bedrock_provider(config);
   }
   throw std::runtime_error("Unknown LLM provider: " + provider);
 }
