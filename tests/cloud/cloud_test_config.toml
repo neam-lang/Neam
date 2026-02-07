@@ -1,0 +1,506 @@
+# Neam v0.6.4 Multi-Cloud Test Configuration
+# Tests agents across AWS, GCP, Azure, and Alibaba Cloud
+
+[test]
+name = "v0.6.4-multi-cloud-benchmark"
+version = "1.0.0"
+description = "End-to-end cloud testing for Neam agents"
+timeout_seconds = 3600
+parallel_clouds = true
+collect_metrics = true
+generate_cost_report = true
+
+# ============================================================================
+# Test Agents Configuration
+# ============================================================================
+
+[[agents]]
+id = "agent-simple-qa"
+name = "Simple Q&A Agent"
+description = "Basic question-answering agent for latency testing"
+type = "qa"
+model = "gpt-4o-mini"
+max_tokens = 256
+temperature = 0.3
+
+[[agents]]
+id = "agent-rag-knowledge"
+name = "RAG Knowledge Agent"
+description = "Agent with vector search for throughput testing"
+type = "rag"
+model = "gpt-4o"
+max_tokens = 1024
+temperature = 0.5
+embedding_model = "text-embedding-3-small"
+vector_dimensions = 1536
+top_k = 10
+
+[[agents]]
+id = "agent-multi-step"
+name = "Multi-Step Reasoning Agent"
+description = "Complex reasoning agent for cost analysis"
+type = "reasoning"
+model = "claude-3-5-sonnet"
+max_tokens = 4096
+temperature = 0.7
+
+[[agents]]
+id = "agent-voice-pipeline"
+name = "Voice Pipeline Agent"
+description = "STT -> Agent -> TTS pipeline"
+type = "voice"
+stt_model = "whisper-large-v3"
+tts_model = "tts-1-hd"
+agent_model = "gpt-4o-mini"
+
+[[agents]]
+id = "agent-gpu-intensive"
+name = "GPU-Intensive Agent"
+description = "Agent requiring GPU for embeddings/inference"
+type = "gpu"
+model = "llama-3.1-70b"
+requires_gpu = true
+gpu_memory_gb = 40
+
+# ============================================================================
+# Test Workloads
+# ============================================================================
+
+[[workloads]]
+id = "workload-latency"
+name = "Latency Test"
+description = "Measure p50/p95/p99 latency"
+agent_id = "agent-simple-qa"
+requests = 1000
+concurrency = 1
+warmup_requests = 10
+prompts_file = "prompts/latency_test.jsonl"
+
+[[workloads]]
+id = "workload-throughput"
+name = "Throughput Test"
+description = "Measure max requests/second"
+agent_id = "agent-rag-knowledge"
+requests = 5000
+concurrency = 50
+duration_seconds = 300
+prompts_file = "prompts/throughput_test.jsonl"
+
+[[workloads]]
+id = "workload-cost"
+name = "Cost Analysis"
+description = "Run realistic workload for cost measurement"
+agent_id = "agent-multi-step"
+requests = 100
+concurrency = 10
+prompts_file = "prompts/cost_test.jsonl"
+
+[[workloads]]
+id = "workload-voice"
+name = "Voice Pipeline Test"
+description = "End-to-end voice latency"
+agent_id = "agent-voice-pipeline"
+requests = 50
+concurrency = 5
+audio_files = "audio/test_samples/"
+
+[[workloads]]
+id = "workload-gpu"
+name = "GPU Workload"
+description = "GPU-accelerated inference"
+agent_id = "agent-gpu-intensive"
+requests = 200
+concurrency = 4
+prompts_file = "prompts/gpu_test.jsonl"
+
+# ============================================================================
+# AWS Configuration
+# ============================================================================
+
+[clouds.aws]
+enabled = true
+provider = "aws"
+name = "Amazon Web Services"
+
+[clouds.aws.credentials]
+access_key_id = "${AWS_ACCESS_KEY_ID}"
+secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
+region = "us-east-1"
+
+[clouds.aws.regions]
+primary = "us-east-1"
+secondary = ["us-west-2", "eu-west-1", "ap-northeast-1"]
+
+# Lambda (Serverless)
+[clouds.aws.lambda]
+enabled = true
+memory_mb = [256, 512, 1024, 2048, 4096]
+timeout_seconds = 300
+runtime = "provided.al2"
+architecture = "arm64"
+provisioned_concurrency = 5
+
+# ECS Fargate (Containers)
+[clouds.aws.ecs]
+enabled = true
+cpu_units = [256, 512, 1024, 2048, 4096]
+memory_mb = [512, 1024, 2048, 4096, 8192]
+spot_enabled = true
+spot_weight = 80
+
+# EC2 (VMs)
+[clouds.aws.ec2]
+enabled = true
+instance_types = [
+    "t3.medium",
+    "t3.large",
+    "m6i.large",
+    "m6i.xlarge",
+    "c6i.xlarge",
+    "r6i.large"
+]
+spot_enabled = true
+spot_max_price_percent = 70
+
+# EC2 GPU
+[clouds.aws.ec2_gpu]
+enabled = true
+instance_types = [
+    "g4dn.xlarge",
+    "g4dn.2xlarge",
+    "g5.xlarge",
+    "p4d.24xlarge"
+]
+spot_enabled = true
+
+# Bedrock (Managed LLM)
+[clouds.aws.bedrock]
+enabled = true
+models = [
+    "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "anthropic.claude-3-haiku-20240307-v1:0",
+    "amazon.titan-text-express-v1"
+]
+
+# Pricing (USD per hour unless noted)
+[clouds.aws.pricing]
+lambda_per_gb_second = 0.0000166667
+lambda_per_request = 0.0000002
+fargate_vcpu_hour = 0.04048
+fargate_gb_hour = 0.004445
+ec2_t3_medium_ondemand = 0.0416
+ec2_t3_medium_spot = 0.0125
+ec2_m6i_large_ondemand = 0.096
+ec2_m6i_large_spot = 0.0384
+ec2_g4dn_xlarge_ondemand = 0.526
+ec2_g4dn_xlarge_spot = 0.1578
+bedrock_claude_sonnet_input_1k = 0.003
+bedrock_claude_sonnet_output_1k = 0.015
+data_transfer_out_gb = 0.09
+
+# ============================================================================
+# GCP Configuration
+# ============================================================================
+
+[clouds.gcp]
+enabled = true
+provider = "gcp"
+name = "Google Cloud Platform"
+
+[clouds.gcp.credentials]
+project_id = "${GCP_PROJECT_ID}"
+credentials_file = "${GOOGLE_APPLICATION_CREDENTIALS}"
+region = "us-central1"
+
+[clouds.gcp.regions]
+primary = "us-central1"
+secondary = ["us-east1", "europe-west1", "asia-northeast1"]
+
+# Cloud Functions (Serverless)
+[clouds.gcp.cloud_functions]
+enabled = true
+memory_mb = [256, 512, 1024, 2048, 4096, 8192]
+timeout_seconds = 540
+runtime = "python311"
+min_instances = 0
+max_instances = 100
+
+# Cloud Run (Containers)
+[clouds.gcp.cloud_run]
+enabled = true
+cpu = [1, 2, 4, 8]
+memory_mb = [512, 1024, 2048, 4096, 8192, 16384]
+concurrency = 80
+min_instances = 0
+max_instances = 100
+cpu_boost = true
+
+# Compute Engine (VMs)
+[clouds.gcp.compute_engine]
+enabled = true
+machine_types = [
+    "e2-medium",
+    "e2-standard-2",
+    "n2-standard-2",
+    "n2-standard-4",
+    "c2-standard-4"
+]
+preemptible = true
+spot = true
+
+# Compute Engine GPU
+[clouds.gcp.compute_engine_gpu]
+enabled = true
+machine_types = [
+    "n1-standard-4",
+    "n1-standard-8",
+    "a2-highgpu-1g"
+]
+accelerators = [
+    { type = "nvidia-tesla-t4", count = 1 },
+    { type = "nvidia-l4", count = 1 },
+    { type = "nvidia-a100-40gb", count = 1 }
+]
+preemptible = true
+
+# Vertex AI
+[clouds.gcp.vertex_ai]
+enabled = true
+models = [
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash-exp"
+]
+
+# Pricing
+[clouds.gcp.pricing]
+functions_per_gb_second = 0.0000025
+functions_per_invocation = 0.0000004
+cloudrun_vcpu_second = 0.00002400
+cloudrun_gb_second = 0.00000250
+compute_e2_medium_ondemand = 0.03351
+compute_e2_medium_preemptible = 0.01005
+compute_n2_standard_2_ondemand = 0.0971
+compute_n2_standard_2_spot = 0.0291
+compute_t4_gpu_hour = 0.35
+compute_a100_gpu_hour = 2.934
+vertex_gemini_pro_input_1k = 0.00125
+vertex_gemini_pro_output_1k = 0.00375
+data_transfer_out_gb = 0.12
+
+# ============================================================================
+# Azure Configuration
+# ============================================================================
+
+[clouds.azure]
+enabled = true
+provider = "azure"
+name = "Microsoft Azure"
+
+[clouds.azure.credentials]
+subscription_id = "${AZURE_SUBSCRIPTION_ID}"
+tenant_id = "${AZURE_TENANT_ID}"
+client_id = "${AZURE_CLIENT_ID}"
+client_secret = "${AZURE_CLIENT_SECRET}"
+region = "eastus"
+
+[clouds.azure.regions]
+primary = "eastus"
+secondary = ["westus2", "northeurope", "eastasia"]
+
+# Azure Functions (Serverless)
+[clouds.azure.functions]
+enabled = true
+sku = ["Consumption", "Premium"]
+memory_mb = [256, 512, 1024, 2048]
+timeout_seconds = 600
+runtime = "python"
+runtime_version = "3.11"
+
+# Azure Container Apps
+[clouds.azure.container_apps]
+enabled = true
+cpu = [0.25, 0.5, 1.0, 2.0, 4.0]
+memory_gb = [0.5, 1.0, 2.0, 4.0, 8.0]
+min_replicas = 0
+max_replicas = 30
+scale_rule_concurrency = 10
+
+# Azure Kubernetes Service
+[clouds.azure.aks]
+enabled = true
+node_sizes = [
+    "Standard_D2s_v3",
+    "Standard_D4s_v3",
+    "Standard_D8s_v3",
+    "Standard_F4s_v2"
+]
+spot_enabled = true
+spot_max_price = -1  # Market price
+
+# Azure VMs GPU
+[clouds.azure.vm_gpu]
+enabled = true
+sizes = [
+    "Standard_NC4as_T4_v3",
+    "Standard_NC8as_T4_v3",
+    "Standard_NC24ads_A100_v4"
+]
+spot_enabled = true
+
+# Azure OpenAI
+[clouds.azure.openai]
+enabled = true
+endpoint = "${AZURE_OPENAI_ENDPOINT}"
+deployments = [
+    { name = "gpt-4o", model = "gpt-4o", version = "2024-08-06" },
+    { name = "gpt-4o-mini", model = "gpt-4o-mini", version = "2024-07-18" }
+]
+
+# Pricing
+[clouds.azure.pricing]
+functions_consumption_executions = 0.0000002
+functions_consumption_gb_second = 0.000016
+container_apps_vcpu_second = 0.000024
+container_apps_gb_second = 0.000003
+aks_d2s_v3_ondemand = 0.096
+aks_d2s_v3_spot = 0.0192
+vm_nc4as_t4_ondemand = 0.526
+vm_nc4as_t4_spot = 0.1052
+openai_gpt4o_input_1k = 0.005
+openai_gpt4o_output_1k = 0.015
+data_transfer_out_gb = 0.087
+
+# ============================================================================
+# Alibaba Cloud Configuration
+# ============================================================================
+
+[clouds.alibaba]
+enabled = true
+provider = "alibaba"
+name = "Alibaba Cloud"
+
+[clouds.alibaba.credentials]
+access_key_id = "${ALIBABA_ACCESS_KEY_ID}"
+access_key_secret = "${ALIBABA_ACCESS_KEY_SECRET}"
+region = "cn-hangzhou"
+
+[clouds.alibaba.regions]
+primary = "cn-hangzhou"
+secondary = ["cn-shanghai", "cn-beijing", "ap-southeast-1", "eu-central-1"]
+
+# Function Compute (Serverless)
+[clouds.alibaba.function_compute]
+enabled = true
+memory_mb = [128, 256, 512, 1024, 2048, 3072]
+timeout_seconds = 600
+runtime = "custom.debian10"
+instance_concurrency = 10
+
+# Elastic Container Instance
+[clouds.alibaba.eci]
+enabled = true
+cpu = [0.25, 0.5, 1, 2, 4, 8]
+memory_gb = [0.5, 1, 2, 4, 8, 16]
+spot_enabled = true
+spot_price_limit = 0  # Market price
+
+# ECS (VMs)
+[clouds.alibaba.ecs]
+enabled = true
+instance_types = [
+    "ecs.g6.large",
+    "ecs.g6.xlarge",
+    "ecs.c6.large",
+    "ecs.c6.xlarge",
+    "ecs.r6.large"
+]
+spot_enabled = true
+spot_strategy = "SpotWithPriceLimit"
+
+# ECS GPU
+[clouds.alibaba.ecs_gpu]
+enabled = true
+instance_types = [
+    "ecs.gn6i-c4g1.xlarge",    # T4
+    "ecs.gn6v-c8g1.2xlarge",   # V100
+    "ecs.gn7i-c8g1.2xlarge"    # A10
+]
+spot_enabled = true
+
+# PAI (Platform for AI)
+[clouds.alibaba.pai]
+enabled = false  # Enable if PAI access available
+models = ["qwen-max", "qwen-plus", "qwen-turbo"]
+
+# Pricing (CNY, converted to USD at 7.2 rate)
+[clouds.alibaba.pricing]
+fc_per_gb_second_cny = 0.00011
+fc_per_invocation_cny = 0.0000002
+eci_vcpu_second_cny = 0.000042
+eci_gb_second_cny = 0.000021
+ecs_g6_large_ondemand_cny = 0.63
+ecs_g6_large_spot_cny = 0.19
+ecs_gn6i_xlarge_ondemand_cny = 5.04
+ecs_gn6i_xlarge_spot_cny = 1.51
+cny_to_usd = 0.139
+
+# ============================================================================
+# Test Execution Settings
+# ============================================================================
+
+[execution]
+# Run order
+phases = ["warmup", "latency", "throughput", "cost", "gpu"]
+
+# Metrics collection
+metrics_interval_seconds = 5
+collect_traces = true
+collect_logs = true
+
+# Cost tracking
+track_all_costs = true
+include_data_transfer = true
+include_storage = true
+
+# Failure handling
+max_retries = 3
+retry_delay_seconds = 5
+fail_fast = false
+continue_on_cloud_failure = true
+
+# Output
+output_dir = "test_results/v064"
+report_formats = ["json", "csv", "html", "pdf"]
+
+# ============================================================================
+# Comparison Settings
+# ============================================================================
+
+[comparison]
+# Baseline cloud for comparison
+baseline_cloud = "aws"
+baseline_region = "us-east-1"
+baseline_compute = "lambda"
+
+# Metrics to compare
+compare_metrics = [
+    "latency_p50_ms",
+    "latency_p95_ms",
+    "latency_p99_ms",
+    "throughput_rps",
+    "cost_per_request_usd",
+    "cost_per_1k_tokens_usd",
+    "cold_start_ms",
+    "error_rate_percent"
+]
+
+# Normalization
+normalize_to_baseline = true
+include_spot_pricing = true
+include_reserved_pricing = false
+
+# Thresholds for recommendations
+latency_threshold_ms = 500
+cost_threshold_percent = 20
+error_threshold_percent = 1

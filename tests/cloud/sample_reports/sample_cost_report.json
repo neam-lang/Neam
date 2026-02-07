@@ -1,0 +1,402 @@
+{
+  "report_id": "v064-cloud-test-20260207-143022",
+  "title": "Neam v0.6.4 Multi-Cloud Cost Comparison Report",
+  "generated_at": "2026-02-07T14:30:22Z",
+  "test_duration_seconds": 3847,
+  "total_requests": 12400,
+  "total_test_cost_usd": 47.83,
+
+  "summary": {
+    "most_cost_effective": {
+      "provider": "gcp",
+      "region": "us-central1",
+      "compute_type": "serverless",
+      "cost_per_request_usd": 0.00032,
+      "savings_vs_baseline_percent": 36.0
+    },
+    "lowest_latency": {
+      "provider": "aws",
+      "region": "us-east-1",
+      "compute_type": "container",
+      "latency_p95_ms": 87,
+      "improvement_vs_baseline_percent": 15.0
+    },
+    "highest_throughput": {
+      "provider": "azure",
+      "region": "eastus",
+      "compute_type": "container",
+      "requests_per_second": 342,
+      "improvement_vs_baseline_percent": 22.0
+    }
+  },
+
+  "provider_comparison": {
+    "aws": {
+      "regions_tested": ["us-east-1", "us-west-2", "eu-west-1"],
+      "compute_types_tested": ["serverless", "container", "vm", "gpu"],
+      "metrics": {
+        "total_requests": 3100,
+        "successful_requests": 3089,
+        "failed_requests": 11,
+        "error_rate_percent": 0.35,
+        "latency_p50_ms": 68,
+        "latency_p95_ms": 142,
+        "latency_p99_ms": 287,
+        "cold_start_avg_ms": 312,
+        "requests_per_second": 287,
+        "tokens_per_second": 1842,
+        "total_cost_usd": 15.62,
+        "cost_per_request_usd": 0.00050,
+        "cost_per_1k_tokens_usd": 0.0078
+      },
+      "cost_breakdown": {
+        "compute_usd": 4.21,
+        "llm_api_usd": 9.87,
+        "data_transfer_usd": 1.12,
+        "storage_usd": 0.42,
+        "compute_percent": 26.9,
+        "llm_percent": 63.2,
+        "data_transfer_percent": 7.2,
+        "storage_percent": 2.7
+      }
+    },
+    "gcp": {
+      "regions_tested": ["us-central1", "us-east1", "europe-west1"],
+      "compute_types_tested": ["serverless", "container", "vm", "gpu"],
+      "metrics": {
+        "total_requests": 3100,
+        "successful_requests": 3092,
+        "failed_requests": 8,
+        "error_rate_percent": 0.26,
+        "latency_p50_ms": 72,
+        "latency_p95_ms": 156,
+        "latency_p99_ms": 298,
+        "cold_start_avg_ms": 187,
+        "requests_per_second": 312,
+        "tokens_per_second": 2156,
+        "total_cost_usd": 9.92,
+        "cost_per_request_usd": 0.00032,
+        "cost_per_1k_tokens_usd": 0.0046
+      },
+      "cost_breakdown": {
+        "compute_usd": 2.14,
+        "llm_api_usd": 6.42,
+        "data_transfer_usd": 1.08,
+        "storage_usd": 0.28,
+        "compute_percent": 21.6,
+        "llm_percent": 64.7,
+        "data_transfer_percent": 10.9,
+        "storage_percent": 2.8
+      }
+    },
+    "azure": {
+      "regions_tested": ["eastus", "westus2", "northeurope"],
+      "compute_types_tested": ["serverless", "container", "vm", "gpu"],
+      "metrics": {
+        "total_requests": 3100,
+        "successful_requests": 3084,
+        "failed_requests": 16,
+        "error_rate_percent": 0.52,
+        "latency_p50_ms": 65,
+        "latency_p95_ms": 138,
+        "latency_p99_ms": 276,
+        "cold_start_avg_ms": 245,
+        "requests_per_second": 342,
+        "tokens_per_second": 2287,
+        "total_cost_usd": 13.47,
+        "cost_per_request_usd": 0.00043,
+        "cost_per_1k_tokens_usd": 0.0059
+      },
+      "cost_breakdown": {
+        "compute_usd": 3.56,
+        "llm_api_usd": 8.32,
+        "data_transfer_usd": 1.24,
+        "storage_usd": 0.35,
+        "compute_percent": 26.4,
+        "llm_percent": 61.8,
+        "data_transfer_percent": 9.2,
+        "storage_percent": 2.6
+      }
+    },
+    "alibaba": {
+      "regions_tested": ["cn-hangzhou", "cn-shanghai", "ap-southeast-1"],
+      "compute_types_tested": ["serverless", "container", "vm", "gpu"],
+      "metrics": {
+        "total_requests": 3100,
+        "successful_requests": 3078,
+        "failed_requests": 22,
+        "error_rate_percent": 0.71,
+        "latency_p50_ms": 89,
+        "latency_p95_ms": 198,
+        "latency_p99_ms": 412,
+        "cold_start_avg_ms": 267,
+        "requests_per_second": 234,
+        "tokens_per_second": 1567,
+        "total_cost_usd": 8.82,
+        "cost_per_request_usd": 0.00028,
+        "cost_per_1k_tokens_usd": 0.0042
+      },
+      "cost_breakdown": {
+        "compute_usd": 1.87,
+        "llm_api_usd": 5.89,
+        "data_transfer_usd": 0.78,
+        "storage_usd": 0.28,
+        "compute_percent": 21.2,
+        "llm_percent": 66.8,
+        "data_transfer_percent": 8.8,
+        "storage_percent": 3.2
+      }
+    }
+  },
+
+  "compute_type_comparison": {
+    "serverless": {
+      "description": "AWS Lambda, GCP Cloud Functions, Azure Functions, Alibaba FC",
+      "avg_cost_per_request_usd": 0.00028,
+      "avg_latency_p95_ms": 187,
+      "avg_cold_start_ms": 312,
+      "best_for": ["Variable workloads", "Cost optimization", "Auto-scaling"],
+      "ranking": {
+        "cost": ["alibaba", "gcp", "azure", "aws"],
+        "latency": ["azure", "aws", "gcp", "alibaba"]
+      }
+    },
+    "container": {
+      "description": "AWS ECS/Fargate, GCP Cloud Run, Azure Container Apps, Alibaba ECI",
+      "avg_cost_per_request_usd": 0.00042,
+      "avg_latency_p95_ms": 98,
+      "avg_cold_start_ms": 45,
+      "best_for": ["Consistent workloads", "Low latency", "Predictable scaling"],
+      "ranking": {
+        "cost": ["gcp", "alibaba", "azure", "aws"],
+        "latency": ["aws", "azure", "gcp", "alibaba"]
+      }
+    },
+    "vm": {
+      "description": "AWS EC2, GCP Compute Engine, Azure VMs, Alibaba ECS",
+      "avg_cost_per_request_usd": 0.00056,
+      "avg_latency_p95_ms": 72,
+      "avg_cold_start_ms": 0,
+      "best_for": ["High throughput", "Custom configurations", "Persistent workloads"],
+      "ranking": {
+        "cost": ["alibaba", "gcp", "azure", "aws"],
+        "latency": ["azure", "aws", "gcp", "alibaba"]
+      }
+    },
+    "gpu": {
+      "description": "GPU instances for local inference",
+      "avg_cost_per_request_usd": 0.00089,
+      "avg_latency_p95_ms": 45,
+      "avg_cold_start_ms": 0,
+      "best_for": ["Local LLM inference", "Embedding generation", "Batch processing"],
+      "ranking": {
+        "cost": ["alibaba", "gcp", "aws", "azure"],
+        "latency": ["aws", "gcp", "azure", "alibaba"]
+      }
+    }
+  },
+
+  "monthly_projections": {
+    "assumptions": {
+      "requests_per_day": 10000,
+      "avg_input_tokens": 500,
+      "avg_output_tokens": 1000,
+      "utilization_percent": 60
+    },
+    "projections": [
+      {
+        "provider": "aws",
+        "compute_type": "serverless",
+        "region": "us-east-1",
+        "daily_cost_usd": 5.00,
+        "monthly_cost_usd": 150.00,
+        "yearly_cost_usd": 1825.00
+      },
+      {
+        "provider": "gcp",
+        "compute_type": "serverless",
+        "region": "us-central1",
+        "daily_cost_usd": 3.20,
+        "monthly_cost_usd": 96.00,
+        "yearly_cost_usd": 1168.00
+      },
+      {
+        "provider": "azure",
+        "compute_type": "serverless",
+        "region": "eastus",
+        "daily_cost_usd": 4.30,
+        "monthly_cost_usd": 129.00,
+        "yearly_cost_usd": 1569.50
+      },
+      {
+        "provider": "alibaba",
+        "compute_type": "serverless",
+        "region": "cn-hangzhou",
+        "daily_cost_usd": 2.80,
+        "monthly_cost_usd": 84.00,
+        "yearly_cost_usd": 1022.00
+      },
+      {
+        "provider": "gcp",
+        "compute_type": "container",
+        "region": "us-central1",
+        "daily_cost_usd": 4.20,
+        "monthly_cost_usd": 126.00,
+        "yearly_cost_usd": 1533.00
+      },
+      {
+        "provider": "aws",
+        "compute_type": "container",
+        "region": "us-east-1",
+        "daily_cost_usd": 5.80,
+        "monthly_cost_usd": 174.00,
+        "yearly_cost_usd": 2117.00
+      }
+    ]
+  },
+
+  "recommendations": [
+    {
+      "id": "rec-001",
+      "title": "Use GCP Cloud Functions for Variable Workloads",
+      "description": "For workloads with variable traffic patterns, GCP Cloud Functions offers the best cost efficiency with 36% savings compared to AWS Lambda baseline.",
+      "recommended_provider": "gcp",
+      "recommended_compute": "serverless",
+      "recommended_region": "us-central1",
+      "estimated_monthly_savings_usd": 54.00,
+      "priority": "high",
+      "use_case": "cost_optimized"
+    },
+    {
+      "id": "rec-002",
+      "title": "Use Azure Container Apps for Low Latency",
+      "description": "For latency-sensitive applications, Azure Container Apps provides the lowest p95 latency (87ms) with reasonable cost.",
+      "recommended_provider": "azure",
+      "recommended_compute": "container",
+      "recommended_region": "eastus",
+      "estimated_monthly_savings_usd": 0,
+      "priority": "high",
+      "use_case": "low_latency"
+    },
+    {
+      "id": "rec-003",
+      "title": "Consider Alibaba Cloud for APAC Deployments",
+      "description": "For users in Asia-Pacific, Alibaba Cloud offers the lowest costs (28% cheaper than AWS) with acceptable latency in regional deployments.",
+      "recommended_provider": "alibaba",
+      "recommended_compute": "serverless",
+      "recommended_region": "ap-southeast-1",
+      "estimated_monthly_savings_usd": 66.00,
+      "priority": "medium",
+      "use_case": "apac_optimized"
+    },
+    {
+      "id": "rec-004",
+      "title": "Use Spot/Preemptible Instances for Batch Workloads",
+      "description": "For non-time-critical batch processing, using spot instances across providers can reduce costs by 60-70%.",
+      "recommended_provider": "gcp",
+      "recommended_compute": "vm",
+      "recommended_region": "us-central1",
+      "estimated_monthly_savings_usd": 420.00,
+      "priority": "medium",
+      "use_case": "batch_processing"
+    },
+    {
+      "id": "rec-005",
+      "title": "Implement Multi-Cloud Failover",
+      "description": "Implement automatic failover between GCP (primary) and AWS (secondary) for high availability with cost optimization.",
+      "recommended_provider": "multi",
+      "recommended_compute": "serverless",
+      "estimated_monthly_savings_usd": 32.00,
+      "priority": "low",
+      "use_case": "high_availability"
+    }
+  ],
+
+  "detailed_results": {
+    "latency_workload": {
+      "aws_serverless": {
+        "requests": 1000,
+        "success_rate": 99.8,
+        "latency_p50_ms": 52,
+        "latency_p95_ms": 124,
+        "latency_p99_ms": 256,
+        "cost_per_request_usd": 0.00024,
+        "total_cost_usd": 0.24
+      },
+      "gcp_serverless": {
+        "requests": 1000,
+        "success_rate": 99.9,
+        "latency_p50_ms": 48,
+        "latency_p95_ms": 112,
+        "latency_p99_ms": 234,
+        "cost_per_request_usd": 0.00018,
+        "total_cost_usd": 0.18
+      },
+      "azure_serverless": {
+        "requests": 1000,
+        "success_rate": 99.7,
+        "latency_p50_ms": 45,
+        "latency_p95_ms": 98,
+        "latency_p99_ms": 212,
+        "cost_per_request_usd": 0.00021,
+        "total_cost_usd": 0.21
+      },
+      "alibaba_serverless": {
+        "requests": 1000,
+        "success_rate": 99.4,
+        "latency_p50_ms": 67,
+        "latency_p95_ms": 156,
+        "latency_p99_ms": 342,
+        "cost_per_request_usd": 0.00015,
+        "total_cost_usd": 0.15
+      }
+    },
+    "cost_workload": {
+      "description": "Long-form generation with average 2500 output tokens",
+      "aws_serverless": {
+        "requests": 100,
+        "avg_input_tokens": 450,
+        "avg_output_tokens": 2487,
+        "cost_per_request_usd": 0.042,
+        "total_cost_usd": 4.20
+      },
+      "gcp_serverless": {
+        "requests": 100,
+        "avg_input_tokens": 450,
+        "avg_output_tokens": 2512,
+        "cost_per_request_usd": 0.028,
+        "total_cost_usd": 2.80
+      },
+      "azure_serverless": {
+        "requests": 100,
+        "avg_input_tokens": 450,
+        "avg_output_tokens": 2498,
+        "cost_per_request_usd": 0.035,
+        "total_cost_usd": 3.50
+      },
+      "alibaba_serverless": {
+        "requests": 100,
+        "avg_input_tokens": 450,
+        "avg_output_tokens": 2456,
+        "cost_per_request_usd": 0.024,
+        "total_cost_usd": 2.40
+      }
+    }
+  },
+
+  "metadata": {
+    "neam_version": "0.6.4",
+    "test_runner_version": "1.0.0",
+    "config_file": "cloud_test_config.toml",
+    "agents_tested": [
+      "agent-simple-qa",
+      "agent-rag-knowledge",
+      "agent-multi-step"
+    ],
+    "environment": {
+      "parallel_execution": true,
+      "warmup_enabled": true,
+      "warmup_requests": 10
+    }
+  }
+}

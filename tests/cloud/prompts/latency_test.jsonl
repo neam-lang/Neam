@@ -1,0 +1,20 @@
+{"id": "lat-001", "prompt": "What is 2+2?", "expected_tokens": 10, "category": "simple_math"}
+{"id": "lat-002", "prompt": "Name the capital of France.", "expected_tokens": 5, "category": "factual"}
+{"id": "lat-003", "prompt": "What color is the sky?", "expected_tokens": 10, "category": "simple_qa"}
+{"id": "lat-004", "prompt": "Define 'hello' in one word.", "expected_tokens": 5, "category": "definition"}
+{"id": "lat-005", "prompt": "Is water wet? Yes or no.", "expected_tokens": 3, "category": "boolean"}
+{"id": "lat-006", "prompt": "What is the largest planet?", "expected_tokens": 10, "category": "factual"}
+{"id": "lat-007", "prompt": "Spell 'cat' backwards.", "expected_tokens": 5, "category": "simple_task"}
+{"id": "lat-008", "prompt": "What comes after Monday?", "expected_tokens": 5, "category": "sequence"}
+{"id": "lat-009", "prompt": "How many legs does a dog have?", "expected_tokens": 5, "category": "factual"}
+{"id": "lat-010", "prompt": "What is the opposite of hot?", "expected_tokens": 5, "category": "antonym"}
+{"id": "lat-011", "prompt": "Name one primary color.", "expected_tokens": 5, "category": "factual"}
+{"id": "lat-012", "prompt": "Is 10 greater than 5?", "expected_tokens": 3, "category": "comparison"}
+{"id": "lat-013", "prompt": "What season comes after winter?", "expected_tokens": 5, "category": "sequence"}
+{"id": "lat-014", "prompt": "How do you say 'yes' in Spanish?", "expected_tokens": 5, "category": "translation"}
+{"id": "lat-015", "prompt": "What is 10 divided by 2?", "expected_tokens": 5, "category": "math"}
+{"id": "lat-016", "prompt": "Name the first month of the year.", "expected_tokens": 5, "category": "calendar"}
+{"id": "lat-017", "prompt": "What animal says 'meow'?", "expected_tokens": 5, "category": "association"}
+{"id": "lat-018", "prompt": "Is the sun a star?", "expected_tokens": 3, "category": "boolean"}
+{"id": "lat-019", "prompt": "What is H2O commonly called?", "expected_tokens": 5, "category": "science"}
+{"id": "lat-020", "prompt": "Complete: 'Roses are red, violets are ___'", "expected_tokens": 5, "category": "completion"}
