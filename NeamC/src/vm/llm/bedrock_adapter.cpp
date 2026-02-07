@@ -115,7 +115,13 @@ AwsCredentials resolve_credentials(const ProviderConfig& config)
   if (const char* env = std::getenv("AWS_SESSION_TOKEN"))
     creds.session_token = env;
 
-  creds.region = !config.default_host.empty() ? config.default_host : "";
+  // default_host may be an Ollama URL (e.g. "http://localhost:11434") from shared
+  // config — only use it as a region if it looks like an AWS region, not a URL.
+  if (!config.default_host.empty() &&
+      config.default_host.find("://") == std::string::npos)
+  {
+    creds.region = config.default_host;
+  }
   if (creds.region.empty())
   {
     if (const char* env = std::getenv("AWS_REGION"))
@@ -147,8 +153,13 @@ SignedRequest sign_request(const AwsCredentials& creds,
   const std::string service = "bedrock";
   const std::string host =
       "bedrock-runtime." + creds.region + ".amazonaws.com";
+  // URL path uses single URI-encoding
   const std::string path =
       "/model/" + uri_encode(model_id) + "/invoke";
+  // AWS SigV4 canonical request requires double URI-encoding of path segments
+  // (non-S3 services): %3A in URL becomes %253A in canonical path
+  const std::string canonical_path =
+      "/model/" + uri_encode(uri_encode(model_id)) + "/invoke";
 
   auto now = std::chrono::system_clock::now();
   auto time_t_now = std::chrono::system_clock::to_time_t(now);
@@ -167,10 +178,10 @@ SignedRequest sign_request(const AwsCredentials& creds,
   const std::string content_type = "application/json";
   const std::string payload_hash = sha256_hex(body);
 
-  // Canonical request
+  // Canonical request (uses double-encoded path per SigV4 spec)
   std::ostringstream canonical;
   canonical << "POST\n"
-            << path << "\n"
+            << canonical_path << "\n"
             << "\n"  // empty query string
             << "content-type:" << content_type << "\n"
             << "host:" << host << "\n"
