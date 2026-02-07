@@ -2093,6 +2093,81 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               return messages;
             };
 
+            // v0.6.6: Collect agent's skills as LLM tool definitions
+            auto collect_agent_tools = [&]() -> std::vector<llm::ToolDefinition> {
+              std::vector<llm::ToolDefinition> tool_defs;
+              if (!agent->skills || agent->skills->items.empty())
+              {
+                return tool_defs;
+              }
+              for (const auto& skill_value : agent->skills->items)
+              {
+                if (!skill_value.is_skill())
+                {
+                  continue;
+                }
+                auto* skill = as_skill(skill_value);
+                if (!skill->name || !skill->impl)
+                {
+                  continue;
+                }
+                llm::ToolDefinition def;
+                def.name = std::string(skill->name->chars, skill->name->length);
+                def.description = skill->description
+                    ? std::string(skill->description->chars, skill->description->length)
+                    : "";
+                def.input_schema = build_skill_schema(skill);
+                tool_defs.push_back(std::move(def));
+              }
+              return tool_defs;
+            };
+
+            // v0.6.6: Convert JSON argument value to Neam Value
+            auto json_to_value = [](const nlohmann::json& j) -> Value {
+              if (j.is_null())
+              {
+                return Value::Nil();
+              }
+              if (j.is_boolean())
+              {
+                return Value::Bool(j.get<bool>());
+              }
+              if (j.is_number())
+              {
+                return Value::Number(j.get<double>());
+              }
+              if (j.is_string())
+              {
+                const auto& s = j.get_ref<const std::string&>();
+                return Value::String(s.c_str(), s.size());
+              }
+              // For arrays/objects, serialize to JSON string
+              const auto s = j.dump();
+              return Value::String(s.c_str(), s.size());
+            };
+
+            // v0.6.6: Find a skill object by name from agent->skills list
+            auto find_agent_skill = [&](const std::string& name) -> ObjSkill* {
+              if (!agent->skills)
+              {
+                return nullptr;
+              }
+              for (const auto& skill_value : agent->skills->items)
+              {
+                if (!skill_value.is_skill())
+                {
+                  continue;
+                }
+                auto* skill = as_skill(skill_value);
+                if (skill->name &&
+                    std::string(skill->name->chars, skill->name->length) == name)
+                {
+                  return skill;
+                }
+              }
+              return nullptr;
+            };
+
             std::string plan_pattern;
             if (!extension.plan.empty())
             {
@@ -2158,6 +2233,266 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               if (final_response.empty())
               {
                 final_response = "Max steps reached without completion.";
+              }
+            }
+            // v0.6.6: Native tool calling when agent has skills attached
+            else if (agent->skills && !agent->skills->items.empty())
+            {
+              const auto tool_defs = collect_agent_tools();
+              if (tool_defs.empty())
+              {
+                // Skills exist but none are valid — fall back to plain chat
+                std::string user_prompt = query;
+                if (!run_guard_chain(extension.guardchains, "on_tool_input", user_prompt))
+                {
+                  final_response = "Request blocked by guard policy.";
+                }
+                else
+                {
+                  final_response = run_llm(build_messages(
+                      agent->system ? to_std_string(agent->system) : "", user_prompt));
+                  if (!run_guard_chain(extension.guardchains, "on_tool_output", final_response))
+                  {
+                    final_response = "Response blocked by guard policy.";
+                  }
+                }
+              }
+              else
+              {
+                const int max_tool_steps = get_config_int("NEAM_MAX_TOOL_STEPS", 25, 1, 1000);
+                const std::string system_prompt =
+                    agent->system ? to_std_string(agent->system) : "";
+
+                // Build initial message list
+                std::vector<llm::Message> messages;
+                if (!system_prompt.empty())
+                {
+                  messages.push_back({"system", system_prompt});
+                }
+                // Include RAG context if connected knowledge exists
+                if (agent->connected_knowledge && !agent->connected_knowledge->items.empty())
+                {
+                  // Reuse the build_messages helper for the system/context parts only
+                  auto full_msgs = build_messages(system_prompt, query);
+                  messages = std::move(full_msgs);
+                }
+                else
+                {
+                  for (const auto& hist : agent->context->history)
+                  {
+                    messages.push_back({hist.role, hist.content});
+                  }
+                  messages.push_back({"user", query});
+                }
+
+                // Guard check on input
+                std::string guarded_query = query;
+                if (!run_guard_chain(extension.guardchains, "on_tool_input", guarded_query))
+                {
+                  final_response = "Request blocked by guard policy.";
+                }
+                else
+                {
+                  // Native tool call loop
+                  for (int step = 0; step < max_tool_steps; ++step)
+                  {
+                    // Budget check before LLM call
+                    if (!extension.budget.empty())
+                    {
+                      auto& tracker = get_budget_tracker(extension.budget);
+                      if (tracker.is_exhausted())
+                      {
+                        final_response = "Budget exhausted: " + extension.budget;
+                        break;
+                      }
+                      tracker.used_api_calls += 1.0;
+                    }
+
+                    emit_debug_event(DebugEventType::BeforeAgentAsk, "agent.ask.tools",
+                                     frame.ip - 1, "step=" + std::to_string(step));
+
+                    auto chat_resp = provider->chat_with_tools(messages, tool_defs, "auto");
+                    trace_logger_.log_llm_output(agent_name, chat_resp.text);
+
+                    // Budget: estimate token usage
+                    if (!extension.budget.empty())
+                    {
+                      auto& tracker = get_budget_tracker(extension.budget);
+                      const double token_estimate =
+                          std::max(1.0, static_cast<double>(chat_resp.text.size()) / 4.0);
+                      tracker.used_tokens += token_estimate;
+                    }
+
+                    // If no tool calls, we're done
+                    if (!chat_resp.has_tool_calls())
+                    {
+                      final_response = chat_resp.text;
+                      if (!run_guard_chain(extension.guardchains, "on_tool_output",
+                                           final_response))
+                      {
+                        final_response = "Response blocked by guard policy.";
+                      }
+                      break;
+                    }
+
+                    // Add assistant response with tool calls to message history
+                    // Build content_blocks for the assistant message
+                    nlohmann::json assistant_blocks = nlohmann::json::array();
+                    if (!chat_resp.text.empty())
+                    {
+                      assistant_blocks.push_back(
+                          {{"type", "text"}, {"text", chat_resp.text}});
+                    }
+                    for (const auto& tc : chat_resp.tool_calls)
+                    {
+                      // Provider-agnostic: store tool call info for message reconstruction
+                      assistant_blocks.push_back(
+                          {{"type", "function"},
+                           {"id", tc.id},
+                           {"name", tc.name},
+                           {"arguments", tc.input.dump()}});
+                    }
+                    llm::Message assistant_msg;
+                    assistant_msg.role = "assistant";
+                    assistant_msg.content = chat_resp.text;
+                    assistant_msg.content_blocks = std::move(assistant_blocks);
+                    messages.push_back(std::move(assistant_msg));
+
+                    // Execute each tool call
+                    for (const auto& tc : chat_resp.tool_calls)
+                    {
+                      std::string result_content;
+                      bool is_error = false;
+
+                      ObjSkill* skill = find_agent_skill(tc.name);
+                      if (!skill || !skill->impl)
+                      {
+                        result_content = "Unknown tool: " + tc.name;
+                        is_error = true;
+                      }
+                      else
+                      {
+                        // Check allowed skills
+                        if (!allowed_skills_.empty() && allowed_skills_.count(tc.name) == 0)
+                        {
+                          result_content = "Permission denied: skill '" + tc.name +
+                                           "' is not in the allowed skills list";
+                          is_error = true;
+                        }
+                        else
+                        {
+                          // Check capabilities via tool def
+                          ToolDef* tool = get_tool_def(tc.name);
+                          bool cap_ok = true;
+                          if (tool)
+                          {
+                            for (const auto& required : tool->capabilities)
+                            {
+                              if (!has_capability(agent_name, required))
+                              {
+                                result_content = "Missing capability: " + required;
+                                is_error = true;
+                                cap_ok = false;
+                                break;
+                              }
+                            }
+                            if (cap_ok)
+                            {
+                              for (const auto& cost : tool->budget_costs)
+                              {
+                                if (!consume_budget(extension.budget, cost.first, cost.second))
+                                {
+                                  result_content = "Budget exhausted for: " + cost.first;
+                                  is_error = true;
+                                  cap_ok = false;
+                                  break;
+                                }
+                              }
+                            }
+                          }
+
+                          if (cap_ok)
+                          {
+                            // Convert JSON arguments to Value arguments
+                            std::vector<Value> args;
+                            args.reserve(skill->param_names.size());
+                            for (const auto& param_name : skill->param_names)
+                            {
+                              if (tc.input.contains(param_name))
+                              {
+                                args.push_back(json_to_value(tc.input.at(param_name)));
+                              }
+                              else
+                              {
+                                args.push_back(Value::Nil());
+                              }
+                            }
+
+                            // Validate and log
+                            trace_logger_.log_tool_call("vm", tc.name,
+                                                        build_redacted_args(skill, args));
+                            emit_debug_event(DebugEventType::BeforeToolExecution,
+                                             "skill:" + tc.name, frame.ip - 1, {});
+
+                            try
+                            {
+                              validate_skill_args(skill, args);
+
+                              // Guard check on tool input
+                              std::string guard_input = tc.input.dump();
+                              if (tool && !run_guard_chain(tool->guards, "on_tool_input",
+                                                           guard_input))
+                              {
+                                result_content = "Request blocked by guard policy.";
+                                is_error = true;
+                              }
+                              else
+                              {
+                                Value result = call_function(skill->impl, args, true, tc.name);
+                                result_content = value_to_string(result);
+
+                                // Guard check on tool output
+                                if (tool && !run_guard_chain(tool->guards, "on_tool_output",
+                                                             result_content))
+                                {
+                                  result_content = "Response blocked by guard policy.";
+                                  is_error = true;
+                                }
+                              }
+                            }
+                            catch (const SchemaViolationError& e)
+                            {
+                              result_content = std::string("Schema error: ") + e.what();
+                              is_error = true;
+                            }
+                            catch (const std::exception& e)
+                            {
+                              result_content = std::string("Tool error: ") + e.what();
+                              is_error = true;
+                            }
+                          }
+                        }
+                      }
+
+                      // Add tool result message
+                      llm::Message tool_msg;
+                      tool_msg.role = "tool";
+                      tool_msg.content = result_content;
+                      tool_msg.content_blocks = nlohmann::json::array();
+                      tool_msg.content_blocks.push_back(
+                          {{"tool_call_id", tc.id},
+                           {"content", result_content},
+                           {"is_error", is_error}});
+                      messages.push_back(std::move(tool_msg));
+                    }
+
+                    // Check if we've exceeded step limit
+                    if (step == max_tool_steps - 1)
+                    {
+                      final_response = "Max tool call steps reached without completion.";
+                    }
+                  }
+                }
               }
             }
             else
