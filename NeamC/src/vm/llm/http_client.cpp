@@ -344,4 +344,68 @@ std::string http_post_json(const std::string& url, const std::string& body,
   throw std::runtime_error("HTTP request failed after " + std::to_string(config.max_attempts) +
                            " attempts");
 }
+
+// ---------------------------------------------------------------------------
+// http_request — generic HTTP method (GET, POST, DELETE, etc.)
+// ---------------------------------------------------------------------------
+HttpResult http_request(const std::string& method, const std::string& url,
+                        const std::string& body,
+                        const std::vector<std::string>& headers,
+                        long timeout_ms)
+{
+  (void)curl_global();
+
+  CURL* handle = ConnectionPool::instance().acquire();
+  if (!handle)
+  {
+    throw std::runtime_error("Failed to initialize curl");
+  }
+  PooledHandle guard(handle);
+
+  LLMLogger::debug("http", method + " " + url);
+
+  std::string response;
+  curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, method.c_str());
+  curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, timeout_ms);
+  curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_callback);
+  curl_easy_setopt(handle, CURLOPT_WRITEDATA, &response);
+
+  if (!body.empty())
+  {
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body.c_str());
+    curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+  }
+
+  configure_tls(handle);
+
+  struct curl_slist* header_list = nullptr;
+  for (const auto& header : headers)
+  {
+    header_list = curl_slist_append(header_list, header.c_str());
+  }
+  if (header_list)
+  {
+    curl_easy_setopt(handle, CURLOPT_HTTPHEADER, header_list);
+  }
+
+  CURLcode res = curl_easy_perform(handle);
+
+  long status = 0;
+  curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &status);
+
+  if (header_list)
+  {
+    curl_slist_free_all(header_list);
+  }
+
+  if (res != CURLE_OK)
+  {
+    guard.handle = nullptr;
+    curl_easy_cleanup(handle);
+    throw std::runtime_error(std::string("HTTP request failed: ") + curl_easy_strerror(res));
+  }
+
+  return HttpResult{status, std::move(response)};
+}
 }  // namespace neamc::llm
