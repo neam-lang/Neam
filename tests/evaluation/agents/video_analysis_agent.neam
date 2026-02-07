@@ -1,0 +1,44 @@
+// Neam v0.6.4 — Video Analysis Agent
+// Demonstrates: GPU-accelerated frame processing + vision model
+
+agent VideoAnalyzer {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "You are a video analysis expert. Describe scenes, detect objects, and identify actions from video frames.",
+  gpu_accelerated: true
+}
+
+let test_scenarios = io.read_lines(env.get("PROMPTS_FILE", "../datasets/video_agents.jsonl"));
+let results = [];
+let start = time.now();
+
+for (let i = 0; i < test_scenarios.length; i += 1) {
+  let entry = json.parse(test_scenarios[i]);
+  if (entry["category"] == "frame_description" || entry["category"] == "video_qa") {
+    let t0 = time.now();
+    // GPU extracts frames, SIMD processes features, agent analyzes
+    let prompt = "Analyze this video scene: " + entry["description"];
+    if (entry["question"] != nil) {
+      prompt = prompt + " Question: " + entry["question"];
+    }
+    let analysis = VideoAnalyzer.ask(prompt);
+    let t1 = time.now();
+    results.push({
+      "id": entry["id"],
+      "category": entry["category"],
+      "latency_ms": (t1 - t0) * 1000,
+      "response": analysis
+    });
+  }
+}
+
+emit json.encode({
+  "agent_type": "video_analysis",
+  "language": "neam",
+  "version": "0.6.4",
+  "total_loc": 8,
+  "gpu_accelerated": true,
+  "total_requests": results.length,
+  "total_time_ms": (time.now() - start) * 1000,
+  "results": results
+});

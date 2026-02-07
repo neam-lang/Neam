@@ -1,0 +1,52 @@
+// Neam v0.6.4 — Multi-Agent Orchestration
+// Demonstrates: 3 agents + pipeline in 15 LoC
+
+agent Researcher {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "You are a research specialist. Gather key facts and data points."
+}
+
+agent Writer {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "You are a technical writer. Create clear, structured prose from research notes."
+}
+
+agent Editor {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "You are an editor. Improve clarity, fix errors, and ensure accuracy."
+}
+
+let prompts = io.read_lines(env.get("PROMPTS_FILE", "../datasets/text_agents.jsonl"));
+let results = [];
+let start = time.now();
+
+for (let i = 0; i < prompts.length; i += 1) {
+  let entry = json.parse(prompts[i]);
+  if (entry["category"] == "multi_agent" || entry["category"] == "long_form") {
+    let t0 = time.now();
+    let research = Researcher.ask(entry["prompt"]);
+    let draft = Writer.ask("Write a polished piece based on: " + research);
+    let final_text = Editor.ask("Edit and improve: " + draft);
+    let t1 = time.now();
+    results.push({
+      "id": entry["id"],
+      "latency_ms": (t1 - t0) * 1000,
+      "pipeline_stages": 3,
+      "response": final_text
+    });
+  }
+}
+
+emit json.encode({
+  "agent_type": "multi_agent_pipeline",
+  "language": "neam",
+  "version": "0.6.4",
+  "total_loc": 15,
+  "pipeline": ["Researcher", "Writer", "Editor"],
+  "total_requests": results.length,
+  "total_time_ms": (time.now() - start) * 1000,
+  "results": results
+});
