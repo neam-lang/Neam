@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Default to Release if not specified
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "Setting build type to 'Release' as none was specified")
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY
+        STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+endif()
+
 # Set CMake policies for compatibility
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
@@ -8,11 +16,19 @@ endif()
 # Allow older cmake_minimum_required in fetched projects
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version")
 
-project(NeamC LANGUAGES C CXX)
+# Read version from VERSION file
+file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" NEAM_VERSION)
+project(NeamC VERSION ${NEAM_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Generate version header from template
+configure_file(
+    "${CMAKE_SOURCE_DIR}/NeamC/include/neamc/version.hpp.in"
+    "${CMAKE_BINARY_DIR}/include/neamc/version.hpp"
+)
 
 include(FetchContent)
 
@@ -147,6 +163,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/native.cpp
     NeamC/src/vm/llm/http_client.cpp
     NeamC/src/vm/llm/message_codec.cpp
+    NeamC/src/vm/llm/bedrock_adapter.cpp
     NeamC/src/vm/llm/ollama_adapter.cpp
     NeamC/src/vm/llm/openai_adapter.cpp
     NeamC/src/vm/llm/provider_factory.cpp
@@ -174,6 +191,7 @@ add_library(neamc_core STATIC ${NEAMC_CORE_SOURCES})
 target_include_directories(neamc_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include
+        ${CMAKE_BINARY_DIR}/include
 )
 
 target_link_libraries(neamc_core
@@ -191,6 +209,37 @@ if (DEFINED nlohmann_json_schema_validator_SOURCE_DIR)
     target_include_directories(neamc_core PUBLIC ${nlohmann_json_schema_validator_SOURCE_DIR}/src)
 endif ()
 
+# ============================================================================
+# Compiler warnings (v0.6.5)
+# ============================================================================
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    set(NEAM_WARNING_FLAGS
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Wno-unused-parameter
+        -Wno-unused-private-field
+    )
+    target_compile_options(neamc_core PRIVATE ${NEAM_WARNING_FLAGS})
+elseif(MSVC)
+    target_compile_options(neamc_core PRIVATE /W4)
+endif()
+
+# Optional: Sanitizers for debug builds
+option(NEAM_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(NEAM_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+
+if(NEAM_ENABLE_ASAN)
+    target_compile_options(neamc_core PUBLIC -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(neamc_core PUBLIC -fsanitize=address)
+endif()
+
+if(NEAM_ENABLE_UBSAN)
+    target_compile_options(neamc_core PUBLIC -fsanitize=undefined)
+    target_link_options(neamc_core PUBLIC -fsanitize=undefined)
+endif()
+
 add_library(libneam SHARED ${NEAMC_CORE_SOURCES})
 target_link_libraries(libneam PUBLIC tree_sitter_lib CURL::libcurl nlohmann_json::nlohmann_json
     nlohmann_json_schema_validator
@@ -205,7 +254,13 @@ endif ()
 target_include_directories(libneam
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include
+        ${CMAKE_BINARY_DIR}/include
 )
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(libneam PRIVATE ${NEAM_WARNING_FLAGS})
+elseif(MSVC)
+    target_compile_options(libneam PRIVATE /W4)
+endif()
 
 add_executable(neamc
     NeamC/src/neamc/main.cpp
@@ -325,3 +380,71 @@ if (TARGET nlohmann_json_schema_validator)
 elseif (TARGET nlohmann_json_schema_validator::nlohmann_json_schema_validator)
     set(NEAM_JSON_SCHEMA_TARGET nlohmann_json_schema_validator::nlohmann_json_schema_validator)
 endif ()
+
+# ============================================================================
+# v0.6.5 Test Targets
+# ============================================================================
+
+add_executable(llm_adapter_test
+    tests/llm/adapter_test.cpp
+)
+target_link_libraries(llm_adapter_test PRIVATE neamc_core gtest_main)
+add_test(NAME llm_adapter_test COMMAND llm_adapter_test)
+
+add_executable(http_client_test
+    tests/llm/http_client_test.cpp
+)
+target_link_libraries(http_client_test PRIVATE neamc_core gtest_main)
+add_test(NAME http_client_test COMMAND http_client_test)
+
+add_executable(package_manager_test
+    tests/pkg/package_manager_test.cpp
+    NeamC/src/pkg/installer.cpp
+    NeamC/src/pkg/registry.cpp
+)
+target_link_libraries(package_manager_test PRIVATE neamc_core gtest_main)
+add_test(NAME package_manager_test COMMAND package_manager_test)
+
+add_executable(compile_run_test
+    tests/integration/compile_run_test.cpp
+)
+target_link_libraries(compile_run_test PRIVATE neamc_core gtest_main)
+add_test(NAME compile_run_test COMMAND compile_run_test)
+
+# ============================================================================
+# Install targets (v0.6.5)
+# ============================================================================
+
+include(GNUInstallDirs)
+
+# Executables
+install(TARGETS neamc neam neam-cli neam-pkg neam-api neam-lsp neam-dap neam-gym
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Core static library
+install(TARGETS neamc_core
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+# Shared library
+install(TARGETS libneam
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+# Headers
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/NeamC/include/neamc
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
+
+# Generated version header
+install(FILES ${CMAKE_BINARY_DIR}/include/neamc/version.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/neamc)
+
+# Standard library (.neam files)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/NeamC/stdlib/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/neam/stdlib
+        FILES_MATCHING PATTERN "*.neam")
+
+# Set RPATH for installed binaries
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)

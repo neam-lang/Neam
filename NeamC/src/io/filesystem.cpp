@@ -488,7 +488,7 @@ IoResult<FileMetadata> metadata(const fs::path& path)
     meta.size = fs::file_size(path, ec);
   }
 
-  auto mod_time = fs::last_write_time(path, ec);
+  (void)fs::last_write_time(path, ec);
   if (!ec)
   {
     auto now = std::chrono::system_clock::now();

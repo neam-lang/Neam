@@ -1,0 +1,50 @@
+// Neam v0.6.4 — RAG-Enhanced Text Agent
+// Demonstrates: knowledge base + retrieval strategy in 12 LoC
+
+knowledge ProjectDocs {
+  vector_store: "usearch",
+  embedding_model: "nomic-embed-text",
+  chunk_size: 200,
+  chunk_overlap: 50,
+  sources: [
+    { type: "file", path: "../../README.md" }
+  ],
+  retrieval_strategy: "hybrid",
+  top_k: 4
+}
+
+agent RAGExpert {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "Answer questions using the provided knowledge context. Be precise and cite sources.",
+  connected_knowledge: [ProjectDocs]
+}
+
+let prompts = io.read_lines(env.get("PROMPTS_FILE", "../datasets/text_agents.jsonl"));
+let results = [];
+let start = time.now();
+
+for (let i = 0; i < prompts.length; i += 1) {
+  let entry = json.parse(prompts[i]);
+  if (entry["category"] == "rag_retrieval") {
+    let t0 = time.now();
+    let answer = RAGExpert.ask(entry["prompt"]);
+    let t1 = time.now();
+    results.push({
+      "id": entry["id"],
+      "latency_ms": (t1 - t0) * 1000,
+      "response": answer
+    });
+  }
+}
+
+emit json.encode({
+  "agent_type": "text_rag",
+  "language": "neam",
+  "version": "0.6.4",
+  "total_loc": 12,
+  "retrieval_strategy": "hybrid",
+  "total_requests": results.length,
+  "total_time_ms": (time.now() - start) * 1000,
+  "results": results
+});

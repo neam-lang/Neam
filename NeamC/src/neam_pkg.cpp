@@ -21,6 +21,7 @@
 
 #include "neamc/pkg/installer.hpp"
 #include "neamc/pkg/registry.hpp"
+#include "neamc/version.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -30,6 +31,13 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <termios.h>
+#include <unistd.h>
+#endif
 
 namespace
 {
@@ -75,7 +83,7 @@ void print_usage()
 
 void print_version()
 {
-  std::cout << "neam-pkg 1.0.0\n";
+  std::cout << "neam-pkg " << NEAM_VERSION << "\n";
 }
 
 void print_error(const std::string& msg)
@@ -127,7 +135,6 @@ std::string read_password()
 {
   std::string password;
 
-  // Disable echo
 #ifdef _WIN32
   HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
   DWORD mode;
@@ -136,9 +143,21 @@ std::string read_password()
   std::getline(std::cin, password);
   SetConsoleMode(hStdin, mode);
 #else
-  system("stty -echo");
-  std::getline(std::cin, password);
-  system("stty echo");
+  struct termios old_term{};
+  struct termios new_term{};
+  if (tcgetattr(STDIN_FILENO, &old_term) == 0)
+  {
+    new_term = old_term;
+    new_term.c_lflag &= ~ECHO;
+    tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
+    std::getline(std::cin, password);
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
+  }
+  else
+  {
+    // Fallback if termios fails (e.g. piped input)
+    std::getline(std::cin, password);
+  }
 #endif
 
   std::cout << "\n";

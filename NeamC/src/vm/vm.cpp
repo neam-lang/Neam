@@ -29,6 +29,30 @@ namespace neamc::vm
 {
 namespace
 {
+// Read an integer from an environment variable with bounds checking.
+int get_config_int(const char* env_var, int default_val, int min_val, int max_val)
+{
+  const char* env = std::getenv(env_var);
+  if (env)
+  {
+    int val = std::atoi(env);
+    if (val >= min_val && val <= max_val)
+    {
+      return val;
+    }
+  }
+  return default_val;
+}
+
+// Maximum call stack depth — prevents native stack overflow (SIGSEGV) from
+// infinite recursion. Configurable via NEAM_MAX_CALL_DEPTH env var.
+int get_max_call_depth()
+{
+  return get_config_int("NEAM_MAX_CALL_DEPTH", 1000, 1, 100000);
+}
+
+const int kMaxCallDepth = get_max_call_depth();
+
 std::string to_std_string(const Value& value)
 {
   if (!value.is_string())
@@ -46,6 +70,17 @@ std::string to_std_string(const ObjString* value)
     return {};
   }
   return std::string(value->chars, value->length);
+}
+
+std::string value_type_name(const Value& value)
+{
+  if (value.is_nil()) return "nil";
+  if (value.is_bool()) return "bool";
+  if (value.is_number()) return "number";
+  if (value.is_string()) return "string";
+  if (value.is_list()) return "list";
+  if (value.is_map()) return "map";
+  return "object";
 }
 
 std::string value_to_string(const Value& value)
@@ -130,6 +165,7 @@ double map_number_value(const ObjMap* map, const std::string& key)
   return it->second.as_number();
 }
 
+[[maybe_unused]]
 bool map_bool_value(const ObjMap* map, const std::string& key, bool fallback = false)
 {
   if (!map)
@@ -748,8 +784,9 @@ std::string opcode_name(OpCode op)
       return "OP_CHECKPOINT";
     case OpCode::OP_REWIND:
       return "OP_REWIND";
+    default:
+      return "OP_UNKNOWN";
   }
-  return "OP_UNKNOWN";
 }
 
 }  // anonymous namespace
@@ -903,7 +940,10 @@ Value VirtualMachine::binary_numeric_op(const Value& lhs, const Value& rhs, OpCo
 {
   if (!lhs.is_number() || !rhs.is_number())
   {
-    throw std::runtime_error("Numeric operation on non-number types");
+    throw std::runtime_error(
+        "Type error: cannot apply '" + std::string(opcode_name(op)) +
+        "' to " + value_type_name(lhs) + " and " + value_type_name(rhs) +
+        " (expected numbers)");
   }
 
   const double a = lhs.as_number();
@@ -924,7 +964,8 @@ Value VirtualMachine::binary_numeric_op(const Value& lhs, const Value& rhs, OpCo
     case OpCode::OP_DIV:
       if (b == 0.0)
       {
-        throw std::runtime_error("Division by zero");
+        throw std::runtime_error(
+            "Division by zero: " + std::to_string(a) + " / 0");
       }
       result = a / b;
       break;
@@ -939,7 +980,9 @@ Value VirtualMachine::concatenate(const Value& lhs, const Value& rhs)
 {
   if (!is_obj_type(lhs, ObjType::OBJ_STRING) || !is_obj_type(rhs, ObjType::OBJ_STRING))
   {
-    throw std::runtime_error("Concatenation expects string operands");
+    throw std::runtime_error(
+        "Type error: cannot concatenate " + value_type_name(lhs) +
+        " and " + value_type_name(rhs) + " (expected strings)");
   }
   const auto* a = as_string(lhs);
   const auto* b = as_string(rhs);
@@ -1012,7 +1055,7 @@ Value VirtualMachine::run_internal(const Bytecode& chunk)
   emitted_.clear();
   trace_logger_.start_run();
   trace_logger_.log_start();
-  frames_.push_back(CallFrame{&chunk, nullptr, 0, 0});
+  frames_.push_back(CallFrame{&chunk, nullptr, 0, 0, false, {}});
   return run_frames(0);
 }
 
@@ -1044,7 +1087,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         const auto index = read_short(code, frame.ip);
         if (index >= constants.size())
         {
-          throw std::runtime_error("Constant index out of range");
+          throw std::runtime_error(
+              "Constant index out of range: index " + std::to_string(index) +
+              " exceeds pool size " + std::to_string(constants.size()));
         }
         stack_.push_back(constants[index]);
         break;
@@ -1069,7 +1114,10 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         const auto slot = read_short(code, frame.ip);
         if (frame.stack_start + slot >= stack_.size())
         {
-          throw std::runtime_error("Local index out of range");
+          throw std::runtime_error(
+              "Local index out of range: slot " + std::to_string(slot) +
+              " (stack_start=" + std::to_string(frame.stack_start) +
+              ", stack_size=" + std::to_string(stack_.size()) + ")");
         }
         stack_.push_back(stack_[frame.stack_start + slot]);
         break;
@@ -1079,7 +1127,10 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         const auto slot = read_short(code, frame.ip);
         if (frame.stack_start + slot >= stack_.size())
         {
-          throw std::runtime_error("Local index out of range for set");
+          throw std::runtime_error(
+              "Local index out of range for set: slot " + std::to_string(slot) +
+              " (stack_start=" + std::to_string(frame.stack_start) +
+              ", stack_size=" + std::to_string(stack_.size()) + ")");
         }
         stack_[frame.stack_start + slot] = peek();
         break;
@@ -1099,7 +1150,8 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value value;
         if (!globals_.get(name, &value))
         {
-          throw std::runtime_error("Undefined global variable");
+          throw std::runtime_error(
+              "Undefined variable '" + std::string(name->chars, name->length) + "'");
         }
         stack_.push_back(value);
         break;
@@ -1110,7 +1162,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         auto* name = as_string(constants[name_index]);
         if (globals_.set(name, peek()))
         {
-          throw std::runtime_error("Undefined global variable");
+          throw std::runtime_error(
+              "Undefined variable '" + std::string(name->chars, name->length) +
+              "' (cannot assign to undeclared variable)");
         }
         break;
       }
@@ -1119,7 +1173,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value value = pop();
         if (!value.is_number())
         {
-          throw std::runtime_error("Negation on non-number type");
+          throw std::runtime_error(
+              "Type error: cannot negate " + value_type_name(value) +
+              " (expected number)");
         }
         stack_.push_back(Value::Number(-value.as_number()));
         break;
@@ -1162,7 +1218,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value lhs = pop();
         if (!lhs.is_number() || !rhs.is_number())
         {
-          throw std::runtime_error("Comparison requires numbers");
+          throw std::runtime_error(
+              "Type error: cannot compare " + value_type_name(lhs) +
+              " and " + value_type_name(rhs) + " (expected numbers)");
         }
         bool result = false;
         if (op == OpCode::OP_GREATER)
@@ -1204,6 +1262,14 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         {
           throw std::runtime_error("OP_CALL missing argument count");
         }
+        // Stack depth protection (v0.6.5 reliability fix)
+        if (static_cast<int>(frames_.size()) >= kMaxCallDepth)
+        {
+          throw std::runtime_error(
+              "Stack overflow: maximum call depth (" +
+              std::to_string(kMaxCallDepth) +
+              ") exceeded. Check for infinite recursion.");
+        }
         const auto arg_count = code[frame.ip++];
         const auto callee_index = stack_.size() - 1 - arg_count;
         if (callee_index >= stack_.size())
@@ -1216,10 +1282,14 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           auto* fn = as_function(callee);
           if (fn->arity != arg_count)
           {
-            throw std::runtime_error("Argument count mismatch for function call");
+            std::string fname = fn->name ? std::string(fn->name->chars, fn->name->length) : "<anonymous>";
+            throw std::runtime_error(
+                "Argument count mismatch: '" + fname + "' expects " +
+                std::to_string(fn->arity) + " argument(s), got " +
+                std::to_string(arg_count));
           }
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-          frames_.push_back(CallFrame{&fn->chunk, fn, 0, callee_index});
+          frames_.push_back(CallFrame{&fn->chunk, fn, 0, callee_index, false, {}});
         }
         else if (is_obj_type(callee, ObjType::OBJ_NATIVE))
         {
@@ -1256,26 +1326,31 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                            frame.ip - 1, {});
           if (!allowed_skills_.empty() && allowed_skills_.count(skill_name) == 0)
           {
-            throw std::runtime_error("Skill blocked by env policy");
+            throw std::runtime_error(
+              "Permission denied: skill '" + skill_name +
+              "' is not in the allowed skills list");
           }
           if (!skill->impl)
           {
-            throw std::runtime_error("Skill has no implementation");
+            throw std::runtime_error(
+                "Skill '" + skill_name + "' has no implementation");
           }
           if (skill->impl->arity != arg_count)
           {
-            throw std::runtime_error("Argument count mismatch for skill call");
+            throw std::runtime_error(
+                "Argument count mismatch: skill '" + skill_name + "' expects " +
+                std::to_string(skill->impl->arity) + " argument(s), got " +
+                std::to_string(arg_count));
           }
           validate_skill_args(skill, args);
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
-          CallFrame tool_frame{&skill->impl->chunk, skill->impl, 0, callee_index};
-          tool_frame.is_tool = true;
-          tool_frame.tool_name = skill_name;
-          frames_.push_back(std::move(tool_frame));
+          frames_.push_back(CallFrame{&skill->impl->chunk, skill->impl, 0, callee_index, true, skill_name});
         }
         else
         {
-          throw std::runtime_error("Attempted to call non-callable value");
+          throw std::runtime_error(
+              "Type error: attempted to call non-callable " +
+              value_type_name(callee));
         }
         break;
       }
@@ -1295,7 +1370,8 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           auto it = map->entries.find(key);
           if (it == map->entries.end())
           {
-            throw std::runtime_error("Missing map property");
+            throw std::runtime_error(
+                "Property error: '" + key + "' not found in map");
           }
           stack_.push_back(it->second);
         }
@@ -1328,12 +1404,15 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           }
           else
           {
-            throw std::runtime_error("Unknown agent property");
+            throw std::runtime_error(
+                "Property error: unknown agent property '" + key + "'");
           }
         }
         else
         {
-          throw std::runtime_error("Property access on non-object");
+          throw std::runtime_error(
+              "Type error: cannot access property '" + key +
+              "' on " + value_type_name(receiver));
         }
         break;
       }
@@ -1345,19 +1424,25 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         {
           if (!index_value.is_number())
           {
-            throw std::runtime_error("List index must be a number");
+            throw std::runtime_error(
+                "Type error: list index must be a number, got " +
+                value_type_name(index_value));
           }
           const double raw_index = index_value.as_number();
           const double floored = std::floor(raw_index);
           if (raw_index < 0 || floored != raw_index)
           {
-            throw std::runtime_error("List index must be a non-negative integer");
+            throw std::runtime_error(
+                "Index error: list index " + std::to_string(raw_index) +
+                " must be a non-negative integer");
           }
           const std::size_t index = static_cast<std::size_t>(floored);
           auto* list = as_list(base_value);
           if (index >= list->items.size())
           {
-            throw std::runtime_error("List index out of range");
+            throw std::runtime_error(
+                "Index out of range: index " + std::to_string(index) +
+                " not valid for list of size " + std::to_string(list->items.size()));
           }
           stack_.push_back(list->items[index]);
         }
@@ -1368,7 +1453,8 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           auto it = map->entries.find(key);
           if (it == map->entries.end())
           {
-            throw std::runtime_error("Missing map key");
+            throw std::runtime_error(
+                "Key error: '" + key + "' not found in map");
           }
           stack_.push_back(it->second);
         }
@@ -2027,7 +2113,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             std::string final_response;
             if (plan_pattern_lower == "react")
             {
-              const int max_steps = 10;
+              const int max_steps = get_config_int("NEAM_MAX_REACT_STEPS", 100, 1, 10000);
               std::string observation = query;
               for (int step = 0; step < max_steps; ++step)
               {
@@ -2808,11 +2894,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       }
       case OpCode::OP_BUILD_LIST:
       {
-        if (frame.ip >= code.size())
-        {
-          throw std::runtime_error("OP_BUILD_LIST missing count");
-        }
-        const auto count = code[frame.ip++];
+        const auto count = read_short(code, frame.ip);
         std::vector<Value> items(count);
         for (std::size_t i = 0; i < count; ++i)
         {
@@ -2823,11 +2905,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       }
       case OpCode::OP_BUILD_MAP:
       {
-        if (frame.ip >= code.size())
-        {
-          throw std::runtime_error("OP_BUILD_MAP missing count");
-        }
-        const auto count = code[frame.ip++];
+        const auto count = read_short(code, frame.ip);
         std::unordered_map<std::string, Value> entries;
         for (std::size_t i = 0; i < count; ++i)
         {
@@ -3175,9 +3253,7 @@ Value VirtualMachine::call_function(ObjFunction* fn, const std::vector<Value>& a
   {
     stack_.push_back(arg);
   }
-  frames_.push_back(CallFrame{&fn->chunk, fn, 0, stack_start});
-  frames_.back().is_tool = is_tool;
-  frames_.back().tool_name = tool_name;
+  frames_.push_back(CallFrame{&fn->chunk, fn, 0, stack_start, is_tool, tool_name});
   return run_frames(target_frame_count);
 }
 

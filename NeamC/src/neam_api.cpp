@@ -6,9 +6,11 @@
 
 #include "neamc/api/http_server.hpp"
 #include "neamc/pipeline.hpp"
+#include "neamc/version.hpp"
 #include "neamc/vm/vm.hpp"
 
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -20,6 +22,67 @@ namespace
 
 // Forward declarations
 std::string escape_string(const std::string& input);
+
+// API key authentication (v0.6.5 security fix)
+// When NEAM_API_KEY is set, all requests must include Authorization: Bearer <key>
+std::string get_api_key()
+{
+  const char* key = std::getenv("NEAM_API_KEY");
+  return key ? std::string(key) : "";
+}
+
+bool authenticate_request(const neamc::api::HttpRequest& request)
+{
+  const std::string expected = get_api_key();
+  if (expected.empty())
+  {
+    return true;  // No key configured — open mode (dev only)
+  }
+
+  auto it = request.headers.find("Authorization");
+  if (it == request.headers.end())
+  {
+    // Also check lowercase (some HTTP servers normalize headers)
+    it = request.headers.find("authorization");
+    if (it == request.headers.end())
+    {
+      return false;
+    }
+  }
+
+  const std::string prefix = "Bearer ";
+  if (it->second.size() < prefix.size() ||
+      it->second.substr(0, prefix.size()) != prefix)
+  {
+    return false;
+  }
+
+  const std::string provided = it->second.substr(prefix.size());
+
+  // Constant-time comparison to prevent timing attacks
+  if (provided.size() != expected.size())
+  {
+    return false;
+  }
+
+  volatile int result = 0;
+  for (size_t i = 0; i < expected.size(); ++i)
+  {
+    result |= (provided[i] ^ expected[i]);
+  }
+  return result == 0;
+}
+
+neamc::api::HttpResponse unauthorized_response()
+{
+  nlohmann::json body = {
+      {"error", "Unauthorized"},
+      {"message", "Set NEAM_API_KEY env var and pass Authorization: Bearer <key> header"}};
+  auto resp = neamc::api::HttpResponse::json(body, 401);
+  resp.status_code = 401;
+  resp.status_text = "Unauthorized";
+  return resp;
+}
 
 // Agent configuration
 struct AgentConfig
@@ -200,13 +263,18 @@ std::string execute_neam_program(const std::string& source)
 // GET /api/v1/health
 neamc::api::HttpResponse handle_health(const neamc::api::HttpRequest&)
 {
-  nlohmann::json response = {{"status", "healthy"}, {"version", "1.0.0"}, {"server", "neam-api"}};
+  nlohmann::json response = {{"status", "healthy"}, {"version", NEAM_VERSION}, {"server", "neam-api"}};
   return neamc::api::HttpResponse::json(response);
 }
 
 // GET /api/v1/agents
-neamc::api::HttpResponse handle_list_agents(const neamc::api::HttpRequest&)
+neamc::api::HttpResponse handle_list_agents(const neamc::api::HttpRequest& request)
 {
+  if (!authenticate_request(request))
+  {
+    return unauthorized_response();
+  }
+
   nlohmann::json agents_json = nlohmann::json::object();
 
   for (const auto& [id, config] : kAgents)
@@ -224,6 +292,11 @@ neamc::api::HttpResponse handle_list_agents(const neamc::api::HttpRequest&)
 // POST /api/v1/agent/ask
 neamc::api::HttpResponse handle_agent_ask(const neamc::api::HttpRequest& request)
 {
+  if (!authenticate_request(request))
+  {
+    return unauthorized_response();
+  }
+
   // Parse JSON body
   nlohmann::json body;
   try
@@ -290,6 +363,7 @@ void print_usage(const char* program_name)
             << "  --port PORT   Port to listen on (default: 8080)\n"
             << "  --help        Show this help message\n"
             << "\nEnvironment Variables:\n"
+            << "  NEAM_API_KEY     API authentication key (required in production)\n"
             << "  OPENAI_API_KEY   Required for OpenAI agents\n"
             << "\nAPI Endpoints:\n"
             << "  GET  /api/v1/health      Health check\n"

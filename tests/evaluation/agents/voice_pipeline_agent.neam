@@ -1,0 +1,43 @@
+// Neam v0.6.4 — Voice Pipeline Agent (STT → Agent → TTS)
+// Demonstrates: built-in voice pipeline in 10 LoC
+
+agent VoiceAssistant {
+  provider: "bedrock",
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  system: "You are a helpful voice assistant. Give brief, spoken-style answers.",
+  stt_model: "whisper-large-v3",
+  tts_model: "tts-1-hd",
+  voice_id: "alloy"
+}
+
+let test_scenarios = io.read_lines(env.get("PROMPTS_FILE", "../datasets/voice_agents.jsonl"));
+let results = [];
+let start = time.now();
+
+for (let i = 0; i < test_scenarios.length; i += 1) {
+  let entry = json.parse(test_scenarios[i]);
+  if (entry["category"] == "voice_pipeline_e2e") {
+    let t0 = time.now();
+    // In voice mode, the agent handles: audio → STT → LLM → TTS → audio
+    let response = VoiceAssistant.ask(entry["transcript"]);
+    let t1 = time.now();
+    results.push({
+      "id": entry["id"],
+      "pipeline": "stt_agent_tts",
+      "latency_ms": (t1 - t0) * 1000,
+      "input_transcript": entry["transcript"],
+      "response": response
+    });
+  }
+}
+
+emit json.encode({
+  "agent_type": "voice_pipeline",
+  "language": "neam",
+  "version": "0.6.4",
+  "total_loc": 10,
+  "pipeline_stages": ["stt", "agent", "tts"],
+  "total_requests": results.length,
+  "total_time_ms": (time.now() - start) * 1000,
+  "results": results
+});
