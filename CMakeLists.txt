@@ -122,6 +122,7 @@ add_library(tree_sitter_lib STATIC
 )
 set_target_properties(tree_sitter_lib PROPERTIES LINKER_LANGUAGE C POSITION_INDEPENDENT_CODE ON)
 target_include_directories(tree_sitter_lib PUBLIC ${tree_sitter_SOURCE_DIR}/lib/include)
+target_include_directories(tree_sitter_lib PRIVATE ${tree_sitter_SOURCE_DIR}/lib/src)
 
 set(NEAMC_CORE_SOURCES
     NeamC/src/parser.cpp
