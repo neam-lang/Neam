@@ -295,19 +295,47 @@ ProjectManifest parse_project_manifest(const std::string& toml)
       }
       else if (key == "replicas")
       {
-        manifest.deploy.kubernetes.replicas = parse_int(value, 1);
+        manifest.deploy.kubernetes.replicas = parse_int(value, 2);
       }
-      else if (key == "cpu")
+      else if (key == "cpu" || key == "cpu-request")
       {
-        manifest.deploy.kubernetes.cpu = unquote(value);
+        manifest.deploy.kubernetes.cpu_request = unquote(value);
       }
-      else if (key == "memory")
+      else if (key == "cpu-limit")
       {
-        manifest.deploy.kubernetes.memory = unquote(value);
+        manifest.deploy.kubernetes.cpu_limit = unquote(value);
+      }
+      else if (key == "memory" || key == "memory-request")
+      {
+        manifest.deploy.kubernetes.memory_request = unquote(value);
+      }
+      else if (key == "memory-limit")
+      {
+        manifest.deploy.kubernetes.memory_limit = unquote(value);
       }
       else if (key == "port")
       {
         manifest.deploy.kubernetes.port = parse_int(value, 8080);
+      }
+      else if (key == "ingress-class")
+      {
+        manifest.deploy.kubernetes.ingress_class = unquote(value);
+      }
+      else if (key == "certificate-arn")
+      {
+        manifest.deploy.kubernetes.certificate_arn = unquote(value);
+      }
+      else if (key == "hpa-min")
+      {
+        manifest.deploy.kubernetes.hpa_min = parse_int(value, 2);
+      }
+      else if (key == "hpa-max")
+      {
+        manifest.deploy.kubernetes.hpa_max = parse_int(value, 10);
+      }
+      else if (key == "hpa-cpu-target")
+      {
+        manifest.deploy.kubernetes.hpa_cpu_target = parse_int(value, 70);
       }
     }
     else if (section == "deploy.serverless")
@@ -323,6 +351,14 @@ ProjectManifest parse_project_manifest(const std::string& toml)
       else if (key == "timeout")
       {
         manifest.deploy.serverless.timeout = parse_int(value, 300);
+      }
+      else if (key == "workers")
+      {
+        manifest.deploy.serverless.workers = parse_int(value, 2);
+      }
+      else if (key == "readiness-path")
+      {
+        manifest.deploy.serverless.readiness_path = unquote(value);
       }
     }
     else if (section == "features")

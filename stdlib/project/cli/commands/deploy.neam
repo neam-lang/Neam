@@ -1,5 +1,32 @@
 module std.project.cli.commands.deploy;
 
+// Deploy a Neam application to a cloud target.
+//
+// Targets:
+//   local       - Run locally on localhost:8080
+//   docker      - Build Docker image and push to registry
+//   kubernetes  - Generate K8s manifests and deploy to EKS
+//   lambda      - Generate SAM template and deploy to AWS Lambda
+//   cloudrun    - Deploy to Google Cloud Run
+//
+// Usage:
+//   neamc deploy --target docker                    # build + push
+//   neamc deploy --target kubernetes --dry-run      # preview manifests
+//   neamc deploy --target lambda --env production   # deploy to Lambda
+//
+// Generated artifacts (deploy/ directory):
+//   deploy/docker/       - Dockerfile, docker-compose.yml
+//   deploy/kubernetes/   - K8s manifests (7 files)
+//   deploy/lambda/       - Lambda Dockerfile, SAM template
+//   deploy/helm/         - Helm chart
+//   deploy/terraform/    - Terraform module
+//   deploy/scripts/      - ecr-push.sh, eks-deploy.sh, lambda-deploy.sh
+//
+// Configuration via neam.toml:
+//   [deploy]             - default-target
+//   [deploy.docker]      - image, registry, tag-format
+//   [deploy.kubernetes]  - namespace, replicas, cpu, memory, ingress, HPA
+//   [deploy.serverless]  - provider, memory, timeout, workers
 pub fun run(target, env) {
   return { ok: true, message: "Deploying to " + (target ?? "default"), value: { env: env } };
 }

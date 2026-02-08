@@ -177,6 +177,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/deploy/helm.cpp
     NeamC/src/deploy/kubernetes.cpp
     NeamC/src/deploy/terraform.cpp
+    NeamC/src/deploy/deploy_scripts.cpp
     NeamC/src/vm/memory.cpp
     NeamC/src/vm/object.cpp
     NeamC/src/vm/external_skill.cpp

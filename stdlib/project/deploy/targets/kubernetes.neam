@@ -1,5 +1,22 @@
 module std.project.deploy.targets.kubernetes;
 
+// Deploy a Neam application to AWS EKS (Kubernetes).
+//
+// Workflow:
+//   1. Generates Dockerfile, K8s manifests, Helm chart, Terraform, deploy scripts
+//   2. Builds Docker image with neam-api + user source
+//   3. Applies manifests to EKS cluster via kubectl
+//
+// Prerequisites:
+//   - Docker installed
+//   - kubectl configured for EKS cluster
+//   - AWS CLI configured with ECR permissions
+//   - neam-sdk/ directory in project root (for Docker build)
+//
+// Quick start:
+//   neamc deploy --target kubernetes --dry-run   # preview generated files
+//   deploy/scripts/ecr-push.sh v1.0.0            # push image to ECR
+//   deploy/scripts/eks-deploy.sh v1.0.0          # apply to EKS cluster
 pub fun run(config) {
   return { ok: true, value: { target: "kubernetes", config: config ?? {} } };
 }

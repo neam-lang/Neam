@@ -1,249 +1,231 @@
-# Neam — Agentic AI Programming Language
+# Neam Programming Language
 
-**v0.6.6** | Compiled DSL for building AI agent systems with native LLM tool calling, RAG, multi-agent orchestration, and multi-cloud deployment.
+**Version:** v0.13 (Draft) — End-to-End Requirements Specification (Jan 05, 2026)
 
-```
-  Neam source (.neam)
-       |
-       v
-  Compiler (neamc)  -->  Bytecode (.neamb)
-       |
-       v
-  VM Runtime (neam)  -->  LLM Providers (OpenAI, Bedrock, Ollama)
-       |                        |
-       v                        v
-  Native Skills  <------  Tool Calls (auto-dispatch)
-```
+> Latest updates (v0.13, Jan 05, 2026): native terminal multimodal I/O (text,
+> images, streaming audio), a Media I/O Kernel with audio device capabilities,
+> realtime audio/image output support in the runtime and NeamCode, A2A + EDA
+> alignment, and tightened security guardrails around device effects and terminal
+> rendering.
 
-## Table of Contents
+Neam is an agent-native programming language and runtime designed to make agentic
+applications simple, safe, and production-ready. It combines Rust/Cargo-like
+ergonomics with Bun-like simplicity and bakes in agent-focused primitives such as
+multi-agent orchestration, capability-scoped effects, structured context lanes,
+and governed tool execution (TerminalTool, PythonTool, WebSearchTool).
 
-- [Quick Start](#quick-start)
-- [Building Neam](#building-neam)
-- [Native Tool Calling (v0.6.6)](#native-tool-calling-v066)
-- [Knowledge Bases (RAG)](#knowledge-bases-rag)
-- [RAG Retrieval Strategies](#rag-retrieval-strategies)
-- [Agentic Patterns](#agentic-patterns)
-- [API Server](#api-server)
-- [Package Manager](#package-manager-neam-pkg)
-- [Examples](#examples)
+This repository captures a GitHub-based installer concept for the Neam toolchain
+alongside a concise, requirements-aligned overview of the language, runtime, and
+ecosystem. Use this repo as the seed for a Neam bootstrapper that installs the
+compiler/runtime artifacts published in the upstream
+[`Praveengovianalytics/NeamC`](https://github.com/Praveengovianalytics/NeamC)
+repository via GitHub Releases.
 
----
+## Highlights (aligned to the v0.13 specification)
 
-## Quick Start
+- **Language + Compiler (NeamC):** statically typed, effect-aware compiler that
+  performs capability checking and emits reproducible Neam Bundles with schema
+  snapshots, policies, and provenance metadata.
+- **Runtime + NeamFlow:** C/C++ runtime with deterministic orchestration,
+  multi-agent messaging (SYNAPSE), event-driven DAGs, supervision trees, and
+  replay-friendly receipts for every tool call and model decision.
+- **Context + Memory Kernels:** structured context lanes (policy, role, goal,
+  plan, tool, memory, evidence, user, output contract) with budgets and
+  injection defenses; human-inspired memory tiers (working, episodic, semantic,
+  procedural, social) governed by provenance and policies.
+- **Tooling + Ecosystem:** built-in TerminalTool, PythonTool, WebSearchTool with
+  sandbox profiles and receipts; MCP host kernel for tools/resources/prompts;
+  package ecosystem (NeamPackage) and audited skill marketplace (NeamSkills).
+- **Media I/O Kernel + Terminal Rendering:** portable audio input/output,
+  inline terminal image rendering (Kitty/iTerm2/Sixel where available), and
+  artifact-based media handling with backpressure and cancellation. Device
+  effects (AudioInput/AudioOutput/Camera/TerminalRender/MediaExport) are
+  explicit capabilities with approval/retention policies enforced by
+  NeamC/Neam.
+- **NeamCode + Provider Realtime:** terminal agent experience with modality
+  routing (text-only, STT→LLM→TTS fallback, or provider-native realtime audio)
+  and CLI flags to force/deny audio or images. A2A client/server support is
+  aligned with the v0.13 AgentCard + version negotiation requirements.
+- **Event- and Interop-Ready:** first-class CloudEvents/AsyncAPI contracts,
+  Kafka/NATS adapters, Beam integration option, and Agent2Agent (A2A) protocol
+  for cross-vendor collaboration.
+- **Observability + Safety:** OpenTelemetry by default, Langfuse/MLflow
+  integrations, approval gates for high-risk effects, deny-by-default
+  capabilities, and mesh-ready governance with certification manifests.
 
-```bash
-# Build
-mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --parallel
+## GitHub-based installer (blueprint)
 
-# Run a Neam program
-./neamc program.neam -o program.neamb
-./neam program.neamb
+The installer is designed to be shipped via GitHub Releases with:
 
-# Or use the CLI (compile + run in one step)
-./neam-cli program.neam
-```
+- Deterministic tarball artifacts per platform/arch (Linux/macOS/Windows),
+  accompanied by SHA-256 checksums and optional signature files.
+- A small, auditable shell installer (`scripts/neam-install.sh`) that performs
+  platform detection, checksum verification, optional GPG validation, and
+  installation into a versioned directory (default: `/usr/local/neam/<version>`)
+  with deterministic symlinks (`neam`, `neamc`).
+- Safe defaults: deny ambient network during install steps, avoid curl | sh,
+  prefer argv-style command invocation, and require explicit `--execute` to make
+  changes (default mode is a dry-run plan).
+- Media-aware artifacts: runtime bundles include the Media I/O Kernel, device
+  capability manifests, and terminal renderer assets; NeamC enforces that audio
+  and camera effects declare policies in the Construct page before builds will
+  pass. The installer validates that media capability assets exist (override
+  with `--allow-missing-media` only when testing partial bundles).
 
-## Building Neam
+See [INSTALL.md](./INSTALL.md) for the full installer design, threat model, and
+operational guidance.
 
-See [BUILD_README.md](BUILD_README.md) for detailed build instructions for macOS, Linux, and Windows.
+## Repository layout
 
----
+- `README.md` — Overview and highlights of Neam v0.13 plus installer summary.
+- `INSTALL.md` — GitHub-based installer design, validation flow, and usage.
+- `scripts/neam-install.sh` — Portable installer script (plan-first, opt-in
+  execute) intended to be distributed via GitHub Releases alongside checksums
+  and signatures; defaults target the `Praveengovianalytics/NeamC` release
+  artifacts.
 
-## Native Tool Calling (v0.6.6)
-
-Neam v0.6.6 introduces **native skill-to-tool integration** — Neam skills declared in your program are automatically converted to LLM-native tool definitions and dispatched via the provider's tool calling protocol (OpenAI function calling, Claude tool_use, or Ollama tools).
-
-### How It Works
-
-```
-  User Query
-       |
-       v
-  Neam VM collects agent.skills --> builds JSON Schema tool definitions
-       |
-       v
-  LLM API call with tools[] array (provider-native format)
-       |
-       v
-  LLM returns tool_use / function_call response
-       |
-       v
-  Neam VM dispatches to skill impl() with converted arguments
-       |
-       v
-  Skill returns result --> sent as tool_result back to LLM
-       |
-       v
-  LLM processes result --> more tool calls OR final text answer
-```
-
-### Defining Skills (Auto-Mapped to LLM Tools)
-
-```neam
-// This skill becomes an LLM tool automatically:
-//   { "name": "lookup_customers",
-//     "description": "Look up customers by city name...",
-//     "input_schema": { "properties": { "city": {"type":"string"} } } }
-
-skill lookup_customers {
-  description: "Look up customers by city name. Returns customer records."
-  params: {
-    city: string
-  }
-  impl(city) {
-    if (city == "Tokyo") {
-      return "Found 2 customers: #101 Tanaka Yuki (47 orders), #205 Sato Hana (23 orders)";
-    }
-    return "No customers found in " + city;
-  }
-}
-
-skill calculate {
-  description: "Perform a math calculation on a list of numbers."
-  params: {
-    operation: string,
-    numbers: string
-  }
-  impl(operation, numbers) {
-    if (operation == "sum") {
-      if (numbers == "47,23") { return "70"; }
-    }
-    return "Computed " + operation + " on " + numbers;
-  }
-}
-```
-
-### Wiring Skills to Agents
-
-```neam
-agent Analyst {
-  provider: "openai"
-  model: "gpt-4o"
-  endpoint: "https://api.openai.com/v1/chat/completions"
-  api_key_env: "OPENAI_API_KEY"
-  system: "You are a data analyst. Use your tools for all data operations."
-  skills: [lookup_customers, calculate]
-  guards: [SecurityChain]
-  budget: AnalyticsBudget
-}
-
-{
-  // The LLM decides which skills to call:
-  let result = Analyst.ask("How many customers in Tokyo? Sum their orders.");
-  emit result;
-}
-```
-
-### What Happens at Runtime
-
-1. VM reads `agent.skills` and calls `build_skill_schema()` for each skill
-2. JSON Schema tool definitions are sent in the LLM API request
-3. The LLM decides which tools to call (or responds directly if no tool needed)
-4. VM receives tool call responses, maps JSON arguments to Neam Values
-5. Skill `impl()` functions execute with full guard/budget enforcement
-6. Results flow back to the LLM as tool results
-7. Loop continues until the LLM sends a final text response
-
-### Supported Providers
-
-| Provider | Protocol | Config |
-|----------|----------|--------|
-| **OpenAI** | Function Calling (`tool_calls`) | `OPENAI_API_KEY` |
-| **AWS Bedrock** | Claude `tool_use` content blocks | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
-| **Ollama** | OpenAI-compatible tools | Local (no key needed) |
-
-### Guards and Budgets on Tool Calls
-
-Guards and budgets are enforced at **every step** in the tool calling loop:
-
-```neam
-guard InputValidator {
-  description: "Validate all tool inputs"
-  on_tool_input(input) {
-    // Check, modify, or block the input
-    return input;
-  }
-  on_tool_output(output) {
-    return output;
-  }
-}
-
-guardchain SecurityChain = [InputValidator];
-
-budget AnalyticsBudget {
-  api_calls: 30
-  tokens: 200000
-}
-```
-
-### Running the Demo
+## Quick start (planner mode)
 
 ```bash
-# Set your provider key
-export OPENAI_API_KEY="your-key"
-
-# Run with INFO-level logging (shows [TOOL] markers for each skill call)
-NEAM_LOG_LEVEL=INFO ./neam-cli examples/v066_claude_skill_integration.neam
-
-# Run with DEBUG-level logging (shows full JSON payloads)
-NEAM_LOG_LEVEL=DEBUG NEAM_TRACE=1 ./neam-cli examples/v066_claude_skill_integration.neam
+# Preview what the installer would do for v0.13.0 on your platform
+./scripts/neam-install.sh --version v0.13.0
 ```
 
-### Demo Output (Actual)
+To actually perform the installation (once release artifacts are published),
+run with `--execute` and adjust `--install-dir` as needed:
 
+```bash
+sudo ./scripts/neam-install.sh --version v0.13.0 --execute
 ```
-+--------------------------------------------------------------------+
-|                                                                    |
-|   Neam v0.6.6 -- Native Skill-to-Tool Integration Demo            |
-|                                                                    |
-|   Skills declared in Neam are auto-converted to LLM tools.        |
-|   The LLM decides which tools to call. Neam executes them.        |
-|                                                                    |
-+--------------------------------------------------------------------+
 
-  DEMO 1: Single Tool Call
-  Expect: LLM calls lookup_customers(city=Tokyo)
-  ........................................................
+## Detailed setup and usage
 
-  Q: How many customers are in Tokyo?
+### Prerequisites
 
-    [TOOL] lookup_customers(city=Tokyo)
+- `curl` and `tar` installed (for downloads and extraction).
+- A checksum tool (`sha256sum` or `shasum`).
+- Optional: `gpg` and a trusted keyring if you plan to verify `SHA256SUMS.sig`.
+- Sufficient privileges for the chosen install directory (`/usr/local/neam` by
+  default; use a user-writable path to avoid `sudo`).
 
-  A: There are 2 customers in Tokyo.
+### Install from the NeamC release (default settings)
 
---------------------------------------------------------------------
+```bash
+# Plan-only dry run: shows computed URLs and targets for v0.13.0
+./scripts/neam-install.sh --version v0.13.0
 
-  DEMO 2: Multi-Step Tool Chain
-  Expect: lookup_customers -> calculate -> make_report
-  ........................................................
+# Perform the install to /usr/local/neam/v0.13.0 and set up bin symlinks
+sudo ./scripts/neam-install.sh --version v0.13.0 --execute
 
-  Q: Look up Tokyo customers, sum their orders, make a report.
-
-    [TOOL] lookup_customers(city=Tokyo)
-    [TOOL] calculate(op=sum, numbers=47,23)
-    [TOOL] make_report(title=Tokyo Summary)
-
-  A: === REPORT: Tokyo Summary === Total orders: 70 === End of Report ===
-
---------------------------------------------------------------------
-
-  DEMO 8: Full Workflow (4-Step Orchestration)
-  Expect: lookup_customers -> calculate -> make_report -> send_alert
-  ........................................................
-
-    [TOOL] lookup_customers(city=Tokyo)
-    [TOOL] calculate(op=average, numbers=47,23)
-    [TOOL] make_report(title=Tokyo Analysis)
-    [TOOL] send_alert(channel=email)
-
-  A: The workflow is complete. Report generated, email alert sent.
+# Add the bin directory to your shell PATH (if not already present)
+export PATH=\"/usr/local/neam/bin:$PATH\"
 ```
+
+### Install to a custom location without sudo
+
+```bash
+mkdir -p \"$HOME/.local/neam\"
+./scripts/neam-install.sh --version v0.13.0 --install-dir \"$HOME/.local/neam\" --execute
+export PATH=\"$HOME/.local/neam/bin:$PATH\"
+```
+
+### Using alternative release hosts or artifact names
+
+If the upstream release owner/repo or tarball prefix differ from the defaults
+(`Praveengovianalytics/NeamC` and `neam-*`), override them explicitly:
+
+```bash
+./scripts/neam-install.sh \
+  --version v0.13.0 \
+  --owner your-org --repo your-repo \
+  --artifact-prefix customprefix \
+  --install-dir "$HOME/.local/neam" \
+  --execute
+```
+
+## Sample Neam workflows (conceptual)
+
+Once binaries are installed, Neam aims to deliver a Cargo-style agentic workflow.
+The commands below illustrate how a typical Neam developer could scaffold and
+run agentic programs (names and flags reflect the v0.13 specification draft):
+
+```bash
+# Create a new agentic project using built-in patterns and templates
+neam init my-agentic-app --template react-loop
+cd my-agentic-app
+
+# Inspect and edit the Construct Page (single-page blueprint)
+${EDITOR:-vi} Construct.neam
+
+# Build with NeamC (type + capability checks; produces a Neam Bundle)
+neam build
+
+# Run the default Construct locally (respecting security profile)
+neam run --profile dev
+
+# Tail traces and receipts for observability/debugging
+neam trace --follow
+
+# Evaluate against an offline regression suite (MLflow/Langfuse ready)
+neam eval --suite smoke
+
+# Publish the bundle to a registry and optional mesh registry
+neam publish --registry https://registry.example.com
+
+# Deploy with a Docker/K8s profile
+neam deploy --profile prod
+```
+
+Additional domain workflows:
+
+- **Event-driven**: `neam event connect --adapter kafka --list-topics` followed
+  by `neam event run --topic transactions --handler fraud_detector`.
+- **A2A interop**: `neam a2a serve --bundle target/neam/bundle` to expose an
+  AgentCard, or `neam a2a discover https://peer.example.com` to delegate tasks.
+- **Ingestion for RAG/GraphRAG**: `neam ingest --profile vec-dev` to run
+  VectorIngest, or `neam ingest --profile graph-dev` for GraphIngest.
+
+## Self-Evolution Workflow
+
+Neam supports a self-evolution loop that allows an agent to rewrite its own
+implementation when guided by an evaluation dataset. The core command is:
+
+```bash
+neam evolve <agent> --dataset <data>
+```
+
+This flow is designed to be **Test-Driven Evolution**, where a Gym suite defines
+the expected behavior and an Optimizer proposes edits until the Gym score
+reaches 100%. The compiler/runtime perform the evolution mechanics, while this
+repository documents the required interfaces and test data for that workflow.
+
+## Governance & Registry
+
+Neam packages are published through a governed workflow:
+
+```bash
+neam publish
+```
+
+The "One Hundred Percent" rule applies: an agent cannot be published unless it
+passes authentication, which requires a Gym certificate with `pass_rate: 1.0`.
+The root repository does not implement this logic (the C++ toolchain does); it
+defines the documentation, rules, and registry interface the compiler must
+adhere to.
+
+## Status
+
+This is a working draft focused on installer and documentation scaffolding.
+Compiler/runtime binaries and release assets are not yet published; the
+installer operates in plan mode by default to avoid accidental partial installs.
 
 ---
 
-## Knowledge Bases (RAG)
+# Neam sample programs
+
+Quick examples you can use to exercise the current `neamc` compiler + VM pipeline.
+
+## Knowledge bases (RAG)
 
 Neam supports first-class knowledge bases via the `knowledge` declaration. Knowledge bases ingest
 sources at runtime and expose relevant context to connected agents through `connected_knowledge`.
@@ -292,478 +274,248 @@ agent SupportBot {
 * `examples/rag_researcher.neam`: Research-focused agent connected to multiple docs.
 * `tests/knowledge_basic.neam`: Minimal knowledge initialization and query for smoke tests.
 
----
-
-## RAG Retrieval Strategies
-
-Neam supports 7 retrieval strategies for knowledge bases:
-
-| Strategy | Description | Use Case |
-|----------|-------------|----------|
-| `basic` | Standard vector similarity | Simple Q&A |
-| `mmr` | Maximal Marginal Relevance | Diverse results |
-| `hybrid` | Keyword + vector search | Precise matching |
-| `hyde` | Hypothetical Document Embeddings | Abstract queries |
-| `self_rag` | Self-reflective with relevance check | High accuracy |
-| `crag` | Corrective RAG with query decomposition | Complex questions |
-| `agentic` | Iterative refinement with reflection | Research tasks |
-
-### Example: Using Different Strategies
-
-```neam
-knowledge BasicKB {
-  vector_store: "usearch"
-  embedding_model: "nomic-embed-text"
-  chunk_size: 200
-  chunk_overlap: 50
-  sources: [ { "type": "file", "path": "./docs.md" } ]
-  retrieval_strategy: "basic"
-  top_k: 3
-}
-
-knowledge HyDEKB {
-  vector_store: "usearch"
-  embedding_model: "nomic-embed-text"
-  chunk_size: 200
-  chunk_overlap: 50
-  sources: [ { "type": "file", "path": "./docs.md" } ]
-  retrieval_strategy: "hyde"
-  top_k: 3
-  num_hypothetical: 1
-}
-
-knowledge SelfRAGKB {
-  vector_store: "usearch"
-  embedding_model: "nomic-embed-text"
-  chunk_size: 200
-  chunk_overlap: 50
-  sources: [ { "type": "file", "path": "./docs.md" } ]
-  retrieval_strategy: "self_rag"
-  top_k: 4
-  enable_relevance_check: true
-}
-```
-
-### Strategy Options
-
-| Option | Strategies | Description |
-|--------|------------|-------------|
-| `top_k` | All | Number of documents to retrieve |
-| `mmr_lambda` | mmr | Balance relevance (1.0) vs diversity (0.0) |
-| `num_hypothetical` | hyde | Hypothetical docs to generate |
-| `enable_relevance_check` | self_rag | Check document relevance |
-| `enable_query_decomposition` | crag | Break complex queries |
-| `max_iterations` | agentic | Refinement iterations |
-| `enable_reflection` | agentic | Enable self-reflection |
-
-See `examples/Neam_test_examples.md` for comprehensive examples.
-
----
-
-## Agentic Patterns
-
-Neam supports various multi-agent orchestration patterns:
-
-### Basic Patterns
-
-| Pattern | Description |
-|---------|-------------|
-| Single Agent | Basic Q&A with one agent |
-| Multi-Agent Collaboration | Researcher -> Writer -> Editor |
-| Sequential Pipeline | Data transformation chain |
-| Supervisor/Worker | Task validation pattern |
-| Router/Dispatcher | Query classification and routing |
-| Debate/Adversarial | Pro vs Con with Judge |
-
-### Special Patterns
-
-| Pattern | Description |
-|---------|-------------|
-| DeepSearch | Plan -> Research -> Synthesize -> Reflect |
-| Chain-of-Thought | Explicit step-by-step reasoning |
-| ReAct | Thought -> Action -> Observation loop |
-| Self-Reflection | Create -> Critique -> Refine |
-| Planning | Goal decomposition and monitoring |
-| Socratic | Teaching through questions |
-| Red/Blue Team | Security attack + defense analysis |
-| Memory | Contextual fact extraction and retrieval |
-
-### Example: Multi-Agent Collaboration
-
-```neam
-agent Researcher {
-  provider: "openai"
-  model: "gpt-4o-mini"
-  system: "You are a researcher. Provide factual information."
-}
-
-agent Writer {
-  provider: "openai"
-  model: "gpt-4o-mini"
-  system: "You are a writer. Create polished prose from notes."
-}
-
-agent Editor {
-  provider: "openai"
-  model: "gpt-4o-mini"
-  system: "You are an editor. Improve text for clarity."
-}
-
-{
-  let research = Researcher.ask("Key facts about AI");
-  let draft = Writer.ask("Write about: " + research);
-  let final_text = Editor.ask("Edit: " + draft);
-  emit final_text;
-}
-```
-
-### Example: Supervisor/Worker with Retries
-
-```neam
-agent Supervisor {
-  provider: "openai"
-  model: "gpt-4o-mini"
-  system: "Evaluate work. Reply APPROVED or NEEDS_REVISION."
-}
-
-agent Worker {
-  provider: "openai"
-  model: "gpt-4o-mini"
-  system: "Complete assigned tasks thoroughly."
-}
-
-{
-  let task = "List 3 benefits of exercise";
-  let result = Worker.ask(task);
-  let validation = Supervisor.ask("Evaluate: " + result);
-  emit validation;
-}
-```
-
-### Example: Skill-Equipped Agents (v0.6.6)
-
-```neam
-skill search_docs {
-  description: "Search documentation by topic"
-  params: { topic: string }
-  impl(topic) {
-    return "Docs for: " + topic;
-  }
-}
-
-skill write_summary {
-  description: "Write a summary from source material"
-  params: { source: string }
-  impl(source) {
-    return "Summary of: " + source;
-  }
-}
-
-agent ResearchAgent {
-  provider: "openai"
-  model: "gpt-4o"
-  endpoint: "https://api.openai.com/v1/chat/completions"
-  api_key_env: "OPENAI_API_KEY"
-  system: "Research agent with document search and summarization tools."
-  skills: [search_docs, write_summary]
-}
-
-{
-  // The LLM autonomously decides to search, then summarize
-  let result = ResearchAgent.ask("Find docs about RAG and summarize them.");
-  emit result;
-}
-```
-
-See `examples/Agentic_Patterns_readme.md` for all patterns with examples.
-
----
-
-## API Server
-
-Neam agents can be exposed as REST API endpoints using the native `neam-api` server built in C++.
-
-### Building the API Server
-
-```bash
-# From the build directory
-cmake --build . --target neam-api --parallel
-
-# Verify build
-./neam-api --help
-```
-
-### Quick Start
-
-```bash
-# Set API key
-export OPENAI_API_KEY="your-key"
-
-# Start the native server
-./neam-api --port 8080
-
-# Query an agent
-curl -X POST http://localhost:8080/api/v1/agent/ask \
-  -H "Content-Type: application/json" \
-  -d '{"agent_id": "assistant", "query": "Hello!"}'
-```
-
-### Command Line Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--host HOST` | Host to bind to | `0.0.0.0` |
-| `--port PORT` | Port to listen on | `8080` |
-| `--help` | Show help message | - |
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/health` | GET | Health check |
-| `/api/v1/agents` | GET | List available agents |
-| `/api/v1/agent/ask` | POST | Query an agent |
-
-### Available Agents
-
-| Agent ID | Description | RAG |
-|----------|-------------|-----|
-| `assistant` | General purpose helpful assistant | No |
-| `coder` | Expert programmer, code solutions | No |
-| `analyst` | Data analysis and insights | No |
-| `writer` | Creative writing | No |
-| `researcher` | Research with knowledge base | Yes |
-
-See `examples/api_server/README.md` for full documentation including Docker deployment and production setup.
-
----
-
-## Package Manager (neam-pkg)
-
-Neam includes a full-featured package manager for managing dependencies, similar to pip (Python), cargo (Rust), or npm (Node.js).
-
-### Building the Package Manager
-
-```bash
-# From the build directory
-cmake --build . --target neam-pkg --parallel
-
-# Verify build
-./neam-pkg --help
-```
-
-### Quick Start
-
-```bash
-# Initialize a new project
-neam-pkg init my-project
-
-# Install a package
-neam-pkg install agent-utils
-
-# Install as dev dependency
-neam-pkg install --dev test-framework
-
-# List installed packages
-neam-pkg list
-
-# Update all packages
-neam-pkg update
-```
-
-### Commands
-
-| Command | Description |
-|---------|-------------|
-| `neam-pkg init [name]` | Initialize a new Neam project |
-| `neam-pkg install` | Install dependencies from neam.toml |
-| `neam-pkg install <pkg>` | Install a specific package |
-| `neam-pkg install <pkg>@<ver>` | Install a specific version |
-| `neam-pkg install --dev <pkg>` | Install as dev dependency |
-| `neam-pkg update` | Update all packages |
-| `neam-pkg update <pkg>` | Update a specific package |
-| `neam-pkg remove <pkg>` | Remove a package |
-| `neam-pkg list` | List installed packages |
-| `neam-pkg outdated` | Show outdated packages |
-| `neam-pkg search <query>` | Search for packages |
-| `neam-pkg info <pkg>` | Show package information |
-| `neam-pkg login` | Login to registry |
-| `neam-pkg publish` | Publish package to registry |
-| `neam-pkg cache clean` | Clean the package cache |
-| `neam-pkg cache info` | Show cache information |
-
-### Project Structure
-
-```
-my-project/
-├── neam.toml           # Project manifest (required)
-├── neam.lock           # Lock file (auto-generated)
-├── src/
-│   └── main.neam       # Main entry point
-├── tests/
-│   └── ...
-└── .neam/
-    └── packages/       # Installed packages
-```
-
-### neam.toml Manifest
-
-```toml
-neam_version = "1.0"
-
-[project]
-name = "my-project"
-version = "0.1.0"
-description = "My Neam project"
-type = "binary"
-authors = ["Developer <dev@example.com>"]
-license = "MIT"
-
-[project.entry_points]
-main = "src/main.neam"
-
-[dependencies]
-utils = "^1.0.0"
-ai-tools = { git = "https://github.com/org/repo" }
-
-[dev-dependencies]
-test-framework = "0.1.0"
-
-[agent]
-provider = "openai"
-model = "gpt-4o-mini"
-```
-
-### Version Constraints
-
-| Constraint | Example | Matches |
-|------------|---------|---------|
-| Exact | `"1.0.0"` | Only 1.0.0 |
-| Caret | `"^1.0.0"` | 1.0.0 to <2.0.0 |
-| Tilde | `"~1.0.0"` | 1.0.0 to <1.1.0 |
-| Greater | `">=1.0.0"` | 1.0.0 and above |
-| Range | `">=1.0.0, <2.0.0"` | Custom range |
-
-See `docs/PACKAGE_ECOSYSTEM.md` for full documentation and `examples/PACKAGING_GUIDE.md` for packaging best practices.
-
----
-
-## Examples
-
-### v0.6.6 — Skill & Tool Integration
-
-| File | Description |
-|------|-------------|
-| `examples/v066_claude_skill_integration.neam` | **Full demo: 8 scenarios with 5 skills, guards, budgets** |
-| `examples/v066_native_tool_calling.neam` | Comprehensive tool calling across all providers |
-| `examples/v066_tool_calling_bedrock.neam` | AWS Bedrock-specific tool calling demo |
-| `examples/v066_tool_calling_ollama.neam` | Local-only Ollama tool calling (no cloud keys) |
-
-### RAG & Agents
-
-| File | Description |
-|------|-------------|
-| `examples/rag_basic_strategies.neam` | Basic, MMR, Hybrid RAG |
-| `examples/rag_advanced_strategies.neam` | HyDE, Self-RAG, CRAG, Agentic |
-| `examples/rag_all_strategies.neam` | All 7 strategies comparison |
-| `examples/agentic_patterns_openai.neam` | 6 orchestration patterns |
-| `examples/agentic_rag_patterns.neam` | RAG-enhanced patterns |
-| `examples/special_agents_openai.neam` | 8 special agent patterns |
-
-### Documentation
-
-| File | Description |
-|------|-------------|
-| `BUILD_README.md` | Build instructions (Mac/Linux/Windows) |
-| `docs/LEARN_NEAM_EXAMPLES.md` | **Part 1: Fundamentals, Agents, Basic RAG, Multi-Agent Patterns** |
-| `docs/LEARN_NEAM_EXAMPLES_PART2.md` | **Part 2: Special Agents, RAG Strategies, Packaging, Web APIs** |
-| `examples/Neam_test_examples.md` | RAG strategies guide |
-| `examples/Agentic_Patterns_readme.md` | Agentic patterns guide |
-| `examples/api_server/README.md` | API server documentation |
-| `examples/PACKAGING_GUIDE.md` | Project packaging guide |
-| `docs/PACKAGE_ECOSYSTEM.md` | Package ecosystem design |
-
----
-
-## Language Basics
-
-### Expressions
+## Simple arithmetic
 
 ```neam
 { 1 + 2; }
 ```
 
+Compile and run:
+
+```bash
+neamc math.neam -o math.neamb
+neam math.neamb
+```
+
+## Nested blocks and duplication
+
 ```neam
 {
   3 * (4 + 5);
+  {
+    -1 + 2;
+  }
+}
+```
+
+This demonstrates block statements and unary negation.
+
+## Chained expressions
+
+```neam
+{
   10 / 2 + 7;
   (8 - 3) * 4;
 }
 ```
 
-### Variables and Control Flow
+Multiple expressions in a block are compiled sequentially; each expression result is popped to keep the stack clean.
+
+## Negative numbers
 
 ```neam
 {
-  let x = 10;
-  let y = 20;
+  -42;
+  -(1 + 2 * 3);
+}
+```
 
-  if (x > 5) {
-    emit "x is large";
+Unary negation lowers to `OP_NEGATE` before arithmetic combines the values.
+
+## Agentic AI patterns (conceptual)
+
+The current parser focuses on arithmetic expressions, but the runtime model already includes `AgentRef` values. Below are forward-looking examples to illustrate intended usage once agent declarations and events are wired through the compiler:
+
+```neam
+agent Planner {
+  // Future: plan tasks and emit structured intents
+}
+
+agent Worker {
+  // Future: execute intents and emit receipts
+}
+
+{
+  Planner.plan("summarize report");
+  Worker.execute(Planner.last_plan);
+}
+```
+
+```neam
+{
+  // Conceptual event emission pipeline
+  let decision = Planner.decide("route inquiry");
+  emit decision;
+  emit "hand-off to worker";
+}
+```
+
+These snippets are illustrative; parser and codegen support for agent declarations, method calls, and event emission will arrive in later phases.
+
+### Multi-agent orchestration sketch
+
+```neam
+agent Router { }
+agent Summarizer { }
+agent Reviewer { }
+
+{
+  // Router inspects the request and chooses a path
+  let route = Router.decide("summarize vs. translate");
+  emit route;
+
+  // Summarizer executes then emits a receipt
+  let summary = Summarizer.summarize("input doc");
+  emit summary;
+
+  // Reviewer validates downstream
+  let verdict = Reviewer.review(summary);
+  emit verdict;
+}
+```
+
+### Supervisor with retries
+
+```neam
+agent Supervisor { }
+agent Worker { }
+
+{
+  let attempt = 0;
+  let success = false;
+
+  while (!success && attempt < 3) {
+    attempt = attempt + 1;
+    let result = Worker.execute("task payload");
+    success = Supervisor.validate(result);
+    emit "attempt " + attempt;
+    emit result;
   }
 
-  let i = 0;
-  while (i < 3) {
-    emit "iteration " + i;
-    i = i + 1;
+  if (!success) {
+    emit "fallback escalation";
   }
 }
 ```
 
-### Agents and Skills
+### Event-driven tool invocation
 
 ```neam
-skill greet {
-  description: "Greet a user by name"
-  params: { name: string }
-  impl(name) {
-    return "Hello, " + name + "!";
-  }
+agent Planner { }
+agent Toolbelt { }
+
+{
+  let plan = Planner.plan("extract key facts");
+  emit plan;
+
+  // Hypothetical tool call sequence
+  let data = Toolbelt.call("search", "topic query");
+  let notes = Toolbelt.call("summarize", data);
+  emit notes;
+}
+```
+
+## 🌟 Phase 6 RAG Examples
+
+Neam's native knowledge system enables powerful agentic workflows. Here are complete examples:
+
+### 1. Basic RAG (`knowledge_simple.neam`)
+The minimal "Hello World" for RAG.
+```neam
+knowledge MyWiki {
+  vector_store: "usearch",
+  embedding_model: "nomic-embed-text",
+  chunk_size: 64,
+  chunk_overlap: 16,
+  sources: [
+    { type: "file", path: "./readme.md" }
+  ]
 }
 
-agent Assistant {
-  provider: "openai"
-  model: "gpt-4o-mini"
-  endpoint: "https://api.openai.com/v1/chat/completions"
-  api_key_env: "OPENAI_API_KEY"
-  system: "You are a friendly assistant."
-  skills: [greet]
+agent Helper {
+  provider: "ollama",
+  model: "qwen2.5:14b",
+  system: "You answer using the provided knowledge context.",
+  connected_knowledge: [MyWiki]
 }
 
 {
-  let response = Assistant.ask("Say hello to Alice");
+  emit "Starting Knowledge Query...";
+  let answer = Helper.ask("How do I build NeamC?");
+  emit answer;
+}
+```
+
+### 2. Deep Researcher (`rag_researcher.neam`)
+Connects an agent to multiple sources (files + web) for synthesis.
+```neam
+knowledge ResearchDocs {
+  vector_store: "usearch",
+  embedding_model: "nomic-embed-text",
+  sources: [
+    { type: "file", path: "./README.md" },
+    { type: "file", path: "./readme.md" }
+  ]
+}
+
+agent Researcher {
+  provider: "ollama",
+  model: "qwen2.5:14b",
+  system: "You are a deep-dive technical researcher.",
+  connected_knowledge: [ResearchDocs]
+}
+
+{
+  let response = Researcher.ask("Summarize Neam positioning.");
   emit response;
 }
 ```
 
----
+### 3. Medical Advisor (`medical_advisor.neam`)
+Demonstrates **Safety Guardrails** using system prompts and temperature control.
+```neam
+knowledge MedicalGuidelines {
+  vector_store: "native",
+  embedding_model: "biomed-embed-v1",
+  sources: [
+    { type: "file", path: "./data/clinical_guidelines.pdf" },
+    { type: "web", path: "https://cdc.gov/protocols" }
+  ]
+}
 
-## Known Limitations (v0.6.6)
+agent DrNeam {
+  provider: "openai",
+  model: "gpt-4-turbo",
+  temperature: 0.1, // Deterministic
+  system: "ONLY answer based on Knowledge Base. If unsure, say 'I do not know'.",
+  connected_knowledge: [MedicalGuidelines]
+}
 
-### Type System
-The Hindley-Milner type inference system is **parsed but not yet enforced**.
-Type annotations are accepted by the parser but type checking is not performed
-at compile time. Full type inference is planned for v0.7.0.
+{
+  let q1 = "What is the recommended dosage?";
+  emit "A: " + DrNeam.ask(q1);
+}
+```
 
-### Module System
-`module` and `import` declarations are parsed but not yet compiled. Code
-organization should use file-based separation for now.
+### 4. Legal Assistant (`legal_assistant.neam`)
+Demonstrates **Control Flow** based on agent responses.
+```neam
+knowledge LegalCorpus {
+  vector_store: "native",
+  sources: [ { type: "file", path: "./data/contracts/*.txt" } ]
+}
 
-### Test Framework
-`test` and `test suite` declarations are parsed but the built-in test runner
-is not yet implemented. Use the external evaluation framework in `tests/`.
+agent ParalegalBot {
+  provider: "ollama",
+  model: "llama3:8b",
+  system: "Cite section numbers. If unsure, state 'Insufficient Data'.",
+  connected_knowledge: [LegalCorpus]
+}
 
-### String Escapes
-The Neam lexer reads strings as raw text between quotes. Standard escape
-sequences (`\n`, `\"`, `\\`) are not processed. Use string concatenation
-or pipe-separated formats for multi-line content.
+{
+  let answer = ParalegalBot.ask("Termination notice period?");
+  if (answer == "Insufficient Data") {
+     emit "Action: Flag for manual review.";
+  }
+}
+```

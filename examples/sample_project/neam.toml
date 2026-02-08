@@ -96,14 +96,23 @@ tag-format = "v{version}"
 [deploy.kubernetes]
 namespace = "ai-apps"
 replicas = 3
-cpu = "500m"
-memory = "1Gi"
+cpu-request = "500m"
+cpu-limit = "2"
+memory-request = "1Gi"
+memory-limit = "2Gi"
 port = 8080
+ingress-class = "alb"
+# certificate-arn = "arn:aws:acm:us-east-1:123456789:certificate/abc-123"
+hpa-min = 2
+hpa-max = 10
+hpa-cpu-target = 70
 
 [deploy.serverless]
-provider = "aws-lambda"
+provider = "aws"
 memory = 1024
 timeout = 300
+workers = 2
+readiness-path = "/health"
 
 # ============================================
 # Knowledge Base Configuration

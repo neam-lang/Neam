@@ -435,6 +435,8 @@ void print_usage(const char* program_name)
             << "  GET  /api/v1/health      Health check\n"
             << "  GET  /api/v1/agents      List available agents\n"
             << "  POST /api/v1/agent/ask   Query an agent\n"
+            << "  GET  /health             Health check (alias)\n"
+            << "  GET  /ready              Readiness check (alias)\n"
             << "\nAvailable Agents:\n";
 
   for (const auto& [id, config] : kAgents)
@@ -523,6 +525,10 @@ int main(int argc, char** argv)
     server.get("/api/v1/agents", handle_list_agents);
     server.post("/api/v1/agent/ask", handle_agent_ask);
 
+    // Root-level health aliases for K8s probes and Lambda Web Adapter
+    server.get("/health", handle_health);
+    server.get("/ready", handle_health);
+
     std::cout << "Starting Neam API Server...\n";
     std::cout << "  Host: " << host << "\n";
     std::cout << "  Port: " << port << "\n";
@@ -530,6 +536,8 @@ int main(int argc, char** argv)
     std::cout << "    GET  /api/v1/health\n";
     std::cout << "    GET  /api/v1/agents\n";
     std::cout << "    POST /api/v1/agent/ask\n";
+    std::cout << "    GET  /health          (alias)\n";
+    std::cout << "    GET  /ready           (alias)\n";
     std::cout << "\n";
 
     server.run();
