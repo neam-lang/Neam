@@ -81,29 +81,83 @@ else
     tar xzf "$ASSET"
 fi
 
-# Install
-info "Installing to ${INSTALL_DIR}..."
+# Collect binaries (handle both unix and windows names)
+BINS=()
+for b in neamc neam neam-pkg neamc.exe neam.exe neam-pkg.exe; do
+    [ -f "$b" ] && BINS+=("$b")
+done
+[ ${#BINS[@]} -eq 0 ] && fail "No binaries found in archive"
+
+# Install — try INSTALL_DIR first, fall back to ~/.neam/bin
+install_to() {
+    local dir="$1"
+    mkdir -p "$dir"
+    cp -f "${BINS[@]}" "$dir/"
+    chmod +x "$dir"/* 2>/dev/null || true
+    INSTALL_DIR="$dir"
+}
+
+NEEDS_PATH_UPDATE=false
+
 if [ -w "$INSTALL_DIR" ]; then
-    cp -f neamc neam "$INSTALL_DIR/" 2>/dev/null || cp -f neamc.exe neam.exe "$INSTALL_DIR/" 2>/dev/null
+    info "Installing to ${INSTALL_DIR}..."
+    install_to "$INSTALL_DIR"
 else
-    warn "Need elevated permissions for ${INSTALL_DIR}"
-    sudo cp -f neamc neam "$INSTALL_DIR/" 2>/dev/null || sudo cp -f neamc.exe neam.exe "$INSTALL_DIR/" 2>/dev/null
+    # Try sudo only if stdin is a terminal (interactive)
+    if [ -t 0 ] && command -v sudo &>/dev/null; then
+        info "Installing to ${INSTALL_DIR} (requires sudo)..."
+        sudo mkdir -p "$INSTALL_DIR"
+        sudo cp -f "${BINS[@]}" "$INSTALL_DIR/"
+        sudo chmod +x "$INSTALL_DIR"/* 2>/dev/null || true
+    else
+        # Fall back to ~/.neam/bin (no sudo needed)
+        INSTALL_DIR="$HOME/.neam/bin"
+        info "Installing to ${INSTALL_DIR}..."
+        install_to "$INSTALL_DIR"
+        NEEDS_PATH_UPDATE=true
+    fi
 fi
 
-chmod +x "${INSTALL_DIR}/neamc" "${INSTALL_DIR}/neam" 2>/dev/null || true
+# Add to PATH if needed
+if [ "$NEEDS_PATH_UPDATE" = true ]; then
+    SHELL_NAME="$(basename "${SHELL:-/bin/bash}")"
+    case "$SHELL_NAME" in
+        zsh)  RC_FILE="$HOME/.zshrc" ;;
+        bash) RC_FILE="$HOME/.bashrc" ;;
+        fish) RC_FILE="$HOME/.config/fish/config.fish" ;;
+        *)    RC_FILE="$HOME/.profile" ;;
+    esac
+
+    if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
+        if [ "$SHELL_NAME" = "fish" ]; then
+            PATH_LINE="fish_add_path $INSTALL_DIR"
+        else
+            PATH_LINE="export PATH=\"$INSTALL_DIR:\$PATH\""
+        fi
+
+        if [ -f "$RC_FILE" ] && grep -qF "$INSTALL_DIR" "$RC_FILE" 2>/dev/null; then
+            info "PATH already configured in $RC_FILE"
+        else
+            echo "" >> "$RC_FILE"
+            echo "# Neam" >> "$RC_FILE"
+            echo "$PATH_LINE" >> "$RC_FILE"
+            info "Added $INSTALL_DIR to PATH in $RC_FILE"
+        fi
+
+        # Also export for current verification step
+        export PATH="$INSTALL_DIR:$PATH"
+    fi
+fi
 
 # Verify
-if command -v neamc &>/dev/null; then
-    ok "neamc installed at $(which neamc)"
-else
-    warn "neamc installed to ${INSTALL_DIR}/neamc but not in PATH"
-fi
-
-if command -v neam &>/dev/null; then
-    ok "neam installed at $(which neam)"
-else
-    warn "neam installed to ${INSTALL_DIR}/neam but not in PATH"
-fi
+echo ""
+for b in neamc neam neam-pkg; do
+    if command -v "$b" &>/dev/null; then
+        ok "$b installed at $(command -v $b)"
+    elif [ -f "${INSTALL_DIR}/$b" ]; then
+        ok "$b installed to ${INSTALL_DIR}/$b"
+    fi
+done
 
 echo ""
 ok "Neam v${VERSION} installed successfully!"
@@ -111,6 +165,12 @@ echo ""
 echo "  Quick start:"
 echo "    neamc hello.neam -o hello.nbc    # Compile"
 echo "    neam hello.nbc                   # Run"
+echo "    neam-pkg init my-agent           # New project"
 echo ""
+if [ "$NEEDS_PATH_UPDATE" = true ]; then
+    echo "  Run this to use neam now:"
+    echo "    source ${RC_FILE}"
+    echo ""
+fi
 echo "  Documentation: https://github.com/${REPO}"
 echo ""
