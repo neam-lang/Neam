@@ -566,7 +566,7 @@ int cmd_init(const std::vector<std::string>& args)
   main_file << "agent HelloAgent {\n";
   main_file << "  provider: \"openai\"\n";
   main_file << "  model: \"gpt-4o-mini\"\n";
-  main_file << "  system_prompt: \"You are a helpful assistant.\"\n";
+  main_file << "  system: \"You are a helpful assistant.\"\n";
   main_file << "}\n\n";
   main_file << "{\n";
   main_file << "  let response = HelloAgent.ask(\"Hello, world!\");\n";
