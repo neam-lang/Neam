@@ -1,0 +1,142 @@
+//
+// Neam v0.6.7 -- Brand Guidelines Agent
+//
+// A simple agent that mixes a local Neam skill with Claude's bash_tool
+// to generate an Anthropic-branded PowerPoint using python-pptx and
+// the brand guidelines from:
+//   https://github.com/anthropics/skills/blob/main/skills/brand-guidelines/SKILL.md
+//
+// Architecture:
+//
+//   Local skill (Neam VM)         External skill (Claude bash_tool)
+//   ---------------------         --------------------------------
+//   get_brand_content             bash_tool (runs python-pptx)
+//         |                              |
+//         +----------+-------------------+
+//                    v
+//              BrandAgent
+//              (Bedrock Claude 3.5 Sonnet)
+//                    |
+//                    v
+//              Branded .pptx file
+//
+// PREREQUISITES:
+//   pip install python-pptx
+//   AWS credentials for Bedrock
+//
+// RUNNING:
+//   NEAM_LOG_LEVEL=INFO neam examples/v067_brand_agent.neam
+//
+
+
+// =========================================================================
+// EXTERNAL SKILL -- Claude bash tool for running Python scripts
+// =========================================================================
+
+extern skill bash_tool {
+  description: "Execute bash commands. Use this to run Python scripts that generate PowerPoint files with python-pptx. Also use for pip install and shell commands."
+  params: { command: string }
+  binding: claude_builtin {
+    type: "bash_20241022"
+  }
+}
+
+
+// =========================================================================
+// LOCAL SKILL -- Returns structured content + brand config for a presentation
+//
+// This is executed locally in the Neam VM. The agent calls it first,
+// then uses the returned data to build a branded PPTX via bash_tool.
+// =========================================================================
+
+skill get_brand_content {
+  description: "Get branded presentation content. Returns Anthropic brand colors, fonts, and slide content as a structured string. Call this FIRST before generating any presentation."
+  params: {
+    topic: string
+  }
+  impl(topic) {
+    emit "  [NEAM] get_brand_content(topic=" + topic + ")";
+
+    // Anthropic brand palette from SKILL.md
+    let colors = "BRAND_DARK=#141413 BRAND_LIGHT=#faf9f5 BRAND_MID_GRAY=#b0aea5 BRAND_LIGHT_GRAY=#e8e6dc BRAND_ORANGE=#d97757 BRAND_BLUE=#6a9bcc BRAND_GREEN=#788c5d";
+
+    // Typography
+    let fonts = "HEADING_FONT=Poppins HEADING_FALLBACK=Arial BODY_FONT=Lora BODY_FALLBACK=Georgia";
+
+    if (topic == "Anthropic") {
+      return colors + " ||| " + fonts + " ||| TITLE: Building Safe AI ||| SUBTITLE: Anthropic Company Overview ||| SLIDES: Mission ~ Anthropic builds reliable and interpretable AI systems. ~ Our mission is the responsible development of advanced AI for the long-term benefit of humanity. ~ We focus on AI safety research as a core priority. ||| Research ~ Constitutional AI aligns models with human values. ~ We publish safety research openly to advance the field. ~ Interpretability work helps us understand model behavior. ||| Products ~ Claude is our AI assistant built to be helpful and harmless. ~ Available via API and claude.ai for individuals and teams. ~ Enterprise deployments with security and privacy controls. ||| Values ~ Safety is not optional -- it is foundational. ~ We believe transparency builds trust with users and society. ~ Long-term thinking guides our technical and business decisions.";
+    }
+
+    return colors + " ||| " + fonts + " ||| TITLE: " + topic + " ||| SUBTITLE: A Branded Overview ||| SLIDES: Overview ~ Key points about " + topic + " ~ Important context and background ||| Details ~ First major aspect of " + topic + " ~ Second consideration ~ Supporting evidence ||| Next Steps ~ Action items going forward ~ Timeline and milestones";
+  }
+}
+
+
+// =========================================================================
+// GUARDS & BUDGET
+// =========================================================================
+
+guard BrandGuard {
+  description: "Safety guard for brand presentation workflow"
+  on_tool_input(input) {
+    return input;
+  }
+  on_tool_output(output) {
+    return output;
+  }
+}
+
+guardchain BrandChain = [BrandGuard];
+
+budget BrandBudget {
+  api_calls: 30
+  tokens: 300000
+}
+
+
+// =========================================================================
+// AGENT -- Orchestrates local content skill + Claude bash for python-pptx
+//
+// The system prompt embeds the brand guidelines so Claude knows exactly
+// how to apply colors and fonts when generating the Python script.
+// =========================================================================
+
+agent BrandAgent {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a brand presentation generator. You apply Anthropic brand guidelines to create professional PowerPoint files. WORKFLOW: Step 1: Call get_brand_content with the requested topic to get brand colors, fonts, and slide content. Step 2: Use bash_tool to run a Python script that creates a branded .pptx using python-pptx. BRAND RULES from the official Anthropic style guide: COLORS: Dark #141413 (text/dark bg), Light #faf9f5 (light bg), Mid Gray #b0aea5 (secondary), Light Gray #e8e6dc (subtle bg), Orange #d97757 (primary accent), Blue #6a9bcc (secondary accent), Green #788c5d (tertiary accent). TYPOGRAPHY: Headings use Poppins (fallback Arial) at 24pt+, Body uses Lora (fallback Georgia). STYLE: Title slide gets dark background (#141413) with light text (#faf9f5) and orange accent. Content slides get light background (#faf9f5) with dark text. Cycle accent colors (orange, blue, green) for shape decorations. Parse the content from get_brand_content: colors and fonts come before the first |||, slide data uses ~ as bullet separator within each SLIDES section separated by |||. Write the complete Python script in a single bash_tool call using python3 -c. Save output to /tmp/anthropic_brand.pptx."
+  skills: [get_brand_content, bash_tool]
+  guards: [BrandChain]
+  budget: BrandBudget
+}
+
+
+// =========================================================================
+// EXECUTION
+// =========================================================================
+
+{
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|                                                                    |";
+  emit "|   Neam v0.6.7 -- Brand Guidelines Agent                           |";
+  emit "|                                                                    |";
+  emit "|   Local skill: get_brand_content  (Neam VM)                       |";
+  emit "|   Claude skill: bash_tool         (python-pptx)                   |";
+  emit "|                                                                    |";
+  emit "|   Brand: Anthropic official colors + typography                    |";
+  emit "|                                                                    |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
+
+  let result = BrandAgent.ask("Create a branded Anthropic company overview presentation. Save it to /tmp/anthropic_brand.pptx");
+
+  emit "";
+  emit "  Agent response:";
+  emit "  " + result;
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|  Done. Check: /tmp/anthropic_brand.pptx                            |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
+}

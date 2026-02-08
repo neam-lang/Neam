@@ -12,6 +12,11 @@
 #include <iostream>
 #include <string>
 
+// Windows headers define ERROR as a macro; undefine to avoid conflicts.
+#ifdef ERROR
+#undef ERROR
+#endif
+
 namespace neamc::llm
 {
 

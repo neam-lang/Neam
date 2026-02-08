@@ -327,8 +327,10 @@ This translates directly to fewer nodes needed, lower cloud bills, and better re
 | 13 | **API Server** | Built-in HTTP server with CORS, JSON endpoints | Flask/FastAPI + uvicorn + cors middleware | 3 packages |
 | 14 | **Voice Pipeline** | STT (Whisper) + TTS built into agent declaration | openai-whisper (300MB) + openai (TTS) + pydub + ffmpeg | 4 packages + ffmpeg |
 | 15 | **Video Processing** | GPU-accelerated frame extraction, batch processing, feature extraction | OpenCV (50MB) + torch (2GB) + torchvision + PIL | 4 packages |
-| 16 | **Type System** | Hindley-Milner type inference with generics, async types, agent types | mypy (optional, incomplete for agents) | 1 tool |
+| 16 | **Type System** | Hindley-Milner type inference with generics, async types, agent types* | mypy (optional, incomplete for agents) | 1 tool |
 | | **TOTALS** | **16 modules, 0 external deps** | **~45+ packages, ~5GB disk, $60K+/yr tools** | |
+
+*\*Note: The type inference parser is implemented; compile-time type checking is planned for v0.7.0. Runtime type checking is active.*
 
 #### 3.5.2 Dependency Chain Risk Analysis
 

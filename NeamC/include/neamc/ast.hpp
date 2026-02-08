@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -328,6 +329,61 @@ struct SkillDecl
   FunctionDecl impl;
 };
 
+// v0.6.7: External skill binding specification
+struct SkillBindingSpec
+{
+  enum class Type
+  {
+    kMcp,
+    kHttp,
+    kClaudeBuiltin
+  };
+
+  Type type{Type::kHttp};
+
+  // MCP binding fields
+  std::string mcp_server;
+  std::string mcp_tool;
+
+  // HTTP binding fields
+  std::string http_method;
+  std::string http_url;
+  std::string http_body_template;
+  std::vector<std::pair<std::string, std::string>> http_headers;
+  std::string http_response_path;
+  long http_timeout_ms{30000};
+
+  // Claude built-in fields
+  std::string claude_tool_type;
+};
+
+struct ExternSkillDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string description;
+  std::vector<SkillParam> params;
+  SkillBindingSpec binding;
+};
+
+// v0.6.7: MCP server declaration
+struct McpServerDecl
+{
+  std::string name;
+  std::string command;
+  std::string url;
+  std::vector<std::string> args;
+  std::unordered_map<std::string, std::string> env;
+};
+
+// v0.6.7: Adopt statement — bulk import tools from MCP server
+struct AdoptStmt
+{
+  std::string server_name;
+  std::vector<std::string> tool_names;       // Empty = wildcard (all tools)
+  std::optional<std::string> alias_prefix;
+};
+
 struct KnowledgeSource
 {
   std::string type;
@@ -614,7 +670,8 @@ struct Statement
                    KnowledgeDecl, BudgetDecl, GuardDecl, GuardChainDecl, CapabilityDecl,
                    ToolDecl, MemoryDecl, EnvDecl, ConnectorDecl, WorldModelDecl, PlanDecl,
                    SubagentDecl, AgentDecl, ModuleDecl, ImportDecl, ConstDecl, TypeAlias,
-                   DocComment, GrantStmt, CheckpointStmt, RewindStmt>;
+                   DocComment, GrantStmt, CheckpointStmt, RewindStmt,
+                   ExternSkillDecl, McpServerDecl, AdoptStmt>;
   SourceSpan span;
   Variant node;
 };

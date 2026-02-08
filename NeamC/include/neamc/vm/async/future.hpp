@@ -15,6 +15,10 @@
 #include <utility>
 #include <vector>
 
+// NOTE: vm::async will be migrated to runtime:: in v0.7.0.
+// The runtime::Future uses Result<T, E> instead of exception_ptr,
+// and runtime::Executor provides work-stealing.
+// New code should prefer runtime:: where possible.
 namespace neamc::vm::async
 {
 class Executor;
