@@ -453,10 +453,20 @@ public:
     nlohmann::json tools_json = nlohmann::json::array();
     for (const auto& tool : tools)
     {
-      tools_json.push_back(
-          {{"name", tool.name},
-           {"description", tool.description},
-           {"input_schema", tool.input_schema}});
+      if (!tool.type.empty())
+      {
+        // v0.6.7: Claude built-in tool (computer_use, bash, text_editor, etc.)
+        tools_json.push_back(
+            {{"type", tool.type},
+             {"name", tool.name}});
+      }
+      else
+      {
+        tools_json.push_back(
+            {{"name", tool.name},
+             {"description", tool.description},
+             {"input_schema", tool.input_schema}});
+      }
     }
     payload["tools"] = std::move(tools_json);
 

@@ -1,11 +1,25 @@
-# Neam - Agentic AI Programming Language
+# Neam — Agentic AI Programming Language
 
-Neam is a domain-specific language for building AI agent systems with first-class support for LLM providers, RAG (Retrieval-Augmented Generation), and multi-agent orchestration.
+**v0.6.6** | Compiled DSL for building AI agent systems with native LLM tool calling, RAG, multi-agent orchestration, and multi-cloud deployment.
+
+```
+  Neam source (.neam)
+       |
+       v
+  Compiler (neamc)  -->  Bytecode (.neamb)
+       |
+       v
+  VM Runtime (neam)  -->  LLM Providers (OpenAI, Bedrock, Ollama)
+       |                        |
+       v                        v
+  Native Skills  <------  Tool Calls (auto-dispatch)
+```
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Building Neam](#building-neam)
+- [Native Tool Calling (v0.6.6)](#native-tool-calling-v066)
 - [Knowledge Bases (RAG)](#knowledge-bases-rag)
 - [RAG Retrieval Strategies](#rag-retrieval-strategies)
 - [Agentic Patterns](#agentic-patterns)
@@ -26,13 +40,210 @@ cmake --build . --parallel
 # Run a Neam program
 ./neamc program.neam -o program.neamb
 ./neam program.neamb
+
+# Or use the CLI (compile + run in one step)
+./neam-cli program.neam
 ```
 
 ## Building Neam
 
 See [BUILD_README.md](BUILD_README.md) for detailed build instructions for macOS, Linux, and Windows.
 
-## Knowledge bases (RAG)
+---
+
+## Native Tool Calling (v0.6.6)
+
+Neam v0.6.6 introduces **native skill-to-tool integration** — Neam skills declared in your program are automatically converted to LLM-native tool definitions and dispatched via the provider's tool calling protocol (OpenAI function calling, Claude tool_use, or Ollama tools).
+
+### How It Works
+
+```
+  User Query
+       |
+       v
+  Neam VM collects agent.skills --> builds JSON Schema tool definitions
+       |
+       v
+  LLM API call with tools[] array (provider-native format)
+       |
+       v
+  LLM returns tool_use / function_call response
+       |
+       v
+  Neam VM dispatches to skill impl() with converted arguments
+       |
+       v
+  Skill returns result --> sent as tool_result back to LLM
+       |
+       v
+  LLM processes result --> more tool calls OR final text answer
+```
+
+### Defining Skills (Auto-Mapped to LLM Tools)
+
+```neam
+// This skill becomes an LLM tool automatically:
+//   { "name": "lookup_customers",
+//     "description": "Look up customers by city name...",
+//     "input_schema": { "properties": { "city": {"type":"string"} } } }
+
+skill lookup_customers {
+  description: "Look up customers by city name. Returns customer records."
+  params: {
+    city: string
+  }
+  impl(city) {
+    if (city == "Tokyo") {
+      return "Found 2 customers: #101 Tanaka Yuki (47 orders), #205 Sato Hana (23 orders)";
+    }
+    return "No customers found in " + city;
+  }
+}
+
+skill calculate {
+  description: "Perform a math calculation on a list of numbers."
+  params: {
+    operation: string,
+    numbers: string
+  }
+  impl(operation, numbers) {
+    if (operation == "sum") {
+      if (numbers == "47,23") { return "70"; }
+    }
+    return "Computed " + operation + " on " + numbers;
+  }
+}
+```
+
+### Wiring Skills to Agents
+
+```neam
+agent Analyst {
+  provider: "openai"
+  model: "gpt-4o"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a data analyst. Use your tools for all data operations."
+  skills: [lookup_customers, calculate]
+  guards: [SecurityChain]
+  budget: AnalyticsBudget
+}
+
+{
+  // The LLM decides which skills to call:
+  let result = Analyst.ask("How many customers in Tokyo? Sum their orders.");
+  emit result;
+}
+```
+
+### What Happens at Runtime
+
+1. VM reads `agent.skills` and calls `build_skill_schema()` for each skill
+2. JSON Schema tool definitions are sent in the LLM API request
+3. The LLM decides which tools to call (or responds directly if no tool needed)
+4. VM receives tool call responses, maps JSON arguments to Neam Values
+5. Skill `impl()` functions execute with full guard/budget enforcement
+6. Results flow back to the LLM as tool results
+7. Loop continues until the LLM sends a final text response
+
+### Supported Providers
+
+| Provider | Protocol | Config |
+|----------|----------|--------|
+| **OpenAI** | Function Calling (`tool_calls`) | `OPENAI_API_KEY` |
+| **AWS Bedrock** | Claude `tool_use` content blocks | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
+| **Ollama** | OpenAI-compatible tools | Local (no key needed) |
+
+### Guards and Budgets on Tool Calls
+
+Guards and budgets are enforced at **every step** in the tool calling loop:
+
+```neam
+guard InputValidator {
+  description: "Validate all tool inputs"
+  on_tool_input(input) {
+    // Check, modify, or block the input
+    return input;
+  }
+  on_tool_output(output) {
+    return output;
+  }
+}
+
+guardchain SecurityChain = [InputValidator];
+
+budget AnalyticsBudget {
+  api_calls: 30
+  tokens: 200000
+}
+```
+
+### Running the Demo
+
+```bash
+# Set your provider key
+export OPENAI_API_KEY="your-key"
+
+# Run with INFO-level logging (shows [TOOL] markers for each skill call)
+NEAM_LOG_LEVEL=INFO ./neam-cli examples/v066_claude_skill_integration.neam
+
+# Run with DEBUG-level logging (shows full JSON payloads)
+NEAM_LOG_LEVEL=DEBUG NEAM_TRACE=1 ./neam-cli examples/v066_claude_skill_integration.neam
+```
+
+### Demo Output (Actual)
+
+```
++--------------------------------------------------------------------+
+|                                                                    |
+|   Neam v0.6.6 -- Native Skill-to-Tool Integration Demo            |
+|                                                                    |
+|   Skills declared in Neam are auto-converted to LLM tools.        |
+|   The LLM decides which tools to call. Neam executes them.        |
+|                                                                    |
++--------------------------------------------------------------------+
+
+  DEMO 1: Single Tool Call
+  Expect: LLM calls lookup_customers(city=Tokyo)
+  ........................................................
+
+  Q: How many customers are in Tokyo?
+
+    [TOOL] lookup_customers(city=Tokyo)
+
+  A: There are 2 customers in Tokyo.
+
+--------------------------------------------------------------------
+
+  DEMO 2: Multi-Step Tool Chain
+  Expect: lookup_customers -> calculate -> make_report
+  ........................................................
+
+  Q: Look up Tokyo customers, sum their orders, make a report.
+
+    [TOOL] lookup_customers(city=Tokyo)
+    [TOOL] calculate(op=sum, numbers=47,23)
+    [TOOL] make_report(title=Tokyo Summary)
+
+  A: === REPORT: Tokyo Summary === Total orders: 70 === End of Report ===
+
+--------------------------------------------------------------------
+
+  DEMO 8: Full Workflow (4-Step Orchestration)
+  Expect: lookup_customers -> calculate -> make_report -> send_alert
+  ........................................................
+
+    [TOOL] lookup_customers(city=Tokyo)
+    [TOOL] calculate(op=average, numbers=47,23)
+    [TOOL] make_report(title=Tokyo Analysis)
+    [TOOL] send_alert(channel=email)
+
+  A: The workflow is complete. Report generated, email alert sent.
+```
+
+---
+
+## Knowledge Bases (RAG)
 
 Neam supports first-class knowledge bases via the `knowledge` declaration. Knowledge bases ingest
 sources at runtime and expose relevant context to connected agents through `connected_knowledge`.
@@ -158,7 +369,7 @@ Neam supports various multi-agent orchestration patterns:
 | Pattern | Description |
 |---------|-------------|
 | Single Agent | Basic Q&A with one agent |
-| Multi-Agent Collaboration | Researcher → Writer → Editor |
+| Multi-Agent Collaboration | Researcher -> Writer -> Editor |
 | Sequential Pipeline | Data transformation chain |
 | Supervisor/Worker | Task validation pattern |
 | Router/Dispatcher | Query classification and routing |
@@ -168,10 +379,10 @@ Neam supports various multi-agent orchestration patterns:
 
 | Pattern | Description |
 |---------|-------------|
-| DeepSearch | Plan → Research → Synthesize → Reflect |
+| DeepSearch | Plan -> Research -> Synthesize -> Reflect |
 | Chain-of-Thought | Explicit step-by-step reasoning |
-| ReAct | Thought → Action → Observation loop |
-| Self-Reflection | Create → Critique → Refine |
+| ReAct | Thought -> Action -> Observation loop |
+| Self-Reflection | Create -> Critique -> Refine |
 | Planning | Goal decomposition and monitoring |
 | Socratic | Teaching through questions |
 | Red/Blue Team | Security attack + defense analysis |
@@ -206,7 +417,7 @@ agent Editor {
 }
 ```
 
-### Example: Supervisor/Worker
+### Example: Supervisor/Worker with Retries
 
 ```neam
 agent Supervisor {
@@ -226,6 +437,41 @@ agent Worker {
   let result = Worker.ask(task);
   let validation = Supervisor.ask("Evaluate: " + result);
   emit validation;
+}
+```
+
+### Example: Skill-Equipped Agents (v0.6.6)
+
+```neam
+skill search_docs {
+  description: "Search documentation by topic"
+  params: { topic: string }
+  impl(topic) {
+    return "Docs for: " + topic;
+  }
+}
+
+skill write_summary {
+  description: "Write a summary from source material"
+  params: { source: string }
+  impl(source) {
+    return "Summary of: " + source;
+  }
+}
+
+agent ResearchAgent {
+  provider: "openai"
+  model: "gpt-4o"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "Research agent with document search and summarization tools."
+  skills: [search_docs, write_summary]
+}
+
+{
+  // The LLM autonomously decides to search, then summarize
+  let result = ResearchAgent.ask("Find docs about RAG and summarize them.");
+  emit result;
 }
 ```
 
@@ -287,55 +533,6 @@ curl -X POST http://localhost:8080/api/v1/agent/ask \
 | `analyst` | Data analysis and insights | No |
 | `writer` | Creative writing | No |
 | `researcher` | Research with knowledge base | Yes |
-
-### Example: Health Check
-
-```bash
-curl http://localhost:8080/api/v1/health
-```
-
-Response:
-```json
-{"status": "healthy", "version": "1.0.0", "server": "neam-api"}
-```
-
-### Example: List Agents
-
-```bash
-curl http://localhost:8080/api/v1/agents
-```
-
-### Example: Query Agent
-
-```bash
-curl -X POST http://localhost:8080/api/v1/agent/ask \
-  -H "Content-Type: application/json" \
-  -d '{"agent_id": "coder", "query": "Write a Python quicksort"}'
-```
-
-Response:
-```json
-{
-  "agent_id": "coder",
-  "query": "Write a Python quicksort",
-  "response": "def quicksort(arr):\n    if len(arr) <= 1:\n        return arr\n    ..."
-}
-```
-
-### Architecture
-
-```
-┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
-│   Client    │────▶│   neam-api       │────▶│   Neam VM   │
-│  (curl/app) │     │  (C++ HTTP)      │     │  (native)   │
-└─────────────┘     └──────────────────┘     └─────────────┘
-                            │
-                            ▼
-                    ┌──────────────────┐
-                    │  LLM Provider    │
-                    │  (OpenAI/Ollama) │
-                    └──────────────────┘
-```
 
 See `examples/api_server/README.md` for full documentation including Docker deployment and production setup.
 
@@ -453,7 +650,16 @@ See `docs/PACKAGE_ECOSYSTEM.md` for full documentation and `examples/PACKAGING_G
 
 ## Examples
 
-### Example Files
+### v0.6.6 — Skill & Tool Integration
+
+| File | Description |
+|------|-------------|
+| `examples/v066_claude_skill_integration.neam` | **Full demo: 8 scenarios with 5 skills, guards, budgets** |
+| `examples/v066_native_tool_calling.neam` | Comprehensive tool calling across all providers |
+| `examples/v066_tool_calling_bedrock.neam` | AWS Bedrock-specific tool calling demo |
+| `examples/v066_tool_calling_ollama.neam` | Local-only Ollama tool calling (no cloud keys) |
+
+### RAG & Agents
 
 | File | Description |
 |------|-------------|
@@ -476,159 +682,78 @@ See `docs/PACKAGE_ECOSYSTEM.md` for full documentation and `examples/PACKAGING_G
 | `examples/api_server/README.md` | API server documentation |
 | `examples/PACKAGING_GUIDE.md` | Project packaging guide |
 | `docs/PACKAGE_ECOSYSTEM.md` | Package ecosystem design |
-| `docs/REGISTRY_IMPLEMENTATION.md` | Package registry implementation spec |
-| `docs/LANDING_PAGE_SPEC.md` | Neam.dev website specification |
 
 ---
 
-## Simple arithmetic
+## Language Basics
+
+### Expressions
 
 ```neam
 { 1 + 2; }
 ```
 
-Compile and run:
-
-```bash
-neamc math.neam -o math.neamb
-neam math.neamb
-```
-
-## Nested blocks and duplication
-
 ```neam
 {
   3 * (4 + 5);
-  {
-    -1 + 2;
-  }
-}
-```
-
-This demonstrates block statements and unary negation.
-
-## Chained expressions
-
-```neam
-{
   10 / 2 + 7;
   (8 - 3) * 4;
 }
 ```
 
-Multiple expressions in a block are compiled sequentially; each expression result is popped to keep the stack clean.
-
-## Negative numbers
+### Variables and Control Flow
 
 ```neam
 {
-  -42;
-  -(1 + 2 * 3);
-}
-```
+  let x = 10;
+  let y = 20;
 
-Unary negation lowers to `OP_NEGATE` before arithmetic combines the values.
-
-## Agentic AI patterns (conceptual)
-
-The current parser focuses on arithmetic expressions, but the runtime model already includes `AgentRef` values. Below are forward-looking examples to illustrate intended usage once agent declarations and events are wired through the compiler:
-
-```neam
-agent Planner {
-  // Future: plan tasks and emit structured intents
-}
-
-agent Worker {
-  // Future: execute intents and emit receipts
-}
-
-{
-  Planner.plan("summarize report");
-  Worker.execute(Planner.last_plan);
-}
-```
-
-```neam
-{
-  // Conceptual event emission pipeline
-  let decision = Planner.decide("route inquiry");
-  emit decision;
-  emit "hand-off to worker";
-}
-```
-
-These snippets are illustrative; parser and codegen support for agent declarations, method calls, and event emission will arrive in later phases.
-
-### Multi-agent orchestration sketch
-
-```neam
-agent Router { }
-agent Summarizer { }
-agent Reviewer { }
-
-{
-  // Router inspects the request and chooses a path
-  let route = Router.decide("summarize vs. translate");
-  emit route;
-
-  // Summarizer executes then emits a receipt
-  let summary = Summarizer.summarize("input doc");
-  emit summary;
-
-  // Reviewer validates downstream
-  let verdict = Reviewer.review(summary);
-  emit verdict;
-}
-```
-
-### Supervisor with retries
-
-```neam
-agent Supervisor { }
-agent Worker { }
-
-{
-  let attempt = 0;
-  let success = false;
-
-  while (!success && attempt < 3) {
-    attempt = attempt + 1;
-    let result = Worker.execute("task payload");
-    success = Supervisor.validate(result);
-    emit "attempt " + attempt;
-    emit result;
+  if (x > 5) {
+    emit "x is large";
   }
 
-  if (!success) {
-    emit "fallback escalation";
+  let i = 0;
+  while (i < 3) {
+    emit "iteration " + i;
+    i = i + 1;
   }
 }
 ```
 
-### Event-driven tool invocation
+### Agents and Skills
 
 ```neam
-agent Planner { }
-agent Toolbelt { }
+skill greet {
+  description: "Greet a user by name"
+  params: { name: string }
+  impl(name) {
+    return "Hello, " + name + "!";
+  }
+}
+
+agent Assistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a friendly assistant."
+  skills: [greet]
+}
 
 {
-  let plan = Planner.plan("extract key facts");
-  emit plan;
-
-  // Hypothetical tool call sequence
-  let data = Toolbelt.call("search", "topic query");
-  let notes = Toolbelt.call("summarize", data);
-  emit notes;
+  let response = Assistant.ask("Say hello to Alice");
+  emit response;
 }
 ```
 
-## Known Limitations (v0.6.5)
+---
+
+## Known Limitations (v0.6.6)
 
 ### Type System
 The Hindley-Milner type inference system is **parsed but not yet enforced**.
 Type annotations are accepted by the parser but type checking is not performed
-at compile time. This means type errors will manifest at runtime rather than
-compile time. Full type inference is planned for v0.7.0.
+at compile time. Full type inference is planned for v0.7.0.
 
 ### Module System
 `module` and `import` declarations are parsed but not yet compiled. Code
@@ -637,3 +762,8 @@ organization should use file-based separation for now.
 ### Test Framework
 `test` and `test suite` declarations are parsed but the built-in test runner
 is not yet implemented. Use the external evaluation framework in `tests/`.
+
+### String Escapes
+The Neam lexer reads strings as raw text between quotes. Standard escape
+sequences (`\n`, `\"`, `\\`) are not processed. Use string concatenation
+or pipe-separated formats for multi-line content.

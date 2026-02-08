@@ -663,7 +663,22 @@ void Parser::tokenize()
       {"on_tool_output", TokenType::OnToolOutput},
       {"on_tool_call", TokenType::OnToolCall},
       {"on_result", TokenType::OnResult},
-      {"to", TokenType::To}};
+      {"to", TokenType::To},
+      // v0.6.7: External skill adoption keywords
+      {"extern", TokenType::Extern},
+      {"mcp_server", TokenType::McpServer},
+      {"adopt", TokenType::Adopt},
+      {"binding", TokenType::Binding},
+      {"mcp", TokenType::Mcp},
+      {"http", TokenType::Http},
+      {"claude_builtin", TokenType::ClaudeBuiltin},
+      {"method", TokenType::Method},
+      {"url", TokenType::Url},
+      {"headers", TokenType::Headers},
+      {"response_path", TokenType::ResponsePath},
+      {"server", TokenType::Server},
+      {"command", TokenType::Command},
+      {"args", TokenType::Args}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -942,6 +957,25 @@ StmtPtr Parser::parse_declaration()
   if (match(TokenType::Suite))
   {
     return parse_test_suite_statement();
+  }
+  // v0.6.7: extern skill <name> { ... }
+  if (match(TokenType::Extern))
+  {
+    if (!match(TokenType::Skill))
+    {
+      error("Expected 'skill' after 'extern'");
+    }
+    return parse_extern_skill(has_visibility ? visibility : Visibility{});
+  }
+  // v0.6.7: mcp_server <name> { ... }
+  if (match(TokenType::McpServer))
+  {
+    return parse_mcp_server();
+  }
+  // v0.6.7: adopt server.* [as prefix]
+  if (match(TokenType::Adopt))
+  {
+    return parse_adopt_statement();
   }
   if (match(TokenType::Skill))
   {
@@ -1340,6 +1374,468 @@ StmtPtr Parser::parse_skill(const Visibility& visibility)
     error("Skill missing impl");
   }
   return make_skill_decl(visibility, name, *description, std::move(params), std::move(*impl), span);
+}
+
+// v0.6.7: Parse extern skill declaration
+StmtPtr Parser::parse_extern_skill(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected extern skill name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after extern skill name");
+  }
+
+  std::optional<std::string> description;
+  std::vector<SkillParam> params;
+  std::optional<SkillBindingSpec> binding;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Description))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after description");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string literal for description");
+      }
+      description = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Params))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after params");
+      }
+      params = parse_skill_params();
+      continue;
+    }
+    if (match(TokenType::Binding))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after binding");
+      }
+      binding = parse_skill_binding();
+      continue;
+    }
+    error("Unexpected token in extern skill block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated extern skill block");
+  }
+  if (!description.has_value())
+  {
+    error("Extern skill missing description");
+  }
+  if (!binding.has_value())
+  {
+    error("Extern skill missing binding");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ExternSkillDecl{
+      visibility, name, *description, std::move(params), std::move(*binding)};
+  return stmt;
+}
+
+// v0.6.7: Parse skill binding specification (mcp, http, claude_builtin)
+SkillBindingSpec Parser::parse_skill_binding()
+{
+  SkillBindingSpec spec;
+
+  if (match(TokenType::Mcp))
+  {
+    spec.type = SkillBindingSpec::Type::kMcp;
+    if (!match(TokenType::LeftBrace))
+    {
+      error("Expected '{' after mcp");
+    }
+    while (!check(TokenType::RightBrace) && !is_at_end())
+    {
+      if (match(TokenType::Server))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after server");
+        }
+        if (!match(TokenType::String))
+        {
+          error("Expected string for server name");
+        }
+        spec.mcp_server = previous().lexeme;
+        continue;
+      }
+      if (match(TokenType::Tool))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after tool");
+        }
+        if (!match(TokenType::String))
+        {
+          error("Expected string for tool name");
+        }
+        spec.mcp_tool = previous().lexeme;
+        continue;
+      }
+      error("Unexpected token in mcp binding");
+    }
+    if (!match(TokenType::RightBrace))
+    {
+      error("Unterminated mcp binding block");
+    }
+  }
+  else if (match(TokenType::Http))
+  {
+    spec.type = SkillBindingSpec::Type::kHttp;
+    if (!match(TokenType::LeftBrace))
+    {
+      error("Expected '{' after http");
+    }
+    while (!check(TokenType::RightBrace) && !is_at_end())
+    {
+      if (match(TokenType::Method))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after method");
+        }
+        if (!match(TokenType::String))
+        {
+          error("Expected string for method");
+        }
+        spec.http_method = previous().lexeme;
+        continue;
+      }
+      if (match(TokenType::Url))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after url");
+        }
+        if (!match(TokenType::String))
+        {
+          error("Expected string for url");
+        }
+        spec.http_url = previous().lexeme;
+        continue;
+      }
+      if (match(TokenType::Headers))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after headers");
+        }
+        if (!match(TokenType::LeftBracket))
+        {
+          error("Expected '[' for headers list");
+        }
+        while (!check(TokenType::RightBracket) && !is_at_end())
+        {
+          if (!match(TokenType::String))
+          {
+            error("Expected string in headers list");
+          }
+          const auto header = previous().lexeme;
+          auto colon_pos = header.find(':');
+          if (colon_pos != std::string::npos)
+          {
+            auto key = header.substr(0, colon_pos);
+            auto value = header.substr(colon_pos + 1);
+            // Trim leading whitespace from value
+            auto start = value.find_first_not_of(" \t");
+            if (start != std::string::npos)
+            {
+              value = value.substr(start);
+            }
+            spec.http_headers.emplace_back(std::move(key), std::move(value));
+          }
+          if (check(TokenType::Comma))
+          {
+            advance();
+          }
+        }
+        if (!match(TokenType::RightBracket))
+        {
+          error("Expected ']' after headers list");
+        }
+        continue;
+      }
+      if (match(TokenType::ResponsePath))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after response_path");
+        }
+        if (!match(TokenType::String))
+        {
+          error("Expected string for response_path");
+        }
+        spec.http_response_path = previous().lexeme;
+        continue;
+      }
+      if (match(TokenType::Timeout))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after timeout");
+        }
+        if (!match(TokenType::Number))
+        {
+          error("Expected number for timeout");
+        }
+        spec.http_timeout_ms = static_cast<long>(std::stod(previous().lexeme));
+        continue;
+      }
+      error("Unexpected token in http binding");
+    }
+    if (!match(TokenType::RightBrace))
+    {
+      error("Unterminated http binding block");
+    }
+    // Default method to GET
+    if (spec.http_method.empty())
+    {
+      spec.http_method = "GET";
+    }
+  }
+  else if (match(TokenType::ClaudeBuiltin))
+  {
+    spec.type = SkillBindingSpec::Type::kClaudeBuiltin;
+    if (!match(TokenType::LeftBrace))
+    {
+      error("Expected '{' after claude_builtin");
+    }
+    while (!check(TokenType::RightBrace) && !is_at_end())
+    {
+      if (match(TokenType::Type))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after type");
+        }
+        if (!match(TokenType::String))
+        {
+          error("Expected string for claude_builtin type");
+        }
+        spec.claude_tool_type = previous().lexeme;
+        continue;
+      }
+      error("Unexpected token in claude_builtin binding");
+    }
+    if (!match(TokenType::RightBrace))
+    {
+      error("Unterminated claude_builtin binding block");
+    }
+  }
+  else
+  {
+    error("Expected binding type: mcp, http, or claude_builtin");
+  }
+
+  return spec;
+}
+
+// v0.6.7: Parse mcp_server declaration
+StmtPtr Parser::parse_mcp_server()
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected mcp_server name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after mcp_server name");
+  }
+
+  McpServerDecl decl;
+  decl.name = name;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Command))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after command");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string for command");
+      }
+      decl.command = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Url))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after url");
+      }
+      if (!match(TokenType::String))
+      {
+        error("Expected string for url");
+      }
+      decl.url = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Args))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after args");
+      }
+      if (!match(TokenType::LeftBracket))
+      {
+        error("Expected '[' for args list");
+      }
+      while (!check(TokenType::RightBracket) && !is_at_end())
+      {
+        if (!match(TokenType::String))
+        {
+          error("Expected string in args list");
+        }
+        decl.args.push_back(previous().lexeme);
+        if (check(TokenType::Comma))
+        {
+          advance();
+        }
+      }
+      if (!match(TokenType::RightBracket))
+      {
+        error("Expected ']' after args list");
+      }
+      continue;
+    }
+    if (match(TokenType::Env))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after env");
+      }
+      if (!match(TokenType::LeftBrace))
+      {
+        error("Expected '{' for env block");
+      }
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        if (!match(TokenType::Identifier) && !match(TokenType::String))
+        {
+          error("Expected env key");
+        }
+        const auto key = previous().lexeme;
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after env key");
+        }
+        if (!match(TokenType::String))
+        {
+          error("Expected string for env value");
+        }
+        decl.env[key] = previous().lexeme;
+        if (check(TokenType::Comma))
+        {
+          advance();
+        }
+      }
+      if (!match(TokenType::RightBrace))
+      {
+        error("Expected '}' after env block");
+      }
+      continue;
+    }
+    error("Unexpected token in mcp_server block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated mcp_server block");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+// v0.6.7: Parse adopt statement
+StmtPtr Parser::parse_adopt_statement()
+{
+  SourceSpan span = span_from_token(previous());
+
+  // Parse server_name.* or server_name.{tool1, tool2}
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected server name after 'adopt'");
+  }
+  const auto server_name = previous().lexeme;
+
+  if (!match(TokenType::Dot))
+  {
+    error("Expected '.' after server name in adopt");
+  }
+
+  AdoptStmt decl;
+  decl.server_name = server_name;
+
+  if (match(TokenType::Star))
+  {
+    // adopt server.* — wildcard, import all tools
+    // tool_names stays empty to indicate wildcard
+  }
+  else if (match(TokenType::LeftBrace))
+  {
+    // adopt server.{tool1, tool2}
+    while (!check(TokenType::RightBrace) && !is_at_end())
+    {
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected tool name in adopt list");
+      }
+      decl.tool_names.push_back(previous().lexeme);
+      if (check(TokenType::Comma))
+      {
+        advance();
+      }
+    }
+    if (!match(TokenType::RightBrace))
+    {
+      error("Expected '}' after adopt tool list");
+    }
+  }
+  else
+  {
+    error("Expected '*' or '{tool1, tool2}' after 'server.'");
+  }
+
+  // Optional: as prefix
+  if (match(TokenType::As))
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected alias prefix after 'as'");
+    }
+    decl.alias_prefix = previous().lexeme;
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = std::move(decl);
+  return stmt;
 }
 
 StmtPtr Parser::parse_agent(const Visibility& visibility)
@@ -2989,7 +3485,15 @@ StmtPtr Parser::parse_knowledge(const Visibility& visibility)
 
 SkillParam Parser::parse_skill_param()
 {
-  if (!match(TokenType::Identifier))
+  // Accept identifiers and contextual keywords as param names (v0.6.7 fix:
+  // keywords like "command", "url", "server" etc. are valid param names)
+  if (!match(TokenType::Identifier) && !match(TokenType::Command) &&
+      !match(TokenType::Url) && !match(TokenType::Server) &&
+      !match(TokenType::Method) && !match(TokenType::Headers) &&
+      !match(TokenType::Args) && !match(TokenType::Type) &&
+      !match(TokenType::Model) && !match(TokenType::System) &&
+      !match(TokenType::Timeout) && !match(TokenType::Description) &&
+      !match(TokenType::Params))
   {
     error("Expected param name");
   }

@@ -366,7 +366,9 @@ bool types_equal(const Type& a, const Type& b)
         }
         else if constexpr (std::is_same_v<LT, std::shared_ptr<ConstrainedType>>)
         {
-          return left->type_var->id == right->type_var->id && left->trait_bounds == right->trait_bounds;
+          const TypeVariable* lv = left->type_var.get();
+          const TypeVariable* rv = right->type_var.get();
+          return lv->id == rv->id && left->trait_bounds == right->trait_bounds;
         }
         else
         {

@@ -68,6 +68,7 @@ void free_object(Obj* object)
     case ObjType::OBJ_SKILL:
     {
       auto* skill = reinterpret_cast<ObjSkill*>(object);
+      delete skill->external;  // No-op when nullptr (local skills)
       skill->~ObjSkill();
       std::free(skill);
       break;

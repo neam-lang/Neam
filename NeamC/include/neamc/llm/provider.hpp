@@ -40,6 +40,7 @@ struct ToolDefinition
   std::string name;
   std::string description;
   nlohmann::json input_schema;  // JSON Schema from build_skill_schema()
+  std::string type;             // v0.6.7: Non-empty for Claude built-in tools (e.g., "bash_20241022")
 };
 
 struct ToolCall

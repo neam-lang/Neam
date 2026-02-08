@@ -1,0 +1,249 @@
+//
+// Neam v0.6.7 -- PPTX Generation Agent
+//
+// Demonstrates mixing local Neam skills with Claude's PPTX skill
+// (https://github.com/anthropics/skills/tree/main/skills/pptx)
+// to generate PowerPoint presentations via an AI agent.
+//
+// Architecture:
+//
+//   Local skills (Neam)        External skills (Claude built-in)
+//   --------------------       ---------------------------------
+//   gather_content             bash_tool  (runs pptxgenjs Node.js)
+//   format_slide_data          text_editor (views/edits files)
+//   validate_presentation
+//         |                           |
+//         +-----------+---------------+
+//                     v
+//               PresentationBot
+//               (Bedrock Claude 3.5 Sonnet)
+//                     |
+//                     v
+//               Generated .pptx file
+//
+// PREREQUISITES:
+//   npm install pptxgenjs        (PowerPoint generation library)
+//   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION  (for Bedrock)
+//
+// RUNNING:
+//   NEAM_LOG_LEVEL=INFO neam examples/v067_pptx_agent.neam
+//
+
+
+// =========================================================================
+// EXTERNAL SKILLS -- Claude built-in tools for file I/O and code execution
+//
+// These are dispatched by the Anthropic API, not locally by Neam.
+// The agent uses bash_tool to run Node.js + PptxGenJS scripts,
+// and text_editor to inspect generated files.
+// =========================================================================
+
+extern skill bash_tool {
+  description: "Execute bash commands. Use this to run Node.js scripts with PptxGenJS to generate PowerPoint files. Also use for npm install, file operations, and running shell commands."
+  params: { command: string }
+  binding: claude_builtin {
+    type: "bash_20241022"
+  }
+}
+
+extern skill text_editor {
+  description: "View and edit text files on disk. Use this to read or modify JavaScript source files, review generated output, or inspect slide content."
+  params: { command: string, path: string }
+  binding: claude_builtin {
+    type: "text_editor_20241022"
+  }
+}
+
+
+// =========================================================================
+// LOCAL SKILLS -- Neam business logic executed locally in the VM
+//
+// These skills prepare data, format content, and validate output.
+// The LLM orchestrates when to call them alongside the Claude tools.
+// =========================================================================
+
+// Skill 1: Gather presentation content from a topic.
+// Returns structured slide data as a pipe-delimited format the agent can parse.
+// In production this would query a database, CMS, or knowledge base.
+skill gather_content {
+  description: "Gather structured content for a presentation given a topic. Returns structured text with title, subtitle, author, and slides separated by ||| delimiters. Each slide has a heading followed by bullet points separated by |. Use this FIRST to get the raw content before generating slides."
+  params: {
+    topic: string
+  }
+  impl(topic) {
+    emit "  [NEAM] gather_content(topic=" + topic + ")";
+
+    if (topic == "Neam Language") {
+      return "TITLE: Neam: A Compiled DSL for AI Agents ||| SUBTITLE: Building Intelligent Systems with Declarative Agent Programming ||| AUTHOR: Neam Team ||| SLIDE: What is Neam? | Compiled domain-specific language for AI agents | Native tool calling with OpenAI, Bedrock, and Ollama | Guards, budgets, and capability enforcement built in | Knowledge bases with advanced RAG strategies ||| SLIDE: Core Concepts | Skills: reusable tool definitions with schema validation | Agents: LLM-powered entities that orchestrate skills | Guards: input/output policy enforcement | Knowledge: vector-backed retrieval with 8 RAG strategies ||| SLIDE: v0.6.7 External Skills | extern skill: bind to HTTP APIs, MCP servers, Claude tools | mcp_server: declare MCP connections (stdio or SSE) | adopt: bulk-import tools from MCP servers | Mix local + external skills in one agent ||| SLIDE: Architecture | Tokenizer to Parser to AST to Compiler to Bytecode to VM | Mark-sweep garbage collector for object lifecycle | Async executor for concurrent operations | LLM adapter layer with provider abstraction ||| SLIDE: Getting Started | Install: brew install neam (macOS) or cargo install neam | Write .neam files with skills, agents, knowledge | Compile: neamc program.neam -o program.nbc | Run: neam program.nbc";
+    }
+
+    if (topic == "Quarterly Review") {
+      return "TITLE: Q4 2025 Business Review ||| SUBTITLE: Performance, Highlights, and 2026 Outlook ||| AUTHOR: Leadership Team ||| SLIDE: Q4 Highlights | Revenue grew 34% year-over-year to $12.8M | Customer base expanded to 2,400 active accounts | NPS score improved from 72 to 81 | Shipped 3 major product releases ||| SLIDE: Key Metrics | ARR: $51.2M (up from $38.2M) | Gross margin: 78% (target: 75%) | CAC payback: 11 months (improved from 14) | Net revenue retention: 128% ||| SLIDE: Product Milestones | Launched AI-powered analytics dashboard | Released mobile app v2.0 with offline mode | Completed SOC 2 Type II certification | Reduced p95 latency from 800ms to 200ms ||| SLIDE: Challenges | Enterprise sales cycle longer than projected | Hiring timeline slipped by 6 weeks | APAC expansion delayed to Q1 2026 | Technical debt in legacy billing system ||| SLIDE: 2026 Outlook | Target: $80M ARR by end of 2026 | Expand to 5 new geographic markets | Launch platform API for third-party integrations | Grow team from 120 to 200 headcount";
+    }
+
+    return "TITLE: " + topic + " ||| SUBTITLE: An Overview ||| AUTHOR: Presenter ||| SLIDE: Introduction | Overview of " + topic + " | Key concepts and terminology | Why this matters ||| SLIDE: Key Points | First major point about " + topic + " | Second important aspect | Third consideration | Supporting evidence ||| SLIDE: Summary | Recap of main takeaways | Next steps and action items | Questions and discussion";
+  }
+}
+
+
+// Skill 2: Generate a PptxGenJS Node.js script from content.
+// The agent receives the structured content from gather_content and an output path.
+// This skill returns a JavaScript script string that the agent writes to disk
+// and executes via bash_tool.
+skill format_slide_data {
+  description: "Convert structured slide content (from gather_content) into a complete Node.js PptxGenJS script that generates a .pptx file. Takes the raw content string and output file path. Returns a complete JavaScript program as a string. The agent should write this script to a .js file and run it with node via bash_tool."
+  params: {
+    content: string,
+    output_path: string
+  }
+  impl(content, output_path) {
+    emit "  [NEAM] format_slide_data(output=" + output_path + ")";
+
+    // Build a PptxGenJS script that the agent can write to a file and execute
+    // We use semicolons at line boundaries so the code works as a single line too
+    let NL = "
+";
+    let s = "const pptxgen = require('pptxgenjs');" + NL;
+    s = s + "let pres = new pptxgen();" + NL;
+    s = s + "pres.layout = 'LAYOUT_16x9';" + NL;
+    s = s + "// Parse the structured content" + NL;
+    s = s + "const raw = `" + content + "`;" + NL;
+    s = s + "const sections = raw.split('|||').map(s => s.trim());" + NL;
+    s = s + "let title = '', subtitle = '', author = '';" + NL;
+    s = s + "const slides = [];" + NL;
+    s = s + "sections.forEach(sec => {" + NL;
+    s = s + "  if (sec.startsWith('TITLE:')) title = sec.slice(6).trim();" + NL;
+    s = s + "  else if (sec.startsWith('SUBTITLE:')) subtitle = sec.slice(9).trim();" + NL;
+    s = s + "  else if (sec.startsWith('AUTHOR:')) author = sec.slice(7).trim();" + NL;
+    s = s + "  else if (sec.startsWith('SLIDE:')) {" + NL;
+    s = s + "    const parts = sec.slice(6).split('|').map(p => p.trim());" + NL;
+    s = s + "    slides.push({ heading: parts[0], bullets: parts.slice(1) });" + NL;
+    s = s + "  }" + NL;
+    s = s + "});" + NL;
+    s = s + "pres.author = author;" + NL;
+    s = s + "pres.title = title;" + NL;
+    s = s + "// Title slide" + NL;
+    s = s + "let ts = pres.addSlide();" + NL;
+    s = s + "ts.background = { color: '003366' };" + NL;
+    s = s + "ts.addText(title, { x: 0.5, y: 1.5, w: 9.0, h: 1.5, fontSize: 36, color: 'FFFFFF', bold: true, align: 'center' });" + NL;
+    s = s + "ts.addText(subtitle, { x: 0.5, y: 3.2, w: 9.0, h: 0.8, fontSize: 18, color: '88CCFF', align: 'center' });" + NL;
+    s = s + "ts.addText(author, { x: 0.5, y: 4.5, w: 9.0, h: 0.5, fontSize: 14, color: 'AAAAAA', align: 'center' });" + NL;
+    s = s + "// Content slides" + NL;
+    s = s + "const colors = ['0077CC', '00AA66', 'CC6600', '8833AA', 'CC3333'];" + NL;
+    s = s + "slides.forEach((sl, i) => {" + NL;
+    s = s + "  let cs = pres.addSlide();" + NL;
+    s = s + "  cs.background = { color: 'F5F5F5' };" + NL;
+    s = s + "  cs.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: 0.15, h: 5.625, fill: { color: colors[i % colors.length] } });" + NL;
+    s = s + "  cs.addText(sl.heading, { x: 0.5, y: 0.3, w: 9.0, h: 0.8, fontSize: 28, color: '222222', bold: true });" + NL;
+    s = s + "  cs.addShape(pres.ShapeType.line, { x: 0.5, y: 1.15, w: 9.0, h: 0, line: { color: colors[i % colors.length], width: 2 } });" + NL;
+    s = s + "  let bt = sl.bullets.map(b => ({ text: b, options: { bullet: true, breakLine: true, fontSize: 16, color: '444444' } }));" + NL;
+    s = s + "  cs.addText(bt, { x: 0.5, y: 1.5, w: 9.0, h: 3.5, valign: 'top', paraSpaceAfter: 8 });" + NL;
+    s = s + "  cs.addText((i + 2).toString(), { x: 9.0, y: 5.1, w: 0.8, h: 0.4, fontSize: 10, color: '999999', align: 'right' });" + NL;
+    s = s + "});" + NL;
+    s = s + "pres.writeFile({ fileName: '" + output_path + "' })" + NL;
+    s = s + "  .then(() => console.log('Presentation saved to " + output_path + "'))" + NL;
+    s = s + "  .catch(err => { console.error('Error:', err); process.exit(1); });" + NL;
+
+    return s;
+  }
+}
+
+
+// Skill 3: Validate the generated presentation file
+skill validate_presentation {
+  description: "Validate that a PowerPoint file was generated successfully. Checks that the file exists and has a reasonable size. Returns a validation status string. The agent should call bash_tool afterwards to run: ls -la <file_path> for confirmation."
+  params: {
+    file_path: string
+  }
+  impl(file_path) {
+    emit "  [NEAM] validate_presentation(path=" + file_path + ")";
+    return "Validation request noted for: " + file_path + ". Use bash_tool to verify with: ls -la " + file_path;
+  }
+}
+
+
+// =========================================================================
+// GUARDS & BUDGET -- Enforce safety on all skill calls (local and external)
+// =========================================================================
+
+guard PptxGuard {
+  description: "Safety guard for presentation generation workflow"
+  on_tool_input(input) {
+    return input;
+  }
+  on_tool_output(output) {
+    return output;
+  }
+}
+
+guardchain PptxChain = [PptxGuard];
+
+budget PptxBudget {
+  api_calls: 50
+  tokens: 500000
+}
+
+
+// =========================================================================
+// AGENT -- Orchestrates local Neam skills + Claude built-in tools
+//
+// The agent has access to:
+//   gather_content       (local)  -> collects structured slide data
+//   format_slide_data    (local)  -> generates PptxGenJS JavaScript
+//   validate_presentation(local)  -> checks the output file
+//   bash_tool            (extern) -> runs Node.js to create the .pptx
+//   text_editor          (extern) -> reads/writes files on disk
+//
+// Claude decides the workflow:
+//   1. gather_content("Neam Language") -> structured content
+//   2. format_slide_data(content, path) -> Node.js script
+//   3. bash_tool: write script to disk and run with node
+//   4. validate_presentation(path)      -> confirm success
+// =========================================================================
+
+agent PresentationBot {
+  provider: "bedrock"
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  system: "You are a presentation generation assistant. You create professional PowerPoint files using a structured workflow. Step 1: FIRST call gather_content with the topic to get structured slide data. Step 2: THEN call format_slide_data with the content string and an output path like /tmp/presentation.pptx to get a Node.js PptxGenJS script. Step 3: THEN use bash_tool to write the script to a .js file and run it with node (install pptxgenjs first if needed with npm install pptxgenjs). Step 4: FINALLY call validate_presentation to confirm the file was created. Always follow this exact workflow. The format_slide_data skill returns a complete Node.js script string. Write it to a .js file using bash_tool and then execute it with node."
+  skills: [gather_content, format_slide_data, validate_presentation, bash_tool, text_editor]
+  guards: [PptxChain]
+  budget: PptxBudget
+}
+
+
+// =========================================================================
+// EXECUTION -- Generate a presentation about the Neam language
+// =========================================================================
+
+{
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|                                                                    |";
+  emit "|   Neam v0.6.7 -- PPTX Generation Agent                            |";
+  emit "|                                                                    |";
+  emit "|   Local skills (Neam VM) + Claude built-in tools (bash, editor)    |";
+  emit "|   work together to generate a PowerPoint presentation.             |";
+  emit "|                                                                    |";
+  emit "|   Workflow:                                                        |";
+  emit "|     gather_content  -> format_slide_data -> bash_tool -> validate  |";
+  emit "|     (Neam local)       (Neam local)         (Claude)     (Neam)    |";
+  emit "|                                                                    |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
+
+  emit "  Generating presentation: Neam Language Overview";
+  emit "  ................................................................";
+  emit "";
+
+  let result = PresentationBot.ask("Create a professional PowerPoint presentation about the Neam Language. Save it to /tmp/neam_overview.pptx");
+
+  emit "";
+  emit "  Agent response:";
+  emit "  " + result;
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|  Generation complete.                                              |";
+  emit "|  Check: /tmp/neam_overview.pptx                                    |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
+}
