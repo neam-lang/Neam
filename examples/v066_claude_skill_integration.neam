@@ -1,473 +1,370 @@
 //
-// Neam v0.6.6 — Claude Skill Integration Demo
+// Neam v0.6.6 -- Native Skill-to-Tool Integration Demo
 //
-// This program demonstrates the bidirectional integration between
-// Neam's native skill system and Claude's tool use protocol:
+// Demonstrates Neam's bidirectional integration with LLM tool calling:
 //
-//   Neam skill  ──────►  Claude tool (automatic JSON Schema mapping)
-//   Claude tool_use  ──►  Neam skill execution (automatic dispatch)
+//   Neam skill {}    -->  LLM tool (auto JSON Schema mapping)
+//   LLM tool_use     -->  Neam skill execution (auto dispatch)
 //
-// HOW IT WORKS:
-//
-//   1. Neam skills (declared with `skill { }`) are compiled into objects
-//      with name, description, params (JSON Schema), and an impl function.
-//
-//   2. When an agent has `skills: [...]`, the VM automatically:
-//      a) Calls build_skill_schema() to convert param types → JSON Schema
-//      b) Sends skills as Claude tools[] in the Bedrock Messages API request
-//      c) Claude decides which tool to call via its native protocol
-//      d) VM receives tool_use blocks, maps arguments back to Neam Values
-//      e) Executes the skill impl function with those arguments
-//      f) Returns tool_result blocks to Claude for the next turn
-//      g) Loops until Claude responds with end_turn (no more tool calls)
-//
-//   3. Guard chains and budgets are enforced at each tool call step.
+// SUPPORTED PROVIDERS: OpenAI, AWS Bedrock, Ollama
 //
 // RUNNING:
-//
-//   # With trace logging to see the full tool call flow:
-//   NEAM_LOG_LEVEL=INFO neam examples/v066_claude_skill_integration.neam
-//
-//   # With debug-level logging (shows JSON payloads):
-//   NEAM_LOG_LEVEL=DEBUG NEAM_TRACE=1 neam examples/v066_claude_skill_integration.neam
+//   NEAM_LOG_LEVEL=INFO  neam examples/v066_claude_skill_integration.neam
+//   NEAM_LOG_LEVEL=DEBUG neam examples/v066_claude_skill_integration.neam
 //
 // REQUIRED:
-//   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-//   AWS_REGION (or defaults to us-east-1)
+//   OPENAI_API_KEY (for OpenAI provider)
+//   -- or --
+//   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION (for Bedrock)
 //
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PART 1: Skills — Each becomes a Claude tool automatically
+// =========================================================================
+// SKILLS -- Each becomes an LLM tool automatically via build_skill_schema()
 //
-// Neam skill declaration       →  Claude tool JSON
-// ─────────────────────────────────────────────────────────────────────────────
-//
-//   skill foo {                     {
-//     description: "..."              "name": "foo",
-//     params: {                       "description": "...",
-//       x: string,                    "input_schema": {
-//       y: number                       "type": "object",
-//     }                                 "properties": {
-//     impl(x, y) { ... }                  "x": {"type": "string"},
-//   }                                     "y": {"type": "number"}
-//                                       },
-//                                       "required": ["x", "y"],
-//                                       "additionalProperties": false
-//                                     }
-//                                   }
-// ─────────────────────────────────────────────────────────────────────────────
+//   skill name {              -->  { "name": "...",
+//     description: "..."            "description": "...",
+//     params: { x: string }         "input_schema": { "properties": { "x": {"type":"string"} } }
+//     impl(x) { ... }            }
+//   }
+// =========================================================================
 
 
-// --- Skill 1: Database query simulation ---
-// Claude will use this when it needs to look up structured data
-
-skill query_database {
-  description: "Query a customer database. Accepts a SQL-like filter expression and returns matching records as JSON. Supports filters on: customer_id, name, city, total_orders."
+// Skill 1: Customer database lookup
+skill lookup_customers {
+  description: "Look up customers by city name. Returns customer records including ID, name, city, and order count."
   params: {
-    filter: string,
-    limit: number
+    city: string
   }
-  impl(filter, limit) {
-    emit "[SKILL EXECUTED] query_database(filter=" + filter + ", limit=" + limit + ")";
+  impl(city) {
+    emit "    [TOOL] lookup_customers(city=" + city + ")";
 
-    if (filter == "city = 'Tokyo'") {
-      return "Results: 2 customers | #101 Tanaka Yuki, Tokyo, 47 orders | #205 Sato Hana, Tokyo, 23 orders";
+    if (city == "Tokyo") {
+      return "Found 2 customers: #101 Tanaka Yuki (47 orders), #205 Sato Hana (23 orders)";
     }
-    if (filter == "city = 'London'") {
-      return "Results: 2 customers | #302 James Smith, London, 31 orders | #415 Emma Wilson, London, 58 orders";
+    if (city == "London") {
+      return "Found 2 customers: #302 James Smith (31 orders), #415 Emma Wilson (58 orders)";
     }
-    if (filter == "total_orders > 40") {
-      return "Results: 3 customers | #101 Tanaka Yuki, Tokyo, 47 orders | #415 Emma Wilson, London, 58 orders | #512 Maria Garcia, Madrid, 62 orders";
+    if (city == "Madrid") {
+      return "Found 1 customer: #512 Maria Garcia (62 orders)";
     }
-    if (filter == "customer_id = 101") {
-      return "Results: 1 customer | #101 Tanaka Yuki, Tokyo, 47 orders, email: yuki@example.jp, joined: 2023-03-15";
-    }
-    return "No results found";
+    return "No customers found in " + city;
   }
 }
 
 
-// --- Skill 2: Analytics computation ---
-// Claude will use this to perform data analysis
-
-skill compute_analytics {
-  description: "Compute analytics on a dataset. Supports operations: sum, average, count, max, min. Takes the operation name and a comma-separated list of numbers."
+// Skill 2: Math computation
+skill calculate {
+  description: "Perform a math calculation. Supports operations: sum, average, max, min, count. Takes a comma-separated list of numbers."
   params: {
     operation: string,
-    values: string
+    numbers: string
   }
-  impl(operation, values) {
-    emit "[SKILL EXECUTED] compute_analytics(op=" + operation + ", values=" + values + ")";
+  impl(operation, numbers) {
+    emit "    [TOOL] calculate(op=" + operation + ", numbers=" + numbers + ")";
 
     if (operation == "sum") {
-      if (values == "47,23") {
-        return "70";
-      }
-      if (values == "31,58") {
-        return "89";
-      }
-      if (values == "47,58,62") {
-        return "167";
-      }
-      if (values == "47,23,31,58,62") {
-        return "221";
-      }
+      if (numbers == "47,23") { return "70"; }
+      if (numbers == "31,58") { return "89"; }
+      if (numbers == "47,23,31,58,62") { return "221"; }
+      return "sum not precomputed for: " + numbers;
     }
     if (operation == "average") {
-      if (values == "47,23") {
-        return "35.0";
-      }
-      if (values == "47,23,31,58,62") {
-        return "44.2";
-      }
-      if (values == "47,58,62") {
-        return "55.67";
-      }
+      if (numbers == "47,23") { return "35"; }
+      if (numbers == "31,58") { return "44.5"; }
+      if (numbers == "47,23,31,58,62") { return "44.2"; }
+      return "average not precomputed for: " + numbers;
     }
     if (operation == "max") {
-      if (values == "47,23,31,58,62") {
-        return "62";
-      }
-      if (values == "47,58,62") {
-        return "62";
-      }
-    }
-    if (operation == "min") {
-      if (values == "47,23,31,58,62") {
-        return "23";
-      }
+      if (numbers == "47,23,31,58,62") { return "62"; }
+      return "max not precomputed for: " + numbers;
     }
     if (operation == "count") {
-      if (values == "47,23") {
-        return "2";
-      }
-      if (values == "47,23,31,58,62") {
-        return "5";
-      }
+      if (numbers == "47,23") { return "2"; }
+      if (numbers == "31,58") { return "2"; }
+      return "count not precomputed for: " + numbers;
     }
-    return "Unable to compute " + operation + " for: " + values;
+    return "Unknown operation: " + operation;
   }
 }
 
 
-// --- Skill 3: Report generation ---
-// Claude will use this to format results into a report
-
-skill generate_report {
-  description: "Generate a formatted report from data. Takes a report title, the data content as a string, and a format type (markdown, plain, or csv)."
+// Skill 3: Report generator
+skill make_report {
+  description: "Generate a formatted report. Takes a title and data content string. Returns a formatted report."
   params: {
     title: string,
-    data: string,
-    format: string
+    content: string
   }
-  impl(title, data, format) {
-    emit "[SKILL EXECUTED] generate_report(title=" + title + ", format=" + format + ")";
-
-    if (format == "markdown") {
-      return "# " + title + " | " + data + " | --- Generated by Neam v0.6.6 Skill System";
-    }
-    if (format == "csv") {
-      return "title,data," + title + "," + data;
-    }
-    return title + " = " + data;
+  impl(title, content) {
+    emit "    [TOOL] make_report(title=" + title + ")";
+    return "=== REPORT: " + title + " === " + content + " === End of Report ===";
   }
 }
 
 
-// --- Skill 4: Send notification ---
-// Claude will use this as a side-effect action
-
-skill send_notification {
-  description: "Send a notification message to a specified channel. Channels: email, slack, sms. Returns confirmation with a message ID."
+// Skill 4: Notification sender
+skill send_alert {
+  description: "Send an alert notification. Takes a channel (email, slack, sms) and a message body. Returns confirmation."
   params: {
     channel: string,
-    recipient: string,
     message: string
   }
-  impl(channel, recipient, message) {
-    emit "[SKILL EXECUTED] send_notification(channel=" + channel + ", to=" + recipient + ")";
-    return "Notification sent via " + channel + " to " + recipient + ". Message ID: NTF-" + channel + "-2024-001. Content: " + message;
+  impl(channel, message) {
+    emit "    [TOOL] send_alert(channel=" + channel + ")";
+    return "Alert sent via " + channel + ": " + message;
   }
 }
 
 
-// --- Skill 5: Time/date utility ---
-// Simple utility Claude can combine with other tools
-
-skill get_current_info {
-  description: "Get current date, time, or system information. Supported queries: date, time, timezone, version."
+// Skill 5: System info
+skill system_info {
+  description: "Get system information. Supported queries: version, date, status."
   params: {
     query: string
   }
   impl(query) {
-    emit "[SKILL EXECUTED] get_current_info(query=" + query + ")";
+    emit "    [TOOL] system_info(query=" + query + ")";
 
-    if (query == "date") {
-      return "2025-01-15";
-    }
-    if (query == "time") {
-      return "14:30:00 UTC";
-    }
-    if (query == "timezone") {
-      return "UTC+0";
-    }
     if (query == "version") {
-      return "Neam v0.6.6 with Claude Tool Integration";
+      return "Neam v0.6.6 (Native Tool Integration)";
     }
-    return "Unknown query: " + query;
+    if (query == "date") {
+      return "2025-02-07";
+    }
+    if (query == "status") {
+      return "All systems operational. 5 skills loaded, tool calling active.";
+    }
+    return "Unknown: " + query;
   }
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PART 2: Guard — Validates tool inputs/outputs in the Claude tool call loop
-// ─────────────────────────────────────────────────────────────────────────────
+// =========================================================================
+// GUARDS & BUDGET -- Enforced at each tool call step in the loop
+// =========================================================================
 
 guard AuditGuard {
-  description: "Logs all tool interactions for audit trail"
-
-  on_tool_input(input) {
-    // In production: log to audit system
-    // Here we just pass through
-    return input;
-  }
-
-  on_tool_output(output) {
-    return output;
-  }
+  description: "Audit trail for all tool interactions"
+  on_tool_input(input) { return input; }
+  on_tool_output(output) { return output; }
 }
 
 guardchain SecurityChain = [AuditGuard];
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PART 3: Budget — Cost control for the Claude tool call loop
-// ─────────────────────────────────────────────────────────────────────────────
-
-budget AnalyticsBudget {
-  api_calls: 15
-  tokens: 100000
+budget DemoBudget {
+  api_calls: 30
+  tokens: 200000
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PART 4: Agents — Claude with Neam skills as native tools
-// ─────────────────────────────────────────────────────────────────────────────
+// =========================================================================
+// AGENTS -- LLM + Neam skills wired as native tools
+// =========================================================================
 
-// Full-featured agent: Claude with all 5 skills as tools
-agent DataAnalyst {
-  provider: "bedrock"
-  model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
-  system: "You are a data analyst assistant. You have access to a customer database, analytics tools, report generator, notification system, and date/time utilities. Always use your tools to get real data rather than making up numbers. When asked to analyze data, follow this workflow: (1) query the database, (2) compute analytics, (3) format results. Be precise and concise."
-  skills: [query_database, compute_analytics, generate_report, send_notification, get_current_info]
+// Full agent: 5 skills, guarded, budgeted
+agent Analyst {
+  provider: "openai"
+  model: "gpt-4o"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a data analyst. Use your tools for all data operations. Be concise. When you call lookup_customers, use the exact city name like Tokyo or London. When you call calculate, pass the operation name and comma-separated numbers with no spaces."
+  skills: [lookup_customers, calculate, make_report, send_alert, system_info]
   guards: [SecurityChain]
-  budget: AnalyticsBudget
+  budget: DemoBudget
 }
 
-// Minimal agent: Only database + analytics (demonstrates selective skill wiring)
-agent SimpleAnalyst {
-  provider: "bedrock"
-  model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
-  system: "You are a simple data lookup assistant. Use your tools to query data and compute basic statistics. Be concise."
-  skills: [query_database, compute_analytics]
+// Minimal agent: only 2 skills (selective wiring)
+agent BasicLookup {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a simple lookup tool. Use lookup_customers and calculate tools. Be very concise."
+  skills: [lookup_customers, calculate]
 }
 
-// No-skills agent for comparison (uses plain chat, no tool calling)
-agent PlainClaude {
-  provider: "bedrock"
-  model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
-  system: "You are a helpful assistant. Answer concisely."
+// No-skills agent (backward compatibility -- uses plain chat)
+agent ChatOnly {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a helpful assistant. Answer in one sentence."
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PART 5: Integration Tests
-//
-// The flow for each test:
-//
-//   User query
-//     │
-//     ▼
-//   Neam VM builds messages + tool definitions from agent.skills
-//     │
-//     ▼
-//   Bedrock API call with tools[] (Claude Messages API)
-//     │
-//     ▼
-//   Claude returns tool_use content blocks
-//     │
-//     ▼
-//   Neam VM dispatches to skill impl() with converted arguments
-//     │
-//     ▼
-//   Skill returns result string
-//     │
-//     ▼
-//   Neam VM sends tool_result back to Claude
-//     │
-//     ▼
-//   Claude processes results → more tool_use OR end_turn with text
-//     │
-//     ▼
-//   Final text response returned to Neam program
-//
-// ─────────────────────────────────────────────────────────────────────────────
+// =========================================================================
+// DEMO EXECUTION
+// =========================================================================
 
 {
-  emit "====================================================================";
-  emit "  Neam v0.6.6 — Claude Skill Integration Demo";
   emit "";
-  emit "  Neam skills are exposed as Claude tools via the native";
-  emit "  tool use protocol. Claude decides what to call, Neam executes.";
+  emit "+--------------------------------------------------------------------+";
+  emit "|                                                                    |";
+  emit "|   Neam v0.6.6 -- Native Skill-to-Tool Integration Demo            |";
+  emit "|                                                                    |";
+  emit "|   Skills declared in Neam are auto-converted to LLM tools.        |";
+  emit "|   The LLM decides which tools to call. Neam executes them.        |";
+  emit "|                                                                    |";
+  emit "|   Flow: User Query -> LLM -> tool_use -> Neam Skill -> result     |";
+  emit "|         -> tool_result -> LLM -> final answer                     |";
+  emit "|                                                                    |";
+  emit "+--------------------------------------------------------------------+";
   emit "";
-  emit "  Watch for [SKILL EXECUTED] markers showing real skill dispatch.";
-  emit "====================================================================";
+  emit "  Provider : OpenAI (gpt-4o / gpt-4o-mini)";
+  emit "  Skills   : lookup_customers, calculate, make_report, send_alert, system_info";
+  emit "  Guards   : AuditGuard (SecurityChain)";
+  emit "  Budget   : 30 API calls, 200K tokens";
   emit "";
+  emit "--------------------------------------------------------------------";
 
 
-  // ─── Scenario 1: Single Tool Call ─────────────────────────────────────
-  // Claude should call query_database once and return the result.
-  // This tests the basic Neam skill → Claude tool → skill execution flow.
+  // --- Demo 1: Single Tool Call -------------------------------------------
 
-  emit "=== Scenario 1: Single Tool Call (Database Query) ===";
-  emit "Q: How many customers are in Tokyo?";
   emit "";
-  let s1 = DataAnalyst.ask("How many customers do we have in Tokyo? Query the database with filter city = 'Tokyo'.");
+  emit "  DEMO 1: Single Tool Call";
+  emit "  Expect: LLM calls lookup_customers(city=Tokyo)";
+  emit "  ........................................................";
   emit "";
-  emit "Claude response: " + s1;
+  emit "  Q: How many customers are in Tokyo?";
   emit "";
-
-
-  // ─── Scenario 2: Multi-Tool Chain ─────────────────────────────────────
-  // Claude should: (1) query_database → (2) compute_analytics → (3) report
-  // This demonstrates Claude orchestrating multiple Neam skills in sequence.
-
-  emit "=== Scenario 2: Multi-Tool Chain (Query + Analyze + Report) ===";
-  emit "Q: Analyze top customers and generate a report";
+  let r1 = Analyst.ask("How many customers are in Tokyo? Use lookup_customers with city Tokyo.");
   emit "";
-  let s2 = DataAnalyst.ask("Find all customers with more than 40 total orders, compute the sum and average of their order counts, and generate a markdown report titled 'Top Customer Analysis'.");
+  emit "  A: " + r1;
   emit "";
-  emit "Claude response: " + s2;
-  emit "";
+  emit "--------------------------------------------------------------------";
 
 
-  // ─── Scenario 3: Claude Decides Which Tools to Use ────────────────────
-  // Open-ended query — Claude must figure out the right tool combination.
-  // This shows Claude's autonomous tool selection with Neam skills.
+  // --- Demo 2: Multi-Step Tool Chain --------------------------------------
 
-  emit "=== Scenario 3: Autonomous Tool Selection ===";
-  emit "Q: Compare Tokyo and London customer bases";
   emit "";
-  let s3 = DataAnalyst.ask("Compare our customer bases in Tokyo and London. How many customers in each city, and what are the total orders?");
+  emit "  DEMO 2: Multi-Step Tool Chain";
+  emit "  Expect: lookup_customers -> calculate -> make_report";
+  emit "  ........................................................";
   emit "";
-  emit "Claude response: " + s3;
+  emit "  Q: Look up Tokyo customers, sum their orders, make a report.";
   emit "";
-
-
-  // ─── Scenario 4: Tool + Side Effect ───────────────────────────────────
-  // Claude should query data, then send a notification about it.
-  // Tests that Claude can chain data retrieval with action skills.
-
-  emit "=== Scenario 4: Data Query + Notification Action ===";
-  emit "Q: Find customer 101 and notify them via email";
+  let r2 = Analyst.ask("Step 1: Use lookup_customers for city Tokyo. Step 2: Use calculate with operation sum and numbers 47,23. Step 3: Use make_report with title 'Tokyo Summary' and the results.");
   emit "";
-  let s4 = DataAnalyst.ask("Look up customer 101 in the database, then send them an email notification saying 'Your loyalty reward is ready!'");
+  emit "  A: " + r2;
   emit "";
-  emit "Claude response: " + s4;
-  emit "";
+  emit "--------------------------------------------------------------------";
 
 
-  // ─── Scenario 5: Utility Tool + Context ───────────────────────────────
-  // Claude uses a simple utility, combined with its own knowledge.
+  // --- Demo 3: Autonomous Tool Selection ----------------------------------
 
-  emit "=== Scenario 5: Utility Tool (System Info) ===";
-  emit "Q: What version are we running and what's today's date?";
   emit "";
-  let s5 = DataAnalyst.ask("What version of the system are we running? Also, what is today's date?");
+  emit "  DEMO 3: Autonomous Tool Selection";
+  emit "  Expect: LLM decides which tools to call (no explicit steps)";
+  emit "  ........................................................";
   emit "";
-  emit "Claude response: " + s5;
+  emit "  Q: What is our system version and current date?";
   emit "";
-
-
-  // ─── Scenario 6: No Tool Needed ──────────────────────────────────────
-  // Claude should respond directly without calling any tools.
-  // Tests that the tool loop exits cleanly when Claude sends end_turn.
-
-  emit "=== Scenario 6: No Tool Needed (Plain Claude Response) ===";
-  emit "Q: What is machine learning?";
+  let r3 = Analyst.ask("What system version are we running and what is today's date?");
   emit "";
-  let s6 = DataAnalyst.ask("In one sentence, what is machine learning?");
+  emit "  A: " + r3;
   emit "";
-  emit "Claude response: " + s6;
-  emit "";
+  emit "--------------------------------------------------------------------";
 
 
-  // ─── Scenario 7: Selective Skills (SimpleAnalyst has only 2 tools) ────
-  // Tests that skill wiring is per-agent, not global.
+  // --- Demo 4: Tool + Side Effect (Notification) --------------------------
 
-  emit "=== Scenario 7: Selective Skill Wiring (2 tools only) ===";
-  emit "Q: Find customers in London and count them";
   emit "";
-  let s7 = SimpleAnalyst.ask("Query customers in London and count how many there are.");
+  emit "  DEMO 4: Data Retrieval + Action (Notification)";
+  emit "  Expect: lookup_customers -> send_alert";
+  emit "  ........................................................";
   emit "";
-  emit "Claude response: " + s7;
+  emit "  Q: Find London customers and alert the team.";
   emit "";
-
-
-  // ─── Scenario 8: No-Skills Agent (Backward Compatibility) ────────────
-  // PlainClaude has no skills → uses provider->chat() not chat_with_tools()
-
-  emit "=== Scenario 8: No-Skills Agent (Backward Compat) ===";
-  emit "Q: Say hello";
+  let r4 = Analyst.ask("Look up customers in London using lookup_customers. Then send a slack alert summarizing what you found.");
   emit "";
-  let s8 = PlainClaude.ask("Say hello in one sentence.");
+  emit "  A: " + r4;
   emit "";
-  emit "Claude response: " + s8;
-  emit "";
+  emit "--------------------------------------------------------------------";
 
 
-  // ─── Scenario 9: Multi-Turn Conversation with Tool Memory ────────────
-  // Tests that tool results are retained in conversation context.
+  // --- Demo 5: No Tool Needed (LLM Responds Directly) --------------------
 
-  emit "=== Scenario 9: Multi-Turn with Tool Context ===";
   emit "";
-  emit "Turn 1: Query Tokyo customers";
-  let t1 = DataAnalyst.ask("Query the database for customers in Tokyo.");
-  emit "  Claude: " + t1;
+  emit "  DEMO 5: No Tool Needed (Plain LLM Response)";
+  emit "  Expect: LLM answers directly without calling any tools";
+  emit "  ........................................................";
   emit "";
-
-  emit "Turn 2: Now analyze those results";
-  let t2 = DataAnalyst.ask("Based on the Tokyo customers you just found, what is the average number of orders?");
-  emit "  Claude: " + t2;
+  emit "  Q: What is machine learning?";
   emit "";
-
-  emit "Turn 3: Generate a report about this";
-  let t3 = DataAnalyst.ask("Generate a markdown report titled 'Tokyo Customer Summary' with the data from our previous analysis.");
-  emit "  Claude: " + t3;
+  let r5 = Analyst.ask("In one sentence, what is machine learning?");
   emit "";
+  emit "  A: " + r5;
+  emit "";
+  emit "--------------------------------------------------------------------";
 
 
-  // ─── Scenario 10: Full Workflow ──────────────────────────────────────
-  // Complex end-to-end: query → analyze → report → notify
-  // This is the full Claude tool orchestration with 4+ skill calls.
+  // --- Demo 6: Selective Skill Wiring (2 tools only) ----------------------
 
-  emit "=== Scenario 10: Full Workflow (Query + Analyze + Report + Notify) ===";
-  emit "Q: Full customer analysis with notification";
   emit "";
-  let s10 = DataAnalyst.ask("Do a complete analysis: (1) find all customers with more than 40 orders, (2) compute the max order count, (3) generate a plain text report titled 'VIP Customer Alert', and (4) send a slack notification to #analytics channel with a summary.");
+  emit "  DEMO 6: Selective Skill Wiring (BasicLookup agent, 2 tools)";
+  emit "  Expect: Only lookup_customers and calculate are available";
+  emit "  ........................................................";
   emit "";
-  emit "Claude response: " + s10;
+  emit "  Q: Find London customers and count them.";
   emit "";
+  let r6 = BasicLookup.ask("Use lookup_customers for city London, then use calculate with operation count and numbers 31,58.");
+  emit "";
+  emit "  A: " + r6;
+  emit "";
+  emit "--------------------------------------------------------------------";
 
 
-  emit "====================================================================";
-  emit "  Demo complete!";
+  // --- Demo 7: No-Skills Agent (Backward Compatibility) -------------------
+
   emit "";
-  emit "  Each [SKILL EXECUTED] line above shows a Neam skill being";
-  emit "  invoked by Claude's native tool use protocol.";
+  emit "  DEMO 7: No-Skills Agent (Backward Compatibility)";
+  emit "  Expect: Uses plain chat(), not chat_with_tools()";
+  emit "  ........................................................";
   emit "";
-  emit "  For detailed protocol logs, re-run with:";
-  emit "    NEAM_LOG_LEVEL=DEBUG NEAM_TRACE=1 neam <this_file>";
-  emit "====================================================================";
+  emit "  Q: Say hello.";
+  emit "";
+  let r7 = ChatOnly.ask("Say hello in one sentence.");
+  emit "";
+  emit "  A: " + r7;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 8: Full Workflow (4-step orchestration) -----------------------
+
+  emit "";
+  emit "  DEMO 8: Full Workflow (4-Step Orchestration)";
+  emit "  Expect: lookup_customers -> calculate -> make_report -> send_alert";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: Full analysis pipeline with notification.";
+  emit "";
+  let r8 = Analyst.ask("Complete this workflow: (1) lookup_customers in Tokyo, (2) calculate the average of 47,23, (3) make_report titled 'Tokyo Analysis' with the average, (4) send_alert via email saying analysis is complete.");
+  emit "";
+  emit "  A: " + r8;
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|                                                                    |";
+  emit "|   Demo Complete                                                    |";
+  emit "|                                                                    |";
+  emit "|   Each [TOOL] line above shows a Neam skill executed via           |";
+  emit "|   the LLM's native tool calling protocol.                          |";
+  emit "|                                                                    |";
+  emit "|   v0.6.6 Features Demonstrated:                                    |";
+  emit "|     - Automatic skill-to-tool JSON Schema conversion               |";
+  emit "|     - Native tool call loop (not text-based ReAct)                 |";
+  emit "|     - Multi-step tool orchestration                                |";
+  emit "|     - Autonomous tool selection by LLM                             |";
+  emit "|     - Selective per-agent skill wiring                             |";
+  emit "|     - Guard chain enforcement per tool call                        |";
+  emit "|     - Budget tracking across tool steps                            |";
+  emit "|     - Backward compat (no-skills = plain chat)                     |";
+  emit "|                                                                    |";
+  emit "|   For protocol-level logs, re-run with:                            |";
+  emit "|     NEAM_LOG_LEVEL=DEBUG NEAM_TRACE=1 neam <this_file>             |";
+  emit "|                                                                    |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
 }

@@ -1,0 +1,292 @@
+//
+// Neam v0.6.6 -- How Claude Skills Work in Neam
+//
+// Neam does NOT import Claude's skills. Instead:
+//
+//   1. You DEFINE skills in Neam
+//   2. Neam EXPOSES them to Claude as native tools (auto JSON Schema)
+//   3. Claude DECIDES which skills to call based on the user's query
+//   4. Neam EXECUTES the skill and sends results back to Claude
+//   5. Claude RESPONDS using the skill results
+//
+// This is a bidirectional integration:
+//
+//   YOUR CODE (Neam skill)  -->  CLAUDE (sees it as a tool)
+//   CLAUDE (tool_use call)  -->  YOUR CODE (skill impl runs)
+//   YOUR CODE (return value) --> CLAUDE (gets tool_result)
+//   CLAUDE (final answer)   --> YOUR CODE (agent.ask returns)
+//
+// RUNNING:
+//   export OPENAI_API_KEY="your-key"
+//   NEAM_LOG_LEVEL=INFO ./neam-cli examples/v066_import_claude_skills.neam
+//
+
+
+// =========================================================================
+// STEP 1: Define your skills
+//
+// Each skill has:
+//   - description  : tells Claude WHEN to use this skill
+//   - params       : tells Claude WHAT arguments to pass
+//   - impl()       : YOUR code that runs when Claude calls the skill
+//
+// The VM automatically converts this to Claude's tool format:
+//   { "name": "weather",
+//     "description": "Get current weather...",
+//     "input_schema": { "properties": { "city": {"type":"string"} } } }
+// =========================================================================
+
+
+// --- A skill that fetches weather (simulated) ---
+// Claude will call this when the user asks about weather
+
+skill weather {
+  description: "Get the current weather for a city. Returns temperature and conditions."
+  params: {
+    city: string
+  }
+  impl(city) {
+    emit "  >> [Neam skill executed] weather(city=" + city + ")";
+
+    // In production, this would call a real weather API.
+    // Here we simulate responses.
+    if (city == "Tokyo") {
+      return "Tokyo: 22C, partly cloudy, humidity 65%";
+    }
+    if (city == "London") {
+      return "London: 14C, rainy, humidity 82%";
+    }
+    if (city == "New York") {
+      return "New York: 28C, sunny, humidity 45%";
+    }
+    if (city == "Paris") {
+      return "Paris: 18C, overcast, humidity 70%";
+    }
+    return city + ": data not available";
+  }
+}
+
+
+// --- A skill that searches a knowledge base (simulated) ---
+// Claude will call this when the user asks for documentation or facts
+
+skill search_kb {
+  description: "Search the company knowledge base. Returns relevant documents matching the query topic."
+  params: {
+    topic: string
+  }
+  impl(topic) {
+    emit "  >> [Neam skill executed] search_kb(topic=" + topic + ")";
+
+    if (topic == "pricing") {
+      return "Pricing: Starter $29/mo (5 users), Pro $99/mo (25 users), Enterprise custom";
+    }
+    if (topic == "api") {
+      return "API: REST endpoints at api.example.com/v2, rate limit 1000 req/min, OAuth2 auth";
+    }
+    if (topic == "onboarding") {
+      return "Onboarding: 1) Create account 2) Verify email 3) Complete profile 4) Start trial";
+    }
+    return "No results for: " + topic;
+  }
+}
+
+
+// --- A skill that creates support tickets (simulated) ---
+// Claude will call this when the user needs to report an issue
+
+skill create_ticket {
+  description: "Create a support ticket in the ticketing system. Returns a ticket ID. Takes a title, priority level, and details text."
+  params: {
+    title: string,
+    priority: string,
+    details: string
+  }
+  impl(title, priority, details) {
+    emit "  >> [Neam skill executed] create_ticket(title=" + title + ", priority=" + priority + ")";
+    return "Ticket created: TKT-2025-0042 | Title: " + title + " | Priority: " + priority + " | Status: Open";
+  }
+}
+
+
+// --- A skill that sends messages (simulated) ---
+// Claude will call this to notify people
+
+skill send_message {
+  description: "Send a message to a user or channel. Channels: email, slack, teams."
+  params: {
+    channel: string,
+    recipient: string,
+    body: string
+  }
+  impl(channel, recipient, body) {
+    emit "  >> [Neam skill executed] send_message(channel=" + channel + ", to=" + recipient + ")";
+    return "Message sent via " + channel + " to " + recipient;
+  }
+}
+
+
+// =========================================================================
+// STEP 2: Wire skills to an agent
+//
+// The `skills: [...]` field tells the VM which skills this agent can use.
+// Different agents can have different skill subsets.
+// =========================================================================
+
+
+// Full-featured support agent with all 4 skills
+agent SupportAgent {
+  provider: "openai"
+  model: "gpt-4o"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a customer support agent. You have tools to check weather, search the knowledge base, create support tickets, and send messages. Always use your tools to get real information. Be concise and helpful."
+  skills: [weather, search_kb, create_ticket, send_message]
+}
+
+// Lightweight agent with only search (demonstrates selective wiring)
+agent SearchOnly {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a search assistant. Use your search tool to find information. Be concise."
+  skills: [search_kb]
+}
+
+
+// =========================================================================
+// STEP 3: Use the agent -- Claude automatically calls your skills
+//
+// When you call agent.ask("..."), here's what happens:
+//
+//   1. VM sends the query + tool definitions to the LLM
+//   2. Claude analyzes the query and decides which tools to call
+//   3. Claude returns a tool_use response (NOT text)
+//   4. VM finds the matching Neam skill and calls impl()
+//   5. VM sends the skill result back to Claude as tool_result
+//   6. Claude may call more tools or return a final text answer
+//   7. The final text is returned from agent.ask()
+//
+// You DON'T need to tell Claude which skill to use.
+// Claude figures it out from the skill descriptions.
+// =========================================================================
+
+{
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|  Neam v0.6.6 -- Claude Skill Integration Usage Demo               |";
+  emit "|                                                                    |";
+  emit "|  Your Neam skills become Claude's tools automatically.             |";
+  emit "|  Claude decides WHEN and WHAT to call. You write the logic.       |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
+
+
+  // --- Example 1: Claude calls a single skill ---
+
+  emit "  Example 1: Single Skill Call";
+  emit "  You ask about weather. Claude calls your weather() skill.";
+  emit "  ............................................................";
+  emit "";
+  emit "  User: What is the weather in Tokyo?";
+  emit "";
+  let r1 = SupportAgent.ask("What is the weather in Tokyo right now?");
+  emit "";
+  emit "  Claude: " + r1;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Example 2: Claude chains multiple skills ---
+
+  emit "";
+  emit "  Example 2: Multi-Skill Chain";
+  emit "  Claude decides to search the KB, then create a ticket.";
+  emit "  ............................................................";
+  emit "";
+  emit "  User: I need help with API rate limits. Create a ticket.";
+  emit "";
+  let r2 = SupportAgent.ask("I keep hitting API rate limits. Can you look up the API documentation and then create a high priority support ticket about rate limit increases?");
+  emit "";
+  emit "  Claude: " + r2;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Example 3: Claude picks the right skill autonomously ---
+
+  emit "";
+  emit "  Example 3: Autonomous Tool Selection";
+  emit "  Claude picks search_kb on its own (you did not specify).";
+  emit "  ............................................................";
+  emit "";
+  emit "  User: How much does the Pro plan cost?";
+  emit "";
+  let r3 = SupportAgent.ask("How much does the Pro plan cost?");
+  emit "";
+  emit "  Claude: " + r3;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Example 4: Claude calls skill + sends notification ---
+
+  emit "";
+  emit "  Example 4: Skill + Side Effect (Send Message)";
+  emit "  Claude searches, creates ticket, and notifies via Slack.";
+  emit "  ............................................................";
+  emit "";
+  emit "  User: The onboarding flow is broken. File a ticket and notify the team.";
+  emit "";
+  let r4 = SupportAgent.ask("The onboarding flow is broken for new users. Look up the onboarding docs, create a critical priority ticket, and send a slack message to #engineering about it.");
+  emit "";
+  emit "  Claude: " + r4;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Example 5: Claude responds without any tools ---
+
+  emit "";
+  emit "  Example 5: No Skill Needed";
+  emit "  Claude answers from its own knowledge (no tool calls).";
+  emit "  ............................................................";
+  emit "";
+  emit "  User: What does API stand for?";
+  emit "";
+  let r5 = SupportAgent.ask("What does API stand for? Answer in one sentence.");
+  emit "";
+  emit "  Claude: " + r5;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Example 6: Agent with limited skills ---
+
+  emit "";
+  emit "  Example 6: Limited Skill Wiring (SearchOnly agent)";
+  emit "  This agent only has search_kb. It cannot create tickets.";
+  emit "  ............................................................";
+  emit "";
+  emit "  User: What are the pricing tiers?";
+  emit "";
+  let r6 = SearchOnly.ask("What are our pricing tiers?");
+  emit "";
+  emit "  Claude: " + r6;
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|  Demo Complete                                                     |";
+  emit "|                                                                    |";
+  emit "|  Key Takeaways:                                                    |";
+  emit "|                                                                    |";
+  emit "|  1. Define skills in Neam with description + params + impl         |";
+  emit "|  2. Wire skills to agents with skills: [skill1, skill2]            |";
+  emit "|  3. Call agent.ask() -- Claude handles tool selection              |";
+  emit "|  4. Your impl() code runs when Claude calls the tool               |";
+  emit "|  5. No import needed -- skills are native Neam constructs          |";
+  emit "|                                                                    |";
+  emit "|  Providers: OpenAI, AWS Bedrock, Ollama (all supported)            |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
+}

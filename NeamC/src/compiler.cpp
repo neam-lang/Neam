@@ -1169,6 +1169,178 @@ void Compiler::emit_statement(const Statement& stmt)
           }
           chunk_.write_op(OpCode::OP_REWIND);
         }
+        // v0.6.7: External skill declarations
+        else if constexpr (std::is_same_v<T, ExternSkillDecl>)
+        {
+          // Push name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // Push description
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, node.description)));
+          // Push param_names list
+          for (const auto& param : node.params)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(
+                static_cast<uint16_t>(emit_string_constant(chunk_, param.name)));
+          }
+          emit_build_list(chunk_, node.params.size());
+          // Push params map (name -> schema)
+          for (const auto& param : node.params)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(
+                static_cast<uint16_t>(emit_string_constant(chunk_, param.name)));
+            emit_json_value(chunk_, param.schema);
+          }
+          emit_build_map(chunk_, node.params.size());
+          // Push binding type as string
+          std::string binding_type_str;
+          switch (node.binding.type)
+          {
+            case SkillBindingSpec::Type::kMcp:
+              binding_type_str = "mcp";
+              break;
+            case SkillBindingSpec::Type::kHttp:
+              binding_type_str = "http";
+              break;
+            case SkillBindingSpec::Type::kClaudeBuiltin:
+              binding_type_str = "claude_builtin";
+              break;
+          }
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, binding_type_str)));
+          // Push binding config as map
+          std::size_t config_count = 0;
+          auto emit_config_entry = [&](const std::string& key, const std::string& value) {
+            if (!value.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, key)));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(
+                  static_cast<uint16_t>(emit_string_constant(chunk_, value)));
+              ++config_count;
+            }
+          };
+          switch (node.binding.type)
+          {
+            case SkillBindingSpec::Type::kMcp:
+              emit_config_entry("server", node.binding.mcp_server);
+              emit_config_entry("tool", node.binding.mcp_tool);
+              break;
+            case SkillBindingSpec::Type::kHttp:
+              emit_config_entry("method", node.binding.http_method);
+              emit_config_entry("url", node.binding.http_url);
+              emit_config_entry("body_template", node.binding.http_body_template);
+              emit_config_entry("response_path", node.binding.http_response_path);
+              if (node.binding.http_timeout_ms != 30000)
+              {
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, "timeout")));
+                chunk_.emit_constant(vm::Value::Number(
+                    static_cast<double>(node.binding.http_timeout_ms)));
+                ++config_count;
+              }
+              // Emit headers as a sub-list
+              if (!node.binding.http_headers.empty())
+              {
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, "headers")));
+                for (const auto& [hk, hv] : node.binding.http_headers)
+                {
+                  chunk_.write_op(OpCode::OP_CONST);
+                  chunk_.write_short(static_cast<uint16_t>(
+                      emit_string_constant(chunk_, hk + ": " + hv)));
+                }
+                emit_build_list(chunk_, node.binding.http_headers.size());
+                ++config_count;
+              }
+              break;
+            case SkillBindingSpec::Type::kClaudeBuiltin:
+              emit_config_entry("type", node.binding.claude_tool_type);
+              break;
+          }
+          emit_build_map(chunk_, config_count);
+          chunk_.write_op(OpCode::OP_DEFINE_EXTERN_SKILL);
+        }
+        else if constexpr (std::is_same_v<T, McpServerDecl>)
+        {
+          // Push server name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // Push config map
+          std::size_t config_count = 0;
+          auto emit_entry = [&](const std::string& key, const std::string& value) {
+            if (!value.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(
+                  static_cast<uint16_t>(emit_string_constant(chunk_, key)));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(
+                  static_cast<uint16_t>(emit_string_constant(chunk_, value)));
+              ++config_count;
+            }
+          };
+          emit_entry("command", node.command);
+          emit_entry("url", node.url);
+          if (!node.args.empty())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(
+                static_cast<uint16_t>(emit_string_constant(chunk_, "args")));
+            emit_string_list(chunk_, node.args);
+            ++config_count;
+          }
+          if (!node.env.empty())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(
+                static_cast<uint16_t>(emit_string_constant(chunk_, "env")));
+            std::size_t env_count = 0;
+            for (const auto& [k, v] : node.env)
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(
+                  static_cast<uint16_t>(emit_string_constant(chunk_, k)));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(
+                  static_cast<uint16_t>(emit_string_constant(chunk_, v)));
+              ++env_count;
+            }
+            emit_build_map(chunk_, env_count);
+            ++config_count;
+          }
+          emit_build_map(chunk_, config_count);
+          chunk_.write_op(OpCode::OP_DEFINE_MCP_SERVER);
+        }
+        else if constexpr (std::is_same_v<T, AdoptStmt>)
+        {
+          // Push server name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, node.server_name)));
+          // Push filter list (empty = wildcard)
+          emit_string_list(chunk_, node.tool_names);
+          // Push alias or nil
+          if (node.alias_prefix.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, *node.alias_prefix)));
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+          chunk_.write_op(OpCode::OP_ADOPT_MCP_TOOLS);
+        }
       },
       stmt.node);
 }

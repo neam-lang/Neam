@@ -62,7 +62,12 @@ enum class OpCode : uint8_t
   OP_DEFINE_AGENT,
   OP_GRANT,
   OP_CHECKPOINT,
-  OP_REWIND
+  OP_REWIND,
+
+  // v0.6.7: External skill adoption
+  OP_DEFINE_EXTERN_SKILL,  // Stack: [name, desc, param_names, params, binding_type, binding_config]
+  OP_DEFINE_MCP_SERVER,    // Stack: [name, config_map]
+  OP_ADOPT_MCP_TOOLS       // Stack: [server_name, filter_list, alias_or_nil]
 };
 
 class Bytecode

@@ -1,0 +1,110 @@
+//
+// v0.6.7 External Skill Adoption — Demo
+//
+// Shows extern skill declarations with HTTP, MCP, and Claude built-in bindings.
+// Agents can mix local and external skills seamlessly.
+//
+
+// ─── HTTP API Binding ─────────────────────────────────────────────
+// Declare an external skill that calls a public HTTP API.
+// The {city} placeholder is replaced with the actual argument at runtime.
+
+extern skill get_weather {
+  description: "Get current weather for a city"
+  params: { city: string }
+  binding: http {
+    method: "GET"
+    url: "https://wttr.in/{city}?format=j1"
+    headers: ["Accept: application/json"]
+    response_path: "/current_condition/0/weatherDesc/0/value"
+    timeout: 5000
+  }
+}
+
+// HTTP POST example with custom headers and env-var auth
+extern skill create_issue {
+  description: "Create a GitHub issue"
+  params: { title: string, body: string }
+  binding: http {
+    method: "POST"
+    url: "https://api.github.com/repos/owner/repo/issues"
+    headers: [
+      "Accept: application/vnd.github.v3+json",
+      "Authorization: token ${GITHUB_TOKEN}"
+    ]
+    timeout: 10000
+  }
+}
+
+// ─── MCP Server Binding ──────────────────────────────────────────
+// Declare an MCP server that will be spawned as a subprocess.
+
+mcp_server filesystem {
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"]
+}
+
+// Declare an MCP server via SSE endpoint.
+mcp_server database {
+  url: "http://localhost:3001/sse"
+}
+
+// Bind a single MCP tool to a Neam skill.
+extern skill read_file {
+  description: "Read a file from the filesystem"
+  params: { path: string }
+  binding: mcp {
+    server: "filesystem"
+    tool: "read_file"
+  }
+}
+
+// Bulk-adopt all tools from an MCP server.
+// Creates skills prefixed as filesystem.read_file, filesystem.list_directory, etc.
+// adopt filesystem.*
+
+// Adopt specific tools only, with a custom prefix.
+// adopt filesystem.{read_file, list_directory} as fs
+
+// ─── Claude Built-in Tools ──────────────────────────────────────
+// Declare skills that map to Anthropic's built-in tool types.
+// These are dispatched by the provider API, not locally.
+
+extern skill bash_tool {
+  description: "Execute bash commands"
+  params: { command: string }
+  binding: claude_builtin {
+    type: "bash_20241022"
+  }
+}
+
+extern skill text_editor {
+  description: "View and edit text files"
+  params: { command: string, path: string }
+  binding: claude_builtin {
+    type: "text_editor_20241022"
+  }
+}
+
+// ─── Local Skill (unchanged from v0.6.6) ────────────────────────
+skill greet {
+  description: "Generate a greeting"
+  params: { name: string }
+  impl(name) {
+    emit "Hello, " + name + "!";
+  }
+}
+
+// ─── Agent: Mix Local + External Skills ─────────────────────────
+// The agent can use local skills, HTTP API skills, MCP tools,
+// and Claude built-in tools — all through the same dispatch loop.
+
+agent WeatherBot {
+  provider: "bedrock"
+  model: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  skills: [greet, get_weather, read_file]
+}
+
+// Usage:
+// let response = WeatherBot.ask("What's the weather in Tokyo?")
+// emit response

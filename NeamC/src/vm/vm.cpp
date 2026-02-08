@@ -22,6 +22,7 @@
 
 #include "neamc/llm/provider_factory.hpp"
 #include "neamc/vm/async/future.hpp"
+#include "neamc/vm/external_skill.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/schema.hpp"
 
@@ -2093,7 +2094,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               return messages;
             };
 
-            // v0.6.6: Collect agent's skills as LLM tool definitions
+            // v0.6.6: Collect agent's skills as LLM tool definitions.
+            // Skills are stored as string names in agent->skills (compiler emits names).
+            // We resolve each name to its ObjSkill via globals lookup.
             auto collect_agent_tools = [&]() -> std::vector<llm::ToolDefinition> {
               std::vector<llm::ToolDefinition> tool_defs;
               if (!agent->skills || agent->skills->items.empty())
@@ -2102,12 +2105,26 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               }
               for (const auto& skill_value : agent->skills->items)
               {
-                if (!skill_value.is_skill())
+                ObjSkill* skill = nullptr;
+                if (skill_value.is_skill())
+                {
+                  skill = as_skill(skill_value);
+                }
+                else if (skill_value.is_string())
+                {
+                  // Resolve skill name from globals
+                  const std::string skill_name = to_std_string(skill_value);
+                  const Value* resolved = find_global_value(globals_, skill_name);
+                  if (resolved && resolved->is_skill())
+                  {
+                    skill = as_skill(*resolved);
+                  }
+                }
+                if (!skill || !skill->name)
                 {
                   continue;
                 }
-                auto* skill = as_skill(skill_value);
-                if (!skill->name || !skill->impl)
+                if (!skill->impl && !skill->external)
                 {
                   continue;
                 }
@@ -2117,6 +2134,12 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                     ? std::string(skill->description->chars, skill->description->length)
                     : "";
                 def.input_schema = build_skill_schema(skill);
+                // v0.6.7: Set type for Claude built-in tools
+                if (skill->external &&
+                    skill->external->binding == vm::SkillBinding::ClaudeBuiltin)
+                {
+                  def.type = skill->external->claude_tool_type;
+                }
                 tool_defs.push_back(std::move(def));
               }
               return tool_defs;
@@ -2146,7 +2169,8 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               return Value::String(s.c_str(), s.size());
             };
 
-            // v0.6.6: Find a skill object by name from agent->skills list
+            // v0.6.6: Find a skill object by name from agent->skills list.
+            // Resolves string skill names via globals lookup.
             auto find_agent_skill = [&](const std::string& name) -> ObjSkill* {
               if (!agent->skills)
               {
@@ -2154,12 +2178,25 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               }
               for (const auto& skill_value : agent->skills->items)
               {
-                if (!skill_value.is_skill())
+                ObjSkill* skill = nullptr;
+                if (skill_value.is_skill())
                 {
-                  continue;
+                  skill = as_skill(skill_value);
                 }
-                auto* skill = as_skill(skill_value);
-                if (skill->name &&
+                else if (skill_value.is_string())
+                {
+                  const std::string skill_name = to_std_string(skill_value);
+                  if (skill_name != name)
+                  {
+                    continue;
+                  }
+                  const Value* resolved = find_global_value(globals_, skill_name);
+                  if (resolved && resolved->is_skill())
+                  {
+                    skill = as_skill(*resolved);
+                  }
+                }
+                if (skill && skill->name &&
                     std::string(skill->name->chars, skill->name->length) == name)
                 {
                   return skill;
@@ -2282,7 +2319,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                   {
                     messages.push_back({hist.role, hist.content});
                   }
-                  messages.push_back({"user", query});
+                  // Note: query is already in history (added at line ~1607)
                 }
 
                 // Guard check on input
@@ -2335,17 +2372,12 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                       break;
                     }
 
-                    // Add assistant response with tool calls to message history
-                    // Build content_blocks for the assistant message
+                    // Add assistant response with tool calls to message history.
+                    // content_blocks stores only tool call info (type:"function");
+                    // text content goes in msg.content for the adapter to handle.
                     nlohmann::json assistant_blocks = nlohmann::json::array();
-                    if (!chat_resp.text.empty())
-                    {
-                      assistant_blocks.push_back(
-                          {{"type", "text"}, {"text", chat_resp.text}});
-                    }
                     for (const auto& tc : chat_resp.tool_calls)
                     {
-                      // Provider-agnostic: store tool call info for message reconstruction
                       assistant_blocks.push_back(
                           {{"type", "function"},
                            {"id", tc.id},
@@ -2365,7 +2397,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                       bool is_error = false;
 
                       ObjSkill* skill = find_agent_skill(tc.name);
-                      if (!skill || !skill->impl)
+                      if (!skill || (!skill->impl && !skill->external))
                       {
                         result_content = "Unknown tool: " + tc.name;
                         is_error = true;
@@ -2445,6 +2477,19 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                               {
                                 result_content = "Request blocked by guard policy.";
                                 is_error = true;
+                              }
+                              else if (skill->external)
+                              {
+                                // v0.6.7: External skill dispatch
+                                result_content = dispatch_external_skill(skill, tc.input);
+
+                                // Guard check on tool output
+                                if (tool && !run_guard_chain(tool->guards, "on_tool_output",
+                                                             result_content))
+                                {
+                                  result_content = "Response blocked by guard policy.";
+                                  is_error = true;
+                                }
                               }
                               else
                               {
@@ -3284,6 +3329,199 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         auto* impl = as_function(impl_value);
         auto* skill = new_skill(name, description, params, std::move(param_names), impl);
         globals_.set(name, Value::Skill(skill));
+        break;
+      }
+      // v0.6.7: Define an external skill (MCP, HTTP, or Claude built-in)
+      case OpCode::OP_DEFINE_EXTERN_SKILL:
+      {
+        Value binding_config_value = pop();
+        Value binding_type_value = pop();
+        Value params_value = pop();
+        Value param_order_value = pop();
+        Value description_value = pop();
+        Value name_value = pop();
+
+        auto* name = as_string(name_value);
+        auto* description = as_string(description_value);
+
+        if (!is_obj_type(params_value, ObjType::OBJ_MAP))
+        {
+          throw std::runtime_error("Extern skill params must be map");
+        }
+        if (!is_obj_type(param_order_value, ObjType::OBJ_LIST))
+        {
+          throw std::runtime_error("Extern skill param order must be list");
+        }
+        if (!is_obj_type(binding_config_value, ObjType::OBJ_MAP))
+        {
+          throw std::runtime_error("Extern skill binding config must be map");
+        }
+
+        auto* params = as_map(params_value);
+        auto* param_order = as_list(param_order_value);
+        auto* binding_config = as_map(binding_config_value);
+
+        std::vector<std::string> param_names;
+        param_names.reserve(param_order->items.size());
+        for (const auto& item : param_order->items)
+        {
+          param_names.push_back(to_std_string(item));
+        }
+
+        // Build ExternalSkillConfig from binding type + config map
+        auto* ext = new ExternalSkillConfig();
+        const std::string binding_type_str = to_std_string(binding_type_value);
+
+        auto map_str = [&](const std::string& key) -> std::string {
+          auto it = binding_config->entries.find(key);
+          if (it != binding_config->entries.end() && it->second.is_string())
+          {
+            return to_std_string(it->second);
+          }
+          return {};
+        };
+
+        if (binding_type_str == "mcp")
+        {
+          ext->binding = SkillBinding::McpTool;
+          ext->mcp_server_name = map_str("server");
+          ext->mcp_tool_name = map_str("tool");
+        }
+        else if (binding_type_str == "http")
+        {
+          ext->binding = SkillBinding::HttpApi;
+          ext->http_method = map_str("method");
+          ext->http_url_template = map_str("url");
+          ext->http_body_template = map_str("body_template");
+          ext->http_response_path = map_str("response_path");
+          // Parse timeout if present
+          auto timeout_it = binding_config->entries.find("timeout");
+          if (timeout_it != binding_config->entries.end() &&
+              timeout_it->second.is_number())
+          {
+            ext->http_timeout_ms =
+                static_cast<long>(timeout_it->second.as_number());
+          }
+          // Parse headers list if present
+          auto headers_it = binding_config->entries.find("headers");
+          if (headers_it != binding_config->entries.end() &&
+              headers_it->second.is_list())
+          {
+            auto* hlist = as_list(headers_it->second);
+            for (const auto& h : hlist->items)
+            {
+              if (h.is_string())
+              {
+                std::string header_str = to_std_string(h);
+                auto colon_pos = header_str.find(':');
+                if (colon_pos != std::string::npos)
+                {
+                  auto key = header_str.substr(0, colon_pos);
+                  auto value = header_str.substr(colon_pos + 1);
+                  auto start = value.find_first_not_of(" \t");
+                  if (start != std::string::npos)
+                  {
+                    value = value.substr(start);
+                  }
+                  ext->http_headers.emplace_back(std::move(key), std::move(value));
+                }
+              }
+            }
+          }
+        }
+        else if (binding_type_str == "claude_builtin")
+        {
+          ext->binding = SkillBinding::ClaudeBuiltin;
+          ext->claude_tool_type = map_str("type");
+        }
+        else
+        {
+          delete ext;
+          throw std::runtime_error("Unknown extern skill binding type: " + binding_type_str);
+        }
+
+        auto* skill = new_skill(name, description, params, std::move(param_names), nullptr);
+        skill->external = ext;
+        globals_.set(name, Value::Skill(skill));
+        break;
+      }
+      // v0.6.7: Define an MCP server connection
+      case OpCode::OP_DEFINE_MCP_SERVER:
+      {
+        Value config_value = pop();
+        Value name_value = pop();
+        // Store MCP server config in globals as a map for later reference
+        if (!is_obj_type(config_value, ObjType::OBJ_MAP))
+        {
+          throw std::runtime_error("MCP server config must be map");
+        }
+        auto* name = as_string(name_value);
+        // Store as a map in globals with a special prefix
+        std::string key = "__mcp_server__" + std::string(name->chars, name->length);
+        auto* key_str = copy_string(key.c_str(), key.size());
+        globals_.set(key_str, config_value);
+        break;
+      }
+      // v0.6.7: Adopt tools from an MCP server
+      case OpCode::OP_ADOPT_MCP_TOOLS:
+      {
+        Value alias_value = pop();
+        Value filter_value = pop();
+        Value server_name_value = pop();
+
+        const std::string server_name = to_std_string(server_name_value);
+
+        // Look up MCP server config
+        std::string config_key = "__mcp_server__" + server_name;
+        auto* config_key_str = copy_string(config_key.c_str(), config_key.size());
+        Value config_val;
+        if (!globals_.get(config_key_str, &config_val))
+        {
+          throw std::runtime_error("Unknown MCP server: " + server_name);
+        }
+
+        // Determine alias prefix
+        std::string prefix = server_name;
+        if (!alias_value.is_nil() && alias_value.is_string())
+        {
+          prefix = to_std_string(alias_value);
+        }
+
+        // Get filter list (empty = adopt all)
+        std::vector<std::string> filter;
+        if (is_obj_type(filter_value, ObjType::OBJ_LIST))
+        {
+          auto* flist = as_list(filter_value);
+          for (const auto& item : flist->items)
+          {
+            if (item.is_string())
+            {
+              filter.push_back(to_std_string(item));
+            }
+          }
+        }
+
+        // MCP adopt is a placeholder — the actual tool list would come from
+        // MCP tools/list call. For now, log a trace and create placeholder skills
+        // if specific tool names are provided in the filter.
+        if (!filter.empty())
+        {
+          for (const auto& tool_name : filter)
+          {
+            std::string full_name = prefix + "." + tool_name;
+            auto* skill_name = copy_string(full_name.c_str(), full_name.size());
+            std::string desc = "MCP tool " + tool_name + " from server " + server_name;
+            auto* skill_desc = copy_string(desc.c_str(), desc.size());
+            auto* skill_params = new_map({});
+            auto* ext = new ExternalSkillConfig();
+            ext->binding = SkillBinding::McpTool;
+            ext->mcp_server_name = server_name;
+            ext->mcp_tool_name = tool_name;
+            auto* skill = new_skill(skill_name, skill_desc, skill_params, {}, nullptr);
+            skill->external = ext;
+            globals_.set(skill_name, Value::Skill(skill));
+          }
+        }
         break;
       }
       case OpCode::OP_DEFINE_KNOWLEDGE:

@@ -152,6 +152,22 @@ enum class TokenType
   Nil,
   DocComment,
 
+  // v0.6.7: External skill adoption
+  Extern,
+  McpServer,
+  Adopt,
+  Binding,
+  Mcp,
+  Http,
+  ClaudeBuiltin,
+  Method,
+  Url,
+  Headers,
+  ResponsePath,
+  Server,
+  Command,
+  Args,
+
   Eof
 };
 
@@ -188,6 +204,10 @@ private:
   StmtPtr parse_emit();
   StmtPtr parse_function(const Visibility& visibility);
   StmtPtr parse_skill(const Visibility& visibility);
+  StmtPtr parse_extern_skill(const Visibility& visibility);
+  StmtPtr parse_mcp_server();
+  StmtPtr parse_adopt_statement();
+  SkillBindingSpec parse_skill_binding();
   StmtPtr parse_knowledge(const Visibility& visibility);
   StmtPtr parse_agent(const Visibility& visibility);
   StmtPtr parse_budget(const Visibility& visibility);
