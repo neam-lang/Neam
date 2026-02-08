@@ -9,13 +9,20 @@
 #include "neamc/version.hpp"
 #include "neamc/vm/vm.hpp"
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <mutex>
+#include <queue>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace
 {
@@ -113,8 +120,70 @@ const std::map<std::string, AgentConfig> kAgents = {
       "You are a researcher. Use the provided knowledge context to answer questions accurately.",
       "./readme.md"}}};
 
-// Global mutex for thread-safe operations
-std::mutex g_vm_mutex;
+// v0.6.8: Thread pool for concurrent request handling (replaces single g_vm_mutex)
+class ThreadPool
+{
+public:
+  explicit ThreadPool(size_t threads = 4)
+  {
+    for (size_t i = 0; i < threads; ++i)
+    {
+      workers_.emplace_back([this] {
+        while (true)
+        {
+          std::function<void()> task;
+          {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            condition_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
+            if (stop_ && tasks_.empty())
+            {
+              return;
+            }
+            task = std::move(tasks_.front());
+            tasks_.pop();
+          }
+          task();
+        }
+      });
+    }
+  }
+
+  ~ThreadPool()
+  {
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex_);
+      stop_ = true;
+    }
+    condition_.notify_all();
+    for (auto& worker : workers_)
+    {
+      if (worker.joinable())
+      {
+        worker.join();
+      }
+    }
+  }
+
+  template <typename F>
+  void enqueue(F&& task)
+  {
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex_);
+      tasks_.push(std::forward<F>(task));
+    }
+    condition_.notify_one();
+  }
+
+private:
+  std::vector<std::thread> workers_;
+  std::queue<std::function<void()>> tasks_;
+  std::mutex queue_mutex_;
+  std::condition_variable condition_;
+  bool stop_{false};
+};
+
+// Request timeout in milliseconds (default 60s, configurable via --timeout)
+long g_request_timeout_ms = 60000;
 
 // Generate Neam program for agent query
 std::string generate_neam_program(const std::string& agent_id, const std::string& query,
@@ -223,17 +292,15 @@ std::string value_to_string(const neamc::vm::Value& value)
   return "<object>";
 }
 
-// Execute Neam program and capture output
+// v0.6.8: Execute Neam program with per-request VM (no global mutex).
+// Each request gets its own Pipeline + VM for full concurrency.
 std::string execute_neam_program(const std::string& source)
 {
-  std::lock_guard<std::mutex> lock(g_vm_mutex);
-
   try
   {
     neamc::Pipeline pipeline;
     auto unit = pipeline.compile(source, {});
 
-    // Create output stream to capture emitted values
     std::ostringstream output_stream;
     std::istringstream input_stream;
 
@@ -241,15 +308,12 @@ std::string execute_neam_program(const std::string& source)
     vm.set_io(&input_stream, &output_stream);
     vm.run(unit.chunk);
 
-    // Get emitted values
     const auto& emitted = vm.emitted();
     if (!emitted.empty())
     {
-      // Return the last emitted value as string
       return value_to_string(emitted.back());
     }
 
-    // Fallback to output stream content
     return output_stream.str();
   }
   catch (const std::exception& ex)
@@ -359,9 +423,11 @@ void print_usage(const char* program_name)
 {
   std::cout << "Usage: " << program_name << " [options]\n"
             << "\nOptions:\n"
-            << "  --host HOST   Host to bind to (default: 0.0.0.0)\n"
-            << "  --port PORT   Port to listen on (default: 8080)\n"
-            << "  --help        Show this help message\n"
+            << "  --host HOST       Host to bind to (default: 0.0.0.0)\n"
+            << "  --port PORT       Port to listen on (default: 8080)\n"
+            << "  --workers N       Thread pool size (default: 4)\n"
+            << "  --timeout MS      Request timeout in ms (default: 60000)\n"
+            << "  --help            Show this help message\n"
             << "\nEnvironment Variables:\n"
             << "  NEAM_API_KEY     API authentication key (required in production)\n"
             << "  OPENAI_API_KEY   Required for OpenAI agents\n"
@@ -393,6 +459,7 @@ int main(int argc, char** argv)
 {
   std::string host = "0.0.0.0";
   int port = 8080;
+  int workers = 4;
 
   // Parse command line arguments
   for (int i = 1; i < argc; ++i)
@@ -411,6 +478,22 @@ int main(int argc, char** argv)
     else if (arg == "--port" && i + 1 < argc)
     {
       port = std::stoi(argv[++i]);
+    }
+    else if (arg == "--workers" && i + 1 < argc)
+    {
+      workers = std::stoi(argv[++i]);
+      if (workers < 1)
+      {
+        workers = 1;
+      }
+      if (workers > 64)
+      {
+        workers = 64;
+      }
+    }
+    else if (arg == "--timeout" && i + 1 < argc)
+    {
+      g_request_timeout_ms = std::stol(argv[++i]);
     }
     else
     {

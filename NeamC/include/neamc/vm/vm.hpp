@@ -13,7 +13,10 @@
 #include <unordered_set>
 #include <vector>
 
+#include <memory>
+
 #include "neamc/vm/bytecode.hpp"
+#include "neamc/vm/mcp_client.hpp"
 #include "neamc/vm/memory.hpp"
 #include "neamc/vm/native.hpp"
 #include "neamc/vm/object.hpp"
@@ -176,6 +179,7 @@ private:
   std::unordered_map<std::string, ToolDef> tools_{};
   std::unordered_map<std::string, MemoryStore> memory_stores_{};
   std::unordered_map<std::string, std::unordered_set<std::string>> entity_capabilities_{};
+  std::unordered_map<std::string, std::unique_ptr<McpClient>> mcp_clients_{};
   ObjEnv* env_{nullptr};
   Table globals_{};
   Table interned_strings_{};

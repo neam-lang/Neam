@@ -306,6 +306,81 @@ public:
     }
   }
 
+  // v0.6.8: NDJSON streaming for Ollama
+  void chat_stream(const std::vector<Message>& messages, StreamCallback callback) override
+  {
+    LLMLogger::info("ollama", "Stream request: model=" + config_.model);
+
+    nlohmann::json payload;
+    payload["model"] = config_.model;
+    payload["messages"] = build_messages_json(messages);
+    payload["stream"] = true;
+    if (config_.temperature > 0.0)
+    {
+      payload["options"] = {{"temperature", config_.temperature}};
+    }
+
+    std::string buffer;
+    http_post_streaming(
+        build_url(config_.endpoint, "/api/chat"), payload.dump(),
+        {"Content-Type: application/json"},
+        [&](const char* data, size_t size) {
+          buffer.append(data, size);
+
+          // Parse NDJSON: one JSON object per line
+          size_t pos = 0;
+          while (pos < buffer.size())
+          {
+            size_t nl = buffer.find('\n', pos);
+            if (nl == std::string::npos)
+            {
+              break;
+            }
+            std::string line = buffer.substr(pos, nl - pos);
+            pos = nl + 1;
+
+            if (line.empty())
+            {
+              continue;
+            }
+
+            try
+            {
+              auto parsed = nlohmann::json::parse(line);
+              bool done = parsed.value("done", false);
+
+              if (parsed.contains("message"))
+              {
+                std::string content = parsed["message"].value("content", "");
+                if (!content.empty())
+                {
+                  callback(content, done);
+                }
+              }
+              else if (parsed.contains("response"))
+              {
+                std::string content = parsed["response"].get<std::string>();
+                if (!content.empty())
+                {
+                  callback(content, done);
+                }
+              }
+
+              if (done)
+              {
+                callback("", true);
+              }
+            }
+            catch (const nlohmann::json::parse_error&)
+            {
+              // Skip malformed lines
+            }
+          }
+          buffer = buffer.substr(pos);
+        },
+        120000);
+  }
+
 private:
   ProviderConfig config_;
 };

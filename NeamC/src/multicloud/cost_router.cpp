@@ -7,7 +7,9 @@
 
 #include <algorithm>
 #include <atomic>
+#include <fstream>
 #include <mutex>
+#include <nlohmann/json.hpp>
 #include <unordered_map>
 
 namespace neamc::multicloud {
@@ -324,12 +326,68 @@ std::optional<CostComparison> CostAwareRouter::get_cheapest(
 }
 
 void CostAwareRouter::refresh_spot_prices() {
-    // In production, this would call cloud provider APIs
-    // For now, just update timestamps
+    // NOTE: This does not call live cloud provider pricing APIs.
+    // To use real pricing data, call load_pricing_from_file() or
+    // update_pricing_batch() with data from your own pricing source.
     std::lock_guard<std::mutex> lock(impl_->mutex);
     auto now = std::chrono::system_clock::now();
     for (auto& [key, pricing] : impl_->pricing) {
         pricing.last_updated = now;
+    }
+}
+
+// v0.6.8: Load pricing data from a JSON file.
+// Expected format:
+// [
+//   {
+//     "provider": "aws",
+//     "region": "us-east-1",
+//     "instance_type": "m5.xlarge",
+//     "spot_price_per_hour": 0.05,
+//     "ondemand_price_per_hour": 0.192,
+//     "spot_availability": 0.95,
+//     "egress_cost_per_gb": 0.09,
+//     "gpu_spot_price_per_hour": 0.0,
+//     "gpu_ondemand_price_per_hour": 0.0
+//   }
+// ]
+bool CostAwareRouter::load_pricing_from_file(const std::string& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    try {
+        auto json = nlohmann::json::parse(file);
+        if (!json.is_array()) {
+            return false;
+        }
+
+        std::vector<RegionPricing> entries;
+        auto now = std::chrono::system_clock::now();
+
+        for (const auto& item : json) {
+            RegionPricing p;
+            p.provider = string_to_provider(item.value("provider", "unknown"));
+            p.region = item.value("region", "");
+            p.instance_type = item.value("instance_type", "");
+            p.spot_price_per_hour = item.value("spot_price_per_hour", 0.0);
+            p.ondemand_price_per_hour = item.value("ondemand_price_per_hour", 0.0);
+            p.spot_availability = item.value("spot_availability", 0.0);
+            p.egress_cost_per_gb = item.value("egress_cost_per_gb", 0.0);
+            p.gpu_spot_price_per_hour = item.value("gpu_spot_price_per_hour", 0.0);
+            p.gpu_ondemand_price_per_hour = item.value("gpu_ondemand_price_per_hour", 0.0);
+            p.last_updated = now;
+
+            if (p.provider != CloudProvider::Unknown && !p.region.empty()) {
+                entries.push_back(std::move(p));
+            }
+        }
+
+        update_pricing_batch(entries);
+        return true;
+    } catch (const std::exception&) {
+        return false;
     }
 }
 

@@ -179,6 +179,92 @@ private:
   std::optional<T> data_;
 };
 
+// Partial specialization for reference types (Option<T&>).
+// Uses a raw pointer internally since std::optional<T&> is ill-formed.
+template <typename T>
+class Option<T&>
+{
+public:
+  using value_type = T&;
+
+  Option() noexcept : ptr_(nullptr) {}
+  Option(NoneType) noexcept : ptr_(nullptr) {}
+  Option(T& value) noexcept : ptr_(&value) {}
+  Option(const Option&) = default;
+  Option& operator=(const Option&) = default;
+
+  bool is_some() const noexcept { return ptr_ != nullptr; }
+  bool is_none() const noexcept { return ptr_ == nullptr; }
+  explicit operator bool() const noexcept { return is_some(); }
+
+  T& unwrap()
+  {
+    if (is_none())
+    {
+      throw std::runtime_error("Called unwrap on None");
+    }
+    return *ptr_;
+  }
+
+  const T& unwrap() const
+  {
+    if (is_none())
+    {
+      throw std::runtime_error("Called unwrap on None");
+    }
+    return *ptr_;
+  }
+
+  T& unwrap_or(T& default_value) const
+  {
+    return is_some() ? *ptr_ : default_value;
+  }
+
+  T& expect(const char* msg)
+  {
+    if (is_none())
+    {
+      throw std::runtime_error(msg);
+    }
+    return *ptr_;
+  }
+
+  template <typename F>
+  auto map(F&& f) const -> Option<std::invoke_result_t<F, T&>>
+  {
+    using U = std::invoke_result_t<F, T&>;
+    if (is_none())
+    {
+      return Option<U>();
+    }
+    return Option<U>(f(*ptr_));
+  }
+
+  bool operator==(const Option& other) const
+  {
+    if (is_none() && other.is_none())
+    {
+      return true;
+    }
+    if (is_none() || other.is_none())
+    {
+      return false;
+    }
+    return *ptr_ == *other.ptr_;
+  }
+
+  bool operator!=(const Option& other) const
+  {
+    return !(*this == other);
+  }
+
+  T** begin() { return is_some() ? &ptr_ : nullptr; }
+  T** end() { return is_some() ? &ptr_ + 1 : nullptr; }
+
+private:
+  T* ptr_;
+};
+
 template <typename T>
 Option<std::decay_t<T>> Some(T&& value)
 {
