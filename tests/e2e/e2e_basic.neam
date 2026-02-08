@@ -1,0 +1,56 @@
+// E2E Test 1: Basic compiler + runtime test
+// Tests: compilation, emit, variables, string ops, if/else, skills
+
+skill greet {
+  description: "Greet a person"
+  params: {
+    name: string
+  }
+  impl(name) {
+    return "Hello, " + name + "!";
+  }
+}
+
+skill add_strings {
+  description: "Concatenate two strings"
+  params: {
+    a: string,
+    b: string
+  }
+  impl(a, b) {
+    return a + " and " + b;
+  }
+}
+
+{
+  emit "=== E2E Test 1: Basic Compilation & Runtime ===";
+  emit "";
+
+  // Test emit
+  emit "T1.1 emit: PASS";
+
+  // Test variable assignment
+  let x = "Neam";
+  emit "T1.2 variable: " + x;
+
+  // Test skill call
+  let greeting = greet("World");
+  emit "T1.3 skill call: " + greeting;
+
+  // Test string skill
+  let combined = add_strings("alpha", "beta");
+  emit "T1.4 string skill: " + combined;
+
+  // Test if/else
+  let val = 42;
+  if (val == 42) {
+    emit "T1.5 if/else: PASS (val is 42)";
+  }
+
+  // Test string concatenation
+  let full = "v" + "0" + "." + "6" + "." + "8";
+  emit "T1.6 string concat: " + full;
+
+  emit "";
+  emit "=== E2E Test 1: COMPLETE ===";
+}

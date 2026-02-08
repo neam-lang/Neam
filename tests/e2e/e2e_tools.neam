@@ -1,0 +1,67 @@
+// E2E Test 3: Native tool calling with OpenAI
+// Tests that skills are exposed as LLM tools and the agent calls them
+
+skill get_weather {
+  description: "Get the current weather for a city. Returns temperature and conditions."
+  params: {
+    city: string
+  }
+  impl(city) {
+    if (city == "Tokyo") {
+      return "Tokyo: 22C, Partly Cloudy, Humidity 65%";
+    }
+    if (city == "London") {
+      return "London: 14C, Overcast, Humidity 78%";
+    }
+    if (city == "Paris") {
+      return "Paris: 18C, Light Rain, Humidity 72%";
+    }
+    return city + ": 20C, Clear, Humidity 50%";
+  }
+}
+
+skill translate {
+  description: "Translate text to a target language."
+  params: {
+    text: string,
+    target_language: string
+  }
+  impl(text, target_language) {
+    let key = target_language + ":" + text;
+    if (key == "Spanish:Hello") {
+      return "Hola";
+    }
+    if (key == "French:Hello") {
+      return "Bonjour";
+    }
+    return "[" + target_language + "] " + text;
+  }
+}
+
+agent ToolAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a helpful assistant. Use your tools when asked about weather or translations. Be concise."
+  skills: [get_weather, translate]
+}
+
+{
+  emit "=== E2E Test 3: Native Tool Calling ===";
+  emit "";
+
+  // Test: Agent should call get_weather tool
+  emit "T3.1 Weather tool call...";
+  let weather = ToolAgent.ask("What is the weather in Tokyo?");
+  emit "T3.1 Response: " + weather;
+  emit "";
+
+  // Test: Agent should call translate tool
+  emit "T3.2 Translation tool call...";
+  let translated = ToolAgent.ask("Translate 'Hello' to French using the translate tool.");
+  emit "T3.2 Response: " + translated;
+  emit "";
+
+  emit "=== E2E Test 3: COMPLETE ===";
+}

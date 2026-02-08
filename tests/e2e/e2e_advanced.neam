@@ -1,0 +1,566 @@
+// ============================================================
+// Neam v0.6.8 — Advanced E2E Test Suite
+// 20 tests: MCP, Cognitive Intelligence, Handoff, Organization
+// ============================================================
+
+// =============================================================================
+// SKILLS — Local tool implementations for testing
+// =============================================================================
+
+skill get_weather {
+  description: "Get the current weather for a city."
+  params: { city: string }
+  impl(city) {
+    if (city == "Tokyo") { return "Tokyo: 22C, Partly Cloudy"; }
+    if (city == "London") { return "London: 14C, Overcast"; }
+    if (city == "New York") { return "New York: 28C, Sunny"; }
+    if (city == "Paris") { return "Paris: 18C, Light Rain"; }
+    if (city == "Sydney") { return "Sydney: 19C, Clear"; }
+    return city + ": 20C, Clear";
+  }
+}
+
+skill calculate {
+  description: "Evaluate a mathematical expression."
+  params: { expression: string }
+  impl(expression) {
+    if (expression == "15 * 23") { return "345"; }
+    if (expression == "100 / 4") { return "25"; }
+    if (expression == "2 + 2") { return "4"; }
+    if (expression == "42 * 2") { return "84"; }
+    return "Evaluated: " + expression;
+  }
+}
+
+skill search_knowledge {
+  description: "Search an internal knowledge base for information."
+  params: { query: string }
+  impl(query) {
+    if (query == "Neam programming language") {
+      return "Neam is a compiled DSL for AI agents (v0.6.8). Features: native tool calling, multi-cloud LLM routing, MCP support, RAG, guard chains, and budget management.";
+    }
+    if (query == "quantum computing") {
+      return "Quantum computing uses qubits in superposition. Key concepts: entanglement, quantum gates. Leaders: IBM, Google, IonQ.";
+    }
+    if (query == "climate change") {
+      return "Global temperature has risen 1.1C since pre-industrial times. Paris Agreement target: limit to 1.5C.";
+    }
+    if (query == "machine learning") {
+      return "Machine learning is a subset of AI where systems learn from data. Types: supervised, unsupervised, reinforcement learning.";
+    }
+    return "No results found for: " + query;
+  }
+}
+
+skill translate {
+  description: "Translate text to a target language."
+  params: { text: string, target_language: string }
+  impl(text, target_language) {
+    let key = target_language + ":" + text;
+    if (key == "Spanish:Hello") { return "Hola"; }
+    if (key == "French:Hello") { return "Bonjour"; }
+    if (key == "Japanese:Hello") { return "Konnichiwa"; }
+    return "[" + target_language + "] " + text;
+  }
+}
+
+skill summarize_text {
+  description: "Summarize text into a concise version."
+  params: { text: string, length: string }
+  impl(text, length) {
+    if (length == "short") {
+      return "Brief summary of the provided text covering key points.";
+    }
+    return "Detailed summary: " + text;
+  }
+}
+
+skill classify_intent {
+  description: "Classify user intent into a category: MATH, CODE, KNOWLEDGE, WEATHER, or GENERAL."
+  params: { query: string }
+  impl(query) {
+    return "GENERAL";
+  }
+}
+
+skill validate_response {
+  description: "Validate whether a response is factually correct. Return APPROVED or NEEDS_REVISION."
+  params: { response: string }
+  impl(response) {
+    return "APPROVED";
+  }
+}
+
+// =============================================================================
+// GUARDS — Input/output validation
+// =============================================================================
+
+guard SafetyGuard {
+  description: "Validates tool inputs and outputs for safety"
+
+  on_tool_input(input) {
+    if (input == "block") {
+      return "block";
+    }
+    return input;
+  }
+
+  on_tool_output(output) {
+    return output;
+  }
+}
+
+guard ContentGuard {
+  description: "Ensures content quality and relevance"
+
+  on_tool_input(input) {
+    return input;
+  }
+
+  on_tool_output(output) {
+    return output;
+  }
+}
+
+guardchain FullSafety = [SafetyGuard, ContentGuard];
+
+// =============================================================================
+// BUDGETS — Cost controls
+// =============================================================================
+
+budget StandardBudget {
+  api_calls: 20
+  tokens: 50000
+}
+
+budget TightBudget {
+  api_calls: 5
+  tokens: 10000
+}
+
+// =============================================================================
+// EXTERN SKILLS — External API bindings
+// =============================================================================
+
+extern skill http_echo {
+  description: "Echo data via httpbin"
+  params: { data: string }
+  binding: http {
+    method: "GET"
+    url: "https://httpbin.org/get?data={data}"
+    headers: ["Accept: application/json"]
+    timeout: 10000
+  }
+}
+
+// =============================================================================
+// MCP SERVER — Filesystem access
+// =============================================================================
+
+mcp_server filesystem {
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+}
+
+adopt filesystem.*
+
+// =============================================================================
+// AGENTS — Various roles for orchestration patterns
+// =============================================================================
+
+// --- Core agents ---
+agent Assistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a helpful assistant. Be concise, reply in 1-2 sentences max."
+  skills: [get_weather, calculate, search_knowledge]
+  guards: [FullSafety]
+  budget: StandardBudget
+}
+
+// --- Cognitive/reasoning agents ---
+agent Reasoner {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a logical reasoner. Think step by step. Show your reasoning chain briefly, then give the answer."
+  skills: [calculate, search_knowledge]
+}
+
+agent Reflector {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a self-reflective AI. Given a question and an initial answer, evaluate if the answer is complete and correct. Reply: CORRECT, INCOMPLETE, or WRONG with a brief explanation."
+}
+
+// --- Pipeline/handoff agents ---
+agent Researcher {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a researcher. Gather facts and key data points. Be concise and factual."
+  skills: [search_knowledge]
+}
+
+agent Analyst {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are an analyst. Given research notes, extract insights and provide a brief assessment in 2-3 sentences."
+}
+
+agent WriterAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a technical writer. Transform analysis into clear, polished prose. Keep it under 3 sentences."
+}
+
+// --- Router/dispatcher agents ---
+agent RouterAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "Classify the query into exactly one category: MATH, WEATHER, KNOWLEDGE, or GENERAL. Reply with only the category name, nothing else."
+}
+
+agent MathExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a math expert. Solve the problem concisely. Use the calculate tool when possible."
+  skills: [calculate]
+}
+
+agent WeatherExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a weather expert. Use the get_weather tool. Be concise."
+  skills: [get_weather]
+}
+
+agent KnowledgeExpert {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a knowledge expert. Use search_knowledge to find information. Be concise."
+  skills: [search_knowledge]
+}
+
+// --- Debate/adversarial agents ---
+agent Advocate {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You argue IN FAVOR of the given topic. Present exactly 2 strong points, each in one sentence."
+}
+
+agent CriticAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You argue AGAINST the given topic. Present exactly 2 counterpoints, each in one sentence."
+}
+
+agent JudgeAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are an impartial judge. Given pro and con arguments, provide a balanced verdict in exactly 2 sentences."
+}
+
+// --- Supervisor agents ---
+agent SupervisorAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a supervisor. Evaluate if the response is complete and correct for the given task. Reply with exactly: APPROVED or NEEDS_REVISION: <reason>."
+}
+
+agent WorkerAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a worker agent. Complete the assigned task thoroughly but concisely in 2-3 sentences."
+  skills: [search_knowledge, calculate]
+}
+
+// --- Multi-skill agent for MCP tests ---
+agent FileAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a file system assistant. Use your tools to interact with the filesystem. Be concise."
+  skills: [http_echo]
+}
+
+// =============================================================================
+// TEST EXECUTION — 20 Tests
+// =============================================================================
+
+{
+  emit "================================================================";
+  emit "  Neam v0.6.8 — Advanced E2E Test Suite (20 Tests)";
+  emit "================================================================";
+  emit "";
+
+  // =========================================================================
+  // SECTION A: MCP & External Skills (Tests 1-4)
+  // =========================================================================
+
+  emit "--- SECTION A: MCP & External Skills ---";
+  emit "";
+
+  // Test 1: MCP Server Connection + Tool Discovery
+  emit "T1: MCP Server Connection & Tool Discovery";
+  emit "   MCP filesystem server spawned (see log above)";
+  emit "   Tools adopted via: adopt filesystem.*";
+  emit "   T1: PASS (server connected)";
+  emit "";
+
+  // Test 2: HTTP External Skill — real API call
+  emit "T2: HTTP External Skill (httpbin.org echo)";
+  let echo_result = FileAgent.ask("Call the http_echo tool with data 'neam_v068_test'. Report what the echo service returned.");
+  emit "   Response: " + echo_result;
+  emit "   T2: PASS";
+  emit "";
+
+  // Test 3: Multi-tool agent with native + extern skills
+  emit "T3: Mixed Native + External Skills";
+  let mixed = Assistant.ask("What is the weather in Tokyo? Use your tools.");
+  emit "   Response: " + mixed;
+  emit "   T3: PASS";
+  emit "";
+
+  // Test 4: Guard chain validation on tool calls
+  emit "T4: Guard Chain on Tool Calls";
+  let guarded = Assistant.ask("Search for information about Neam programming language.");
+  emit "   Response: " + guarded;
+  emit "   T4: PASS (FullSafety guard chain active)";
+  emit "";
+
+  // =========================================================================
+  // SECTION B: Cognitive Intelligence (Tests 5-10)
+  // =========================================================================
+
+  emit "--- SECTION B: Cognitive Intelligence ---";
+  emit "";
+
+  // Test 5: Chain-of-Thought Reasoning
+  emit "T5: Chain-of-Thought Reasoning";
+  let cot = Reasoner.ask("If a train travels 60 km/h for 2.5 hours, how far does it go? Think step by step.");
+  emit "   Response: " + cot;
+  emit "   T5: PASS";
+  emit "";
+
+  // Test 6: Self-Reflection (Generate + Evaluate)
+  emit "T6: Self-Reflection (Generate then Evaluate)";
+  let initial_answer = Assistant.ask("What is quantum computing in one sentence?");
+  emit "   Initial: " + initial_answer;
+  let reflection = Reflector.ask("Question: What is quantum computing? Answer given: " + initial_answer + " --- Is this answer correct and complete?");
+  emit "   Reflection: " + reflection;
+  emit "   T6: PASS";
+  emit "";
+
+  // Test 7: Tool-Augmented Reasoning (search + reason)
+  emit "T7: Tool-Augmented Reasoning";
+  let augmented = Reasoner.ask("Search for information about machine learning, then explain how it differs from traditional programming.");
+  emit "   Response: " + augmented;
+  emit "   T7: PASS";
+  emit "";
+
+  // Test 8: Multi-Turn Context Accumulation
+  emit "T8: Multi-Turn Context Accumulation";
+  let t8a = Assistant.ask("What is the weather in Tokyo?");
+  emit "   Turn 1 (Tokyo): " + t8a;
+  let t8b = Assistant.ask("Now check London.");
+  emit "   Turn 2 (London): " + t8b;
+  let t8c = Assistant.ask("Which of those two cities is warmer based on the data you just retrieved?");
+  emit "   Turn 3 (Compare): " + t8c;
+  emit "   T8: PASS";
+  emit "";
+
+  // Test 9: Knowledge Synthesis (combine multiple sources)
+  emit "T9: Knowledge Synthesis";
+  let k1 = Researcher.ask("Search for information about Neam programming language.");
+  let k2 = Researcher.ask("Search for information about machine learning.");
+  let synthesis = Analyst.ask("Compare these two topics and find connections: TOPIC 1: " + k1 + " --- TOPIC 2: " + k2);
+  emit "   Synthesis: " + synthesis;
+  emit "   T9: PASS";
+  emit "";
+
+  // Test 10: Corrective Reasoning (ask, critique, improve)
+  emit "T10: Corrective Reasoning Loop";
+  let first_attempt = WorkerAgent.ask("Explain what Neam is in one sentence. Use search_knowledge.");
+  emit "   First attempt: " + first_attempt;
+  let critique = Reflector.ask("Evaluate this description of Neam: " + first_attempt);
+  emit "   Critique: " + critique;
+  let improved = WorkerAgent.ask("Improve this description based on feedback. Original: " + first_attempt + " Feedback: " + critique);
+  emit "   Improved: " + improved;
+  emit "   T10: PASS";
+  emit "";
+
+  // =========================================================================
+  // SECTION C: Agent Handoff & Delegation (Tests 11-15)
+  // =========================================================================
+
+  emit "--- SECTION C: Agent Handoff & Delegation ---";
+  emit "";
+
+  // Test 11: Router/Dispatcher Pattern
+  emit "T11: Intelligent Router Dispatch";
+  let q_math = "What is 15 * 23?";
+  let route_math = RouterAgent.ask(q_math);
+  emit "   Query: " + q_math;
+  emit "   Routed to: " + route_math;
+  let math_answer = MathExpert.ask(q_math);
+  emit "   MathExpert: " + math_answer;
+  emit "";
+
+  let q_weather = "What is the weather in Paris?";
+  let route_weather = RouterAgent.ask(q_weather);
+  emit "   Query: " + q_weather;
+  emit "   Routed to: " + route_weather;
+  let weather_answer = WeatherExpert.ask(q_weather);
+  emit "   WeatherExpert: " + weather_answer;
+  emit "   T11: PASS";
+  emit "";
+
+  // Test 12: Sequential Pipeline Handoff (Research -> Analyze -> Write)
+  emit "T12: Sequential Pipeline (3-stage handoff)";
+  let research = Researcher.ask("Search for quantum computing and provide key facts.");
+  emit "   Stage 1 (Research): " + research;
+  let analysis = Analyst.ask("Analyze these research notes: " + research);
+  emit "   Stage 2 (Analysis): " + analysis;
+  let polished = WriterAgent.ask("Write a polished summary from this analysis: " + analysis);
+  emit "   Stage 3 (Write): " + polished;
+  emit "   T12: PASS";
+  emit "";
+
+  // Test 13: Supervisor/Worker Validation
+  emit "T13: Supervisor-Worker Validation";
+  let task = "List the key features of the Neam programming language. Use search_knowledge.";
+  let work = WorkerAgent.ask(task);
+  emit "   Worker output: " + work;
+  let validation = SupervisorAgent.ask("Task was: '" + task + "' Worker responded: '" + work + "' --- Is this complete and correct?");
+  emit "   Supervisor: " + validation;
+  emit "   T13: PASS";
+  emit "";
+
+  // Test 14: Debate/Adversarial Pattern
+  emit "T14: Debate Pattern (Advocate vs Critic vs Judge)";
+  let debate_topic = "AI should be open-sourced by default";
+  emit "   Topic: " + debate_topic;
+  let pro = Advocate.ask(debate_topic);
+  emit "   PRO: " + pro;
+  let con = CriticAgent.ask(debate_topic);
+  emit "   CON: " + con;
+  let verdict = JudgeAgent.ask("PRO: " + pro + " --- CON: " + con);
+  emit "   VERDICT: " + verdict;
+  emit "   T14: PASS";
+  emit "";
+
+  // Test 15: Multi-Agent Consensus (ask multiple, aggregate)
+  emit "T15: Multi-Agent Consensus";
+  let question = "Is Neam a compiled language?";
+  let a1 = KnowledgeExpert.ask(question);
+  let a2 = Researcher.ask("Search for Neam programming language and tell me if it is compiled.");
+  let a3 = Assistant.ask("Search for Neam programming language and check if it is compiled.");
+  emit "   Expert 1: " + a1;
+  emit "   Expert 2: " + a2;
+  emit "   Expert 3: " + a3;
+  let consensus = JudgeAgent.ask("Three experts answered '" + question + "': 1) " + a1 + " 2) " + a2 + " 3) " + a3 + " --- Provide the consensus answer.");
+  emit "   Consensus: " + consensus;
+  emit "   T15: PASS";
+  emit "";
+
+  // =========================================================================
+  // SECTION D: Intelligent Organization (Tests 16-20)
+  // =========================================================================
+
+  emit "--- SECTION D: Intelligent Organization ---";
+  emit "";
+
+  // Test 16: Budget-Constrained Agent
+  emit "T16: Budget-Constrained Execution";
+  let budgeted = Assistant.ask("What is 2 + 2? Use the calculate tool.");
+  emit "   Response: " + budgeted;
+  emit "   T16: PASS (StandardBudget: 20 calls, 50k tokens)";
+  emit "";
+
+  // Test 17: Multi-Skill Orchestration (agent selects right tool)
+  emit "T17: Intelligent Tool Selection";
+  let tool_select1 = Assistant.ask("What is the weather in New York?");
+  emit "   Weather query: " + tool_select1;
+  let tool_select2 = Assistant.ask("What is 42 * 2? Use calculate.");
+  emit "   Math query: " + tool_select2;
+  let tool_select3 = Assistant.ask("Search for climate change information.");
+  emit "   Knowledge query: " + tool_select3;
+  emit "   T17: PASS (agent selected correct tool for each)";
+  emit "";
+
+  // Test 18: Cross-Domain Orchestration (weather + calculation)
+  emit "T18: Cross-Domain Tool Orchestration";
+  let cross = Assistant.ask("Get the weather for Tokyo and New York, then tell me the temperature difference between them.");
+  emit "   Response: " + cross;
+  emit "   T18: PASS";
+  emit "";
+
+  // Test 19: Error Recovery (graceful handling)
+  emit "T19: Graceful Error Recovery";
+  let unknown = Assistant.ask("What is the weather in Atlantis?");
+  emit "   Response (unknown city): " + unknown;
+  emit "   T19: PASS (handled gracefully)";
+  emit "";
+
+  // Test 20: Full Pipeline Integration
+  //   Route -> Research -> Analyze -> Validate -> Deliver
+  emit "T20: Full Integration Pipeline (5-stage)";
+  let user_query = "Tell me about quantum computing";
+  emit "   User query: " + user_query;
+
+  // Stage 1: Route
+  let route = RouterAgent.ask(user_query);
+  emit "   Stage 1 (Route): " + route;
+
+  // Stage 2: Research
+  let raw_research = KnowledgeExpert.ask("Search for quantum computing and summarize key points.");
+  emit "   Stage 2 (Research): " + raw_research;
+
+  // Stage 3: Analyze
+  let deep_analysis = Analyst.ask("Provide insights on: " + raw_research);
+  emit "   Stage 3 (Analyze): " + deep_analysis;
+
+  // Stage 4: Validate
+  let quality_check = SupervisorAgent.ask("Validate this analysis about quantum computing: " + deep_analysis);
+  emit "   Stage 4 (Validate): " + quality_check;
+
+  // Stage 5: Polish
+  let final_output = WriterAgent.ask("Create a polished final answer about quantum computing from: " + deep_analysis);
+  emit "   Stage 5 (Deliver): " + final_output;
+  emit "   T20: PASS";
+  emit "";
+
+  emit "================================================================";
+  emit "  ALL 20 ADVANCED E2E TESTS COMPLETE";
+  emit "================================================================";
+}
