@@ -22,6 +22,9 @@
 
 #include "neamc/vm/async/future.hpp"
 
+// NOTE: vm::async::Executor will be replaced by runtime::Executor in v0.7.0.
+// runtime::Executor provides work-stealing and configurable queue sizes.
+// New code should prefer runtime::Executor where possible.
 namespace neamc::vm::async
 {
 struct TimeoutError

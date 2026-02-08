@@ -22,6 +22,7 @@
 
 #include "neamc/llm/provider_factory.hpp"
 #include "neamc/vm/async/future.hpp"
+#include "neamc/vm/external_skill.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/schema.hpp"
 
@@ -29,20 +30,26 @@ namespace neamc::vm
 {
 namespace
 {
-// Maximum call stack depth — prevents native stack overflow (SIGSEGV) from
-// infinite recursion. Configurable via NEAM_MAX_CALL_DEPTH env var.
-int get_max_call_depth()
+// Read an integer from an environment variable with bounds checking.
+int get_config_int(const char* env_var, int default_val, int min_val, int max_val)
 {
-  const char* env = std::getenv("NEAM_MAX_CALL_DEPTH");
+  const char* env = std::getenv(env_var);
   if (env)
   {
     int val = std::atoi(env);
-    if (val > 0 && val <= 100000)
+    if (val >= min_val && val <= max_val)
     {
       return val;
     }
   }
-  return 1000;
+  return default_val;
+}
+
+// Maximum call stack depth — prevents native stack overflow (SIGSEGV) from
+// infinite recursion. Configurable via NEAM_MAX_CALL_DEPTH env var.
+int get_max_call_depth()
+{
+  return get_config_int("NEAM_MAX_CALL_DEPTH", 1000, 1, 100000);
 }
 
 const int kMaxCallDepth = get_max_call_depth();
@@ -64,6 +71,17 @@ std::string to_std_string(const ObjString* value)
     return {};
   }
   return std::string(value->chars, value->length);
+}
+
+std::string value_type_name(const Value& value)
+{
+  if (value.is_nil()) return "nil";
+  if (value.is_bool()) return "bool";
+  if (value.is_number()) return "number";
+  if (value.is_string()) return "string";
+  if (value.is_list()) return "list";
+  if (value.is_map()) return "map";
+  return "object";
 }
 
 std::string value_to_string(const Value& value)
@@ -767,8 +785,9 @@ std::string opcode_name(OpCode op)
       return "OP_CHECKPOINT";
     case OpCode::OP_REWIND:
       return "OP_REWIND";
+    default:
+      return "OP_UNKNOWN";
   }
-  return "OP_UNKNOWN";
 }
 
 }  // anonymous namespace
@@ -922,7 +941,10 @@ Value VirtualMachine::binary_numeric_op(const Value& lhs, const Value& rhs, OpCo
 {
   if (!lhs.is_number() || !rhs.is_number())
   {
-    throw std::runtime_error("Numeric operation on non-number types");
+    throw std::runtime_error(
+        "Type error: cannot apply '" + std::string(opcode_name(op)) +
+        "' to " + value_type_name(lhs) + " and " + value_type_name(rhs) +
+        " (expected numbers)");
   }
 
   const double a = lhs.as_number();
@@ -943,7 +965,8 @@ Value VirtualMachine::binary_numeric_op(const Value& lhs, const Value& rhs, OpCo
     case OpCode::OP_DIV:
       if (b == 0.0)
       {
-        throw std::runtime_error("Division by zero");
+        throw std::runtime_error(
+            "Division by zero: " + std::to_string(a) + " / 0");
       }
       result = a / b;
       break;
@@ -958,7 +981,9 @@ Value VirtualMachine::concatenate(const Value& lhs, const Value& rhs)
 {
   if (!is_obj_type(lhs, ObjType::OBJ_STRING) || !is_obj_type(rhs, ObjType::OBJ_STRING))
   {
-    throw std::runtime_error("Concatenation expects string operands");
+    throw std::runtime_error(
+        "Type error: cannot concatenate " + value_type_name(lhs) +
+        " and " + value_type_name(rhs) + " (expected strings)");
   }
   const auto* a = as_string(lhs);
   const auto* b = as_string(rhs);
@@ -1063,7 +1088,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         const auto index = read_short(code, frame.ip);
         if (index >= constants.size())
         {
-          throw std::runtime_error("Constant index out of range");
+          throw std::runtime_error(
+              "Constant index out of range: index " + std::to_string(index) +
+              " exceeds pool size " + std::to_string(constants.size()));
         }
         stack_.push_back(constants[index]);
         break;
@@ -1088,7 +1115,10 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         const auto slot = read_short(code, frame.ip);
         if (frame.stack_start + slot >= stack_.size())
         {
-          throw std::runtime_error("Local index out of range");
+          throw std::runtime_error(
+              "Local index out of range: slot " + std::to_string(slot) +
+              " (stack_start=" + std::to_string(frame.stack_start) +
+              ", stack_size=" + std::to_string(stack_.size()) + ")");
         }
         stack_.push_back(stack_[frame.stack_start + slot]);
         break;
@@ -1098,7 +1128,10 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         const auto slot = read_short(code, frame.ip);
         if (frame.stack_start + slot >= stack_.size())
         {
-          throw std::runtime_error("Local index out of range for set");
+          throw std::runtime_error(
+              "Local index out of range for set: slot " + std::to_string(slot) +
+              " (stack_start=" + std::to_string(frame.stack_start) +
+              ", stack_size=" + std::to_string(stack_.size()) + ")");
         }
         stack_[frame.stack_start + slot] = peek();
         break;
@@ -1118,7 +1151,8 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value value;
         if (!globals_.get(name, &value))
         {
-          throw std::runtime_error("Undefined global variable");
+          throw std::runtime_error(
+              "Undefined variable '" + std::string(name->chars, name->length) + "'");
         }
         stack_.push_back(value);
         break;
@@ -1129,7 +1163,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         auto* name = as_string(constants[name_index]);
         if (globals_.set(name, peek()))
         {
-          throw std::runtime_error("Undefined global variable");
+          throw std::runtime_error(
+              "Undefined variable '" + std::string(name->chars, name->length) +
+              "' (cannot assign to undeclared variable)");
         }
         break;
       }
@@ -1138,7 +1174,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value value = pop();
         if (!value.is_number())
         {
-          throw std::runtime_error("Negation on non-number type");
+          throw std::runtime_error(
+              "Type error: cannot negate " + value_type_name(value) +
+              " (expected number)");
         }
         stack_.push_back(Value::Number(-value.as_number()));
         break;
@@ -1181,7 +1219,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value lhs = pop();
         if (!lhs.is_number() || !rhs.is_number())
         {
-          throw std::runtime_error("Comparison requires numbers");
+          throw std::runtime_error(
+              "Type error: cannot compare " + value_type_name(lhs) +
+              " and " + value_type_name(rhs) + " (expected numbers)");
         }
         bool result = false;
         if (op == OpCode::OP_GREATER)
@@ -1243,7 +1283,11 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           auto* fn = as_function(callee);
           if (fn->arity != arg_count)
           {
-            throw std::runtime_error("Argument count mismatch for function call");
+            std::string fname = fn->name ? std::string(fn->name->chars, fn->name->length) : "<anonymous>";
+            throw std::runtime_error(
+                "Argument count mismatch: '" + fname + "' expects " +
+                std::to_string(fn->arity) + " argument(s), got " +
+                std::to_string(arg_count));
           }
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
           frames_.push_back(CallFrame{&fn->chunk, fn, 0, callee_index, false, {}});
@@ -1283,15 +1327,21 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                            frame.ip - 1, {});
           if (!allowed_skills_.empty() && allowed_skills_.count(skill_name) == 0)
           {
-            throw std::runtime_error("Skill blocked by env policy");
+            throw std::runtime_error(
+              "Permission denied: skill '" + skill_name +
+              "' is not in the allowed skills list");
           }
           if (!skill->impl)
           {
-            throw std::runtime_error("Skill has no implementation");
+            throw std::runtime_error(
+                "Skill '" + skill_name + "' has no implementation");
           }
           if (skill->impl->arity != arg_count)
           {
-            throw std::runtime_error("Argument count mismatch for skill call");
+            throw std::runtime_error(
+                "Argument count mismatch: skill '" + skill_name + "' expects " +
+                std::to_string(skill->impl->arity) + " argument(s), got " +
+                std::to_string(arg_count));
           }
           validate_skill_args(skill, args);
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
@@ -1299,7 +1349,9 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         }
         else
         {
-          throw std::runtime_error("Attempted to call non-callable value");
+          throw std::runtime_error(
+              "Type error: attempted to call non-callable " +
+              value_type_name(callee));
         }
         break;
       }
@@ -1319,7 +1371,8 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           auto it = map->entries.find(key);
           if (it == map->entries.end())
           {
-            throw std::runtime_error("Missing map property");
+            throw std::runtime_error(
+                "Property error: '" + key + "' not found in map");
           }
           stack_.push_back(it->second);
         }
@@ -1352,12 +1405,15 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           }
           else
           {
-            throw std::runtime_error("Unknown agent property");
+            throw std::runtime_error(
+                "Property error: unknown agent property '" + key + "'");
           }
         }
         else
         {
-          throw std::runtime_error("Property access on non-object");
+          throw std::runtime_error(
+              "Type error: cannot access property '" + key +
+              "' on " + value_type_name(receiver));
         }
         break;
       }
@@ -1369,19 +1425,25 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         {
           if (!index_value.is_number())
           {
-            throw std::runtime_error("List index must be a number");
+            throw std::runtime_error(
+                "Type error: list index must be a number, got " +
+                value_type_name(index_value));
           }
           const double raw_index = index_value.as_number();
           const double floored = std::floor(raw_index);
           if (raw_index < 0 || floored != raw_index)
           {
-            throw std::runtime_error("List index must be a non-negative integer");
+            throw std::runtime_error(
+                "Index error: list index " + std::to_string(raw_index) +
+                " must be a non-negative integer");
           }
           const std::size_t index = static_cast<std::size_t>(floored);
           auto* list = as_list(base_value);
           if (index >= list->items.size())
           {
-            throw std::runtime_error("List index out of range");
+            throw std::runtime_error(
+                "Index out of range: index " + std::to_string(index) +
+                " not valid for list of size " + std::to_string(list->items.size()));
           }
           stack_.push_back(list->items[index]);
         }
@@ -1392,7 +1454,8 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           auto it = map->entries.find(key);
           if (it == map->entries.end())
           {
-            throw std::runtime_error("Missing map key");
+            throw std::runtime_error(
+                "Key error: '" + key + "' not found in map");
           }
           stack_.push_back(it->second);
         }
@@ -2031,6 +2094,117 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               return messages;
             };
 
+            // v0.6.6: Collect agent's skills as LLM tool definitions.
+            // Skills are stored as string names in agent->skills (compiler emits names).
+            // We resolve each name to its ObjSkill via globals lookup.
+            auto collect_agent_tools = [&]() -> std::vector<llm::ToolDefinition> {
+              std::vector<llm::ToolDefinition> tool_defs;
+              if (!agent->skills || agent->skills->items.empty())
+              {
+                return tool_defs;
+              }
+              for (const auto& skill_value : agent->skills->items)
+              {
+                ObjSkill* skill = nullptr;
+                if (skill_value.is_skill())
+                {
+                  skill = as_skill(skill_value);
+                }
+                else if (skill_value.is_string())
+                {
+                  // Resolve skill name from globals
+                  const std::string skill_name = to_std_string(skill_value);
+                  const Value* resolved = find_global_value(globals_, skill_name);
+                  if (resolved && resolved->is_skill())
+                  {
+                    skill = as_skill(*resolved);
+                  }
+                }
+                if (!skill || !skill->name)
+                {
+                  continue;
+                }
+                if (!skill->impl && !skill->external)
+                {
+                  continue;
+                }
+                llm::ToolDefinition def;
+                def.name = std::string(skill->name->chars, skill->name->length);
+                def.description = skill->description
+                    ? std::string(skill->description->chars, skill->description->length)
+                    : "";
+                def.input_schema = build_skill_schema(skill);
+                // v0.6.7: Set type for Claude built-in tools
+                if (skill->external &&
+                    skill->external->binding == vm::SkillBinding::ClaudeBuiltin)
+                {
+                  def.type = skill->external->claude_tool_type;
+                }
+                tool_defs.push_back(std::move(def));
+              }
+              return tool_defs;
+            };
+
+            // v0.6.6: Convert JSON argument value to Neam Value
+            auto json_to_value = [](const nlohmann::json& j) -> Value {
+              if (j.is_null())
+              {
+                return Value::Nil();
+              }
+              if (j.is_boolean())
+              {
+                return Value::Bool(j.get<bool>());
+              }
+              if (j.is_number())
+              {
+                return Value::Number(j.get<double>());
+              }
+              if (j.is_string())
+              {
+                const auto& s = j.get_ref<const std::string&>();
+                return Value::String(s.c_str(), s.size());
+              }
+              // For arrays/objects, serialize to JSON string
+              const auto s = j.dump();
+              return Value::String(s.c_str(), s.size());
+            };
+
+            // v0.6.6: Find a skill object by name from agent->skills list.
+            // Resolves string skill names via globals lookup.
+            auto find_agent_skill = [&](const std::string& name) -> ObjSkill* {
+              if (!agent->skills)
+              {
+                return nullptr;
+              }
+              for (const auto& skill_value : agent->skills->items)
+              {
+                ObjSkill* skill = nullptr;
+                if (skill_value.is_skill())
+                {
+                  skill = as_skill(skill_value);
+                }
+                else if (skill_value.is_string())
+                {
+                  const std::string skill_name = to_std_string(skill_value);
+                  if (skill_name != name)
+                  {
+                    continue;
+                  }
+                  const Value* resolved = find_global_value(globals_, skill_name);
+                  if (resolved && resolved->is_skill())
+                  {
+                    skill = as_skill(*resolved);
+                  }
+                }
+                if (skill && skill->name &&
+                    std::string(skill->name->chars, skill->name->length) == name)
+                {
+                  return skill;
+                }
+              }
+              return nullptr;
+            };
+
             std::string plan_pattern;
             if (!extension.plan.empty())
             {
@@ -2051,7 +2225,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             std::string final_response;
             if (plan_pattern_lower == "react")
             {
-              const int max_steps = 10;
+              const int max_steps = get_config_int("NEAM_MAX_REACT_STEPS", 100, 1, 10000);
               std::string observation = query;
               for (int step = 0; step < max_steps; ++step)
               {
@@ -2096,6 +2270,274 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               if (final_response.empty())
               {
                 final_response = "Max steps reached without completion.";
+              }
+            }
+            // v0.6.6: Native tool calling when agent has skills attached
+            else if (agent->skills && !agent->skills->items.empty())
+            {
+              const auto tool_defs = collect_agent_tools();
+              if (tool_defs.empty())
+              {
+                // Skills exist but none are valid — fall back to plain chat
+                std::string user_prompt = query;
+                if (!run_guard_chain(extension.guardchains, "on_tool_input", user_prompt))
+                {
+                  final_response = "Request blocked by guard policy.";
+                }
+                else
+                {
+                  final_response = run_llm(build_messages(
+                      agent->system ? to_std_string(agent->system) : "", user_prompt));
+                  if (!run_guard_chain(extension.guardchains, "on_tool_output", final_response))
+                  {
+                    final_response = "Response blocked by guard policy.";
+                  }
+                }
+              }
+              else
+              {
+                const int max_tool_steps = get_config_int("NEAM_MAX_TOOL_STEPS", 25, 1, 1000);
+                const std::string system_prompt =
+                    agent->system ? to_std_string(agent->system) : "";
+
+                // Build initial message list
+                std::vector<llm::Message> messages;
+                if (!system_prompt.empty())
+                {
+                  messages.push_back({"system", system_prompt});
+                }
+                // Include RAG context if connected knowledge exists
+                if (agent->connected_knowledge && !agent->connected_knowledge->items.empty())
+                {
+                  // Reuse the build_messages helper for the system/context parts only
+                  auto full_msgs = build_messages(system_prompt, query);
+                  messages = std::move(full_msgs);
+                }
+                else
+                {
+                  for (const auto& hist : agent->context->history)
+                  {
+                    messages.push_back({hist.role, hist.content});
+                  }
+                  // Note: query is already in history (added at line ~1607)
+                }
+
+                // Guard check on input
+                std::string guarded_query = query;
+                if (!run_guard_chain(extension.guardchains, "on_tool_input", guarded_query))
+                {
+                  final_response = "Request blocked by guard policy.";
+                }
+                else
+                {
+                  // Native tool call loop
+                  for (int step = 0; step < max_tool_steps; ++step)
+                  {
+                    // Budget check before LLM call
+                    if (!extension.budget.empty())
+                    {
+                      auto& tracker = get_budget_tracker(extension.budget);
+                      if (tracker.is_exhausted())
+                      {
+                        final_response = "Budget exhausted: " + extension.budget;
+                        break;
+                      }
+                      tracker.used_api_calls += 1.0;
+                    }
+
+                    emit_debug_event(DebugEventType::BeforeAgentAsk, "agent.ask.tools",
+                                     frame.ip - 1, "step=" + std::to_string(step));
+
+                    auto chat_resp = provider->chat_with_tools(messages, tool_defs, "auto");
+                    trace_logger_.log_llm_output(agent_name, chat_resp.text);
+
+                    // Budget: estimate token usage
+                    if (!extension.budget.empty())
+                    {
+                      auto& tracker = get_budget_tracker(extension.budget);
+                      const double token_estimate =
+                          std::max(1.0, static_cast<double>(chat_resp.text.size()) / 4.0);
+                      tracker.used_tokens += token_estimate;
+                    }
+
+                    // If no tool calls, we're done
+                    if (!chat_resp.has_tool_calls())
+                    {
+                      final_response = chat_resp.text;
+                      if (!run_guard_chain(extension.guardchains, "on_tool_output",
+                                           final_response))
+                      {
+                        final_response = "Response blocked by guard policy.";
+                      }
+                      break;
+                    }
+
+                    // Add assistant response with tool calls to message history.
+                    // content_blocks stores only tool call info (type:"function");
+                    // text content goes in msg.content for the adapter to handle.
+                    nlohmann::json assistant_blocks = nlohmann::json::array();
+                    for (const auto& tc : chat_resp.tool_calls)
+                    {
+                      assistant_blocks.push_back(
+                          {{"type", "function"},
+                           {"id", tc.id},
+                           {"name", tc.name},
+                           {"arguments", tc.input.dump()}});
+                    }
+                    llm::Message assistant_msg;
+                    assistant_msg.role = "assistant";
+                    assistant_msg.content = chat_resp.text;
+                    assistant_msg.content_blocks = std::move(assistant_blocks);
+                    messages.push_back(std::move(assistant_msg));
+
+                    // Execute each tool call
+                    for (const auto& tc : chat_resp.tool_calls)
+                    {
+                      std::string result_content;
+                      bool is_error = false;
+
+                      ObjSkill* skill = find_agent_skill(tc.name);
+                      if (!skill || (!skill->impl && !skill->external))
+                      {
+                        result_content = "Unknown tool: " + tc.name;
+                        is_error = true;
+                      }
+                      else
+                      {
+                        // Check allowed skills
+                        if (!allowed_skills_.empty() && allowed_skills_.count(tc.name) == 0)
+                        {
+                          result_content = "Permission denied: skill '" + tc.name +
+                                           "' is not in the allowed skills list";
+                          is_error = true;
+                        }
+                        else
+                        {
+                          // Check capabilities via tool def
+                          ToolDef* tool = get_tool_def(tc.name);
+                          bool cap_ok = true;
+                          if (tool)
+                          {
+                            for (const auto& required : tool->capabilities)
+                            {
+                              if (!has_capability(agent_name, required))
+                              {
+                                result_content = "Missing capability: " + required;
+                                is_error = true;
+                                cap_ok = false;
+                                break;
+                              }
+                            }
+                            if (cap_ok)
+                            {
+                              for (const auto& cost : tool->budget_costs)
+                              {
+                                if (!consume_budget(extension.budget, cost.first, cost.second))
+                                {
+                                  result_content = "Budget exhausted for: " + cost.first;
+                                  is_error = true;
+                                  cap_ok = false;
+                                  break;
+                                }
+                              }
+                            }
+                          }
+
+                          if (cap_ok)
+                          {
+                            // Convert JSON arguments to Value arguments
+                            std::vector<Value> args;
+                            args.reserve(skill->param_names.size());
+                            for (const auto& param_name : skill->param_names)
+                            {
+                              if (tc.input.contains(param_name))
+                              {
+                                args.push_back(json_to_value(tc.input.at(param_name)));
+                              }
+                              else
+                              {
+                                args.push_back(Value::Nil());
+                              }
+                            }
+
+                            // Validate and log
+                            trace_logger_.log_tool_call("vm", tc.name,
+                                                        build_redacted_args(skill, args));
+                            emit_debug_event(DebugEventType::BeforeToolExecution,
+                                             "skill:" + tc.name, frame.ip - 1, {});
+
+                            try
+                            {
+                              validate_skill_args(skill, args);
+
+                              // Guard check on tool input
+                              std::string guard_input = tc.input.dump();
+                              if (tool && !run_guard_chain(tool->guards, "on_tool_input",
+                                                           guard_input))
+                              {
+                                result_content = "Request blocked by guard policy.";
+                                is_error = true;
+                              }
+                              else if (skill->external)
+                              {
+                                // v0.6.7: External skill dispatch
+                                result_content = dispatch_external_skill(skill, tc.input);
+
+                                // Guard check on tool output
+                                if (tool && !run_guard_chain(tool->guards, "on_tool_output",
+                                                             result_content))
+                                {
+                                  result_content = "Response blocked by guard policy.";
+                                  is_error = true;
+                                }
+                              }
+                              else
+                              {
+                                Value result = call_function(skill->impl, args, true, tc.name);
+                                result_content = value_to_string(result);
+
+                                // Guard check on tool output
+                                if (tool && !run_guard_chain(tool->guards, "on_tool_output",
+                                                             result_content))
+                                {
+                                  result_content = "Response blocked by guard policy.";
+                                  is_error = true;
+                                }
+                              }
+                            }
+                            catch (const SchemaViolationError& e)
+                            {
+                              result_content = std::string("Schema error: ") + e.what();
+                              is_error = true;
+                            }
+                            catch (const std::exception& e)
+                            {
+                              result_content = std::string("Tool error: ") + e.what();
+                              is_error = true;
+                            }
+                          }
+                        }
+                      }
+
+                      // Add tool result message
+                      llm::Message tool_msg;
+                      tool_msg.role = "tool";
+                      tool_msg.content = result_content;
+                      tool_msg.content_blocks = nlohmann::json::array();
+                      tool_msg.content_blocks.push_back(
+                          {{"tool_call_id", tc.id},
+                           {"content", result_content},
+                           {"is_error", is_error}});
+                      messages.push_back(std::move(tool_msg));
+                    }
+
+                    // Check if we've exceeded step limit
+                    if (step == max_tool_steps - 1)
+                    {
+                      final_response = "Max tool call steps reached without completion.";
+                    }
+                  }
+                }
               }
             }
             else
@@ -2832,11 +3274,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       }
       case OpCode::OP_BUILD_LIST:
       {
-        if (frame.ip >= code.size())
-        {
-          throw std::runtime_error("OP_BUILD_LIST missing count");
-        }
-        const auto count = code[frame.ip++];
+        const auto count = read_short(code, frame.ip);
         std::vector<Value> items(count);
         for (std::size_t i = 0; i < count; ++i)
         {
@@ -2847,11 +3285,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       }
       case OpCode::OP_BUILD_MAP:
       {
-        if (frame.ip >= code.size())
-        {
-          throw std::runtime_error("OP_BUILD_MAP missing count");
-        }
-        const auto count = code[frame.ip++];
+        const auto count = read_short(code, frame.ip);
         std::unordered_map<std::string, Value> entries;
         for (std::size_t i = 0; i < count; ++i)
         {
@@ -2895,6 +3329,199 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         auto* impl = as_function(impl_value);
         auto* skill = new_skill(name, description, params, std::move(param_names), impl);
         globals_.set(name, Value::Skill(skill));
+        break;
+      }
+      // v0.6.7: Define an external skill (MCP, HTTP, or Claude built-in)
+      case OpCode::OP_DEFINE_EXTERN_SKILL:
+      {
+        Value binding_config_value = pop();
+        Value binding_type_value = pop();
+        Value params_value = pop();
+        Value param_order_value = pop();
+        Value description_value = pop();
+        Value name_value = pop();
+
+        auto* name = as_string(name_value);
+        auto* description = as_string(description_value);
+
+        if (!is_obj_type(params_value, ObjType::OBJ_MAP))
+        {
+          throw std::runtime_error("Extern skill params must be map");
+        }
+        if (!is_obj_type(param_order_value, ObjType::OBJ_LIST))
+        {
+          throw std::runtime_error("Extern skill param order must be list");
+        }
+        if (!is_obj_type(binding_config_value, ObjType::OBJ_MAP))
+        {
+          throw std::runtime_error("Extern skill binding config must be map");
+        }
+
+        auto* params = as_map(params_value);
+        auto* param_order = as_list(param_order_value);
+        auto* binding_config = as_map(binding_config_value);
+
+        std::vector<std::string> param_names;
+        param_names.reserve(param_order->items.size());
+        for (const auto& item : param_order->items)
+        {
+          param_names.push_back(to_std_string(item));
+        }
+
+        // Build ExternalSkillConfig from binding type + config map
+        auto* ext = new ExternalSkillConfig();
+        const std::string binding_type_str = to_std_string(binding_type_value);
+
+        auto map_str = [&](const std::string& key) -> std::string {
+          auto it = binding_config->entries.find(key);
+          if (it != binding_config->entries.end() && it->second.is_string())
+          {
+            return to_std_string(it->second);
+          }
+          return {};
+        };
+
+        if (binding_type_str == "mcp")
+        {
+          ext->binding = SkillBinding::McpTool;
+          ext->mcp_server_name = map_str("server");
+          ext->mcp_tool_name = map_str("tool");
+        }
+        else if (binding_type_str == "http")
+        {
+          ext->binding = SkillBinding::HttpApi;
+          ext->http_method = map_str("method");
+          ext->http_url_template = map_str("url");
+          ext->http_body_template = map_str("body_template");
+          ext->http_response_path = map_str("response_path");
+          // Parse timeout if present
+          auto timeout_it = binding_config->entries.find("timeout");
+          if (timeout_it != binding_config->entries.end() &&
+              timeout_it->second.is_number())
+          {
+            ext->http_timeout_ms =
+                static_cast<long>(timeout_it->second.as_number());
+          }
+          // Parse headers list if present
+          auto headers_it = binding_config->entries.find("headers");
+          if (headers_it != binding_config->entries.end() &&
+              headers_it->second.is_list())
+          {
+            auto* hlist = as_list(headers_it->second);
+            for (const auto& h : hlist->items)
+            {
+              if (h.is_string())
+              {
+                std::string header_str = to_std_string(h);
+                auto colon_pos = header_str.find(':');
+                if (colon_pos != std::string::npos)
+                {
+                  auto key = header_str.substr(0, colon_pos);
+                  auto value = header_str.substr(colon_pos + 1);
+                  auto start = value.find_first_not_of(" \t");
+                  if (start != std::string::npos)
+                  {
+                    value = value.substr(start);
+                  }
+                  ext->http_headers.emplace_back(std::move(key), std::move(value));
+                }
+              }
+            }
+          }
+        }
+        else if (binding_type_str == "claude_builtin")
+        {
+          ext->binding = SkillBinding::ClaudeBuiltin;
+          ext->claude_tool_type = map_str("type");
+        }
+        else
+        {
+          delete ext;
+          throw std::runtime_error("Unknown extern skill binding type: " + binding_type_str);
+        }
+
+        auto* skill = new_skill(name, description, params, std::move(param_names), nullptr);
+        skill->external = ext;
+        globals_.set(name, Value::Skill(skill));
+        break;
+      }
+      // v0.6.7: Define an MCP server connection
+      case OpCode::OP_DEFINE_MCP_SERVER:
+      {
+        Value config_value = pop();
+        Value name_value = pop();
+        // Store MCP server config in globals as a map for later reference
+        if (!is_obj_type(config_value, ObjType::OBJ_MAP))
+        {
+          throw std::runtime_error("MCP server config must be map");
+        }
+        auto* name = as_string(name_value);
+        // Store as a map in globals with a special prefix
+        std::string key = "__mcp_server__" + std::string(name->chars, name->length);
+        auto* key_str = copy_string(key.c_str(), key.size());
+        globals_.set(key_str, config_value);
+        break;
+      }
+      // v0.6.7: Adopt tools from an MCP server
+      case OpCode::OP_ADOPT_MCP_TOOLS:
+      {
+        Value alias_value = pop();
+        Value filter_value = pop();
+        Value server_name_value = pop();
+
+        const std::string server_name = to_std_string(server_name_value);
+
+        // Look up MCP server config
+        std::string config_key = "__mcp_server__" + server_name;
+        auto* config_key_str = copy_string(config_key.c_str(), config_key.size());
+        Value config_val;
+        if (!globals_.get(config_key_str, &config_val))
+        {
+          throw std::runtime_error("Unknown MCP server: " + server_name);
+        }
+
+        // Determine alias prefix
+        std::string prefix = server_name;
+        if (!alias_value.is_nil() && alias_value.is_string())
+        {
+          prefix = to_std_string(alias_value);
+        }
+
+        // Get filter list (empty = adopt all)
+        std::vector<std::string> filter;
+        if (is_obj_type(filter_value, ObjType::OBJ_LIST))
+        {
+          auto* flist = as_list(filter_value);
+          for (const auto& item : flist->items)
+          {
+            if (item.is_string())
+            {
+              filter.push_back(to_std_string(item));
+            }
+          }
+        }
+
+        // MCP adopt is a placeholder — the actual tool list would come from
+        // MCP tools/list call. For now, log a trace and create placeholder skills
+        // if specific tool names are provided in the filter.
+        if (!filter.empty())
+        {
+          for (const auto& tool_name : filter)
+          {
+            std::string full_name = prefix + "." + tool_name;
+            auto* skill_name = copy_string(full_name.c_str(), full_name.size());
+            std::string desc = "MCP tool " + tool_name + " from server " + server_name;
+            auto* skill_desc = copy_string(desc.c_str(), desc.size());
+            auto* skill_params = new_map({});
+            auto* ext = new ExternalSkillConfig();
+            ext->binding = SkillBinding::McpTool;
+            ext->mcp_server_name = server_name;
+            ext->mcp_tool_name = tool_name;
+            auto* skill = new_skill(skill_name, skill_desc, skill_params, {}, nullptr);
+            skill->external = ext;
+            globals_.set(skill_name, Value::Skill(skill));
+          }
+        }
         break;
       }
       case OpCode::OP_DEFINE_KNOWLEDGE:

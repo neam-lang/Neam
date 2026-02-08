@@ -2,8 +2,7 @@
 // Neam LLM - AWS Bedrock adapter
 //
 // Implements AWS Signature V4 signing for Bedrock invoke_model API.
-// Reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional),
-// and AWS_REGION from environment variables.
+// v0.6.6: Added chat_with_tools() for native Claude tool use protocol.
 //
 
 #include "neamc/llm/bedrock_adapter.hpp"
@@ -116,7 +115,13 @@ AwsCredentials resolve_credentials(const ProviderConfig& config)
   if (const char* env = std::getenv("AWS_SESSION_TOKEN"))
     creds.session_token = env;
 
-  creds.region = !config.default_host.empty() ? config.default_host : "";
+  // default_host may be an Ollama URL (e.g. "http://localhost:11434") from shared
+  // config — only use it as a region if it looks like an AWS region, not a URL.
+  if (!config.default_host.empty() &&
+      config.default_host.find("://") == std::string::npos)
+  {
+    creds.region = config.default_host;
+  }
   if (creds.region.empty())
   {
     if (const char* env = std::getenv("AWS_REGION"))
@@ -148,8 +153,13 @@ SignedRequest sign_request(const AwsCredentials& creds,
   const std::string service = "bedrock";
   const std::string host =
       "bedrock-runtime." + creds.region + ".amazonaws.com";
+  // URL path uses single URI-encoding
   const std::string path =
       "/model/" + uri_encode(model_id) + "/invoke";
+  // AWS SigV4 canonical request requires double URI-encoding of path segments
+  // (non-S3 services): %3A in URL becomes %253A in canonical path
+  const std::string canonical_path =
+      "/model/" + uri_encode(uri_encode(model_id)) + "/invoke";
 
   auto now = std::chrono::system_clock::now();
   auto time_t_now = std::chrono::system_clock::to_time_t(now);
@@ -168,10 +178,10 @@ SignedRequest sign_request(const AwsCredentials& creds,
   const std::string content_type = "application/json";
   const std::string payload_hash = sha256_hex(body);
 
-  // Canonical request
+  // Canonical request (uses double-encoded path per SigV4 spec)
   std::ostringstream canonical;
   canonical << "POST\n"
-            << path << "\n"
+            << canonical_path << "\n"
             << "\n"  // empty query string
             << "content-type:" << content_type << "\n"
             << "host:" << host << "\n"
@@ -251,15 +261,105 @@ std::string extract_response_text(const nlohmann::json& json)
   throw std::runtime_error("Bedrock response missing content");
 }
 
-nlohmann::json message_list_to_json(const std::vector<Message>& messages)
+// Build messages array for Claude Messages API.
+// Handles both plain text messages and multi-block content (tool results).
+nlohmann::json build_messages_json(const std::vector<Message>& messages)
 {
-  nlohmann::json json = nlohmann::json::array();
-  for (const auto& message : messages)
+  nlohmann::json arr = nlohmann::json::array();
+  for (const auto& msg : messages)
   {
-    json.push_back({{"role", message.role},
-                    {"content", message.content}});
+    nlohmann::json entry;
+    entry["role"] = msg.role;
+    if (!msg.content_blocks.is_null() && msg.content_blocks.is_array() &&
+        !msg.content_blocks.empty())
+    {
+      entry["content"] = msg.content_blocks;
+    }
+    else
+    {
+      entry["content"] = msg.content;
+    }
+    arr.push_back(std::move(entry));
   }
-  return json;
+  return arr;
+}
+
+// Parse Claude response into ChatResponse, detecting tool_use blocks.
+ChatResponse parse_claude_response(const nlohmann::json& parsed)
+{
+  ChatResponse resp;
+  resp.stop_reason = parsed.value("stop_reason", "end_turn");
+
+  if (parsed.contains("content") && parsed.at("content").is_array())
+  {
+    for (const auto& block : parsed.at("content"))
+    {
+      const auto type = block.value("type", "");
+      if (type == "text")
+      {
+        if (!resp.text.empty())
+        {
+          resp.text += "\n";
+        }
+        resp.text += block.value("text", "");
+      }
+      else if (type == "tool_use")
+      {
+        ToolCall tc;
+        tc.id = block.value("id", "");
+        tc.name = block.value("name", "");
+        tc.input = block.value("input", nlohmann::json::object());
+        resp.tool_calls.push_back(std::move(tc));
+      }
+    }
+  }
+
+  // Fallback for older response formats
+  if (resp.text.empty() && resp.tool_calls.empty())
+  {
+    if (parsed.contains("completion"))
+    {
+      resp.text = parsed.at("completion").get<std::string>();
+    }
+  }
+
+  return resp;
+}
+
+// Build tool_result content blocks for returning skill results to Claude.
+nlohmann::json build_tool_result_blocks(const std::vector<ToolResult>& results)
+{
+  nlohmann::json blocks = nlohmann::json::array();
+  for (const auto& r : results)
+  {
+    nlohmann::json block;
+    block["type"] = "tool_result";
+    block["tool_use_id"] = r.tool_use_id;
+    block["content"] = r.content;
+    if (r.is_error)
+    {
+      block["is_error"] = true;
+    }
+    blocks.push_back(std::move(block));
+  }
+  return blocks;
+}
+
+// Build assistant content blocks that include both text and tool_use entries,
+// so the conversation history is well-formed for Claude.
+nlohmann::json build_assistant_content_blocks(const ChatResponse& resp)
+{
+  nlohmann::json blocks = nlohmann::json::array();
+  if (!resp.text.empty())
+  {
+    blocks.push_back({{"type", "text"}, {"text", resp.text}});
+  }
+  for (const auto& tc : resp.tool_calls)
+  {
+    blocks.push_back(
+        {{"type", "tool_use"}, {"id", tc.id}, {"name", tc.name}, {"input", tc.input}});
+  }
+  return blocks;
 }
 }  // namespace
 
@@ -297,8 +397,8 @@ public:
 
     nlohmann::json payload;
     payload["anthropic_version"] = "bedrock-2023-10-31";
-    payload["max_tokens"] = 1024;
-    payload["messages"] = message_list_to_json(messages);
+    payload["max_tokens"] = 4096;
+    payload["messages"] = build_messages_json(messages);
     if (config_.temperature > 0.0)
     {
       payload["temperature"] = config_.temperature;
@@ -319,6 +419,91 @@ public:
     catch (const std::exception& e)
     {
       LLMLogger::error("bedrock", "Chat failed: " + std::string(e.what()));
+      throw;
+    }
+  }
+
+  // v0.6.6: Native Claude tool use via Bedrock Messages API
+  ChatResponse chat_with_tools(const std::vector<Message>& messages,
+                               const std::vector<ToolDefinition>& tools,
+                               const std::string& tool_choice) override
+  {
+    if (tools.empty())
+    {
+      ChatResponse resp;
+      resp.text = chat(messages);
+      resp.stop_reason = "end_turn";
+      return resp;
+    }
+
+    LLMLogger::info("bedrock", "Tool-aware chat: model=" + config_.model +
+                                    ", tools=" + std::to_string(tools.size()) +
+                                    ", messages=" + std::to_string(messages.size()));
+
+    nlohmann::json payload;
+    payload["anthropic_version"] = "bedrock-2023-10-31";
+    payload["max_tokens"] = 4096;
+    payload["messages"] = build_messages_json(messages);
+    if (config_.temperature > 0.0)
+    {
+      payload["temperature"] = config_.temperature;
+    }
+
+    // Build tools array in Claude format
+    nlohmann::json tools_json = nlohmann::json::array();
+    for (const auto& tool : tools)
+    {
+      if (!tool.type.empty())
+      {
+        // v0.6.7: Claude built-in tool (computer_use, bash, text_editor, etc.)
+        tools_json.push_back(
+            {{"type", tool.type},
+             {"name", tool.name}});
+      }
+      else
+      {
+        tools_json.push_back(
+            {{"name", tool.name},
+             {"description", tool.description},
+             {"input_schema", tool.input_schema}});
+      }
+    }
+    payload["tools"] = std::move(tools_json);
+
+    // Tool choice
+    if (tool_choice == "any")
+    {
+      payload["tool_choice"] = {{"type", "any"}};
+    }
+    else if (tool_choice == "none")
+    {
+      payload["tool_choice"] = {{"type", "none"}};
+    }
+    else if (tool_choice != "auto" && !tool_choice.empty())
+    {
+      payload["tool_choice"] = {{"type", "tool"}, {"name", tool_choice}};
+    }
+    else
+    {
+      payload["tool_choice"] = {{"type", "auto"}};
+    }
+
+    const std::string body = payload.dump();
+    const auto signed_req = sign_request(creds_, config_.model, body);
+
+    try
+    {
+      const std::string response =
+          http_post_json(signed_req.url, body, signed_req.headers, 60000);
+      auto parsed = nlohmann::json::parse(response);
+      auto chat_resp = parse_claude_response(parsed);
+      LLMLogger::debug("bedrock", "Tool response: stop_reason=" + chat_resp.stop_reason +
+                                       ", tool_calls=" + std::to_string(chat_resp.tool_calls.size()));
+      return chat_resp;
+    }
+    catch (const std::exception& e)
+    {
+      LLMLogger::error("bedrock", "Tool chat failed: " + std::string(e.what()));
       throw;
     }
   }

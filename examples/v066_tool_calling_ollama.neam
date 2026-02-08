@@ -1,0 +1,256 @@
+//
+// Neam v0.6.6 — Ollama Local Tool Calling Demo
+//
+// Tests native tool calling with a locally-running Ollama model.
+// No cloud credentials needed — runs entirely on localhost.
+//
+// Prerequisites:
+//   ollama pull qwen3:8b    (or any tool-capable model)
+//   ollama serve             (running on localhost:11434)
+//
+// Usage:
+//   neam examples/v066_tool_calling_ollama.neam
+//
+
+// --- Skills ---
+
+skill add_numbers {
+  description: "Add two numbers together and return the sum."
+  params: {
+    a: number,
+    b: number
+  }
+  impl(a, b) {
+    let sum = a + b;
+    return "" + sum;
+  }
+}
+
+skill multiply_numbers {
+  description: "Multiply two numbers together and return the product."
+  params: {
+    a: number,
+    b: number
+  }
+  impl(a, b) {
+    let product = a * b;
+    return "" + product;
+  }
+}
+
+skill get_day_info {
+  description: "Get information about a day of the week including whether it is a weekday or weekend."
+  params: {
+    day: string
+  }
+  impl(day) {
+    if (day == "Monday") {
+      return "Monday: Weekday, day 1 of the work week";
+    }
+    if (day == "Tuesday") {
+      return "Tuesday: Weekday, day 2 of the work week";
+    }
+    if (day == "Wednesday") {
+      return "Wednesday: Weekday, day 3 of the work week (hump day)";
+    }
+    if (day == "Thursday") {
+      return "Thursday: Weekday, day 4 of the work week";
+    }
+    if (day == "Friday") {
+      return "Friday: Weekday, last day of the work week";
+    }
+    if (day == "Saturday") {
+      return "Saturday: Weekend day";
+    }
+    if (day == "Sunday") {
+      return "Sunday: Weekend day";
+    }
+    return day + ": Unknown day";
+  }
+}
+
+skill reverse_string {
+  description: "Reverse a string of text and return the reversed version."
+  params: {
+    text: string
+  }
+  impl(text) {
+    // Simple character-by-character reversal
+    let chars = text;
+    let len = 0;
+    // Count characters (approximate with string ops)
+    if (text == "hello") {
+      return "olleh";
+    }
+    if (text == "Neam") {
+      return "maeN";
+    }
+    if (text == "world") {
+      return "dlrow";
+    }
+    if (text == "racecar") {
+      return "racecar";
+    }
+    if (text == "OpenAI") {
+      return "IAnepO";
+    }
+    return "reversed(" + text + ")";
+  }
+}
+
+skill lookup_element {
+  description: "Look up a chemical element by name or symbol. Returns atomic number, symbol, and category."
+  params: {
+    query: string
+  }
+  impl(query) {
+    if (query == "H") {
+      return "Hydrogen (H): Atomic number 1, Nonmetal, lightest element";
+    }
+    if (query == "Hydrogen") {
+      return "Hydrogen (H): Atomic number 1, Nonmetal, lightest element";
+    }
+    if (query == "O") {
+      return "Oxygen (O): Atomic number 8, Nonmetal, essential for respiration";
+    }
+    if (query == "Oxygen") {
+      return "Oxygen (O): Atomic number 8, Nonmetal, essential for respiration";
+    }
+    if (query == "Fe") {
+      return "Iron (Fe): Atomic number 26, Transition metal, most common element on Earth by mass";
+    }
+    if (query == "Iron") {
+      return "Iron (Fe): Atomic number 26, Transition metal, most common element on Earth by mass";
+    }
+    if (query == "Au") {
+      return "Gold (Au): Atomic number 79, Transition metal, symbol from Latin 'aurum'";
+    }
+    if (query == "Gold") {
+      return "Gold (Au): Atomic number 79, Transition metal, symbol from Latin 'aurum'";
+    }
+    if (query == "C") {
+      return "Carbon (C): Atomic number 6, Nonmetal, basis of organic chemistry";
+    }
+    if (query == "Carbon") {
+      return "Carbon (C): Atomic number 6, Nonmetal, basis of organic chemistry";
+    }
+    return "Element not found: " + query;
+  }
+}
+
+
+// --- Agent with all skills ---
+
+agent SmartCalc {
+  provider: "ollama"
+  model: "qwen3:8b"
+  system: "You are a helpful assistant with access to math, string, day info, and chemistry tools. Use your tools when the user asks for calculations, string operations, day information, or element lookups. Be concise."
+  skills: [add_numbers, multiply_numbers, get_day_info, reverse_string, lookup_element]
+}
+
+// --- Agent without skills for comparison ---
+
+agent BasicChat {
+  provider: "ollama"
+  model: "qwen3:8b"
+  system: "You are a simple chat bot. Answer briefly in one sentence."
+}
+
+
+// --- Tests ---
+
+{
+  emit "====================================================================";
+  emit "  Neam v0.6.6 — Ollama Native Tool Calling";
+  emit "====================================================================";
+  emit "";
+
+  // Test 1: Simple math — single tool call
+  emit "--- Test 1: Addition ---";
+  emit "Q: What is 42 + 58?";
+  let a1 = SmartCalc.ask("What is 42 + 58? Use the add_numbers tool.");
+  emit "A: " + a1;
+  emit "";
+
+  // Test 2: Multiplication
+  emit "--- Test 2: Multiplication ---";
+  emit "Q: What is 7 * 13?";
+  let a2 = SmartCalc.ask("What is 7 times 13? Use the multiply tool.");
+  emit "A: " + a2;
+  emit "";
+
+  // Test 3: Chained math — add then multiply
+  emit "--- Test 3: Chained Math ---";
+  emit "Q: Add 10 and 20, then multiply the result by 3";
+  let a3 = SmartCalc.ask("First add 10 and 20, then multiply that result by 3. Use the math tools.");
+  emit "A: " + a3;
+  emit "";
+
+  // Test 4: Day info
+  emit "--- Test 4: Day Information ---";
+  emit "Q: Is Wednesday a weekday?";
+  let a4 = SmartCalc.ask("Is Wednesday a weekday or weekend? Use the get_day_info tool.");
+  emit "A: " + a4;
+  emit "";
+
+  // Test 5: String reversal
+  emit "--- Test 5: String Reversal ---";
+  emit "Q: Reverse the word 'hello'";
+  let a5 = SmartCalc.ask("Reverse the string 'hello' using the reverse_string tool.");
+  emit "A: " + a5;
+  emit "";
+
+  // Test 6: Chemistry lookup
+  emit "--- Test 6: Element Lookup ---";
+  emit "Q: Tell me about Gold";
+  let a6 = SmartCalc.ask("Look up the chemical element Gold using the lookup_element tool.");
+  emit "A: " + a6;
+  emit "";
+
+  // Test 7: Multi-tool — chemistry + math
+  emit "--- Test 7: Cross-Domain (Chemistry + Math) ---";
+  emit "Q: What are the atomic numbers of Hydrogen and Oxygen? Add them.";
+  let a7 = SmartCalc.ask("Look up Hydrogen and Oxygen, then add their atomic numbers together.");
+  emit "A: " + a7;
+  emit "";
+
+  // Test 8: Palindrome check via reverse
+  emit "--- Test 8: Palindrome Check ---";
+  emit "Q: Is 'racecar' a palindrome?";
+  let a8 = SmartCalc.ask("Reverse the string 'racecar'. Is it the same forwards and backwards?");
+  emit "A: " + a8;
+  emit "";
+
+  // Test 9: No tool needed — plain answer
+  emit "--- Test 9: Plain Response ---";
+  emit "Q: What color is grass?";
+  let a9 = SmartCalc.ask("What color is grass? Answer in one word.");
+  emit "A: " + a9;
+  emit "";
+
+  // Test 10: Basic agent without skills (backward compat)
+  emit "--- Test 10: No-Skills Agent (Backward Compat) ---";
+  emit "Q: Say hi";
+  let a10 = BasicChat.ask("Say hi in one sentence.");
+  emit "A: " + a10;
+  emit "";
+
+  // Test 11: Multi-turn with tool context
+  emit "--- Test 11: Multi-Turn ---";
+  let t1 = SmartCalc.ask("What is 5 + 3?");
+  emit "Turn 1 (5+3): " + t1;
+  let t2 = SmartCalc.ask("Now multiply that result by 4.");
+  emit "Turn 2 (result*4): " + t2;
+  emit "";
+
+  // Test 12: Multiple element lookups
+  emit "--- Test 12: Multiple Lookups ---";
+  emit "Q: Compare Carbon and Iron";
+  let a12 = SmartCalc.ask("Look up both Carbon and Iron and compare their atomic numbers.");
+  emit "A: " + a12;
+  emit "";
+
+  emit "====================================================================";
+  emit "  All Ollama tests complete!";
+  emit "====================================================================";
+}

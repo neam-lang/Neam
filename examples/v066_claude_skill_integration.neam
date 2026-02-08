@@ -1,0 +1,370 @@
+//
+// Neam v0.6.6 -- Native Skill-to-Tool Integration Demo
+//
+// Demonstrates Neam's bidirectional integration with LLM tool calling:
+//
+//   Neam skill {}    -->  LLM tool (auto JSON Schema mapping)
+//   LLM tool_use     -->  Neam skill execution (auto dispatch)
+//
+// SUPPORTED PROVIDERS: OpenAI, AWS Bedrock, Ollama
+//
+// RUNNING:
+//   NEAM_LOG_LEVEL=INFO  neam examples/v066_claude_skill_integration.neam
+//   NEAM_LOG_LEVEL=DEBUG neam examples/v066_claude_skill_integration.neam
+//
+// REQUIRED:
+//   OPENAI_API_KEY (for OpenAI provider)
+//   -- or --
+//   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION (for Bedrock)
+//
+
+
+// =========================================================================
+// SKILLS -- Each becomes an LLM tool automatically via build_skill_schema()
+//
+//   skill name {              -->  { "name": "...",
+//     description: "..."            "description": "...",
+//     params: { x: string }         "input_schema": { "properties": { "x": {"type":"string"} } }
+//     impl(x) { ... }            }
+//   }
+// =========================================================================
+
+
+// Skill 1: Customer database lookup
+skill lookup_customers {
+  description: "Look up customers by city name. Returns customer records including ID, name, city, and order count."
+  params: {
+    city: string
+  }
+  impl(city) {
+    emit "    [TOOL] lookup_customers(city=" + city + ")";
+
+    if (city == "Tokyo") {
+      return "Found 2 customers: #101 Tanaka Yuki (47 orders), #205 Sato Hana (23 orders)";
+    }
+    if (city == "London") {
+      return "Found 2 customers: #302 James Smith (31 orders), #415 Emma Wilson (58 orders)";
+    }
+    if (city == "Madrid") {
+      return "Found 1 customer: #512 Maria Garcia (62 orders)";
+    }
+    return "No customers found in " + city;
+  }
+}
+
+
+// Skill 2: Math computation
+skill calculate {
+  description: "Perform a math calculation. Supports operations: sum, average, max, min, count. Takes a comma-separated list of numbers."
+  params: {
+    operation: string,
+    numbers: string
+  }
+  impl(operation, numbers) {
+    emit "    [TOOL] calculate(op=" + operation + ", numbers=" + numbers + ")";
+
+    if (operation == "sum") {
+      if (numbers == "47,23") { return "70"; }
+      if (numbers == "31,58") { return "89"; }
+      if (numbers == "47,23,31,58,62") { return "221"; }
+      return "sum not precomputed for: " + numbers;
+    }
+    if (operation == "average") {
+      if (numbers == "47,23") { return "35"; }
+      if (numbers == "31,58") { return "44.5"; }
+      if (numbers == "47,23,31,58,62") { return "44.2"; }
+      return "average not precomputed for: " + numbers;
+    }
+    if (operation == "max") {
+      if (numbers == "47,23,31,58,62") { return "62"; }
+      return "max not precomputed for: " + numbers;
+    }
+    if (operation == "count") {
+      if (numbers == "47,23") { return "2"; }
+      if (numbers == "31,58") { return "2"; }
+      return "count not precomputed for: " + numbers;
+    }
+    return "Unknown operation: " + operation;
+  }
+}
+
+
+// Skill 3: Report generator
+skill make_report {
+  description: "Generate a formatted report. Takes a title and data content string. Returns a formatted report."
+  params: {
+    title: string,
+    content: string
+  }
+  impl(title, content) {
+    emit "    [TOOL] make_report(title=" + title + ")";
+    return "=== REPORT: " + title + " === " + content + " === End of Report ===";
+  }
+}
+
+
+// Skill 4: Notification sender
+skill send_alert {
+  description: "Send an alert notification. Takes a channel (email, slack, sms) and a message body. Returns confirmation."
+  params: {
+    channel: string,
+    message: string
+  }
+  impl(channel, message) {
+    emit "    [TOOL] send_alert(channel=" + channel + ")";
+    return "Alert sent via " + channel + ": " + message;
+  }
+}
+
+
+// Skill 5: System info
+skill system_info {
+  description: "Get system information. Supported queries: version, date, status."
+  params: {
+    query: string
+  }
+  impl(query) {
+    emit "    [TOOL] system_info(query=" + query + ")";
+
+    if (query == "version") {
+      return "Neam v0.6.6 (Native Tool Integration)";
+    }
+    if (query == "date") {
+      return "2025-02-07";
+    }
+    if (query == "status") {
+      return "All systems operational. 5 skills loaded, tool calling active.";
+    }
+    return "Unknown: " + query;
+  }
+}
+
+
+// =========================================================================
+// GUARDS & BUDGET -- Enforced at each tool call step in the loop
+// =========================================================================
+
+guard AuditGuard {
+  description: "Audit trail for all tool interactions"
+  on_tool_input(input) { return input; }
+  on_tool_output(output) { return output; }
+}
+
+guardchain SecurityChain = [AuditGuard];
+
+budget DemoBudget {
+  api_calls: 30
+  tokens: 200000
+}
+
+
+// =========================================================================
+// AGENTS -- LLM + Neam skills wired as native tools
+// =========================================================================
+
+// Full agent: 5 skills, guarded, budgeted
+agent Analyst {
+  provider: "openai"
+  model: "gpt-4o"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a data analyst. Use your tools for all data operations. Be concise. When you call lookup_customers, use the exact city name like Tokyo or London. When you call calculate, pass the operation name and comma-separated numbers with no spaces."
+  skills: [lookup_customers, calculate, make_report, send_alert, system_info]
+  guards: [SecurityChain]
+  budget: DemoBudget
+}
+
+// Minimal agent: only 2 skills (selective wiring)
+agent BasicLookup {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a simple lookup tool. Use lookup_customers and calculate tools. Be very concise."
+  skills: [lookup_customers, calculate]
+}
+
+// No-skills agent (backward compatibility -- uses plain chat)
+agent ChatOnly {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a helpful assistant. Answer in one sentence."
+}
+
+
+// =========================================================================
+// DEMO EXECUTION
+// =========================================================================
+
+{
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|                                                                    |";
+  emit "|   Neam v0.6.6 -- Native Skill-to-Tool Integration Demo            |";
+  emit "|                                                                    |";
+  emit "|   Skills declared in Neam are auto-converted to LLM tools.        |";
+  emit "|   The LLM decides which tools to call. Neam executes them.        |";
+  emit "|                                                                    |";
+  emit "|   Flow: User Query -> LLM -> tool_use -> Neam Skill -> result     |";
+  emit "|         -> tool_result -> LLM -> final answer                     |";
+  emit "|                                                                    |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
+  emit "  Provider : OpenAI (gpt-4o / gpt-4o-mini)";
+  emit "  Skills   : lookup_customers, calculate, make_report, send_alert, system_info";
+  emit "  Guards   : AuditGuard (SecurityChain)";
+  emit "  Budget   : 30 API calls, 200K tokens";
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 1: Single Tool Call -------------------------------------------
+
+  emit "";
+  emit "  DEMO 1: Single Tool Call";
+  emit "  Expect: LLM calls lookup_customers(city=Tokyo)";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: How many customers are in Tokyo?";
+  emit "";
+  let r1 = Analyst.ask("How many customers are in Tokyo? Use lookup_customers with city Tokyo.");
+  emit "";
+  emit "  A: " + r1;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 2: Multi-Step Tool Chain --------------------------------------
+
+  emit "";
+  emit "  DEMO 2: Multi-Step Tool Chain";
+  emit "  Expect: lookup_customers -> calculate -> make_report";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: Look up Tokyo customers, sum their orders, make a report.";
+  emit "";
+  let r2 = Analyst.ask("Step 1: Use lookup_customers for city Tokyo. Step 2: Use calculate with operation sum and numbers 47,23. Step 3: Use make_report with title 'Tokyo Summary' and the results.");
+  emit "";
+  emit "  A: " + r2;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 3: Autonomous Tool Selection ----------------------------------
+
+  emit "";
+  emit "  DEMO 3: Autonomous Tool Selection";
+  emit "  Expect: LLM decides which tools to call (no explicit steps)";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: What is our system version and current date?";
+  emit "";
+  let r3 = Analyst.ask("What system version are we running and what is today's date?");
+  emit "";
+  emit "  A: " + r3;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 4: Tool + Side Effect (Notification) --------------------------
+
+  emit "";
+  emit "  DEMO 4: Data Retrieval + Action (Notification)";
+  emit "  Expect: lookup_customers -> send_alert";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: Find London customers and alert the team.";
+  emit "";
+  let r4 = Analyst.ask("Look up customers in London using lookup_customers. Then send a slack alert summarizing what you found.");
+  emit "";
+  emit "  A: " + r4;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 5: No Tool Needed (LLM Responds Directly) --------------------
+
+  emit "";
+  emit "  DEMO 5: No Tool Needed (Plain LLM Response)";
+  emit "  Expect: LLM answers directly without calling any tools";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: What is machine learning?";
+  emit "";
+  let r5 = Analyst.ask("In one sentence, what is machine learning?");
+  emit "";
+  emit "  A: " + r5;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 6: Selective Skill Wiring (2 tools only) ----------------------
+
+  emit "";
+  emit "  DEMO 6: Selective Skill Wiring (BasicLookup agent, 2 tools)";
+  emit "  Expect: Only lookup_customers and calculate are available";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: Find London customers and count them.";
+  emit "";
+  let r6 = BasicLookup.ask("Use lookup_customers for city London, then use calculate with operation count and numbers 31,58.");
+  emit "";
+  emit "  A: " + r6;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 7: No-Skills Agent (Backward Compatibility) -------------------
+
+  emit "";
+  emit "  DEMO 7: No-Skills Agent (Backward Compatibility)";
+  emit "  Expect: Uses plain chat(), not chat_with_tools()";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: Say hello.";
+  emit "";
+  let r7 = ChatOnly.ask("Say hello in one sentence.");
+  emit "";
+  emit "  A: " + r7;
+  emit "";
+  emit "--------------------------------------------------------------------";
+
+
+  // --- Demo 8: Full Workflow (4-step orchestration) -----------------------
+
+  emit "";
+  emit "  DEMO 8: Full Workflow (4-Step Orchestration)";
+  emit "  Expect: lookup_customers -> calculate -> make_report -> send_alert";
+  emit "  ........................................................";
+  emit "";
+  emit "  Q: Full analysis pipeline with notification.";
+  emit "";
+  let r8 = Analyst.ask("Complete this workflow: (1) lookup_customers in Tokyo, (2) calculate the average of 47,23, (3) make_report titled 'Tokyo Analysis' with the average, (4) send_alert via email saying analysis is complete.");
+  emit "";
+  emit "  A: " + r8;
+  emit "";
+  emit "+--------------------------------------------------------------------+";
+  emit "|                                                                    |";
+  emit "|   Demo Complete                                                    |";
+  emit "|                                                                    |";
+  emit "|   Each [TOOL] line above shows a Neam skill executed via           |";
+  emit "|   the LLM's native tool calling protocol.                          |";
+  emit "|                                                                    |";
+  emit "|   v0.6.6 Features Demonstrated:                                    |";
+  emit "|     - Automatic skill-to-tool JSON Schema conversion               |";
+  emit "|     - Native tool call loop (not text-based ReAct)                 |";
+  emit "|     - Multi-step tool orchestration                                |";
+  emit "|     - Autonomous tool selection by LLM                             |";
+  emit "|     - Selective per-agent skill wiring                             |";
+  emit "|     - Guard chain enforcement per tool call                        |";
+  emit "|     - Budget tracking across tool steps                            |";
+  emit "|     - Backward compat (no-skills = plain chat)                     |";
+  emit "|                                                                    |";
+  emit "|   For protocol-level logs, re-run with:                            |";
+  emit "|     NEAM_LOG_LEVEL=DEBUG NEAM_TRACE=1 neam <this_file>             |";
+  emit "|                                                                    |";
+  emit "+--------------------------------------------------------------------+";
+  emit "";
+}

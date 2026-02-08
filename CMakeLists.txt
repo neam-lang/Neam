@@ -131,7 +131,27 @@ if (TARGET benchmark)
 endif ()
 
 find_package(CURL REQUIRED)
-find_package(OpenSSL REQUIRED)
+
+# For MinGW cross-compilation, FindOpenSSL can't locate LibreSSL in the
+# deps bundle. Create the imported target manually from toolchain hints.
+if(CMAKE_CROSSCOMPILING AND DEFINED OPENSSL_CRYPTO_LIBRARY)
+    if(NOT TARGET OpenSSL::Crypto)
+        add_library(OpenSSL::Crypto STATIC IMPORTED)
+        set_target_properties(OpenSSL::Crypto PROPERTIES
+            IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+        )
+    endif()
+    if(NOT TARGET OpenSSL::SSL)
+        add_library(OpenSSL::SSL STATIC IMPORTED)
+        set_target_properties(OpenSSL::SSL PROPERTIES
+            IMPORTED_LOCATION "${OPENSSL_SSL_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+        )
+    endif()
+else()
+    find_package(OpenSSL REQUIRED)
+endif()
 
 add_library(tree_sitter_lib STATIC
     ${tree_sitter_SOURCE_DIR}/lib/src/lib.c
@@ -159,6 +179,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/deploy/terraform.cpp
     NeamC/src/vm/memory.cpp
     NeamC/src/vm/object.cpp
+    NeamC/src/vm/external_skill.cpp
     NeamC/src/vm/table.cpp
     NeamC/src/vm/native.cpp
     NeamC/src/vm/llm/http_client.cpp
@@ -210,6 +231,14 @@ if (DEFINED nlohmann_json_schema_validator_SOURCE_DIR)
 endif ()
 
 # ============================================================================
+# Static curl/SSL deps for MinGW cross-compilation (v0.6.7)
+# When cross-compiling with static libcurl, transitive deps must be linked.
+# ============================================================================
+if(DEFINED CURL_STATIC_DEPS)
+    target_link_libraries(neamc_core PUBLIC ${CURL_STATIC_DEPS})
+endif()
+
+# ============================================================================
 # Compiler warnings (v0.6.5)
 # ============================================================================
 
@@ -240,26 +269,29 @@ if(NEAM_ENABLE_UBSAN)
     target_link_options(neamc_core PUBLIC -fsanitize=undefined)
 endif()
 
-add_library(libneam SHARED ${NEAMC_CORE_SOURCES})
-target_link_libraries(libneam PUBLIC tree_sitter_lib CURL::libcurl nlohmann_json::nlohmann_json
-    nlohmann_json_schema_validator
-    OpenSSL::Crypto
-    usearch
-    lexbor
-    miniz
-)
-if (DEFINED nlohmann_json_schema_validator_SOURCE_DIR)
-    target_include_directories(libneam PUBLIC ${nlohmann_json_schema_validator_SOURCE_DIR}/src)
-endif ()
-target_include_directories(libneam
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include
-        ${CMAKE_BINARY_DIR}/include
-)
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(libneam PRIVATE ${NEAM_WARNING_FLAGS})
-elseif(MSVC)
-    target_compile_options(libneam PRIVATE /W4)
+# Shared library is not built during MinGW cross-compilation
+if(NOT CMAKE_CROSSCOMPILING)
+    add_library(libneam SHARED ${NEAMC_CORE_SOURCES})
+    target_link_libraries(libneam PUBLIC tree_sitter_lib CURL::libcurl nlohmann_json::nlohmann_json
+        nlohmann_json_schema_validator
+        OpenSSL::Crypto
+        usearch
+        lexbor
+        miniz
+    )
+    if (DEFINED nlohmann_json_schema_validator_SOURCE_DIR)
+        target_include_directories(libneam PUBLIC ${nlohmann_json_schema_validator_SOURCE_DIR}/src)
+    endif ()
+    target_include_directories(libneam
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include
+            ${CMAKE_BINARY_DIR}/include
+    )
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        target_compile_options(libneam PRIVATE ${NEAM_WARNING_FLAGS})
+    elseif(MSVC)
+        target_compile_options(libneam PRIVATE /W4)
+    endif()
 endif()
 
 add_executable(neamc
@@ -382,6 +414,36 @@ elseif (TARGET nlohmann_json_schema_validator::nlohmann_json_schema_validator)
 endif ()
 
 # ============================================================================
+# v0.6.5 Test Targets
+# ============================================================================
+
+add_executable(llm_adapter_test
+    tests/llm/adapter_test.cpp
+)
+target_link_libraries(llm_adapter_test PRIVATE neamc_core gtest_main)
+add_test(NAME llm_adapter_test COMMAND llm_adapter_test)
+
+add_executable(http_client_test
+    tests/llm/http_client_test.cpp
+)
+target_link_libraries(http_client_test PRIVATE neamc_core gtest_main)
+add_test(NAME http_client_test COMMAND http_client_test)
+
+add_executable(package_manager_test
+    tests/pkg/package_manager_test.cpp
+    NeamC/src/pkg/installer.cpp
+    NeamC/src/pkg/registry.cpp
+)
+target_link_libraries(package_manager_test PRIVATE neamc_core gtest_main)
+add_test(NAME package_manager_test COMMAND package_manager_test)
+
+add_executable(compile_run_test
+    tests/integration/compile_run_test.cpp
+)
+target_link_libraries(compile_run_test PRIVATE neamc_core gtest_main)
+add_test(NAME compile_run_test COMMAND compile_run_test)
+
+# ============================================================================
 # Install targets (v0.6.5)
 # ============================================================================
 
@@ -396,10 +458,12 @@ install(TARGETS neamc_core
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-# Shared library
-install(TARGETS libneam
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# Shared library (not built during cross-compilation)
+if(NOT CMAKE_CROSSCOMPILING)
+    install(TARGETS libneam
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
 
 # Headers
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/NeamC/include/neamc

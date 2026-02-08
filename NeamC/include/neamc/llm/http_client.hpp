@@ -32,4 +32,12 @@ std::string http_post_json(const std::string& url, const std::string& body,
                            const std::vector<std::string>& headers,
                            long timeout_ms = 30000);
 
+// Generic HTTP request — single attempt, returns status + body.
+// Supports GET, POST, DELETE, PUT, PATCH.
+// Throws std::runtime_error on network/curl failure.
+HttpResult http_request(const std::string& method, const std::string& url,
+                        const std::string& body,
+                        const std::vector<std::string>& headers,
+                        long timeout_ms = 30000);
+
 }  // namespace neamc::llm

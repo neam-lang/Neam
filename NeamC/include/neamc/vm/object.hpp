@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "neamc/vm/bytecode.hpp"
+#include "neamc/vm/external_skill.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/value.hpp"
 
@@ -87,7 +88,8 @@ struct ObjSkill : Obj
   ObjString* description{nullptr};
   ObjMap* params{nullptr};
   std::vector<std::string> param_names;
-  ObjFunction* impl{nullptr};
+  ObjFunction* impl{nullptr};              // Non-null for local skills
+  ExternalSkillConfig* external{nullptr};   // Non-null for external skills (v0.6.7)
 };
 
 struct ObjContext : Obj
