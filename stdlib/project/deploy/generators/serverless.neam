@@ -1,5 +1,30 @@
 module std.project.deploy.generators.serverless;
 
+// Generate AWS Lambda deployment artifacts using Lambda Web Adapter.
+//
+// The Lambda Web Adapter wraps neam-api as a Lambda function with zero code
+// changes. It registers as a Lambda Extension, starts the HTTP server, and
+// proxies Lambda invoke events to localhost.
+//
+// Generates:
+//   deploy/lambda/Dockerfile     - Image with Lambda Web Adapter extension
+//   deploy/lambda/template.yaml  - SAM template (PackageType: Image)
+//   deploy/scripts/lambda-deploy.sh - Build, push to ECR, and SAM deploy
+//
+// Config options (from [deploy.serverless] in neam.toml):
+//   provider        - Cloud provider (default: "aws")
+//   memory          - Lambda memory in MB (default: 1024)
+//   timeout         - Lambda timeout in seconds (default: 300)
+//   workers         - neam-api worker threads (default: 2)
+//   readiness-path  - Health check path (default: "/health")
+//
+// Usage:
+//   neamc deploy --target lambda [--dry-run]
+//
+// Output:
+//   deploy/lambda/Dockerfile
+//   deploy/lambda/template.yaml
+//   deploy/scripts/lambda-deploy.sh
 pub fun generate(config) {
   return project_deploy_generate("serverless", config ?? {});
 }

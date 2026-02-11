@@ -4,10 +4,17 @@
 
 #include "neamc/api/http_server.hpp"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#define close closesocket
+#else
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
 
 #include <atomic>
 #include <cstring>
@@ -244,7 +251,7 @@ public:
 
     // Allow address reuse
     int opt = 1;
-    if (::setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+    if (::setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0)
     {
       ::close(server_fd_);
       throw std::runtime_error("Failed to set socket options");

@@ -45,6 +45,9 @@ struct ExternalSkillConfig
   std::string claude_tool_type;    // "computer_20241022", "bash_20241022", etc.
 };
 
+class McpClient;  // Forward declaration
+
 // Dispatch an external skill call and return the result as a string.
-std::string dispatch_external_skill(ObjSkill* skill, const nlohmann::json& input);
+std::string dispatch_external_skill(ObjSkill* skill, const nlohmann::json& input,
+                                    McpClient* mcp_client = nullptr);
 }  // namespace neamc::vm

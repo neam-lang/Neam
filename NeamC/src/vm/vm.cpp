@@ -2480,8 +2480,17 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                               }
                               else if (skill->external)
                               {
-                                // v0.6.7: External skill dispatch
-                                result_content = dispatch_external_skill(skill, tc.input);
+                                // v0.6.8: External skill dispatch with MCP client lookup
+                                McpClient* mcp_ptr = nullptr;
+                                if (skill->external->binding == SkillBinding::McpTool)
+                                {
+                                  auto mcp_it = mcp_clients_.find(skill->external->mcp_server_name);
+                                  if (mcp_it != mcp_clients_.end())
+                                  {
+                                    mcp_ptr = mcp_it->second.get();
+                                  }
+                                }
+                                result_content = dispatch_external_skill(skill, tc.input, mcp_ptr);
 
                                 // Guard check on tool output
                                 if (tool && !run_guard_chain(tool->guards, "on_tool_output",
@@ -3446,20 +3455,77 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         break;
       }
       // v0.6.7: Define an MCP server connection
+      // v0.6.8: Now launches a real MCP client process
       case OpCode::OP_DEFINE_MCP_SERVER:
       {
         Value config_value = pop();
         Value name_value = pop();
-        // Store MCP server config in globals as a map for later reference
         if (!is_obj_type(config_value, ObjType::OBJ_MAP))
         {
           throw std::runtime_error("MCP server config must be map");
         }
         auto* name = as_string(name_value);
-        // Store as a map in globals with a special prefix
-        std::string key = "__mcp_server__" + std::string(name->chars, name->length);
+        std::string server_name(name->chars, name->length);
+
+        // Store config in globals for reference
+        std::string key = "__mcp_server__" + server_name;
         auto* key_str = copy_string(key.c_str(), key.size());
         globals_.set(key_str, config_value);
+
+        // v0.6.8: Extract command/args and create McpClient
+        auto* config_map = as_map(config_value);
+        auto map_val = [&](const std::string& k) -> std::string {
+          auto it = config_map->entries.find(k);
+          if (it != config_map->entries.end() && it->second.is_string())
+          {
+            return to_std_string(it->second);
+          }
+          return {};
+        };
+
+        std::string command = map_val("command");
+        std::vector<std::string> args;
+        auto args_it = config_map->entries.find("args");
+        if (args_it != config_map->entries.end() && args_it->second.is_list())
+        {
+          auto* args_list = as_list(args_it->second);
+          for (const auto& item : args_list->items)
+          {
+            if (item.is_string())
+            {
+              args.push_back(to_std_string(item));
+            }
+          }
+        }
+
+        std::unordered_map<std::string, std::string> env;
+        auto env_it = config_map->entries.find("env");
+        if (env_it != config_map->entries.end() && env_it->second.is_map())
+        {
+          auto* env_map = as_map(env_it->second);
+          for (const auto& [ek, ev] : env_map->entries)
+          {
+            if (ev.is_string())
+            {
+              env[ek] = to_std_string(ev);
+            }
+          }
+        }
+
+        if (!command.empty())
+        {
+          auto client = std::make_unique<McpClient>(command, args, env);
+          try
+          {
+            client->initialize();
+            mcp_clients_[server_name] = std::move(client);
+          }
+          catch (const std::exception& e)
+          {
+            output_stream() << "[MCP] Warning: Failed to connect to server '"
+                            << server_name << "': " << e.what() << "\n";
+          }
+        }
         break;
       }
       // v0.6.7: Adopt tools from an MCP server
@@ -3501,11 +3567,58 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           }
         }
 
-        // MCP adopt is a placeholder — the actual tool list would come from
-        // MCP tools/list call. For now, log a trace and create placeholder skills
-        // if specific tool names are provided in the filter.
-        if (!filter.empty())
+        // v0.6.8: Real MCP tool discovery via tools/list
+        auto mcp_it = mcp_clients_.find(server_name);
+        if (mcp_it != mcp_clients_.end() && mcp_it->second)
         {
+          try
+          {
+            auto discovered_tools = mcp_it->second->list_tools();
+            for (const auto& tool_info : discovered_tools)
+            {
+              // Apply filter: if filter is non-empty, only adopt listed tools
+              if (!filter.empty())
+              {
+                bool in_filter = false;
+                for (const auto& f : filter)
+                {
+                  if (f == tool_info.name)
+                  {
+                    in_filter = true;
+                    break;
+                  }
+                }
+                if (!in_filter)
+                {
+                  continue;
+                }
+              }
+
+              std::string full_name = prefix + "." + tool_info.name;
+              auto* skill_name = copy_string(full_name.c_str(), full_name.size());
+              std::string desc = tool_info.description.empty()
+                  ? ("MCP tool " + tool_info.name + " from server " + server_name)
+                  : tool_info.description;
+              auto* skill_desc = copy_string(desc.c_str(), desc.size());
+              auto* skill_params = new_map({});
+              auto* ext = new ExternalSkillConfig();
+              ext->binding = SkillBinding::McpTool;
+              ext->mcp_server_name = server_name;
+              ext->mcp_tool_name = tool_info.name;
+              auto* skill = new_skill(skill_name, skill_desc, skill_params, {}, nullptr);
+              skill->external = ext;
+              globals_.set(skill_name, Value::Skill(skill));
+            }
+          }
+          catch (const std::exception& e)
+          {
+            output_stream() << "[MCP] Warning: tools/list failed for server '"
+                            << server_name << "': " << e.what() << "\n";
+          }
+        }
+        else if (!filter.empty())
+        {
+          // Fallback: create stubs for explicitly named tools
           for (const auto& tool_name : filter)
           {
             std::string full_name = prefix + "." + tool_name;

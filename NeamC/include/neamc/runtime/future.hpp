@@ -242,7 +242,7 @@ public:
   void add_continuation(std::function<void(ResultType)> cont)
   {
     bool run_now = false;
-    ResultType result;
+    std::optional<ResultType> result;
     {
       std::lock_guard<std::mutex> lock(state_->mutex);
       if (state_->state == State::kPending)
@@ -255,7 +255,7 @@ public:
     }
     if (run_now)
     {
-      cont(std::move(result));
+      cont(std::move(*result));
     }
   }
 

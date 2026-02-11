@@ -80,7 +80,9 @@ TEST(ExecutorTest, TimeoutExpired)
 
   ASSERT_TRUE(result.is_ok());
   EXPECT_TRUE(result.unwrap().is_err());
-  EXPECT_TRUE(std::holds_alternative<TimeoutError>(result.unwrap().unwrap_err()));
+  // The inner Result<int, TimeoutError>::unwrap_err() returns a TimeoutError directly
+  auto inner = result.unwrap();
+  EXPECT_EQ(inner.unwrap_err().message, "timeout");
 }
 
 TEST(ExecutorTest, Cancellation)
