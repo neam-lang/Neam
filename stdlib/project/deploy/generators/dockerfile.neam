@@ -1,5 +1,23 @@
 module std.project.deploy.generators.dockerfile;
 
+// Generate a multi-stage Dockerfile for the current Neam project.
+//
+// The generated Dockerfile:
+//   Stage 1 (toolchain): Builds Neam compiler/runtime from neam-sdk/ source
+//   Stage 2 (app):       Copies toolchain binaries + user's neam.toml + src/
+//
+// Config options (from [deploy.docker] in neam.toml):
+//   image        - Docker image name
+//   registry     - Container registry URL
+//   tag-format   - Tag format string (default: "v{version}")
+//
+// Usage:
+//   neamc deploy --target docker [--dry-run]
+//
+// Output:
+//   deploy/docker/Dockerfile
+//   deploy/docker/docker-compose.yml
+//   .dockerignore
 pub fun generate(config) {
   return project_deploy_generate("docker", config ?? {});
 }

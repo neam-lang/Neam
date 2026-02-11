@@ -1,0 +1,59 @@
+// E2E Test 4: External skill syntax + MCP server
+// Tests: extern skill parsing, HTTP binding, mcp_server, adopt
+
+// HTTP GET binding — calls a real public API
+extern skill get_weather {
+  description: "Get current weather for a city"
+  params: { city: string }
+  binding: http {
+    method: "GET"
+    url: "https://wttr.in/{city}?format=3"
+    headers: ["Accept: text/plain"]
+    timeout: 10000
+  }
+}
+
+// MCP server definition — uses npx filesystem server on /tmp
+mcp_server filesystem {
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+}
+
+// Adopt all tools from the MCP server
+adopt filesystem.*
+
+agent WeatherAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a weather assistant. Use the get_weather tool. Reply in one sentence."
+  skills: [get_weather]
+}
+
+agent FileAgent {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a filesystem assistant. Use your filesystem tools to read and list files. Reply concisely."
+}
+
+{
+  emit "=== E2E Test 4: External Skills + MCP ===";
+  emit "";
+
+  // Test: HTTP extern skill via agent (real weather API call)
+  emit "T4.1 HTTP extern skill via agent (wttr.in)...";
+  let weather = WeatherAgent.ask("What is the weather in London? Use your get_weather tool.");
+  emit "T4.1 Response: " + weather;
+  emit "";
+
+  // Test: MCP adopted tools via agent
+  emit "T4.2 MCP adopted tools via agent...";
+  let files = FileAgent.ask("List the contents of the /tmp directory. Use the filesystem tools.");
+  emit "T4.2 Response: " + files;
+  emit "";
+
+  emit "=== E2E Test 4: COMPLETE ===";
+}

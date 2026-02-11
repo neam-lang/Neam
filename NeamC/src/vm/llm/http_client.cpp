@@ -38,12 +38,38 @@ const CurlGlobal& curl_global()
   return global_init;
 }
 
+// v0.6.8: WriteContext with max response size to prevent unbounded memory usage.
+// Default 50MB limit; configurable via NEAM_HTTP_MAX_RESPONSE_BYTES.
+struct WriteContext
+{
+  std::string* response;
+  size_t max_size{52428800};  // 50 MB default
+};
+
 size_t write_callback(char* ptr, size_t size, size_t nmemb, void* userdata)
 {
-  auto* buffer = static_cast<std::string*>(userdata);
+  auto* ctx = static_cast<WriteContext*>(userdata);
   const size_t total = size * nmemb;
-  buffer->append(ptr, total);
+  if (ctx->response->size() + total > ctx->max_size)
+  {
+    // Returning 0 causes CURLE_WRITE_ERROR which aborts the transfer
+    return 0;
+  }
+  ctx->response->append(ptr, total);
   return total;
+}
+
+size_t load_max_response_size()
+{
+  if (const char* env = std::getenv("NEAM_HTTP_MAX_RESPONSE_BYTES"))
+  {
+    long val = std::atol(env);
+    if (val > 0)
+    {
+      return static_cast<size_t>(val);
+    }
+  }
+  return 52428800;  // 50 MB
 }
 
 // ---------------------------------------------------------------------------
@@ -221,13 +247,16 @@ HttpResult http_post_json_raw(const std::string& url, const std::string& body,
   LLMLogger::debug("http", "POST " + url + " (" + std::to_string(body.size()) + " bytes)");
 
   std::string response;
+  static const size_t max_response = load_max_response_size();
+  WriteContext write_ctx{&response, max_response};
+
   curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
   curl_easy_setopt(handle, CURLOPT_POST, 1L);
   curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body.c_str());
   curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, timeout_ms);
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_callback);
-  curl_easy_setopt(handle, CURLOPT_WRITEDATA, &response);
+  curl_easy_setopt(handle, CURLOPT_WRITEDATA, &write_ctx);
 
   configure_tls(handle);
 
@@ -365,11 +394,14 @@ HttpResult http_request(const std::string& method, const std::string& url,
   LLMLogger::debug("http", method + " " + url);
 
   std::string response;
+  static const size_t max_response = load_max_response_size();
+  WriteContext write_ctx{&response, max_response};
+
   curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
   curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, method.c_str());
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, timeout_ms);
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_callback);
-  curl_easy_setopt(handle, CURLOPT_WRITEDATA, &response);
+  curl_easy_setopt(handle, CURLOPT_WRITEDATA, &write_ctx);
 
   if (!body.empty())
   {
@@ -407,5 +439,78 @@ HttpResult http_request(const std::string& method, const std::string& url,
   }
 
   return HttpResult{status, std::move(response)};
+}
+// ---------------------------------------------------------------------------
+// http_post_streaming — delivers chunks to callback as they arrive (v0.6.8)
+// ---------------------------------------------------------------------------
+void http_post_streaming(const std::string& url, const std::string& body,
+                         const std::vector<std::string>& headers,
+                         StreamChunkCallback chunk_callback,
+                         long timeout_ms)
+{
+  (void)curl_global();
+
+  CURL* handle = ConnectionPool::instance().acquire();
+  if (!handle)
+  {
+    throw std::runtime_error("Failed to initialize curl");
+  }
+  PooledHandle guard(handle);
+
+  struct StreamContext
+  {
+    StreamChunkCallback* callback;
+    size_t total_bytes{0};
+    size_t max_bytes{52428800};  // 50 MB safety
+  };
+
+  StreamContext ctx{&chunk_callback, 0};
+
+  auto stream_write = [](char* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
+    auto* sctx = static_cast<StreamContext*>(userdata);
+    const size_t total = size * nmemb;
+    sctx->total_bytes += total;
+    if (sctx->total_bytes > sctx->max_bytes)
+    {
+      return 0;
+    }
+    (*sctx->callback)(ptr, total);
+    return total;
+  };
+
+  curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(handle, CURLOPT_POST, 1L);
+  curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body.c_str());
+  curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+  curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, timeout_ms);
+  curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION,
+                   static_cast<size_t (*)(char*, size_t, size_t, void*)>(stream_write));
+  curl_easy_setopt(handle, CURLOPT_WRITEDATA, &ctx);
+
+  configure_tls(handle);
+
+  struct curl_slist* header_list = nullptr;
+  for (const auto& header : headers)
+  {
+    header_list = curl_slist_append(header_list, header.c_str());
+  }
+  if (header_list)
+  {
+    curl_easy_setopt(handle, CURLOPT_HTTPHEADER, header_list);
+  }
+
+  CURLcode res = curl_easy_perform(handle);
+
+  if (header_list)
+  {
+    curl_slist_free_all(header_list);
+  }
+
+  if (res != CURLE_OK && res != CURLE_WRITE_ERROR)
+  {
+    guard.handle = nullptr;
+    curl_easy_cleanup(handle);
+    throw std::runtime_error(std::string("HTTP streaming failed: ") + curl_easy_strerror(res));
+  }
 }
 }  // namespace neamc::llm

@@ -167,6 +167,7 @@ enum class TokenType
   Server,
   Command,
   Args,
+  BodyTemplate,  // v0.6.8: HTTP body template
 
   Eof
 };
