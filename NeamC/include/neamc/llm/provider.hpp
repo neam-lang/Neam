@@ -66,6 +66,10 @@ struct ToolResult
   bool is_error{false};
 };
 
+// --- Streaming callback (v0.6.8) ---------------------------------------------
+
+using StreamCallback = std::function<void(const std::string& chunk, bool is_final)>;
+
 // --- Provider interface ------------------------------------------------------
 
 class LLMProvider
@@ -88,6 +92,13 @@ public:
     resp.text = chat(messages);
     resp.stop_reason = "end_turn";
     return resp;
+  }
+
+  // v0.6.8: Streaming chat. Default: buffer entire response and call once.
+  virtual void chat_stream(const std::vector<Message>& messages, StreamCallback callback)
+  {
+    auto response = chat(messages);
+    callback(response, true);
   }
 };
 }  // namespace neamc::llm

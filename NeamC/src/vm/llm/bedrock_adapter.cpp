@@ -375,6 +375,27 @@ public:
     }
   }
 
+  // v0.6.8: Refresh credentials from environment (supports IAM role rotation)
+  void refresh_credentials()
+  {
+    if (const char* key = std::getenv("AWS_ACCESS_KEY_ID"))
+    {
+      creds_.access_key = key;
+    }
+    if (const char* secret = std::getenv("AWS_SECRET_ACCESS_KEY"))
+    {
+      creds_.secret_key = secret;
+    }
+    if (const char* token = std::getenv("AWS_SESSION_TOKEN"))
+    {
+      creds_.session_token = token;
+    }
+    else
+    {
+      creds_.session_token.clear();
+    }
+  }
+
   std::string complete(const std::string& prompt) override
   {
     std::vector<Message> messages;
@@ -405,22 +426,47 @@ public:
     }
 
     const std::string body = payload.dump();
-    const auto signed_req = sign_request(creds_, config_.model, body);
 
-    try
+    // v0.6.8: Retry once on 401/403 after refreshing credentials
+    for (int attempt = 0; attempt < 2; ++attempt)
     {
-      const std::string response =
-          http_post_json(signed_req.url, body, signed_req.headers, 60000);
-      auto parsed = nlohmann::json::parse(response);
-      auto text = extract_response_text(parsed);
-      LLMLogger::debug("bedrock", "Response: " + std::to_string(text.size()) + " chars");
-      return text;
+      const auto signed_req = sign_request(creds_, config_.model, body);
+
+      try
+      {
+        auto result = http_post_json_raw(signed_req.url, body, signed_req.headers, 60000);
+
+        if ((result.status == 401 || result.status == 403) && attempt == 0)
+        {
+          LLMLogger::warn("bedrock", "Auth failed (" + std::to_string(result.status) +
+                                          "), refreshing credentials and retrying");
+          refresh_credentials();
+          continue;
+        }
+
+        if (result.status >= 400)
+        {
+          throw std::runtime_error("HTTP error " + std::to_string(result.status) +
+                                   ": " + result.body);
+        }
+
+        auto parsed = nlohmann::json::parse(result.body);
+        auto text = extract_response_text(parsed);
+        LLMLogger::debug("bedrock", "Response: " + std::to_string(text.size()) + " chars");
+        return text;
+      }
+      catch (const std::exception& e)
+      {
+        if (attempt == 1)
+        {
+          LLMLogger::error("bedrock", "Chat failed: " + std::string(e.what()));
+          throw;
+        }
+        throw;
+      }
     }
-    catch (const std::exception& e)
-    {
-      LLMLogger::error("bedrock", "Chat failed: " + std::string(e.what()));
-      throw;
-    }
+
+    throw std::runtime_error("Bedrock chat: unexpected retry loop exit");
   }
 
   // v0.6.6: Native Claude tool use via Bedrock Messages API
@@ -489,23 +535,48 @@ public:
     }
 
     const std::string body = payload.dump();
-    const auto signed_req = sign_request(creds_, config_.model, body);
 
-    try
+    // v0.6.8: Retry once on 401/403 after refreshing credentials
+    for (int attempt = 0; attempt < 2; ++attempt)
     {
-      const std::string response =
-          http_post_json(signed_req.url, body, signed_req.headers, 60000);
-      auto parsed = nlohmann::json::parse(response);
-      auto chat_resp = parse_claude_response(parsed);
-      LLMLogger::debug("bedrock", "Tool response: stop_reason=" + chat_resp.stop_reason +
-                                       ", tool_calls=" + std::to_string(chat_resp.tool_calls.size()));
-      return chat_resp;
+      const auto signed_req = sign_request(creds_, config_.model, body);
+
+      try
+      {
+        auto result = http_post_json_raw(signed_req.url, body, signed_req.headers, 60000);
+
+        if ((result.status == 401 || result.status == 403) && attempt == 0)
+        {
+          LLMLogger::warn("bedrock", "Auth failed (" + std::to_string(result.status) +
+                                          "), refreshing credentials and retrying");
+          refresh_credentials();
+          continue;
+        }
+
+        if (result.status >= 400)
+        {
+          throw std::runtime_error("HTTP error " + std::to_string(result.status) +
+                                   ": " + result.body);
+        }
+
+        auto parsed = nlohmann::json::parse(result.body);
+        auto chat_resp = parse_claude_response(parsed);
+        LLMLogger::debug("bedrock", "Tool response: stop_reason=" + chat_resp.stop_reason +
+                                         ", tool_calls=" + std::to_string(chat_resp.tool_calls.size()));
+        return chat_resp;
+      }
+      catch (const std::exception& e)
+      {
+        if (attempt == 1)
+        {
+          LLMLogger::error("bedrock", "Tool chat failed: " + std::string(e.what()));
+          throw;
+        }
+        throw;
+      }
     }
-    catch (const std::exception& e)
-    {
-      LLMLogger::error("bedrock", "Tool chat failed: " + std::string(e.what()));
-      throw;
-    }
+
+    throw std::runtime_error("Bedrock tool chat: unexpected retry loop exit");
   }
 
 private:

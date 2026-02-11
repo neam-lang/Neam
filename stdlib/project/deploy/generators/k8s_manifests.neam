@@ -1,5 +1,37 @@
 module std.project.deploy.generators.k8s_manifests;
 
+// Generate production-ready Kubernetes manifests for AWS EKS deployment.
+//
+// Generates 7 manifest files:
+//   namespace.yaml    - Application namespace
+//   configmap.yaml    - Environment configuration (NEAM_ENV, NEAM_LOG_LEVEL)
+//   secrets.yaml      - API keys (OPENAI_API_KEY, NEAM_API_KEY) — base64 encoded
+//   deployment.yaml   - Pod spec with rolling update, probes, security context
+//   service.yaml      - ClusterIP service (port 80 -> app port)
+//   ingress.yaml      - ALB or NGINX ingress with HTTPS
+//   hpa.yaml          - HorizontalPodAutoscaler (CPU-based scaling)
+//
+// Config options (from [deploy.kubernetes] in neam.toml):
+//   namespace        - K8s namespace (default: "default")
+//   replicas         - Initial replica count (default: 2)
+//   cpu-request      - CPU request (default: "250m")
+//   cpu-limit        - CPU limit (default: "1")
+//   memory-request   - Memory request (default: "512Mi")
+//   memory-limit     - Memory limit (default: "1Gi")
+//   port             - Container port (default: 8080)
+//   ingress-class    - "alb" for AWS ALB, "nginx" for generic (default: "alb")
+//   certificate-arn  - ACM certificate ARN for HTTPS
+//   hpa-min          - Minimum replicas for HPA (default: 2)
+//   hpa-max          - Maximum replicas for HPA (default: 10)
+//   hpa-cpu-target   - CPU utilization target % (default: 70)
+//
+// Usage:
+//   neamc deploy --target kubernetes [--dry-run]
+//
+// Output:
+//   deploy/kubernetes/*.yaml
+//   deploy/scripts/ecr-push.sh
+//   deploy/scripts/eks-deploy.sh
 pub fun generate(config) {
   return project_deploy_generate("kubernetes", config ?? {});
 }

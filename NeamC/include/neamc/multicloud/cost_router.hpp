@@ -204,9 +204,17 @@ public:
     );
 
     /**
-     * Refresh spot prices from all providers
+     * Refresh spot prices from all providers.
+     * NOTE: Does not call live cloud APIs. Use load_pricing_from_file()
+     * or update_pricing_batch() to supply real pricing data.
      */
     void refresh_spot_prices();
+
+    /**
+     * v0.6.8: Load pricing data from a JSON file.
+     * Returns true on success, false if the file cannot be read or parsed.
+     */
+    bool load_pricing_from_file(const std::string& path);
 
     /**
      * Set auto-refresh interval

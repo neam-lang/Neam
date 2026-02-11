@@ -292,6 +292,87 @@ public:
     }
   }
 
+  // v0.6.8: SSE streaming for OpenAI
+  void chat_stream(const std::vector<Message>& messages, StreamCallback callback) override
+  {
+    LLMLogger::info("openai", "Stream request: model=" + config_.model);
+
+    nlohmann::json payload;
+    payload["model"] = config_.model;
+    payload["messages"] = build_messages_json(messages);
+    payload["stream"] = true;
+    if (config_.temperature > 0.0)
+    {
+      payload["temperature"] = config_.temperature;
+    }
+
+    std::string buffer;
+    http_post_streaming(
+        config_.endpoint, payload.dump(),
+        {"Content-Type: application/json",
+         "Authorization: Bearer " + config_.api_key},
+        [&](const char* data, size_t size) {
+          buffer.append(data, size);
+
+          // Parse SSE lines: "data: {...}\n"
+          size_t pos = 0;
+          while (pos < buffer.size())
+          {
+            size_t nl = buffer.find('\n', pos);
+            if (nl == std::string::npos)
+            {
+              break;
+            }
+            std::string line = buffer.substr(pos, nl - pos);
+            pos = nl + 1;
+
+            if (line.empty() || line == "\r")
+            {
+              continue;
+            }
+            // Remove trailing \r
+            if (!line.empty() && line.back() == '\r')
+            {
+              line.pop_back();
+            }
+
+            if (line.rfind("data: ", 0) != 0)
+            {
+              continue;
+            }
+            std::string json_str = line.substr(6);
+            if (json_str == "[DONE]")
+            {
+              callback("", true);
+              break;
+            }
+
+            try
+            {
+              auto parsed = nlohmann::json::parse(json_str);
+              if (parsed.contains("choices") && !parsed["choices"].empty())
+              {
+                const auto& delta = parsed["choices"][0].value("delta", nlohmann::json::object());
+                if (delta.contains("content") && !delta["content"].is_null())
+                {
+                  std::string chunk = delta["content"].get<std::string>();
+                  if (!chunk.empty())
+                  {
+                    callback(chunk, false);
+                  }
+                }
+              }
+            }
+            catch (const nlohmann::json::parse_error&)
+            {
+              // Skip malformed SSE lines
+            }
+          }
+          buffer = buffer.substr(pos);
+        },
+        120000);
+  }
+
 private:
   ProviderConfig config_;
 };

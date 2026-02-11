@@ -53,17 +53,28 @@ struct DeployConfig
   struct Kubernetes
   {
     std::string namespace_ = "default";
-    int replicas = 1;
-    std::string cpu = "500m";
-    std::string memory = "1Gi";
+    int replicas = 2;
+    std::string cpu_request = "250m";
+    std::string cpu_limit = "1";
+    std::string memory_request = "512Mi";
+    std::string memory_limit = "1Gi";
     int port = 8080;
+    // v0.6.8: EKS/ALB support
+    std::string ingress_class = "alb";  // "alb" for AWS, "nginx" for generic
+    std::string certificate_arn;        // ACM cert ARN for HTTPS
+    int hpa_min = 2;
+    int hpa_max = 10;
+    int hpa_cpu_target = 70;
   } kubernetes;
 
   struct Serverless
   {
-    std::string provider;
+    std::string provider = "aws";
     int memory = 1024;
     int timeout = 300;
+    int workers = 2;
+    // v0.6.8: Lambda Web Adapter support
+    std::string readiness_path = "/health";
   } serverless;
 };
 
