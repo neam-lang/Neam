@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Neam v0.6.7 Installer
-# Usage: curl -fsSL https://github.com/neam-lang/Neam/releases/download/v0.6.7/install.sh | bash
+# Neam v0.6.8 Installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/neam-lang/Neam/main/install.sh | bash
 set -euo pipefail
 
-VERSION="0.6.7"
+VERSION="0.6.8"
 REPO="neam-lang/Neam"
 INSTALL_DIR="${NEAM_INSTALL_DIR:-/usr/local/bin}"
 
@@ -81,12 +81,15 @@ else
     tar xzf "$ASSET"
 fi
 
-# Collect binaries (handle both unix and windows names)
+# Collect binaries — search recursively (archive may have bin/ subdirectory)
 BINS=()
-for b in neamc neam neam-pkg neamc.exe neam.exe neam-pkg.exe; do
-    [ -f "$b" ] && BINS+=("$b")
+for b in neamc neam neam-api neam-pkg neamc.exe neam.exe neam-api.exe neam-pkg.exe; do
+    found="$(find . -name "$b" -type f 2>/dev/null | head -1)"
+    [ -n "$found" ] && BINS+=("$found")
 done
 [ ${#BINS[@]} -eq 0 ] && fail "No binaries found in archive"
+
+info "Found ${#BINS[@]} binaries: $(printf '%s ' "${BINS[@]}" | sed 's|.*/||g')"
 
 # Install — try INSTALL_DIR first, fall back to ~/.neam/bin
 install_to() {
@@ -151,7 +154,7 @@ fi
 
 # Verify
 echo ""
-for b in neamc neam neam-pkg; do
+for b in neamc neam neam-api neam-pkg; do
     if command -v "$b" &>/dev/null; then
         ok "$b installed at $(command -v $b)"
     elif [ -f "${INSTALL_DIR}/$b" ]; then
@@ -163,14 +166,15 @@ echo ""
 ok "Neam v${VERSION} installed successfully!"
 echo ""
 echo "  Quick start:"
-echo "    neamc hello.neam -o hello.nbc    # Compile"
-echo "    neam hello.nbc                   # Run"
-echo "    neam-pkg init my-agent           # New project"
+echo "    neamc hello.neam -o hello.neamb   # Compile"
+echo "    neam hello.neamb                  # Run"
+echo "    neam-pkg init my-agent            # New project"
 echo ""
 if [ "$NEEDS_PATH_UPDATE" = true ]; then
     echo "  Run this to use neam now:"
     echo "    source ${RC_FILE}"
     echo ""
 fi
-echo "  Documentation: https://github.com/${REPO}"
+echo "  Documentation: https://neam.dev"
+echo "  GitHub:        https://github.com/${REPO}"
 echo ""
