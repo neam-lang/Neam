@@ -678,7 +678,8 @@ void Parser::tokenize()
       {"response_path", TokenType::ResponsePath},
       {"server", TokenType::Server},
       {"command", TokenType::Command},
-      {"args", TokenType::Args}};
+      {"args", TokenType::Args},
+      {"body_template", TokenType::BodyTemplate}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -1597,6 +1598,20 @@ SkillBindingSpec Parser::parse_skill_binding()
           error("Expected number for timeout");
         }
         spec.http_timeout_ms = static_cast<long>(std::stod(previous().lexeme));
+        continue;
+      }
+      // v0.6.8: body_template for HTTP binding
+      if (match(TokenType::BodyTemplate))
+      {
+        if (!match(TokenType::Colon))
+        {
+          error("Expected ':' after body_template");
+        }
+        if (!match(TokenType::String))
+        {
+          error("Expected string for body_template");
+        }
+        spec.http_body_template = previous().lexeme;
         continue;
       }
       error("Unexpected token in http binding");
@@ -3493,7 +3508,7 @@ SkillParam Parser::parse_skill_param()
       !match(TokenType::Args) && !match(TokenType::Type) &&
       !match(TokenType::Model) && !match(TokenType::System) &&
       !match(TokenType::Timeout) && !match(TokenType::Description) &&
-      !match(TokenType::Params))
+      !match(TokenType::Params) && !match(TokenType::BodyTemplate))
   {
     error("Expected param name");
   }

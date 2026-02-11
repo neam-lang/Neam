@@ -177,9 +177,11 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/deploy/helm.cpp
     NeamC/src/deploy/kubernetes.cpp
     NeamC/src/deploy/terraform.cpp
+    NeamC/src/deploy/deploy_scripts.cpp
     NeamC/src/vm/memory.cpp
     NeamC/src/vm/object.cpp
     NeamC/src/vm/external_skill.cpp
+    NeamC/src/vm/mcp_client.cpp
     NeamC/src/vm/table.cpp
     NeamC/src/vm/native.cpp
     NeamC/src/vm/llm/http_client.cpp
@@ -205,6 +207,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/testing/coverage.cpp
     NeamC/src/io/filesystem.cpp
     NeamC/src/io/temp.cpp
+    NeamC/src/multicloud/cost_router.cpp
 )
 
 add_library(neamc_core STATIC ${NEAMC_CORE_SOURCES})
@@ -442,6 +445,16 @@ add_executable(compile_run_test
 )
 target_link_libraries(compile_run_test PRIVATE neamc_core gtest_main)
 add_test(NAME compile_run_test COMMAND compile_run_test)
+
+# ============================================================================
+# v0.6.8 Test Targets
+# ============================================================================
+
+add_executable(v068_test
+    tests/unit/v068_test.cpp
+)
+target_link_libraries(v068_test PRIVATE neamc_core gtest_main)
+add_test(NAME v068_test COMMAND v068_test)
 
 # ============================================================================
 # Install targets (v0.6.5)

@@ -1,5 +1,5 @@
 //
-// Neam Virtual Machine - External skill dispatch (v0.6.7)
+// Neam Virtual Machine - External skill dispatch (v0.6.8)
 //
 // Dispatches external skill calls to MCP servers, HTTP APIs,
 // or Claude built-in tool handlers.
@@ -7,17 +7,27 @@
 
 #include "neamc/vm/external_skill.hpp"
 
+#include <cerrno>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 #include <nlohmann/json.hpp>
 
 #include "neamc/llm/http_client.hpp"
+#include "neamc/vm/mcp_client.hpp"
 #include "neamc/vm/object.hpp"
 
 namespace neamc::vm
@@ -168,15 +178,192 @@ std::string dispatch_http_skill(ObjSkill* skill, const nlohmann::json& input)
   return result.body;
 }
 
-std::string dispatch_mcp_skill(ObjSkill* skill, const nlohmann::json& input)
+std::string dispatch_mcp_skill(ObjSkill* skill, const nlohmann::json& input,
+                               McpClient* mcp_client)
 {
-  // MCP dispatch is a placeholder — full JSON-RPC MCP client integration
-  // would require a separate MCP client library. For now, return an error
-  // indicating the MCP server connection is not yet established.
   const auto& cfg = *skill->external;
-  throw std::runtime_error(
-      "MCP tool dispatch not yet connected: server='" + cfg.mcp_server_name +
-      "', tool='" + cfg.mcp_tool_name + "'. MCP client integration pending.");
+
+  if (!mcp_client)
+  {
+    throw std::runtime_error(
+        "MCP tool dispatch: no active connection for server '" +
+        cfg.mcp_server_name + "'. Ensure the mcp_server block is defined.");
+  }
+
+  auto result = mcp_client->call_tool(cfg.mcp_tool_name, input);
+  if (result.is_string())
+  {
+    return result.get<std::string>();
+  }
+  return result.dump();
+}
+
+// v0.6.8: Safe command execution with shell metacharacter rejection,
+// timeout (default 30s), and output size limit (default 1MB).
+// Uses posix_spawn/fork+exec on Unix, falls back to constrained popen on Windows.
+constexpr long kDefaultExecTimeoutMs = 30000;
+constexpr size_t kDefaultMaxOutput = 1048576;  // 1 MB
+
+bool contains_shell_metachar(const std::string& cmd)
+{
+  for (char c : cmd)
+  {
+    switch (c)
+    {
+      case ';':
+      case '|':
+      case '&':
+      case '$':
+      case '`':
+      case '>':
+      case '<':
+      case '(':
+      case ')':
+        return true;
+      default:
+        break;
+    }
+  }
+  return false;
+}
+
+std::string safe_exec(const std::string& command, long timeout_ms = kDefaultExecTimeoutMs,
+                      size_t max_output = kDefaultMaxOutput)
+{
+  if (command.empty())
+  {
+    throw std::runtime_error("safe_exec: empty command");
+  }
+
+  // Reject shell metacharacters to prevent injection
+  if (contains_shell_metachar(command))
+  {
+    throw std::runtime_error(
+        "safe_exec: command contains shell metacharacters (;|&$`><()) which are "
+        "not allowed for security. Use individual commands instead.");
+  }
+
+#ifdef _WIN32
+  // Windows fallback: use _popen with metachar check already done above
+  FILE* pipe = _popen(command.c_str(), "r");
+  if (!pipe)
+  {
+    throw std::runtime_error("safe_exec: failed to execute command");
+  }
+  std::string output;
+  char buffer[4096];
+  while (fgets(buffer, sizeof(buffer), pipe))
+  {
+    output += buffer;
+    if (output.size() > max_output)
+    {
+      _pclose(pipe);
+      output.resize(max_output);
+      output += "\n[output truncated at " + std::to_string(max_output) + " bytes]";
+      return output;
+    }
+  }
+  _pclose(pipe);
+  return output;
+#else
+  // Unix: fork + exec with stdout/stderr capture via pipe
+  int pipefd[2];
+  if (pipe(pipefd) != 0)
+  {
+    throw std::runtime_error("safe_exec: pipe() failed");
+  }
+
+  pid_t pid = fork();
+  if (pid < 0)
+  {
+    close(pipefd[0]);
+    close(pipefd[1]);
+    throw std::runtime_error("safe_exec: fork() failed");
+  }
+
+  if (pid == 0)
+  {
+    // Child process
+    close(pipefd[0]);  // Close read end
+    dup2(pipefd[1], STDOUT_FILENO);
+    dup2(pipefd[1], STDERR_FILENO);
+    close(pipefd[1]);
+
+    // Use execv with /bin/sh -c for the command
+    const char* argv[] = {"/bin/sh", "-c", command.c_str(), nullptr};
+    execv("/bin/sh", const_cast<char* const*>(argv));
+    _exit(127);  // exec failed
+  }
+
+  // Parent process
+  close(pipefd[1]);  // Close write end
+
+  // Set read end to non-blocking for timeout handling
+  int flags = fcntl(pipefd[0], F_GETFL, 0);
+  fcntl(pipefd[0], F_SETFL, flags | O_NONBLOCK);
+
+  std::string output;
+  char buffer[4096];
+  auto start = std::chrono::steady_clock::now();
+  bool timed_out = false;
+
+  while (true)
+  {
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - start)
+                       .count();
+    if (elapsed > timeout_ms)
+    {
+      timed_out = true;
+      break;
+    }
+
+    ssize_t n = read(pipefd[0], buffer, sizeof(buffer));
+    if (n > 0)
+    {
+      output.append(buffer, static_cast<size_t>(n));
+      if (output.size() > max_output)
+      {
+        output.resize(max_output);
+        output += "\n[output truncated at " + std::to_string(max_output) + " bytes]";
+        break;
+      }
+    }
+    else if (n == 0)
+    {
+      break;  // EOF — child closed its end
+    }
+    else if (errno == EAGAIN || errno == EWOULDBLOCK)
+    {
+      // No data yet — brief sleep then retry
+      usleep(10000);  // 10ms
+    }
+    else
+    {
+      break;  // Read error
+    }
+  }
+
+  close(pipefd[0]);
+
+  if (timed_out)
+  {
+    kill(pid, SIGKILL);
+    waitpid(pid, nullptr, 0);
+    throw std::runtime_error("safe_exec: command timed out after " +
+                             std::to_string(timeout_ms) + "ms");
+  }
+
+  int status = 0;
+  waitpid(pid, &status, 0);
+
+  if (WIFEXITED(status) && WEXITSTATUS(status) != 0 && output.empty())
+  {
+    output = "Command exited with status " + std::to_string(WEXITSTATUS(status));
+  }
+
+  return output;
+#endif
 }
 
 // Execute a Claude built-in tool locally.
@@ -189,7 +376,6 @@ std::string dispatch_claude_builtin(ObjSkill* skill, const nlohmann::json& input
 
   if (tool_type == "bash_20241022")
   {
-    // Execute bash command and capture output
     std::string command;
     if (input.contains("command") && input["command"].is_string())
     {
@@ -200,29 +386,8 @@ std::string dispatch_claude_builtin(ObjSkill* skill, const nlohmann::json& input
       throw std::runtime_error("bash_20241022: 'command' parameter required");
     }
 
-    // Redirect stderr to stdout so we capture everything
-    command += " 2>&1";
-
-    FILE* pipe = popen(command.c_str(), "r");
-    if (!pipe)
-    {
-      throw std::runtime_error("bash_20241022: failed to execute command");
-    }
-
-    std::string output;
-    char buffer[4096];
-    while (fgets(buffer, sizeof(buffer), pipe))
-    {
-      output += buffer;
-    }
-
-    int status = pclose(pipe);
-    if (status != 0 && output.empty())
-    {
-      output = "Command exited with status " + std::to_string(status);
-    }
-
-    return output;
+    // v0.6.8: Use safe_exec instead of raw popen
+    return safe_exec(command, kDefaultExecTimeoutMs, kDefaultMaxOutput);
   }
 
   if (tool_type == "text_editor_20241022")
@@ -263,7 +428,8 @@ std::string dispatch_claude_builtin(ObjSkill* skill, const nlohmann::json& input
 }
 }  // namespace
 
-std::string dispatch_external_skill(ObjSkill* skill, const nlohmann::json& input)
+std::string dispatch_external_skill(ObjSkill* skill, const nlohmann::json& input,
+                                    McpClient* mcp_client)
 {
   if (!skill || !skill->external)
   {
@@ -273,7 +439,7 @@ std::string dispatch_external_skill(ObjSkill* skill, const nlohmann::json& input
   switch (skill->external->binding)
   {
     case SkillBinding::McpTool:
-      return dispatch_mcp_skill(skill, input);
+      return dispatch_mcp_skill(skill, input, mcp_client);
     case SkillBinding::HttpApi:
       return dispatch_http_skill(skill, input);
     case SkillBinding::ClaudeBuiltin:

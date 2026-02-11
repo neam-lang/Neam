@@ -72,11 +72,16 @@ public:
   Future<T> spawn(std::function<T()> work, TaskPriority priority = TaskPriority::kNormal)
   {
     auto task = std::make_shared<Task<T>>(std::move(work), priority);
+    // Capture shared state before moving the future out, since Task::execute()
+    // uses future_state_ to resolve/reject after the future is returned.
+    auto future_state = task->future.state_;
+    Future<T> result;
+    result.state_ = future_state;
     if (!schedule_task(task))
     {
-      task->future.reject(typename Future<T>::ErrorType{std::string("Task queue full")});
+      Future<T>::reject_shared(future_state, typename Future<T>::ErrorType{std::string("Task queue full")});
     }
-    return task->future;
+    return result;
   }
 
   template <typename T>

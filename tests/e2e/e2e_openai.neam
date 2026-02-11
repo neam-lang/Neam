@@ -1,0 +1,21 @@
+// E2E Test 2: Real OpenAI agent call
+
+agent Assistant {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "OPENAI_API_KEY"
+  system: "You are a helpful assistant. Reply in exactly one short sentence."
+}
+
+{
+  emit "=== E2E Test 2: OpenAI Agent ===";
+  emit "";
+
+  emit "T2.1 Sending query to OpenAI gpt-4o-mini...";
+  let answer = Assistant.ask("What is 2 + 2? Reply with just the number.");
+  emit "T2.1 Response: " + answer;
+  emit "";
+
+  emit "=== E2E Test 2: COMPLETE ===";
+}

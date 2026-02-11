@@ -1,5 +1,26 @@
 module std.project.deploy.targets.serverless.aws_lambda;
 
+// Deploy a Neam application to AWS Lambda via Lambda Web Adapter.
+//
+// Architecture:
+//   API Gateway v2 (HttpApi)
+//     -> Lambda invoke
+//       -> Lambda Web Adapter (Extension)
+//         -> neam-api :8080 (localhost)
+//           -> pipeline.compile() + VM.run() per request
+//
+// The Lambda Web Adapter converts Lambda events into HTTP requests and
+// proxies them to neam-api running inside the container. No code changes
+// needed — the same neam-api binary runs in Lambda as in EKS/Docker.
+//
+// Prerequisites:
+//   - Docker installed
+//   - AWS SAM CLI installed
+//   - AWS CLI configured with ECR + CloudFormation permissions
+//
+// Quick start:
+//   neamc deploy --target lambda --dry-run       # preview generated files
+//   deploy/scripts/lambda-deploy.sh v1.0.0       # build, push, deploy
 pub fun run(config) {
   return { ok: true, value: { target: "aws-lambda", config: config ?? {} } };
 }

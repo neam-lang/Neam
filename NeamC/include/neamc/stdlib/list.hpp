@@ -112,7 +112,6 @@ public:
   void clear() noexcept { data_.clear(); }
 
   void push(T value) { data_.push_back(std::move(value)); }
-  void push(T&& value) { data_.push_back(std::move(value)); }
 
   Option<T> pop()
   {
