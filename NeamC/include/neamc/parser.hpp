@@ -169,6 +169,9 @@ enum class TokenType
   Args,
   BodyTemplate,  // v0.6.8: HTTP body template
 
+  // v0.6.9: Security policy keyword
+  Policy,
+
   Eof
 };
 
@@ -214,6 +217,7 @@ private:
   StmtPtr parse_budget(const Visibility& visibility);
   StmtPtr parse_guard(const Visibility& visibility);
   StmtPtr parse_guardchain(const Visibility& visibility);
+  StmtPtr parse_policy(const Visibility& visibility);
   StmtPtr parse_capability(const Visibility& visibility);
   StmtPtr parse_tool(const Visibility& visibility);
   StmtPtr parse_memory(const Visibility& visibility);

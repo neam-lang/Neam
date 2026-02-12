@@ -1,13 +1,16 @@
 //
-// Neam Virtual Machine - MCP Client (v0.6.8)
+// Neam Virtual Machine - MCP Client (v0.6.9)
 //
 // JSON-RPC 2.0 over stdio transport for Model Context Protocol.
+// v0.6.9 D6: Resource limits, environment isolation, hash pinning.
 //
 
 #include "neamc/vm/mcp_client.hpp"
 
 #include <chrono>
 #include <cstring>
+#include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -16,16 +19,29 @@
 #include <cerrno>
 #include <csignal>
 #include <fcntl.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <crt_externs.h>  // _NSGetEnviron
 #endif
+#endif
+
+#include <openssl/evp.h>
+
+#include "neamc/security/audit_log.hpp"
+#include "neamc/security/credential_manager.hpp"
 
 namespace neamc::vm
 {
 
 McpClient::McpClient(const std::string& command, const std::vector<std::string>& args,
-                     const std::unordered_map<std::string, std::string>& env)
-    : command_(command), args_(args), env_(env)
+                     const std::unordered_map<std::string, std::string>& env,
+                     size_t max_memory_bytes, size_t max_cpu_seconds,
+                     long startup_timeout_ms, const std::string& expected_hash)
+    : command_(command), args_(args), env_(env),
+      max_memory_bytes_(max_memory_bytes), max_cpu_seconds_(max_cpu_seconds),
+      startup_timeout_ms_(startup_timeout_ms), expected_hash_(expected_hash)
 {
 }
 
@@ -68,11 +84,44 @@ void McpClient::start_process()
     close(to_child[0]);
     close(from_child[1]);
 
-    // Set environment variables
-    for (const auto& [key, value] : env_)
+    // v0.6.9 D6+D7: Environment isolation — build clean env
+    auto clean_env = security::CredentialManager::instance().build_clean_env(env_);
+
+    // Clear inherited environment and set only declared vars
+    // Use _NSGetEnviron on macOS, environ on Linux
+#ifdef __APPLE__
+    *_NSGetEnviron() = nullptr;
+#else
+    extern char** environ;
+    environ = nullptr;
+#endif
+    for (const auto& [key, value] : clean_env)
     {
       setenv(key.c_str(), value.c_str(), 1);
     }
+
+    // v0.6.9 D6: Resource limits for child process
+    struct rlimit rl;
+
+    // Address space limit
+    rl.rlim_cur = max_memory_bytes_;
+    rl.rlim_max = max_memory_bytes_;
+    setrlimit(RLIMIT_AS, &rl);
+
+    // CPU time limit
+    rl.rlim_cur = max_cpu_seconds_;
+    rl.rlim_max = max_cpu_seconds_;
+    setrlimit(RLIMIT_CPU, &rl);
+
+    // Max child processes
+    rl.rlim_cur = 16;
+    rl.rlim_max = 16;
+    setrlimit(RLIMIT_NPROC, &rl);
+
+    // Max file write size (10MB)
+    rl.rlim_cur = 10 * 1024 * 1024;
+    rl.rlim_max = 10 * 1024 * 1024;
+    setrlimit(RLIMIT_FSIZE, &rl);
 
     // Build argv
     std::vector<const char*> argv;
@@ -94,6 +143,9 @@ void McpClient::start_process()
   stdin_fd_ = to_child[1];
   stdout_fd_ = from_child[0];
   child_pid_ = pid;
+
+  // Ignore SIGPIPE so writes to dead child return EPIPE instead of killing us
+  signal(SIGPIPE, SIG_IGN);
 
   // Set stdout_fd_ to non-blocking for timeout reads
   int flags = fcntl(stdout_fd_, F_GETFL, 0);
@@ -263,6 +315,88 @@ nlohmann::json McpClient::read_response(int id, long timeout_ms)
 #endif
 }
 
+// v0.6.9 D6: Compute SHA-256 of a file
+std::string McpClient::compute_sha256_file(const std::string& path)
+{
+  std::ifstream file(path, std::ios::binary);
+  if (!file.is_open()) return "";
+
+  EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+  if (!ctx) return "";
+
+  EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+
+  char buf[8192];
+  while (file.read(buf, sizeof(buf)) || file.gcount() > 0)
+  {
+    EVP_DigestUpdate(ctx, buf, static_cast<size_t>(file.gcount()));
+  }
+
+  unsigned char hash[EVP_MAX_MD_SIZE];
+  unsigned int hash_len = 0;
+  EVP_DigestFinal_ex(ctx, hash, &hash_len);
+  EVP_MD_CTX_free(ctx);
+
+  std::ostringstream hex;
+  hex << std::hex << std::setfill('0');
+  for (unsigned int i = 0; i < hash_len; ++i)
+  {
+    hex << std::setw(2) << static_cast<int>(hash[i]);
+  }
+  return hex.str();
+}
+
+// v0.6.9 D6: Verify binary hash before launch
+void McpClient::verify_hash()
+{
+  if (expected_hash_.empty()) return;
+
+  // Resolve command to full path
+  std::string cmd_path = command_;
+
+  // If not an absolute path, search PATH
+  if (!command_.empty() && command_[0] != '/')
+  {
+    const char* path_env = std::getenv("PATH");
+    if (path_env)
+    {
+      std::istringstream paths(path_env);
+      std::string dir;
+      while (std::getline(paths, dir, ':'))
+      {
+        std::string candidate = dir + "/" + command_;
+        std::ifstream test(candidate);
+        if (test.good())
+        {
+          cmd_path = candidate;
+          break;
+        }
+      }
+    }
+  }
+
+  auto actual = compute_sha256_file(cmd_path);
+  if (actual.empty())
+  {
+    throw std::runtime_error("MCP D6: cannot compute hash for '" + cmd_path + "'");
+  }
+  if (actual != expected_hash_)
+  {
+    security::AuditLogger::instance().log({
+        {},
+        security::TraceContext::current(),
+        security::EventType::MCPRequest,
+        "",
+        command_,
+        "MCP server hash mismatch — possible supply chain attack",
+        {{"expected", expected_hash_}, {"actual", actual}, {"path", cmd_path}}});
+    throw std::runtime_error(
+        "MCP D6: hash mismatch for '" + command_ +
+        "' (expected " + expected_hash_.substr(0, 16) + "..., got " +
+        actual.substr(0, 16) + "...)");
+  }
+}
+
 bool McpClient::initialize()
 {
   if (initialized_)
@@ -270,14 +404,42 @@ bool McpClient::initialize()
     return true;
   }
 
+  // v0.6.9 D6: Verify hash before starting process
+  verify_hash();
+
+  auto init_start = std::chrono::steady_clock::now();
+
   start_process();
+
+  // v0.6.9 D6: Audit MCP server start
+  security::AuditLogger::instance().log({
+      {},
+      security::TraceContext::current(),
+      security::EventType::MCPRequest,
+      "",
+      command_,
+      "MCP server starting",
+      {{"args_count", static_cast<int>(args_.size())},
+       {"env_count", static_cast<int>(env_.size())},
+       {"max_memory_mb", static_cast<int>(max_memory_bytes_ / 1048576)}}});
 
   nlohmann::json params = {
       {"protocolVersion", "2024-11-05"},
       {"capabilities", nlohmann::json::object()},
-      {"clientInfo", {{"name", "neam"}, {"version", "0.6.8"}}}};
+      {"clientInfo", {{"name", "neam"}, {"version", "0.6.9"}}}};
 
   auto result = send_request("initialize", params);
+
+  // v0.6.9 D6: Startup timeout check
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::steady_clock::now() - init_start)
+                     .count();
+  if (elapsed > startup_timeout_ms_)
+  {
+    kill_process();
+    throw std::runtime_error("MCP D6: server startup timeout after " +
+                             std::to_string(elapsed) + "ms");
+  }
 
   // Send initialized notification (no response expected)
   nlohmann::json notification = {
@@ -289,6 +451,17 @@ bool McpClient::initialize()
 #endif
 
   initialized_ = true;
+
+  // Audit successful initialization
+  security::AuditLogger::instance().log({
+      {},
+      security::TraceContext::current(),
+      security::EventType::MCPResponse,
+      "",
+      command_,
+      "MCP server initialized",
+      {{"elapsed_ms", static_cast<int>(elapsed)}}});
+
   return true;
 }
 
@@ -323,8 +496,40 @@ nlohmann::json McpClient::call_tool(const std::string& name, const nlohmann::jso
     throw std::runtime_error("MCP client: not initialized");
   }
 
+  // v0.6.9 D6: Audit MCP tool call
+  auto& audit = security::AuditLogger::instance();
+  nlohmann::json req_meta = {{"server", command_}};
+  if (args.is_object())
+  {
+    std::vector<std::string> keys;
+    for (auto& [k, v] : args.items()) keys.push_back(k);
+    req_meta["args_keys"] = keys;
+  }
+  audit.log({
+      {},
+      security::TraceContext::current(),
+      security::EventType::MCPRequest,
+      "",
+      name,
+      "MCP tool call",
+      req_meta});
+
+  auto call_start = std::chrono::steady_clock::now();
   nlohmann::json params = {{"name", name}, {"arguments", args}};
   auto result = send_request("tools/call", params);
+
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::steady_clock::now() - call_start)
+                     .count();
+
+  audit.log({
+      {},
+      security::TraceContext::current(),
+      security::EventType::MCPResponse,
+      "",
+      name,
+      "MCP tool response",
+      {{"server", command_}, {"elapsed_ms", static_cast<int>(elapsed)}}});
 
   // MCP tools/call returns {content: [{type: "text", text: "..."}]}
   if (result.contains("content") && result["content"].is_array() &&

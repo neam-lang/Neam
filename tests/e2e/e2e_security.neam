@@ -1,0 +1,65 @@
+//
+// Neam v0.6.9 — End-to-End Security Test Program
+//
+// Tests: sensitive skills, policy blocks, agent + policy binding
+//
+
+skill read_docs {
+  description: "Read documentation"
+  params: { query: string }
+  impl(query) {
+    return "Results for: " + query;
+  }
+}
+
+skill send_email {
+  description: "Send an email to a recipient"
+  params: { recipient: string, subject: string }
+  sensitive: true
+  impl(recipient, subject) {
+    return "Email sent to " + recipient + ": " + subject;
+  }
+}
+
+skill calculate {
+  description: "Calculate a math expression"
+  params: { expr: string }
+  sensitive: false
+  impl(expr) {
+    return "42";
+  }
+}
+
+policy agent_policy {
+  allow: [read_docs, calculate, send_email]
+  confirm: [send_email]
+  default_deny: true
+}
+
+agent SecureBot {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a secure assistant with limited tool access."
+  skills: [read_docs, send_email, calculate]
+  policy: agent_policy
+}
+
+{
+  emit "=== E2E Security Test (v0.6.9) ===";
+  emit "";
+
+  // T1: Non-sensitive skill call (direct, no agent)
+  let result1 = read_docs("neam api");
+  emit "T1 read_docs: " + result1;
+
+  // T2: Sensitive skill call (direct, no agent — should execute locally)
+  let result2 = send_email("admin@example.com", "Test");
+  emit "T2 send_email (direct): " + result2;
+
+  // T3: Non-sensitive skill call with explicit false
+  let result3 = calculate("2+2");
+  emit "T3 calculate: " + result3;
+
+  emit "";
+  emit "=== E2E Security Test: COMPLETE ===";
+}

@@ -21,6 +21,11 @@
 #include <unordered_map>
 
 #include "neamc/llm/provider_factory.hpp"
+#include "neamc/security/audit_log.hpp"
+#include "neamc/security/behavioral_monitor.hpp"
+#include "neamc/security/human_in_the_loop.hpp"
+#include "neamc/security/injection_scanner.hpp"
+#include "neamc/security/rate_limiter.hpp"
 #include "neamc/vm/async/future.hpp"
 #include "neamc/vm/external_skill.hpp"
 #include "neamc/vm/knowledge.hpp"
@@ -1522,6 +1527,49 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             const AgentExtension extension =
                 extension_it == agent_extensions_.end() ? AgentExtension{} : extension_it->second;
 
+            // v0.6.9 D8: Agent recursion depth guard
+            static thread_local int agent_depth = 0;
+            struct DepthGuard {
+              DepthGuard() { ++agent_depth; }
+              ~DepthGuard() { --agent_depth; }
+            } depth_guard;
+
+            {
+              int max_depth =
+                  security::RateLimiter::instance().input_limits().max_agent_depth;
+              if (agent_depth > max_depth)
+              {
+                security::AuditLogger::instance().log_tool_call(
+                    security::TraceContext::current(), agent_name, "agent.ask",
+                    "", 0, "error:depth_exceeded");
+                std::string depth_err =
+                    "Agent call depth exceeded (max " + std::to_string(max_depth) + ")";
+                stack_.push_back(Value::String(depth_err.c_str(), depth_err.size()));
+                break;
+              }
+            }
+
+            // v0.6.9 D9: Kill switch — reject if agent is disabled
+            if (security::BehavioralMonitor::instance().is_disabled(agent_name))
+            {
+              security::AuditLogger::instance().log({
+                  {},
+                  security::TraceContext::current(),
+                  security::EventType::AgentDisabled,
+                  agent_name,
+                  {},
+                  "Agent is disabled (kill switch active)",
+                  {}});
+              std::string disabled_err = "Agent '" + agent_name + "' is disabled";
+              stack_.push_back(Value::String(disabled_err.c_str(), disabled_err.size()));
+              break;
+            }
+
+            // v0.6.9 D9: Track agent execution start time for behavioral metrics
+            auto agent_exec_start = std::chrono::steady_clock::now();
+            int agent_tool_call_count = 0;
+            std::vector<std::string> agent_tools_used;
+
             auto get_budget_definition = [&](const std::string& name) -> BudgetDefinition {
               auto it = budgets_.find(name);
               if (it != budgets_.end())
@@ -1772,6 +1820,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             auto run_guard_chain =
                 [&](const std::vector<std::string>& chains,
                     const std::string& handler_type, std::string& value) -> bool {
+              auto& audit = security::AuditLogger::instance();
               for (const auto& chain_name : chains)
               {
                 auto* chain = get_guardchain_def(chain_name);
@@ -1805,12 +1854,23 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                       const auto output = to_std_string(result);
                       if (output == "block")
                       {
+                        auto input_preview = value.size() > 64
+                                                 ? value.substr(0, 64) + "..."
+                                                 : value;
+                        audit.log_guard(security::TraceContext::current(),
+                                        guard_name, "block", input_preview);
                         return false;
                       }
                       value = output;
                     }
                   }
                 }
+              }
+              // Log pass only if there were chains to evaluate
+              if (!chains.empty())
+              {
+                audit.log_guard(security::TraceContext::current(),
+                                chains.front(), "pass", "");
               }
               return true;
             };
@@ -1882,14 +1942,45 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               {
                 tracker.used_cost += amount;
               }
-              return !tracker.is_exhausted();
+
+              bool exhausted = tracker.is_exhausted();
+              // Log when >80% utilized or exhausted
+              double used = 0, limit = 0;
+              if (resource == "tokens")
+              {
+                used = tracker.used_tokens;
+                limit = tracker.limits.max_tokens;
+              }
+              else if (resource == "api_calls")
+              {
+                used = tracker.used_api_calls;
+                limit = tracker.limits.max_api_calls;
+              }
+              else if (resource == "cost")
+              {
+                used = tracker.used_cost;
+                limit = tracker.limits.max_cost;
+              }
+              if (limit > 0 && (exhausted || (used / limit) > 0.8))
+              {
+                security::AuditLogger::instance().log_budget(
+                    security::TraceContext::current(),
+                    budget_name, resource, used, limit, exhausted);
+              }
+              return !exhausted;
             };
 
             auto run_tool = [&](const std::string& tool_name,
                                 const std::vector<std::string>& arg_texts) -> std::string {
+              auto& audit = security::AuditLogger::instance();
+              auto trace_id = security::TraceContext::current();
+              auto tool_start = std::chrono::steady_clock::now();
+
               ToolDef* tool = get_tool_def(tool_name);
               if (!tool || !tool->impl)
               {
+                audit.log_tool_call(trace_id, agent_name, tool_name, "",
+                                    0, "error:unknown_tool");
                 return "Unknown tool: " + tool_name;
               }
 
@@ -1897,7 +1988,145 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               {
                 if (!has_capability(agent_name, required))
                 {
+                  audit.log_tool_call(trace_id, agent_name, tool_name, "",
+                                      0, "error:missing_capability");
                   return "Missing capability: " + required;
+                }
+              }
+
+              // v0.6.9: Policy enforcement — check before budget/guards
+              if (!extension.policy.empty())
+              {
+                auto policy_it = policies_.find(extension.policy);
+                if (policy_it == policies_.end())
+                {
+                  // Try loading from globals
+                  const Value* pv = find_global_value(globals_, extension.policy);
+                  if (pv && pv->is_map())
+                  {
+                    auto* pm = as_map(*pv);
+                    security::PolicyDef def;
+                    def.name = extension.policy;
+                    if (auto it = pm->entries.find("allow"); it != pm->entries.end())
+                    {
+                      for (const auto& v : as_list(it->second)->items)
+                        def.allow_tools.insert(to_std_string(v));
+                    }
+                    if (auto it = pm->entries.find("deny"); it != pm->entries.end())
+                    {
+                      for (const auto& v : as_list(it->second)->items)
+                        def.deny_tools.insert(to_std_string(v));
+                    }
+                    if (auto it = pm->entries.find("confirm"); it != pm->entries.end())
+                    {
+                      for (const auto& v : as_list(it->second)->items)
+                        def.confirm_tools.insert(to_std_string(v));
+                    }
+                    if (auto it = pm->entries.find("default_deny"); it != pm->entries.end())
+                    {
+                      def.default_deny = is_truthy(it->second);
+                    }
+                    policies_[extension.policy] = std::move(def);
+                    policy_it = policies_.find(extension.policy);
+                  }
+                }
+                if (policy_it != policies_.end())
+                {
+                  std::string args_preview;
+                  for (const auto& a : arg_texts)
+                  {
+                    if (!args_preview.empty()) args_preview += ",";
+                    args_preview += a;
+                  }
+                  auto result =
+                      security::evaluate_policy(policy_it->second, tool_name, args_preview);
+                  if (result.action == security::PolicyAction::Deny)
+                  {
+                    audit.log_policy_deny(trace_id, agent_name, tool_name, result.reason);
+                    return "Denied by policy: " + result.reason;
+                  }
+                  if (result.action == security::PolicyAction::Confirm)
+                  {
+                    // D10: Check if already approved
+                    auto& cm = security::ConfirmationManager::instance();
+                    auto status = cm.check(trace_id);
+                    if (!status.has_value() || *status != security::ConfirmationStatus::Approved)
+                    {
+                      std::string args_json;
+                      for (const auto& a : arg_texts)
+                      {
+                        if (!args_json.empty()) args_json += ",";
+                        args_json += a;
+                      }
+                      cm.submit(trace_id, agent_name, tool_name, args_json,
+                                "Policy requires confirmation: " + result.reason);
+                      audit.log({
+                          {},
+                          trace_id,
+                          security::EventType::PolicyConfirm,
+                          agent_name,
+                          tool_name,
+                          "Tool requires human confirmation",
+                          {{"reason", result.reason}}});
+                      return "Pending confirmation [" + trace_id + "]: " + result.reason;
+                    }
+                  }
+                }
+              }
+
+              // v0.6.9 D10: Sensitive skill check
+              {
+                const Value* skill_value = find_global_value(globals_, tool_name);
+                if (skill_value && skill_value->is_skill())
+                {
+                  auto* skill = as_skill(*skill_value);
+                  if (skill->sensitive)
+                  {
+                    auto& cm = security::ConfirmationManager::instance();
+                    auto status = cm.check(trace_id);
+                    if (!status.has_value() || *status != security::ConfirmationStatus::Approved)
+                    {
+                      std::string args_json;
+                      for (const auto& a : arg_texts)
+                      {
+                        if (!args_json.empty()) args_json += ",";
+                        args_json += a;
+                      }
+                      cm.submit(trace_id, agent_name, tool_name, args_json,
+                                "Skill marked sensitive");
+                      audit.log({
+                          {},
+                          trace_id,
+                          security::EventType::PolicyConfirm,
+                          agent_name,
+                          tool_name,
+                          "Sensitive skill requires human confirmation",
+                          {}});
+                      return "Pending confirmation [" + trace_id + "]: "
+                             "Sensitive skill '" + tool_name + "' requires approval";
+                    }
+                  }
+                }
+              }
+
+              // v0.6.9 D5: Circuit breaker check
+              {
+                auto& breaker = security::CircuitBreaker::instance();
+                if (breaker.is_open(tool_name))
+                {
+                  audit.log_tool_call(trace_id, agent_name, tool_name, "",
+                                      0, "error:circuit_open");
+                  return "Tool '" + tool_name + "' is temporarily disabled (circuit breaker open)";
+                }
+              }
+
+              // v0.6.9 D5: Per-tool rate limiting
+              {
+                auto& limiter = security::RateLimiter::instance();
+                if (!limiter.check_tool(tool_name))
+                {
+                  audit.log_rate_limit(trace_id, tool_name, "tool");
+                  return "Rate limit exceeded for tool: " + tool_name;
                 }
               }
 
@@ -1905,6 +2134,8 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               {
                 if (!consume_budget(extension.budget, cost.first, cost.second))
                 {
+                  audit.log_tool_call(trace_id, agent_name, tool_name, "",
+                                      0, "error:budget_exhausted");
                   return "Budget exhausted for: " + cost.first;
                 }
               }
@@ -1919,9 +2150,51 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                 input_payload += arg_texts[i];
               }
 
+              // v0.6.9 D8: Tool argument size limit
+              {
+                auto max_arg_bytes =
+                    security::RateLimiter::instance().input_limits().max_tool_arg_bytes;
+                if (input_payload.size() > max_arg_bytes)
+                {
+                  audit.log_tool_call(trace_id, agent_name, tool_name,
+                                      input_payload.substr(0, 128), 0,
+                                      "error:arg_too_large");
+                  return "Tool argument exceeds maximum size of " +
+                         std::to_string(max_arg_bytes) + " bytes";
+                }
+              }
+
+              // v0.6.9: Injection scanning on tool arguments
+              {
+                static const security::InjectionScanner scanner(
+                    security::InjectionStrictness::Moderate);
+                auto scan_result = scanner.scan(input_payload);
+                if (scan_result.blocked)
+                {
+                  std::string patterns_str;
+                  for (const auto& p : scan_result.patterns)
+                  {
+                    if (!patterns_str.empty()) patterns_str += ",";
+                    patterns_str += p;
+                  }
+                  audit.log_injection(trace_id, scan_result.score, patterns_str);
+                  audit.log_tool_call(trace_id, agent_name, tool_name,
+                                      input_payload.substr(0, 128), 0,
+                                      "blocked:injection");
+                  return "Blocked: potential prompt injection detected in tool arguments "
+                         "(score=" + std::to_string(scan_result.score) + ")";
+                }
+              }
+
               std::string guard_input = input_payload;
               if (!run_guard_chain(tool->guards, "on_tool_input", guard_input))
               {
+                auto ms = static_cast<int>(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - tool_start)
+                        .count());
+                audit.log_tool_call(trace_id, agent_name, tool_name,
+                                    input_payload.substr(0, 128), ms, "blocked:guard");
                 return "Request blocked by guard policy.";
               }
 
@@ -1931,13 +2204,50 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               {
                 tool_args.push_back(Value::String(arg.c_str(), arg.size()));
               }
-              Value result = call_function(tool->impl, tool_args, true, tool_name);
-              std::string output = value_to_string(result);
+
+              // v0.6.9 D5: Execute with circuit breaker tracking
+              std::string output;
+              try
+              {
+                Value result = call_function(tool->impl, tool_args, true, tool_name);
+                output = value_to_string(result);
+                security::CircuitBreaker::instance().record_success(tool_name);
+              }
+              catch (const std::exception& ex)
+              {
+                security::CircuitBreaker::instance().record_failure(tool_name);
+                auto ms = static_cast<int>(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - tool_start)
+                        .count());
+                audit.log_tool_call(trace_id, agent_name, tool_name,
+                                    input_payload.substr(0, 128), ms, "error:exception");
+                return std::string("Tool error: ") + ex.what();
+              }
 
               if (!run_guard_chain(tool->guards, "on_tool_output", output))
               {
+                auto ms = static_cast<int>(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - tool_start)
+                        .count());
+                audit.log_tool_call(trace_id, agent_name, tool_name,
+                                    input_payload.substr(0, 128), ms, "blocked:output_guard");
                 return "Response blocked by guard policy.";
               }
+
+              // Log successful tool execution
+              auto ms = static_cast<int>(
+                  std::chrono::duration_cast<std::chrono::milliseconds>(
+                      std::chrono::steady_clock::now() - tool_start)
+                      .count());
+              audit.log_tool_call(trace_id, agent_name, tool_name,
+                                  input_payload.substr(0, 128), ms, "success");
+
+              // v0.6.9 D9: Track tool usage for behavioral monitoring
+              ++agent_tool_call_count;
+              agent_tools_used.push_back(tool_name);
+
               return output;
             };
 
@@ -1957,6 +2267,10 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                 auto& tracker = get_budget_tracker(extension.budget);
                 if (tracker.is_exhausted())
                 {
+                  security::AuditLogger::instance().log_budget(
+                      security::TraceContext::current(),
+                      extension.budget, "api_calls",
+                      tracker.used_api_calls, tracker.limits.max_api_calls, true);
                   return "Budget exhausted: " + extension.budget;
                 }
                 tracker.used_api_calls += 1.0;
@@ -1978,7 +2292,12 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               std::vector<llm::Message> messages;
               if (!system_prompt.empty())
               {
-                messages.push_back({"system", system_prompt});
+                // v0.6.9: Wrap system prompt with injection boundaries
+                static const security::InjectionScanner scanner(
+                    security::InjectionStrictness::Moderate);
+                auto nonce = security::generate_trace_id().substr(0, 8);
+                auto wrapped = scanner.wrap_system_prompt(system_prompt, nonce);
+                messages.push_back({"system", wrapped});
               }
               if (agent->connected_knowledge && !agent->connected_knowledge->items.empty())
               {
@@ -2083,7 +2402,11 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                 }
                 if (!combined_context.empty())
                 {
-                  messages.push_back({"system", combined_context});
+                  // v0.6.9: Tag RAG content as data-only to prevent injection
+                  static const security::InjectionScanner ctx_scanner(
+                      security::InjectionStrictness::Moderate);
+                  auto tagged = ctx_scanner.tag_retrieved_context(combined_context);
+                  messages.push_back({"system", tagged});
                 }
               }
               for (const auto& message : agent->context->history)
@@ -2575,6 +2898,33 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               store.events.push_back(
                   MemoryEvent{current_time_ms(), "assistant", final_response, agent_name});
             }
+
+            // v0.6.9 D9: Record behavioral metrics and check for anomalies
+            {
+              auto agent_elapsed_ms = static_cast<double>(
+                  std::chrono::duration_cast<std::chrono::milliseconds>(
+                      std::chrono::steady_clock::now() - agent_exec_start)
+                      .count());
+              auto& monitor = security::BehavioralMonitor::instance();
+              monitor.record_request(agent_name, agent_tool_call_count,
+                                     agent_elapsed_ms, agent_tools_used);
+              auto anomaly = monitor.check_anomaly(agent_name, agent_tool_call_count,
+                                                    agent_tools_used);
+              if (anomaly.anomalous)
+              {
+                security::AuditLogger::instance().log({
+                    {},
+                    security::TraceContext::current(),
+                    security::EventType::AnomalyDetected,
+                    agent_name,
+                    {},
+                    "Behavioral anomaly: " + anomaly.reason,
+                    {{"deviation_score", anomaly.deviation_score},
+                     {"tool_calls", agent_tool_call_count},
+                     {"elapsed_ms", agent_elapsed_ms}}});
+              }
+            }
+
             trace_logger_.log_llm_output(agent_name, final_response);
             stack_.push_back(
                 Value::String(final_response.c_str(), final_response.size()));
@@ -3308,6 +3658,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       }
       case OpCode::OP_DEFINE_SKILL:
       {
+        Value sensitive_value = pop();
         Value impl_value = pop();
         Value params_value = pop();
         Value param_order_value = pop();
@@ -3337,12 +3688,14 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         }
         auto* impl = as_function(impl_value);
         auto* skill = new_skill(name, description, params, std::move(param_names), impl);
+        skill->sensitive = is_truthy(sensitive_value);
         globals_.set(name, Value::Skill(skill));
         break;
       }
       // v0.6.7: Define an external skill (MCP, HTTP, or Claude built-in)
       case OpCode::OP_DEFINE_EXTERN_SKILL:
       {
+        Value sensitive_value = pop();
         Value binding_config_value = pop();
         Value binding_type_value = pop();
         Value params_value = pop();
@@ -3451,6 +3804,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
 
         auto* skill = new_skill(name, description, params, std::move(param_names), nullptr);
         skill->external = ext;
+        skill->sensitive = is_truthy(sensitive_value);
         globals_.set(name, Value::Skill(skill));
         break;
       }
@@ -3729,6 +4083,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value memory_value = pop();
         Value env_value = pop();
         Value budget_value = pop();
+        Value policy_value = pop();  // v0.6.9
         Value guardchains_value = pop();
         Value required_caps_value = pop();
         Value knowledge_value = pop();
@@ -3771,6 +4126,10 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         for (const auto& guard : as_list(guardchains_value)->items)
         {
           extension.guardchains.push_back(to_std_string(guard));
+        }
+        if (policy_value.is_string())
+        {
+          extension.policy = to_std_string(policy_value);
         }
         if (budget_value.is_string())
         {

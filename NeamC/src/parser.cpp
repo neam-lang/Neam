@@ -288,6 +288,7 @@ StmtPtr make_agent_decl(Visibility visibility, std::string name, std::string pro
                         std::vector<IdentifierRef> connected_knowledge,
                         std::vector<IdentifierRef> required_capabilities,
                         std::vector<IdentifierRef> guardchains,
+                        std::optional<IdentifierRef> policy,
                         std::optional<IdentifierRef> budget,
                         std::optional<IdentifierRef> env,
                         std::optional<IdentifierRef> memory,
@@ -302,9 +303,9 @@ StmtPtr make_agent_decl(Visibility visibility, std::string name, std::string pro
                          std::move(model), std::move(endpoint), std::move(api_key_env),
                          std::move(temperature), std::move(system), std::move(skills),
                          std::move(connected_knowledge), std::move(required_capabilities),
-                         std::move(guardchains), std::move(budget), std::move(env),
-                         std::move(memory), std::move(world_model), std::move(plan),
-                         std::move(connector)};
+                         std::move(guardchains), std::move(policy), std::move(budget),
+                         std::move(env), std::move(memory), std::move(world_model),
+                         std::move(plan), std::move(connector)};
   return stmt;
 }
 
@@ -679,7 +680,9 @@ void Parser::tokenize()
       {"server", TokenType::Server},
       {"command", TokenType::Command},
       {"args", TokenType::Args},
-      {"body_template", TokenType::BodyTemplate}};
+      {"body_template", TokenType::BodyTemplate},
+      // v0.6.9: Security policy
+      {"policy", TokenType::Policy}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -994,6 +997,10 @@ StmtPtr Parser::parse_declaration()
   {
     return parse_guardchain(has_visibility ? visibility : Visibility{});
   }
+  if (match(TokenType::Policy))
+  {
+    return parse_policy(has_visibility ? visibility : Visibility{});
+  }
   if (match(TokenType::Capability))
   {
     return parse_capability(has_visibility ? visibility : Visibility{});
@@ -1302,6 +1309,7 @@ StmtPtr Parser::parse_skill(const Visibility& visibility)
   std::optional<std::string> description;
   std::vector<SkillParam> params;
   std::optional<FunctionDecl> impl;
+  bool sensitive = false;
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -1358,6 +1366,28 @@ StmtPtr Parser::parse_skill(const Visibility& visibility)
           FunctionDecl{visibility, name + ".impl", std::move(impl_params), std::move(body)};
       continue;
     }
+    // v0.6.9 D10: sensitive marker
+    if (check(TokenType::Identifier) && peek().lexeme == "sensitive")
+    {
+      advance();
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after sensitive");
+      }
+      if (match(TokenType::True))
+      {
+        sensitive = true;
+      }
+      else if (match(TokenType::False))
+      {
+        sensitive = false;
+      }
+      else
+      {
+        error("Expected 'true' or 'false' for sensitive");
+      }
+      continue;
+    }
 
     error("Unexpected token in skill block");
   }
@@ -1374,7 +1404,13 @@ StmtPtr Parser::parse_skill(const Visibility& visibility)
   {
     error("Skill missing impl");
   }
-  return make_skill_decl(visibility, name, *description, std::move(params), std::move(*impl), span);
+  auto result = make_skill_decl(visibility, name, *description, std::move(params), std::move(*impl), span);
+  if (sensitive)
+  {
+    auto& decl = std::get<SkillDecl>(result->node);
+    decl.sensitive = true;
+  }
+  return result;
 }
 
 // v0.6.7: Parse extern skill declaration
@@ -1394,6 +1430,7 @@ StmtPtr Parser::parse_extern_skill(const Visibility& visibility)
   std::optional<std::string> description;
   std::vector<SkillParam> params;
   std::optional<SkillBindingSpec> binding;
+  bool sensitive = false;
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -1428,6 +1465,28 @@ StmtPtr Parser::parse_extern_skill(const Visibility& visibility)
       binding = parse_skill_binding();
       continue;
     }
+    // v0.6.9 D10: sensitive marker
+    if (check(TokenType::Identifier) && peek().lexeme == "sensitive")
+    {
+      advance();
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after sensitive");
+      }
+      if (match(TokenType::True))
+      {
+        sensitive = true;
+      }
+      else if (match(TokenType::False))
+      {
+        sensitive = false;
+      }
+      else
+      {
+        error("Expected 'true' or 'false' for sensitive");
+      }
+      continue;
+    }
     error("Unexpected token in extern skill block");
   }
 
@@ -1447,7 +1506,7 @@ StmtPtr Parser::parse_extern_skill(const Visibility& visibility)
   auto stmt = std::make_unique<Statement>();
   stmt->span = span;
   stmt->node = ExternSkillDecl{
-      visibility, name, *description, std::move(params), std::move(*binding)};
+      visibility, name, *description, std::move(params), std::move(*binding), sensitive};
   return stmt;
 }
 
@@ -1876,6 +1935,7 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
   std::vector<IdentifierRef> connected_knowledge;
   std::vector<IdentifierRef> required_capabilities;
   std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;  // v0.6.9
   std::optional<IdentifierRef> budget;
   std::optional<IdentifierRef> env;
   std::optional<IdentifierRef> memory;
@@ -1999,6 +2059,19 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
       guardchains = parse_identifier_list();
       continue;
     }
+    if (match(TokenType::Policy))
+    {
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after policy");
+      }
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected policy identifier");
+      }
+      policy = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
     if (match(TokenType::Budget))
     {
       if (!match(TokenType::Colon))
@@ -2096,7 +2169,7 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
                          std::move(api_key_env), std::move(temperature), std::move(system),
                          std::move(skills), std::move(connected_knowledge),
                          std::move(required_capabilities), std::move(guardchains),
-                         std::move(budget), std::move(env), std::move(memory),
+                         std::move(policy), std::move(budget), std::move(env), std::move(memory),
                          std::move(world_model), std::move(plan), std::move(connector), span);
 }
 
@@ -2191,6 +2264,103 @@ StmtPtr Parser::parse_guardchain(const Visibility& visibility)
     error("Expected ';' after guardchain declaration");
   }
   return make_guardchain_decl(visibility, name, std::move(guards), span);
+}
+
+// v0.6.9: parse policy block
+// policy StrictOps {
+//   allow: [tool1, tool2]
+//   deny: [tool3]
+//   confirm: [tool4]
+//   default_deny: true
+// }
+StmtPtr Parser::parse_policy(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected policy name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after policy name");
+  }
+
+  std::vector<std::string> allow_tools;
+  std::vector<std::string> deny_tools;
+  std::vector<std::string> confirm_tools;
+  bool default_deny = true;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Identifier))
+    {
+      const auto key = previous().lexeme;
+      if (!match(TokenType::Colon))
+      {
+        error("Expected ':' after '" + key + "' in policy block");
+      }
+
+      if (key == "allow" || key == "deny" || key == "confirm")
+      {
+        auto list = parse_identifier_list();
+        for (const auto& id : list)
+        {
+          if (key == "allow")
+          {
+            allow_tools.push_back(id.name);
+          }
+          else if (key == "deny")
+          {
+            deny_tools.push_back(id.name);
+          }
+          else
+          {
+            confirm_tools.push_back(id.name);
+          }
+        }
+      }
+      else if (key == "default_deny")
+      {
+        if (match(TokenType::True))
+        {
+          default_deny = true;
+        }
+        else if (match(TokenType::False))
+        {
+          default_deny = false;
+        }
+        else
+        {
+          error("Expected 'true' or 'false' for default_deny");
+        }
+      }
+      else
+      {
+        error("Unknown policy field: " + key);
+      }
+      continue;
+    }
+    error("Unexpected token in policy block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated policy block");
+  }
+
+  PolicyDecl decl;
+  decl.visibility = visibility;
+  decl.name = name;
+  decl.allow_tools = std::move(allow_tools);
+  decl.deny_tools = std::move(deny_tools);
+  decl.confirm_tools = std::move(confirm_tools);
+  decl.default_deny = default_deny;
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = std::move(decl);
+  return stmt;
 }
 
 StmtPtr Parser::parse_capability(const Visibility& visibility)
@@ -3508,7 +3678,8 @@ SkillParam Parser::parse_skill_param()
       !match(TokenType::Args) && !match(TokenType::Type) &&
       !match(TokenType::Model) && !match(TokenType::System) &&
       !match(TokenType::Timeout) && !match(TokenType::Description) &&
-      !match(TokenType::Params) && !match(TokenType::BodyTemplate))
+      !match(TokenType::Params) && !match(TokenType::BodyTemplate) &&
+      !match(TokenType::Policy))
   {
     error("Expected param name");
   }

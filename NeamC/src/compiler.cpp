@@ -524,6 +524,8 @@ void Compiler::emit_statement(const Statement& stmt)
           emit_build_map(chunk_, node.params.size());
           chunk_.write_op(OpCode::OP_CONST);
           chunk_.write_short(static_cast<uint16_t>(fn_constant));
+          // v0.6.9 D10: sensitive marker
+          chunk_.write_op(node.sensitive ? OpCode::OP_TRUE : OpCode::OP_FALSE);
           chunk_.write_op(OpCode::OP_DEFINE_SKILL);
         }
         else if constexpr (std::is_same_v<T, KnowledgeDecl>)
@@ -728,6 +730,42 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "guards")));
           emit_identifier_list(chunk_, node.guards);
           emit_build_map(chunk_, 1);
+          chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+        }
+        // v0.6.9: Policy codegen
+        else if constexpr (std::is_same_v<T, PolicyDecl>)
+        {
+          // Emit "allow" key + list
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "allow")));
+          emit_string_list(chunk_, node.allow_tools);
+
+          // Emit "deny" key + list
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "deny")));
+          emit_string_list(chunk_, node.deny_tools);
+
+          // Emit "confirm" key + list
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "confirm")));
+          emit_string_list(chunk_, node.confirm_tools);
+
+          // Emit "default_deny" key + value
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, "default_deny")));
+          if (node.default_deny)
+          {
+            chunk_.write_op(OpCode::OP_TRUE);
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_FALSE);
+          }
+
+          emit_build_map(chunk_, 4);
           chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
           chunk_.write_short(
               static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
@@ -1066,6 +1104,18 @@ void Compiler::emit_statement(const Statement& stmt)
           emit_identifier_list(chunk_, node.required_capabilities);
           emit_identifier_list(chunk_, node.guardchains);
 
+          // v0.6.9: emit policy reference
+          if (node.policy.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.policy->name)));
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+
           if (node.budget.has_value())
           {
             chunk_.write_op(OpCode::OP_CONST);
@@ -1267,6 +1317,8 @@ void Compiler::emit_statement(const Statement& stmt)
               break;
           }
           emit_build_map(chunk_, config_count);
+          // v0.6.9 D10: sensitive marker
+          chunk_.write_op(node.sensitive ? OpCode::OP_TRUE : OpCode::OP_FALSE);
           chunk_.write_op(OpCode::OP_DEFINE_EXTERN_SKILL);
         }
         else if constexpr (std::is_same_v<T, McpServerDecl>)

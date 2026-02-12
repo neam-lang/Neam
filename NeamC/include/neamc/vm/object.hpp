@@ -90,6 +90,7 @@ struct ObjSkill : Obj
   std::vector<std::string> param_names;
   ObjFunction* impl{nullptr};              // Non-null for local skills
   ExternalSkillConfig* external{nullptr};   // Non-null for external skills (v0.6.7)
+  bool sensitive{false};                    // v0.6.9 D10: requires human confirmation
 };
 
 struct ObjContext : Obj

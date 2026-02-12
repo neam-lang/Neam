@@ -178,6 +178,14 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/deploy/kubernetes.cpp
     NeamC/src/deploy/terraform.cpp
     NeamC/src/deploy/deploy_scripts.cpp
+    NeamC/src/security/audit_log.cpp
+    NeamC/src/security/tool_policy.cpp
+    NeamC/src/security/injection_scanner.cpp
+    NeamC/src/security/network_policy.cpp
+    NeamC/src/security/credential_manager.cpp
+    NeamC/src/security/rate_limiter.cpp
+    NeamC/src/security/behavioral_monitor.cpp
+    NeamC/src/security/human_in_the_loop.cpp
     NeamC/src/vm/memory.cpp
     NeamC/src/vm/object.cpp
     NeamC/src/vm/external_skill.cpp
@@ -455,6 +463,16 @@ add_executable(v068_test
 )
 target_link_libraries(v068_test PRIVATE neamc_core gtest_main)
 add_test(NAME v068_test COMMAND v068_test)
+
+# ============================================================================
+# v0.6.9 Test Targets
+# ============================================================================
+
+add_executable(v069_test
+    tests/unit/v069_test.cpp
+)
+target_link_libraries(v069_test PRIVATE neamc_core gtest_main)
+add_test(NAME v069_test COMMAND v069_test)
 
 # ============================================================================
 # Install targets (v0.6.5)

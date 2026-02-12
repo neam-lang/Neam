@@ -327,6 +327,7 @@ struct SkillDecl
   std::string description;
   std::vector<SkillParam> params;
   FunctionDecl impl;
+  bool sensitive{false};  // v0.6.9 D10: requires human confirmation
 };
 
 // v0.6.7: External skill binding specification
@@ -364,6 +365,7 @@ struct ExternSkillDecl
   std::string description;
   std::vector<SkillParam> params;
   SkillBindingSpec binding;
+  bool sensitive{false};  // v0.6.9 D10: requires human confirmation
 };
 
 // v0.6.7: MCP server declaration
@@ -484,6 +486,17 @@ struct GuardDecl
   std::string name;
   std::string description;
   std::vector<std::unique_ptr<GuardHandler>> handlers;
+};
+
+// v0.6.9: Security policy declaration
+struct PolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> allow_tools;
+  std::vector<std::string> deny_tools;
+  std::vector<std::string> confirm_tools;
+  bool default_deny = true;
 };
 
 struct GuardChainDecl
@@ -633,6 +646,7 @@ struct AgentDecl
   std::vector<IdentifierRef> connected_knowledge;
   std::vector<IdentifierRef> required_capabilities;
   std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;  // v0.6.9: security policy reference
   std::optional<IdentifierRef> budget;
   std::optional<IdentifierRef> env;
   std::optional<IdentifierRef> memory;
@@ -668,6 +682,7 @@ struct Statement
       std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
                    AssertStmt, WithStmt, TestDecl, TestSuiteDecl, FunctionDecl, SkillDecl,
                    KnowledgeDecl, BudgetDecl, GuardDecl, GuardChainDecl, CapabilityDecl,
+                   PolicyDecl,
                    ToolDecl, MemoryDecl, EnvDecl, ConnectorDecl, WorldModelDecl, PlanDecl,
                    SubagentDecl, AgentDecl, ModuleDecl, ImportDecl, ConstDecl, TypeAlias,
                    DocComment, GrantStmt, CheckpointStmt, RewindStmt,

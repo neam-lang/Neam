@@ -18,11 +18,30 @@
 #include <vector>
 
 #include "neamc/llm/llm_logger.hpp"
+#include "neamc/security/audit_log.hpp"
+#include "neamc/security/network_policy.hpp"
 
 namespace neamc::llm
 {
 namespace
 {
+
+// v0.6.9: SSRF pre-flight check (D4)
+void ssrf_check(const std::string& url)
+{
+  if (!security::network_policy_enabled())
+  {
+    return;
+  }
+  auto result = security::validate_url(url, security::global_network_policy());
+  if (!result.allowed)
+  {
+    security::AuditLogger::instance().log_ssrf_block(
+        security::TraceContext::current(), url, result.reason);
+    throw std::runtime_error("SSRF blocked: " + result.reason);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Global curl init
 // ---------------------------------------------------------------------------
@@ -250,6 +269,10 @@ HttpResult http_post_json_raw(const std::string& url, const std::string& body,
   static const size_t max_response = load_max_response_size();
   WriteContext write_ctx{&response, max_response};
 
+  ssrf_check(url);  // v0.6.9: SSRF protection
+  curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1L);
+  curl_easy_setopt(handle, CURLOPT_MAXREDIRS,
+                   static_cast<long>(security::global_network_policy().max_redirects));
   curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
   curl_easy_setopt(handle, CURLOPT_POST, 1L);
   curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body.c_str());
@@ -397,6 +420,10 @@ HttpResult http_request(const std::string& method, const std::string& url,
   static const size_t max_response = load_max_response_size();
   WriteContext write_ctx{&response, max_response};
 
+  ssrf_check(url);  // v0.6.9: SSRF protection
+  curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1L);
+  curl_easy_setopt(handle, CURLOPT_MAXREDIRS,
+                   static_cast<long>(security::global_network_policy().max_redirects));
   curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
   curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, method.c_str());
   curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, timeout_ms);
@@ -478,6 +505,10 @@ void http_post_streaming(const std::string& url, const std::string& body,
     return total;
   };
 
+  ssrf_check(url);  // v0.6.9: SSRF protection
+  curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1L);
+  curl_easy_setopt(handle, CURLOPT_MAXREDIRS,
+                   static_cast<long>(security::global_network_policy().max_redirects));
   curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
   curl_easy_setopt(handle, CURLOPT_POST, 1L);
   curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body.c_str());
