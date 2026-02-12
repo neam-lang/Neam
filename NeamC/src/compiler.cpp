@@ -1393,6 +1393,210 @@ void Compiler::emit_statement(const Statement& stmt)
           }
           chunk_.write_op(OpCode::OP_ADOPT_MCP_TOOLS);
         }
+        // v0.7.0: For-in loop
+        else if constexpr (std::is_same_v<T, ForInStmt>)
+        {
+          // Emit iterable
+          emit_expression(*node.iterable);
+          chunk_.write_op(OpCode::OP_GET_ITER);
+
+          // Track the iterator as a hidden local so stack slot indices are correct.
+          // Use an outer scope for the iterator (persists across iterations).
+          begin_scope();
+          locals_.push_back(Local{"$iter", scope_depth_});
+
+          // Record loop start for continue
+          const auto loop_start = chunk_.code().size();
+          loop_starts_.push_back(loop_start);
+          break_patches_.emplace_back();
+          // Save local count before loop body locals (just the iterator)
+          loop_local_counts_.push_back(locals_.size());
+
+          // OP_FOR_ITER with exit placeholder
+          chunk_.write_op(OpCode::OP_FOR_ITER);
+          const auto exit_jump = chunk_.code().size();
+          chunk_.write_short(0);
+
+          // Define loop variable as local in inner scope
+          // (OP_FOR_ITER pushes next value onto stack)
+          begin_scope();
+          locals_.push_back(Local{node.variable, scope_depth_});
+
+          // If second variable exists (for (k,v) destructuring), we need to
+          // handle it by pushing map key and value
+          if (!node.second_variable.empty())
+          {
+            locals_.push_back(Local{node.second_variable, scope_depth_});
+            // Push a nil placeholder for second var (users use entry.key, entry.value)
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+
+          // Emit body
+          const auto* body_stmt = &node.body->node;
+          if (auto* block = std::get_if<BlockStmt>(body_stmt))
+          {
+            for (const auto& s : block->statements)
+            {
+              emit_statement(*s);
+            }
+          }
+          else
+          {
+            emit_statement(*node.body);
+          }
+
+          // Pop locals declared in body scope (loop var + any body locals, NOT iterator)
+          end_scope();
+
+          // OP_LOOP back to OP_FOR_ITER
+          chunk_.write_op(OpCode::OP_LOOP);
+          const auto loop_back_index = chunk_.code().size();
+          chunk_.write_short(0);
+          const auto back_offset = chunk_.code().size() - loop_start;
+          if (back_offset > std::numeric_limits<uint16_t>::max())
+          {
+            throw std::runtime_error("Loop body too large");
+          }
+          chunk_.patch_short(loop_back_index, static_cast<uint16_t>(back_offset));
+
+          // Patch exit jump (OP_FOR_ITER jumps here when done)
+          const auto exit_offset = chunk_.code().size() - exit_jump - 2;
+          if (exit_offset > std::numeric_limits<uint16_t>::max())
+          {
+            throw std::runtime_error("For-in exit jump too large");
+          }
+          chunk_.patch_short(exit_jump, static_cast<uint16_t>(exit_offset));
+
+          // Pop iterator via end_scope of the outer loop scope
+          end_scope();
+
+          // Patch breaks — break target is here (after iterator scope cleaned up)
+          for (auto break_offset : break_patches_.back())
+          {
+            const auto bp_offset = chunk_.code().size() - break_offset - 2;
+            chunk_.patch_short(break_offset, static_cast<uint16_t>(bp_offset));
+          }
+          break_patches_.pop_back();
+          loop_starts_.pop_back();
+          loop_local_counts_.pop_back();
+        }
+        else if constexpr (std::is_same_v<T, BreakStmt>)
+        {
+          if (break_patches_.empty())
+          {
+            throw std::runtime_error("'break' used outside of loop");
+          }
+          // Pop all body locals (loop var + anything declared in body)
+          const auto base_locals = loop_local_counts_.back();
+          for (std::size_t i = locals_.size(); i > base_locals; --i)
+          {
+            chunk_.write_op(OpCode::OP_POP);
+          }
+          // Pop the iterator (hidden $iter local in outer loop scope)
+          chunk_.write_op(OpCode::OP_POP);
+          chunk_.write_op(OpCode::OP_JUMP);
+          break_patches_.back().push_back(chunk_.code().size());
+          chunk_.write_short(0);
+        }
+        else if constexpr (std::is_same_v<T, ContinueStmt>)
+        {
+          if (loop_starts_.empty())
+          {
+            throw std::runtime_error("'continue' used outside of loop");
+          }
+          // Pop all locals declared inside the loop scope (but NOT the iterator)
+          const auto base_locals = loop_local_counts_.back();
+          for (std::size_t i = locals_.size(); i > base_locals; --i)
+          {
+            chunk_.write_op(OpCode::OP_POP);
+          }
+          chunk_.write_op(OpCode::OP_LOOP);
+          const auto target = chunk_.code().size();
+          chunk_.write_short(0);
+          const auto offset = chunk_.code().size() - loop_starts_.back();
+          if (offset > std::numeric_limits<uint16_t>::max())
+          {
+            throw std::runtime_error("Continue jump too large");
+          }
+          chunk_.patch_short(target, static_cast<uint16_t>(offset));
+        }
+        // v0.7.0: Destructuring let
+        else if constexpr (std::is_same_v<T, DestructureLetStmt>)
+        {
+          emit_expression(*node.initializer);
+          const auto& pattern = node.pattern;
+          if (pattern.has_rest)
+          {
+            // Count names before and after rest
+            int before = pattern.rest_position;
+            int after = static_cast<int>(pattern.names.size()) - before;
+            chunk_.write_op(OpCode::OP_UNPACK_REST);
+            chunk_.write_short(static_cast<uint16_t>(before));
+            chunk_.write_short(static_cast<uint16_t>(after));
+            // Stack now has (bottom to top): [name0, name1, ..., rest_list, nameN, ...]
+            if (scope_depth_ == 0)
+            {
+              // OP_DEFINE_GLOBAL takes from stack top, so define in reverse order:
+              // after names (reverse), rest, before names (reverse)
+              for (int i = static_cast<int>(pattern.names.size()) - 1; i >= before; --i)
+              {
+                const auto nc = chunk_.add_constant(
+                    vm::Value::String(pattern.names[i].c_str(), pattern.names[i].size()));
+                chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+                chunk_.write_short(static_cast<uint16_t>(nc));
+              }
+              // Rest variable
+              const auto nc = chunk_.add_constant(
+                  vm::Value::String(pattern.rest_name.c_str(), pattern.rest_name.size()));
+              chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+              chunk_.write_short(static_cast<uint16_t>(nc));
+              // Before names (reverse)
+              for (int i = before - 1; i >= 0; --i)
+              {
+                const auto nc2 = chunk_.add_constant(
+                    vm::Value::String(pattern.names[i].c_str(), pattern.names[i].size()));
+                chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+                chunk_.write_short(static_cast<uint16_t>(nc2));
+              }
+            }
+            else
+            {
+              // For locals, just register in forward order (stack slots match)
+              for (int i = 0; i < before; ++i)
+              {
+                locals_.push_back(Local{pattern.names[i], scope_depth_});
+              }
+              locals_.push_back(Local{pattern.rest_name, scope_depth_});
+              for (int i = before; i < static_cast<int>(pattern.names.size()); ++i)
+              {
+                locals_.push_back(Local{pattern.names[i], scope_depth_});
+              }
+            }
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_UNPACK);
+            chunk_.write_short(static_cast<uint16_t>(pattern.names.size()));
+            if (scope_depth_ == 0)
+            {
+              // OP_DEFINE_GLOBAL takes from stack top, so define in reverse order
+              for (int i = static_cast<int>(pattern.names.size()) - 1; i >= 0; --i)
+              {
+                const auto nc = chunk_.add_constant(
+                    vm::Value::String(pattern.names[i].c_str(), pattern.names[i].size()));
+                chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+                chunk_.write_short(static_cast<uint16_t>(nc));
+              }
+            }
+            else
+            {
+              for (const auto& name : pattern.names)
+              {
+                locals_.push_back(Local{name, scope_depth_});
+              }
+            }
+          }
+        }
       },
       stmt.node);
 }
@@ -1490,6 +1694,13 @@ void Compiler::emit_expression(const Expression& expr)
               break;
             case BinaryOp::NotEqual:
               chunk_.write_op(OpCode::OP_EQUAL);
+              chunk_.write_op(OpCode::OP_NOT);
+              break;
+            case BinaryOp::In:
+              chunk_.write_op(OpCode::OP_CONTAINS);
+              break;
+            case BinaryOp::NotIn:
+              chunk_.write_op(OpCode::OP_CONTAINS);
               chunk_.write_op(OpCode::OP_NOT);
               break;
             default:
@@ -1630,6 +1841,64 @@ void Compiler::emit_expression(const Expression& expr)
           emit_expression(*node.value);
           chunk_.write_op(OpCode::OP_CALL_NATIVE);
           chunk_.write_byte(3);
+        }
+        // v0.7.0: Index assignment (x[i] = val)
+        else if constexpr (std::is_same_v<T, IndexAssignExpr>)
+        {
+          emit_expression(*node.base);
+          emit_expression(*node.index);
+          emit_expression(*node.value);
+          chunk_.write_op(OpCode::OP_SET_INDEX);
+        }
+        // v0.7.0: Tuple literal
+        else if constexpr (std::is_same_v<T, TupleExpr>)
+        {
+          for (const auto& element : node.elements)
+          {
+            emit_expression(*element);
+          }
+          chunk_.write_op(OpCode::OP_BUILD_TUPLE);
+          chunk_.write_short(static_cast<uint16_t>(node.elements.size()));
+        }
+        // v0.7.0: F-string
+        else if constexpr (std::is_same_v<T, FStringExpr>)
+        {
+          for (const auto& segment : node.segments)
+          {
+            if (segment.is_expr)
+            {
+              emit_expression(*segment.expr);
+            }
+            else
+            {
+              chunk_.emit_constant(vm::Value::String(segment.text.c_str(), segment.text.size()));
+            }
+          }
+          chunk_.write_op(OpCode::OP_FORMAT_STRING);
+          chunk_.write_short(static_cast<uint16_t>(node.segments.size()));
+        }
+        // v0.7.0: Slice expression
+        else if constexpr (std::is_same_v<T, SliceExpr>)
+        {
+          emit_expression(*node.base);
+          uint8_t flags = 0;
+          if (node.start)
+          {
+            emit_expression(*node.start);
+            flags |= 0x01;
+          }
+          if (node.end)
+          {
+            emit_expression(*node.end);
+            flags |= 0x02;
+          }
+          if (node.step)
+          {
+            emit_expression(*node.step);
+            flags |= 0x04;
+          }
+          chunk_.write_op(OpCode::OP_SLICE);
+          chunk_.write_byte(flags);
         }
       },
       expr.node);

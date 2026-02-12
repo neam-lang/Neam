@@ -16,6 +16,7 @@
 #include "neamc/vm/external_skill.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/value.hpp"
+#include "neamc/vm/value_hash.hpp"
 
 namespace neamc::vm::async
 {
@@ -46,7 +47,12 @@ enum class ObjType
   OBJ_ENV,
   OBJ_KNOWLEDGE,
   OBJ_OPTION,
-  OBJ_FUTURE
+  OBJ_FUTURE,
+  // v0.7.0: Data types
+  OBJ_RANGE,
+  OBJ_ITER_STATE,
+  OBJ_SET,
+  OBJ_TUPLE
 };
 
 struct ObjString : Obj
@@ -178,6 +184,38 @@ struct ObjFuture : Obj
   std::shared_ptr<async::Future<Value>> future;
 };
 
+// v0.7.0: Range type — represents a lazy integer sequence
+struct ObjRange : Obj
+{
+  int64_t start{0};
+  int64_t end{0};
+  int64_t step{1};
+};
+
+// v0.7.0: Iterator state — internal loop iterator
+struct ObjIterState : Obj
+{
+  Value source{Value::Nil()};
+  int64_t position{0};
+  int64_t end{0};
+  int64_t step{1};
+  std::vector<Value> snapshot;
+};
+
+// v0.7.0: Set type — unordered collection of unique hashable values
+struct ObjSet : Obj
+{
+  std::unordered_set<Value, ValueHash, ValueEqual> items;
+};
+
+// v0.7.0: Tuple type — immutable fixed-size collection
+struct ObjTuple : Obj
+{
+  std::vector<Value> items;
+  uint32_t hash_cache{0};
+  bool hash_computed{false};
+};
+
 ObjString* allocate_string(char* chars, std::size_t length, uint32_t hash);
 ObjString* copy_string(const char* chars, std::size_t length);
 ObjString* take_string(char* chars, std::size_t length);
@@ -199,6 +237,11 @@ ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString*
                             RetrievalStrategyOptions strategy_options = {});
 ObjOption* new_option(bool has_value, Value value);
 ObjFuture* new_future(std::shared_ptr<async::Future<Value>> future);
+// v0.7.0: New type factories
+ObjRange* new_range(int64_t start, int64_t end, int64_t step);
+ObjIterState* new_iter_state();
+ObjSet* new_set(std::unordered_set<Value, ValueHash, ValueEqual> items);
+ObjTuple* new_tuple(std::vector<Value> items);
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

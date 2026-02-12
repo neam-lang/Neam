@@ -30,6 +30,7 @@
 #include "neamc/vm/external_skill.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/schema.hpp"
+#include "neamc/vm/value_hash.hpp"
 
 namespace neamc::vm
 {
@@ -86,31 +87,11 @@ std::string value_type_name(const Value& value)
   if (value.is_string()) return "string";
   if (value.is_list()) return "list";
   if (value.is_map()) return "map";
+  if (value.is_range()) return "range";
+  if (value.is_set()) return "set";
+  if (value.is_tuple()) return "tuple";
+  if (value.is_option()) return "option";
   return "object";
-}
-
-std::string value_to_string(const Value& value)
-{
-  if (value.is_string())
-  {
-    auto* str = as_string(value);
-    return std::string(str->chars, str->length);
-  }
-  if (value.is_number())
-  {
-    std::ostringstream out;
-    out << value.as_number();
-    return out.str();
-  }
-  if (value.is_bool())
-  {
-    return value.as_bool() ? "true" : "false";
-  }
-  if (value.is_nil())
-  {
-    return "nil";
-  }
-  return "<object>";
 }
 
 bool match_key(const ObjString* key, const std::string& name)
@@ -790,6 +771,32 @@ std::string opcode_name(OpCode op)
       return "OP_CHECKPOINT";
     case OpCode::OP_REWIND:
       return "OP_REWIND";
+    case OpCode::OP_DEFINE_EXTERN_SKILL:
+      return "OP_DEFINE_EXTERN_SKILL";
+    case OpCode::OP_DEFINE_MCP_SERVER:
+      return "OP_DEFINE_MCP_SERVER";
+    case OpCode::OP_ADOPT_MCP_TOOLS:
+      return "OP_ADOPT_MCP_TOOLS";
+    case OpCode::OP_SET_INDEX:
+      return "OP_SET_INDEX";
+    case OpCode::OP_GET_ITER:
+      return "OP_GET_ITER";
+    case OpCode::OP_FOR_ITER:
+      return "OP_FOR_ITER";
+    case OpCode::OP_BUILD_SET:
+      return "OP_BUILD_SET";
+    case OpCode::OP_BUILD_TUPLE:
+      return "OP_BUILD_TUPLE";
+    case OpCode::OP_CONTAINS:
+      return "OP_CONTAINS";
+    case OpCode::OP_FORMAT_STRING:
+      return "OP_FORMAT_STRING";
+    case OpCode::OP_UNPACK:
+      return "OP_UNPACK";
+    case OpCode::OP_UNPACK_REST:
+      return "OP_UNPACK_REST";
+    case OpCode::OP_SLICE:
+      return "OP_SLICE";
     default:
       return "OP_UNKNOWN";
   }
@@ -926,17 +933,8 @@ bool VirtualMachine::values_equal(const Value& lhs, const Value& rhs)
       return lhs.as_number() == rhs.as_number();
     case ValueType::Obj:
     {
-      if (is_obj_type(lhs, ObjType::OBJ_STRING) && is_obj_type(rhs, ObjType::OBJ_STRING))
-      {
-        auto* a = as_string(lhs);
-        auto* b = as_string(rhs);
-        if (a->length != b->length)
-        {
-          return false;
-        }
-        return std::memcmp(a->chars, b->chars, a->length) == 0;
-      }
-      return lhs.as_obj() == rhs.as_obj();
+      ValueEqual eq;
+      return eq(lhs, rhs);
     }
   }
   return false;
@@ -1199,10 +1197,54 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       {
         Value rhs = pop();
         Value lhs = pop();
-        if (op == OpCode::OP_ADD && is_obj_type(lhs, ObjType::OBJ_STRING) &&
-            is_obj_type(rhs, ObjType::OBJ_STRING))
+        if (op == OpCode::OP_ADD)
         {
-          stack_.push_back(concatenate(lhs, rhs));
+          if (lhs.is_string() && rhs.is_string())
+          {
+            stack_.push_back(concatenate(lhs, rhs));
+          }
+          else if (lhs.is_string())
+          {
+            auto rhs_str = value_to_string(rhs);
+            auto rhs_val = Value::String(rhs_str.c_str(), rhs_str.size());
+            stack_.push_back(concatenate(lhs, rhs_val));
+          }
+          else if (rhs.is_string())
+          {
+            auto lhs_str = value_to_string(lhs);
+            auto lhs_val = Value::String(lhs_str.c_str(), lhs_str.size());
+            stack_.push_back(concatenate(lhs_val, rhs));
+          }
+          else
+          {
+            stack_.push_back(binary_numeric_op(lhs, rhs, op));
+          }
+        }
+        else if (op == OpCode::OP_MUL && lhs.is_string() && rhs.is_number())
+        {
+          auto* str = as_string(lhs);
+          auto src = std::string(str->chars, str->length);
+          int n = static_cast<int>(rhs.as_number());
+          std::string result;
+          result.reserve(src.size() * std::max(0, n));
+          for (int i = 0; i < n; ++i)
+          {
+            result += src;
+          }
+          stack_.push_back(Value::String(result.c_str(), result.size()));
+        }
+        else if (op == OpCode::OP_MUL && lhs.is_number() && rhs.is_string())
+        {
+          auto* str = as_string(rhs);
+          auto src = std::string(str->chars, str->length);
+          int n = static_cast<int>(lhs.as_number());
+          std::string result;
+          result.reserve(src.size() * std::max(0, n));
+          for (int i = 0; i < n; ++i)
+          {
+            result += src;
+          }
+          stack_.push_back(Value::String(result.c_str(), result.size()));
         }
         else
         {
@@ -1414,6 +1456,57 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                 "Property error: unknown agent property '" + key + "'");
           }
         }
+        // v0.7.0: Tuple positional access (.0, .1, ...)
+        else if (is_obj_type(receiver, ObjType::OBJ_TUPLE))
+        {
+          auto* tuple = as_tuple(receiver);
+          // Try numeric key
+          bool is_numeric = !key.empty();
+          for (char ch : key) { if (ch < '0' || ch > '9') { is_numeric = false; break; } }
+          if (is_numeric)
+          {
+            auto idx = static_cast<std::size_t>(std::stoul(key));
+            if (idx >= tuple->items.size())
+            {
+              throw std::runtime_error(
+                  "Index out of range: tuple index " + key +
+                  " for tuple of size " + std::to_string(tuple->items.size()));
+            }
+            stack_.push_back(tuple->items[idx]);
+          }
+          else
+          {
+            throw std::runtime_error(
+                "Property error: unknown tuple property '" + key + "'");
+          }
+        }
+        // v0.7.0: Option property access (.value, .has_value)
+        else if (is_obj_type(receiver, ObjType::OBJ_OPTION))
+        {
+          auto* opt = as_option(receiver);
+          if (key == "value")
+          {
+            stack_.push_back(opt->has_value ? opt->value : Value::Nil());
+          }
+          else if (key == "has_value")
+          {
+            stack_.push_back(Value::Bool(opt->has_value));
+          }
+          else
+          {
+            throw std::runtime_error(
+                "Property error: unknown option property '" + key + "'");
+          }
+        }
+        // v0.7.0: Range property access (.start, .end, .step)
+        else if (is_obj_type(receiver, ObjType::OBJ_RANGE))
+        {
+          auto* range = as_range(receiver);
+          if (key == "start") stack_.push_back(Value::Number(static_cast<double>(range->start)));
+          else if (key == "end") stack_.push_back(Value::Number(static_cast<double>(range->end)));
+          else if (key == "step") stack_.push_back(Value::Number(static_cast<double>(range->step)));
+          else throw std::runtime_error("Property error: unknown range property '" + key + "'");
+        }
         else
         {
           throw std::runtime_error(
@@ -1434,23 +1527,17 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                 "Type error: list index must be a number, got " +
                 value_type_name(index_value));
           }
-          const double raw_index = index_value.as_number();
-          const double floored = std::floor(raw_index);
-          if (raw_index < 0 || floored != raw_index)
-          {
-            throw std::runtime_error(
-                "Index error: list index " + std::to_string(raw_index) +
-                " must be a non-negative integer");
-          }
-          const std::size_t index = static_cast<std::size_t>(floored);
+          auto raw = static_cast<int64_t>(index_value.as_number());
           auto* list = as_list(base_value);
-          if (index >= list->items.size())
+          auto len = static_cast<int64_t>(list->items.size());
+          if (raw < 0) raw += len;
+          if (raw < 0 || raw >= len)
           {
             throw std::runtime_error(
-                "Index out of range: index " + std::to_string(index) +
-                " not valid for list of size " + std::to_string(list->items.size()));
+                "Index out of range: index " + std::to_string(raw) +
+                " not valid for list of size " + std::to_string(len));
           }
-          stack_.push_back(list->items[index]);
+          stack_.push_back(list->items[static_cast<std::size_t>(raw)]);
         }
         else if (is_obj_type(base_value, ObjType::OBJ_MAP))
         {
@@ -1464,9 +1551,90 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           }
           stack_.push_back(it->second);
         }
+        else if (is_obj_type(base_value, ObjType::OBJ_STRING))
+        {
+          if (!index_value.is_number())
+          {
+            throw std::runtime_error(
+                "Type error: string index must be a number, got " +
+                value_type_name(index_value));
+          }
+          auto* str = as_string(base_value);
+          auto raw = static_cast<int64_t>(index_value.as_number());
+          auto len = static_cast<int64_t>(str->length);
+          if (raw < 0) raw += len;
+          if (raw < 0 || raw >= len)
+          {
+            throw std::runtime_error(
+                "Index out of range: index " + std::to_string(raw) +
+                " not valid for string of length " + std::to_string(len));
+          }
+          stack_.push_back(Value::String(str->chars + raw, 1));
+        }
+        else if (is_obj_type(base_value, ObjType::OBJ_TUPLE))
+        {
+          if (!index_value.is_number())
+          {
+            throw std::runtime_error(
+                "Type error: tuple index must be a number, got " +
+                value_type_name(index_value));
+          }
+          auto* tuple = as_tuple(base_value);
+          auto raw = static_cast<int64_t>(index_value.as_number());
+          auto len = static_cast<int64_t>(tuple->items.size());
+          if (raw < 0) raw += len;
+          if (raw < 0 || raw >= len)
+          {
+            throw std::runtime_error(
+                "Index out of range: index " + std::to_string(raw) +
+                " not valid for tuple of size " + std::to_string(len));
+          }
+          stack_.push_back(tuple->items[static_cast<std::size_t>(raw)]);
+        }
         else
         {
-          throw std::runtime_error("Indexing is only supported on lists and maps");
+          throw std::runtime_error(
+              "Indexing is only supported on lists, maps, strings, and tuples");
+        }
+        break;
+      }
+      case OpCode::OP_SET_INDEX:
+      {
+        Value val = pop();
+        Value index_value = pop();
+        Value base_value = pop();
+        if (is_obj_type(base_value, ObjType::OBJ_LIST))
+        {
+          if (!index_value.is_number())
+          {
+            throw std::runtime_error(
+                "Type error: list index must be a number, got " +
+                value_type_name(index_value));
+          }
+          auto raw = static_cast<int64_t>(index_value.as_number());
+          auto* list = as_list(base_value);
+          auto len = static_cast<int64_t>(list->items.size());
+          if (raw < 0) raw += len;
+          if (raw < 0 || raw >= len)
+          {
+            throw std::runtime_error(
+                "Index out of range: index " + std::to_string(raw) +
+                " not valid for list of size " + std::to_string(len));
+          }
+          list->items[static_cast<std::size_t>(raw)] = val;
+          stack_.push_back(val);
+        }
+        else if (is_obj_type(base_value, ObjType::OBJ_MAP))
+        {
+          const std::string key = to_std_string(index_value);
+          auto* map = as_map(base_value);
+          map->entries[key] = val;
+          stack_.push_back(val);
+        }
+        else
+        {
+          throw std::runtime_error(
+              "Index assignment is only supported on lists and maps");
         }
         break;
       }
@@ -3291,9 +3459,346 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               stack_.push_back(Value::Nil());
             }
           }
+          else if (method == "contains")
+          {
+            if (arg_count != 1)
+              throw std::runtime_error("list.contains expects 1 argument");
+            bool found = false;
+            ValueEqual eq;
+            for (const auto& item : list->items)
+            {
+              if (eq(item, args[0])) { found = true; break; }
+            }
+            stack_.push_back(Value::Bool(found));
+          }
+          else if (method == "is_empty")
+          {
+            stack_.push_back(Value::Bool(list->items.empty()));
+          }
+          else if (method == "first")
+          {
+            if (list->items.empty())
+              stack_.push_back(Value::Option(new_option(false, Value::Nil())));
+            else
+              stack_.push_back(Value::Option(new_option(true, list->items.front())));
+          }
+          else if (method == "last")
+          {
+            if (list->items.empty())
+              stack_.push_back(Value::Option(new_option(false, Value::Nil())));
+            else
+              stack_.push_back(Value::Option(new_option(true, list->items.back())));
+          }
+          else if (method == "take")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.take expects 1 argument");
+            auto n = static_cast<std::size_t>(std::max(0.0, args[0].as_number()));
+            n = std::min(n, list->items.size());
+            std::vector<Value> items(list->items.begin(), list->items.begin() + static_cast<std::ptrdiff_t>(n));
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "skip")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.skip expects 1 argument");
+            auto n = static_cast<std::size_t>(std::max(0.0, args[0].as_number()));
+            n = std::min(n, list->items.size());
+            std::vector<Value> items(list->items.begin() + static_cast<std::ptrdiff_t>(n), list->items.end());
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "any")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.any expects 1 argument");
+            bool result = false;
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {item};
+              if (is_truthy(call_native(args[0], 1, call_args))) { result = true; break; }
+            }
+            stack_.push_back(Value::Bool(result));
+          }
+          else if (method == "all")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.all expects 1 argument");
+            bool result = true;
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {item};
+              if (!is_truthy(call_native(args[0], 1, call_args))) { result = false; break; }
+            }
+            stack_.push_back(Value::Bool(result));
+          }
+          else if (method == "count")
+          {
+            if (arg_count == 0)
+            {
+              stack_.push_back(Value::Number(static_cast<double>(list->items.size())));
+            }
+            else if (arg_count == 1)
+            {
+              int cnt = 0;
+              for (const auto& item : list->items)
+              {
+                Value call_args[] = {item};
+                if (is_truthy(call_native(args[0], 1, call_args))) ++cnt;
+              }
+              stack_.push_back(Value::Number(static_cast<double>(cnt)));
+            }
+            else
+            {
+              throw std::runtime_error("list.count expects 0-1 arguments");
+            }
+          }
+          else if (method == "flatten")
+          {
+            std::vector<Value> items;
+            for (const auto& item : list->items)
+            {
+              if (item.is_list())
+              {
+                auto* sub = as_list(item);
+                items.insert(items.end(), sub->items.begin(), sub->items.end());
+              }
+              else
+              {
+                items.push_back(item);
+              }
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "flat_map")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.flat_map expects 1 argument");
+            std::vector<Value> items;
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {item};
+              Value result = call_native(args[0], 1, call_args);
+              if (result.is_list())
+              {
+                auto* sub = as_list(result);
+                items.insert(items.end(), sub->items.begin(), sub->items.end());
+              }
+              else
+              {
+                items.push_back(result);
+              }
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "zip")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.zip expects 1 argument");
+            if (!args[0].is_list()) throw std::runtime_error("list.zip expects list argument");
+            auto* other = as_list(args[0]);
+            auto len = std::min(list->items.size(), other->items.size());
+            std::vector<Value> items;
+            items.reserve(len);
+            for (std::size_t idx = 0; idx < len; ++idx)
+            {
+              std::vector<Value> pair = {list->items[idx], other->items[idx]};
+              items.push_back(Value::Tuple(new_tuple(std::move(pair))));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "enumerate")
+          {
+            std::vector<Value> items;
+            items.reserve(list->items.size());
+            for (std::size_t idx = 0; idx < list->items.size(); ++idx)
+            {
+              std::vector<Value> pair = {Value::Number(static_cast<double>(idx)), list->items[idx]};
+              items.push_back(Value::Tuple(new_tuple(std::move(pair))));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "unique")
+          {
+            std::unordered_set<Value, ValueHash, ValueEqual> seen;
+            std::vector<Value> items;
+            for (const auto& item : list->items)
+            {
+              if (seen.insert(item).second)
+              {
+                items.push_back(item);
+              }
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "chunk")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.chunk expects 1 argument");
+            auto n = static_cast<std::size_t>(std::max(1.0, args[0].as_number()));
+            std::vector<Value> chunks;
+            for (std::size_t idx = 0; idx < list->items.size(); idx += n)
+            {
+              auto end = std::min(idx + n, list->items.size());
+              std::vector<Value> chunk(list->items.begin() + static_cast<std::ptrdiff_t>(idx),
+                                       list->items.begin() + static_cast<std::ptrdiff_t>(end));
+              chunks.push_back(Value::List(new_list(std::move(chunk))));
+            }
+            stack_.push_back(Value::List(new_list(std::move(chunks))));
+          }
+          else if (method == "sort_by")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.sort_by expects 1 argument");
+            std::vector<Value> sorted_items = list->items;
+            auto fn = args[0];
+            std::sort(sorted_items.begin(), sorted_items.end(),
+                      [&](const Value& a, const Value& b)
+                      {
+                        Value ca[] = {a};
+                        Value cb[] = {b};
+                        Value va = call_native(fn, 1, ca);
+                        Value vb = call_native(fn, 1, cb);
+                        if (va.is_number() && vb.is_number())
+                          return va.as_number() < vb.as_number();
+                        return value_to_string(va) < value_to_string(vb);
+                      });
+            stack_.push_back(Value::List(new_list(std::move(sorted_items))));
+          }
+          else if (method == "min")
+          {
+            if (list->items.empty())
+            {
+              stack_.push_back(Value::Option(new_option(false, Value::Nil())));
+            }
+            else
+            {
+              Value best = list->items[0];
+              for (std::size_t idx = 1; idx < list->items.size(); ++idx)
+              {
+                if (list->items[idx].is_number() && best.is_number() &&
+                    list->items[idx].as_number() < best.as_number())
+                  best = list->items[idx];
+              }
+              stack_.push_back(best);
+            }
+          }
+          else if (method == "max")
+          {
+            if (list->items.empty())
+            {
+              stack_.push_back(Value::Option(new_option(false, Value::Nil())));
+            }
+            else
+            {
+              Value best = list->items[0];
+              for (std::size_t idx = 1; idx < list->items.size(); ++idx)
+              {
+                if (list->items[idx].is_number() && best.is_number() &&
+                    list->items[idx].as_number() > best.as_number())
+                  best = list->items[idx];
+              }
+              stack_.push_back(best);
+            }
+          }
+          else if (method == "sum")
+          {
+            double total = 0;
+            for (const auto& item : list->items)
+            {
+              if (item.is_number()) total += item.as_number();
+            }
+            stack_.push_back(Value::Number(total));
+          }
+          else if (method == "mean")
+          {
+            if (list->items.empty())
+            {
+              stack_.push_back(Value::Number(0));
+            }
+            else
+            {
+              double total = 0;
+              int cnt = 0;
+              for (const auto& item : list->items)
+              {
+                if (item.is_number()) { total += item.as_number(); ++cnt; }
+              }
+              stack_.push_back(Value::Number(cnt > 0 ? total / cnt : 0));
+            }
+          }
+          else if (method == "join")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.join expects 1 argument");
+            std::string sep = to_std_string(args[0]);
+            std::string result;
+            for (std::size_t idx = 0; idx < list->items.size(); ++idx)
+            {
+              if (idx > 0) result += sep;
+              result += value_to_string(list->items[idx]);
+            }
+            stack_.push_back(Value::String(result.c_str(), result.size()));
+          }
+          else if (method == "to_set")
+          {
+            std::unordered_set<Value, ValueHash, ValueEqual> items;
+            for (const auto& item : list->items) items.insert(item);
+            stack_.push_back(Value::Set(new_set(std::move(items))));
+          }
+          else if (method == "index_of")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.index_of expects 1 argument");
+            ValueEqual eq;
+            int found_idx = -1;
+            for (std::size_t idx = 0; idx < list->items.size(); ++idx)
+            {
+              if (eq(list->items[idx], args[0])) { found_idx = static_cast<int>(idx); break; }
+            }
+            stack_.push_back(Value::Number(static_cast<double>(found_idx)));
+          }
+          else if (method == "for_each")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.for_each expects 1 argument");
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {item};
+              call_native(args[0], 1, call_args);
+            }
+            stack_.push_back(Value::Nil());
+          }
+          else if (method == "group_by")
+          {
+            if (arg_count != 1) throw std::runtime_error("list.group_by expects 1 argument");
+            std::unordered_map<std::string, std::vector<Value>> groups;
+            std::vector<std::string> order;
+            for (const auto& item : list->items)
+            {
+              Value call_args[] = {item};
+              Value key = call_native(args[0], 1, call_args);
+              std::string key_str = value_to_string(key);
+              if (groups.find(key_str) == groups.end()) order.push_back(key_str);
+              groups[key_str].push_back(item);
+            }
+            std::unordered_map<std::string, Value> result_map;
+            for (const auto& k : order)
+            {
+              auto items_copy = groups[k];
+              result_map[k] = Value::List(new_list(std::move(items_copy)));
+            }
+            stack_.push_back(Value::Map(new_map(std::move(result_map))));
+          }
+          else if (method == "slice")
+          {
+            if (arg_count < 1 || arg_count > 2) throw std::runtime_error("list.slice expects 1-2 arguments");
+            auto sz = static_cast<int64_t>(list->items.size());
+            auto start = static_cast<int64_t>(args[0].as_number());
+            if (start < 0) start = std::max<int64_t>(0, sz + start);
+            auto end_idx = (arg_count == 2) ? static_cast<int64_t>(args[1].as_number()) : sz;
+            if (end_idx < 0) end_idx = std::max<int64_t>(0, sz + end_idx);
+            start = std::max<int64_t>(0, std::min(start, sz));
+            end_idx = std::max<int64_t>(0, std::min(end_idx, sz));
+            if (start >= end_idx)
+              stack_.push_back(Value::List(new_list({})));
+            else
+            {
+              std::vector<Value> items(list->items.begin() + start, list->items.begin() + end_idx);
+              stack_.push_back(Value::List(new_list(std::move(items))));
+            }
+          }
           else
           {
-            throw std::runtime_error("Unknown list method");
+            throw std::runtime_error("Unknown list method: " + method);
           }
         }
         else if (is_obj_type(receiver, ObjType::OBJ_MAP))
@@ -3416,9 +3921,142 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             }
             stack_.push_back(Value::List(new_list(std::move(items))));
           }
+          else if (method == "len")
+          {
+            stack_.push_back(Value::Number(static_cast<double>(map->entries.size())));
+          }
+          else if (method == "is_empty")
+          {
+            stack_.push_back(Value::Bool(map->entries.empty()));
+          }
+          else if (method == "get_or")
+          {
+            if (arg_count != 2) throw std::runtime_error("map.get_or expects 2 arguments");
+            std::string key = to_std_string(args[0]);
+            auto it = map->entries.find(key);
+            stack_.push_back(it != map->entries.end() ? it->second : args[1]);
+          }
+          else if (method == "merge")
+          {
+            if (arg_count != 1) throw std::runtime_error("map.merge expects 1 argument");
+            if (!args[0].is_map()) throw std::runtime_error("map.merge expects map argument");
+            auto* other = as_map(args[0]);
+            std::unordered_map<std::string, Value> merged = map->entries;
+            for (const auto& entry : other->entries)
+            {
+              merged[entry.first] = entry.second;
+            }
+            stack_.push_back(Value::Map(new_map(std::move(merged))));
+          }
+          else if (method == "map_values")
+          {
+            if (arg_count != 1) throw std::runtime_error("map.map_values expects 1 argument");
+            std::unordered_map<std::string, Value> result;
+            for (const auto& entry : map->entries)
+            {
+              Value call_args[] = {entry.second};
+              result[entry.first] = call_native(args[0], 1, call_args);
+            }
+            stack_.push_back(Value::Map(new_map(std::move(result))));
+          }
+          else if (method == "map_keys")
+          {
+            if (arg_count != 1) throw std::runtime_error("map.map_keys expects 1 argument");
+            std::unordered_map<std::string, Value> result;
+            for (const auto& entry : map->entries)
+            {
+              Value key_val = Value::String(entry.first.c_str(), entry.first.size());
+              Value call_args[] = {key_val};
+              Value new_key = call_native(args[0], 1, call_args);
+              result[value_to_string(new_key)] = entry.second;
+            }
+            stack_.push_back(Value::Map(new_map(std::move(result))));
+          }
+          else if (method == "filter")
+          {
+            if (arg_count != 1) throw std::runtime_error("map.filter expects 1 argument");
+            std::unordered_map<std::string, Value> result;
+            for (const auto& entry : map->entries)
+            {
+              Value key_val = Value::String(entry.first.c_str(), entry.first.size());
+              Value call_args[] = {key_val, entry.second};
+              if (is_truthy(call_native(args[0], 2, call_args)))
+              {
+                result[entry.first] = entry.second;
+              }
+            }
+            stack_.push_back(Value::Map(new_map(std::move(result))));
+          }
+          else if (method == "find")
+          {
+            if (arg_count != 1) throw std::runtime_error("map.find expects 1 argument");
+            bool found = false;
+            for (const auto& entry : map->entries)
+            {
+              Value key_val = Value::String(entry.first.c_str(), entry.first.size());
+              Value call_args[] = {key_val, entry.second};
+              if (is_truthy(call_native(args[0], 2, call_args)))
+              {
+                std::unordered_map<std::string, Value> pair;
+                pair["key"] = key_val;
+                pair["value"] = entry.second;
+                stack_.push_back(Value::Map(new_map(std::move(pair))));
+                found = true;
+                break;
+              }
+            }
+            if (!found) stack_.push_back(Value::Nil());
+          }
+          else if (method == "for_each")
+          {
+            if (arg_count != 1) throw std::runtime_error("map.for_each expects 1 argument");
+            for (const auto& entry : map->entries)
+            {
+              Value key_val = Value::String(entry.first.c_str(), entry.first.size());
+              Value call_args[] = {key_val, entry.second};
+              call_native(args[0], 2, call_args);
+            }
+            stack_.push_back(Value::Nil());
+          }
+          else if (method == "count")
+          {
+            if (arg_count == 0)
+            {
+              stack_.push_back(Value::Number(static_cast<double>(map->entries.size())));
+            }
+            else if (arg_count == 1)
+            {
+              int cnt = 0;
+              for (const auto& entry : map->entries)
+              {
+                Value key_val = Value::String(entry.first.c_str(), entry.first.size());
+                Value call_args[] = {key_val, entry.second};
+                if (is_truthy(call_native(args[0], 2, call_args))) ++cnt;
+              }
+              stack_.push_back(Value::Number(static_cast<double>(cnt)));
+            }
+            else
+            {
+              throw std::runtime_error("map.count expects 0-1 arguments");
+            }
+          }
+          else if (method == "to_list")
+          {
+            std::vector<Value> items;
+            items.reserve(map->entries.size());
+            for (const auto& entry : map->entries)
+            {
+              std::vector<Value> pair = {
+                Value::String(entry.first.c_str(), entry.first.size()),
+                entry.second
+              };
+              items.push_back(Value::Tuple(new_tuple(std::move(pair))));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
           else
           {
-            throw std::runtime_error("Unknown map method");
+            throw std::runtime_error("Unknown map method: " + method);
           }
         }
         else if (is_obj_type(receiver, ObjType::OBJ_STRING))
@@ -3604,9 +4242,587 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               stack_.push_back(Value::String(slice.c_str(), slice.size()));
             }
           }
+          else if (method == "len")
+          {
+            stack_.push_back(Value::Number(static_cast<double>(base.size())));
+          }
+          else if (method == "is_empty")
+          {
+            stack_.push_back(Value::Bool(base.empty()));
+          }
+          else if (method == "chars")
+          {
+            std::vector<Value> items;
+            items.reserve(base.size());
+            for (char c : base)
+            {
+              items.push_back(Value::String(&c, 1));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "repeat")
+          {
+            if (arg_count != 1) throw std::runtime_error("string.repeat expects 1 argument");
+            auto n = static_cast<int>(args[0].as_number());
+            std::string result;
+            result.reserve(base.size() * std::max(0, n));
+            for (int j = 0; j < n; ++j) result += base;
+            stack_.push_back(Value::String(result.c_str(), result.size()));
+          }
+          else if (method == "pad_left")
+          {
+            if (arg_count < 1 || arg_count > 2) throw std::runtime_error("string.pad_left expects 1-2 arguments");
+            auto width = static_cast<std::size_t>(args[0].as_number());
+            char pad_char = (arg_count == 2) ? to_std_string(args[1])[0] : ' ';
+            std::string result = base;
+            while (result.size() < width) result = pad_char + result;
+            stack_.push_back(Value::String(result.c_str(), result.size()));
+          }
+          else if (method == "pad_right")
+          {
+            if (arg_count < 1 || arg_count > 2) throw std::runtime_error("string.pad_right expects 1-2 arguments");
+            auto width = static_cast<std::size_t>(args[0].as_number());
+            char pad_char = (arg_count == 2) ? to_std_string(args[1])[0] : ' ';
+            std::string result = base;
+            while (result.size() < width) result += pad_char;
+            stack_.push_back(Value::String(result.c_str(), result.size()));
+          }
+          else if (method == "match")
+          {
+            if (arg_count != 1) throw std::runtime_error("string.match expects 1 argument");
+            std::string pattern = to_std_string(args[0]);
+            try
+            {
+              std::regex re(pattern);
+              std::smatch match_result;
+              if (std::regex_search(base, match_result, re))
+              {
+                stack_.push_back(Value::String(match_result[0].str().c_str(), match_result[0].str().size()));
+              }
+              else
+              {
+                stack_.push_back(Value::Nil());
+              }
+            }
+            catch (const std::regex_error& ex)
+            {
+              throw std::runtime_error(std::string("Invalid regex: ") + ex.what());
+            }
+          }
+          else if (method == "match_all")
+          {
+            if (arg_count != 1) throw std::runtime_error("string.match_all expects 1 argument");
+            std::string pattern = to_std_string(args[0]);
+            try
+            {
+              std::regex re(pattern);
+              std::vector<Value> matches;
+              auto begin = std::sregex_iterator(base.begin(), base.end(), re);
+              auto end_it = std::sregex_iterator();
+              for (auto it = begin; it != end_it; ++it)
+              {
+                auto m = it->str();
+                matches.push_back(Value::String(m.c_str(), m.size()));
+              }
+              stack_.push_back(Value::List(new_list(std::move(matches))));
+            }
+            catch (const std::regex_error& ex)
+            {
+              throw std::runtime_error(std::string("Invalid regex: ") + ex.what());
+            }
+          }
+          else if (method == "is_numeric")
+          {
+            bool numeric = !base.empty();
+            bool has_dot = false;
+            for (std::size_t idx = 0; idx < base.size(); ++idx)
+            {
+              char c = base[idx];
+              if (c == '-' && idx == 0) continue;
+              if (c == '.' && !has_dot) { has_dot = true; continue; }
+              if (!std::isdigit(static_cast<unsigned char>(c))) { numeric = false; break; }
+            }
+            stack_.push_back(Value::Bool(numeric));
+          }
+          else if (method == "to_number")
+          {
+            try
+            {
+              double num = std::stod(base);
+              stack_.push_back(Value::Number(num));
+            }
+            catch (...)
+            {
+              stack_.push_back(Value::Nil());
+            }
+          }
+          else if (method == "reverse")
+          {
+            std::string reversed(base.rbegin(), base.rend());
+            stack_.push_back(Value::String(reversed.c_str(), reversed.size()));
+          }
+          else if (method == "count")
+          {
+            if (arg_count != 1) throw std::runtime_error("string.count expects 1 argument");
+            std::string sub = to_std_string(args[0]);
+            int cnt = 0;
+            std::size_t pos = 0;
+            if (!sub.empty())
+            {
+              while ((pos = base.find(sub, pos)) != std::string::npos)
+              {
+                ++cnt;
+                pos += sub.size();
+              }
+            }
+            stack_.push_back(Value::Number(static_cast<double>(cnt)));
+          }
+          else if (method == "index_of")
+          {
+            if (arg_count != 1) throw std::runtime_error("string.index_of expects 1 argument");
+            std::string sub = to_std_string(args[0]);
+            auto pos = base.find(sub);
+            stack_.push_back(Value::Number(pos == std::string::npos ? -1.0 : static_cast<double>(pos)));
+          }
+          else if (method == "lines")
+          {
+            std::vector<Value> items;
+            std::size_t start = 0;
+            while (start <= base.size())
+            {
+              auto pos = base.find('\n', start);
+              auto len = (pos == std::string::npos) ? base.size() - start : pos - start;
+              std::string line = base.substr(start, len);
+              items.push_back(Value::String(line.c_str(), line.size()));
+              if (pos == std::string::npos) break;
+              start = pos + 1;
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "words")
+          {
+            std::vector<Value> items;
+            std::size_t start = 0;
+            while (start < base.size())
+            {
+              while (start < base.size() && std::isspace(static_cast<unsigned char>(base[start]))) ++start;
+              if (start >= base.size()) break;
+              std::size_t end_pos = start;
+              while (end_pos < base.size() && !std::isspace(static_cast<unsigned char>(base[end_pos]))) ++end_pos;
+              std::string word = base.substr(start, end_pos - start);
+              items.push_back(Value::String(word.c_str(), word.size()));
+              start = end_pos;
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
           else
           {
-            throw std::runtime_error("Unknown string method");
+            throw std::runtime_error("Unknown string method: " + method);
+          }
+        }
+        // v0.7.0: Range methods
+        else if (is_obj_type(receiver, ObjType::OBJ_RANGE))
+        {
+          auto* range = as_range(receiver);
+          if (method == "len")
+          {
+            int64_t len = 0;
+            if (range->step > 0 && range->start < range->end)
+            {
+              len = (range->end - range->start + range->step - 1) / range->step;
+            }
+            else if (range->step < 0 && range->start > range->end)
+            {
+              len = (range->start - range->end + (-range->step) - 1) / (-range->step);
+            }
+            stack_.push_back(Value::Number(static_cast<double>(len)));
+          }
+          else if (method == "contains")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("range.contains() expects 1 argument");
+            }
+            bool found = false;
+            if (args[0].is_number())
+            {
+              auto val = static_cast<int64_t>(args[0].as_number());
+              if (range->step > 0)
+              {
+                found = val >= range->start && val < range->end && ((val - range->start) % range->step) == 0;
+              }
+              else if (range->step < 0)
+              {
+                found = val <= range->start && val > range->end && ((range->start - val) % (-range->step)) == 0;
+              }
+            }
+            stack_.push_back(Value::Bool(found));
+          }
+          else if (method == "to_list")
+          {
+            std::vector<Value> items;
+            if (range->step > 0)
+            {
+              for (int64_t i = range->start; i < range->end; i += range->step)
+              {
+                items.push_back(Value::Number(static_cast<double>(i)));
+              }
+            }
+            else if (range->step < 0)
+            {
+              for (int64_t i = range->start; i > range->end; i += range->step)
+              {
+                items.push_back(Value::Number(static_cast<double>(i)));
+              }
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "reverse")
+          {
+            int64_t len = 0;
+            if (range->step > 0 && range->start < range->end)
+            {
+              len = (range->end - range->start + range->step - 1) / range->step;
+            }
+            else if (range->step < 0 && range->start > range->end)
+            {
+              len = (range->start - range->end + (-range->step) - 1) / (-range->step);
+            }
+            if (len == 0)
+            {
+              stack_.push_back(Value::Range(new_range(0, 0, 1)));
+            }
+            else
+            {
+              int64_t new_start = range->start + (len - 1) * range->step;
+              int64_t new_end = range->start - range->step;
+              stack_.push_back(Value::Range(new_range(new_start, new_end, -range->step)));
+            }
+          }
+          else
+          {
+            throw std::runtime_error("Unknown range method '" + method + "'");
+          }
+        }
+        // v0.7.0: Set methods
+        else if (is_obj_type(receiver, ObjType::OBJ_SET))
+        {
+          auto* set = as_set(receiver);
+          if (method == "add")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("set.add() expects 1 argument");
+            }
+            set->items.insert(args[0]);
+            stack_.push_back(receiver);
+          }
+          else if (method == "remove")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("set.remove() expects 1 argument");
+            }
+            set->items.erase(args[0]);
+            stack_.push_back(receiver);
+          }
+          else if (method == "contains")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("set.contains() expects 1 argument");
+            }
+            stack_.push_back(Value::Bool(set->items.count(args[0]) > 0));
+          }
+          else if (method == "len")
+          {
+            stack_.push_back(Value::Number(static_cast<double>(set->items.size())));
+          }
+          else if (method == "is_empty")
+          {
+            stack_.push_back(Value::Bool(set->items.empty()));
+          }
+          else if (method == "union")
+          {
+            if (arg_count != 1 || !args[0].is_set())
+            {
+              throw std::runtime_error("set.union() expects a set argument");
+            }
+            auto* other = as_set(args[0]);
+            std::unordered_set<Value, ValueHash, ValueEqual> result(set->items);
+            for (const auto& item : other->items)
+            {
+              result.insert(item);
+            }
+            stack_.push_back(Value::Set(new_set(std::move(result))));
+          }
+          else if (method == "intersection")
+          {
+            if (arg_count != 1 || !args[0].is_set())
+            {
+              throw std::runtime_error("set.intersection() expects a set argument");
+            }
+            auto* other = as_set(args[0]);
+            std::unordered_set<Value, ValueHash, ValueEqual> result;
+            for (const auto& item : set->items)
+            {
+              if (other->items.count(item) > 0)
+              {
+                result.insert(item);
+              }
+            }
+            stack_.push_back(Value::Set(new_set(std::move(result))));
+          }
+          else if (method == "difference")
+          {
+            if (arg_count != 1 || !args[0].is_set())
+            {
+              throw std::runtime_error("set.difference() expects a set argument");
+            }
+            auto* other = as_set(args[0]);
+            std::unordered_set<Value, ValueHash, ValueEqual> result;
+            for (const auto& item : set->items)
+            {
+              if (other->items.count(item) == 0)
+              {
+                result.insert(item);
+              }
+            }
+            stack_.push_back(Value::Set(new_set(std::move(result))));
+          }
+          else if (method == "symmetric_diff")
+          {
+            if (arg_count != 1 || !args[0].is_set())
+            {
+              throw std::runtime_error("set.symmetric_diff() expects a set argument");
+            }
+            auto* other = as_set(args[0]);
+            std::unordered_set<Value, ValueHash, ValueEqual> result;
+            for (const auto& item : set->items)
+            {
+              if (other->items.count(item) == 0) result.insert(item);
+            }
+            for (const auto& item : other->items)
+            {
+              if (set->items.count(item) == 0) result.insert(item);
+            }
+            stack_.push_back(Value::Set(new_set(std::move(result))));
+          }
+          else if (method == "is_subset")
+          {
+            if (arg_count != 1 || !args[0].is_set())
+            {
+              throw std::runtime_error("set.is_subset() expects a set argument");
+            }
+            auto* other = as_set(args[0]);
+            bool subset = true;
+            for (const auto& item : set->items)
+            {
+              if (other->items.count(item) == 0)
+              {
+                subset = false;
+                break;
+              }
+            }
+            stack_.push_back(Value::Bool(subset));
+          }
+          else if (method == "is_superset")
+          {
+            if (arg_count != 1 || !args[0].is_set())
+            {
+              throw std::runtime_error("set.is_superset() expects a set argument");
+            }
+            auto* other = as_set(args[0]);
+            bool superset = true;
+            for (const auto& item : other->items)
+            {
+              if (set->items.count(item) == 0)
+              {
+                superset = false;
+                break;
+              }
+            }
+            stack_.push_back(Value::Bool(superset));
+          }
+          else if (method == "to_list")
+          {
+            std::vector<Value> items(set->items.begin(), set->items.end());
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (method == "clear")
+          {
+            set->items.clear();
+            stack_.push_back(receiver);
+          }
+          else if (method == "map")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("set.map() expects 1 argument");
+            }
+            std::unordered_set<Value, ValueHash, ValueEqual> result;
+            for (const auto& item : set->items)
+            {
+              { Value fn_arg = item; result.insert(call_native(args[0], 1, &fn_arg)); }
+            }
+            stack_.push_back(Value::Set(new_set(std::move(result))));
+          }
+          else if (method == "filter")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("set.filter() expects 1 argument");
+            }
+            std::unordered_set<Value, ValueHash, ValueEqual> result;
+            for (const auto& item : set->items)
+            {
+              Value fn_arg = item; Value pred = call_native(args[0], 1, &fn_arg);
+              if (is_truthy(pred))
+              {
+                result.insert(item);
+              }
+            }
+            stack_.push_back(Value::Set(new_set(std::move(result))));
+          }
+          else
+          {
+            throw std::runtime_error("Unknown set method '" + method + "'");
+          }
+        }
+        // v0.7.0: Tuple methods
+        else if (is_obj_type(receiver, ObjType::OBJ_TUPLE))
+        {
+          auto* tuple = as_tuple(receiver);
+          if (method == "len")
+          {
+            stack_.push_back(Value::Number(static_cast<double>(tuple->items.size())));
+          }
+          else if (method == "contains")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("tuple.contains() expects 1 argument");
+            }
+            bool found = false;
+            for (const auto& item : tuple->items)
+            {
+              if (values_equal(item, args[0]))
+              {
+                found = true;
+                break;
+              }
+            }
+            stack_.push_back(Value::Bool(found));
+          }
+          else if (method == "to_list")
+          {
+            stack_.push_back(Value::List(new_list(std::vector<Value>(tuple->items))));
+          }
+          else if (method == "index_of")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("tuple.index_of() expects 1 argument");
+            }
+            double idx = -1;
+            for (std::size_t i = 0; i < tuple->items.size(); ++i)
+            {
+              if (values_equal(tuple->items[i], args[0]))
+              {
+                idx = static_cast<double>(i);
+                break;
+              }
+            }
+            stack_.push_back(Value::Number(idx));
+          }
+          else
+          {
+            throw std::runtime_error("Unknown tuple method '" + method + "'");
+          }
+        }
+        // v0.7.0: Option methods
+        else if (is_obj_type(receiver, ObjType::OBJ_OPTION))
+        {
+          auto* opt = as_option(receiver);
+          if (method == "is_some")
+          {
+            stack_.push_back(Value::Bool(opt->has_value));
+          }
+          else if (method == "is_none")
+          {
+            stack_.push_back(Value::Bool(!opt->has_value));
+          }
+          else if (method == "unwrap")
+          {
+            if (!opt->has_value)
+            {
+              throw std::runtime_error("Called unwrap() on None");
+            }
+            stack_.push_back(opt->value);
+          }
+          else if (method == "unwrap_or")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("unwrap_or() expects 1 argument");
+            }
+            stack_.push_back(opt->has_value ? opt->value : args[0]);
+          }
+          else if (method == "map")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("option.map() expects 1 argument");
+            }
+            if (opt->has_value)
+            {
+              Value fn_arg = opt->value; Value mapped = call_native(args[0], 1, &fn_arg);
+              stack_.push_back(Value::Option(new_option(true, mapped)));
+            }
+            else
+            {
+              stack_.push_back(Value::Option(new_option(false, Value::Nil())));
+            }
+          }
+          else if (method == "and_then")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("option.and_then() expects 1 argument");
+            }
+            if (opt->has_value)
+            {
+              { Value fn_arg = opt->value; stack_.push_back(call_native(args[0], 1, &fn_arg)); }
+            }
+            else
+            {
+              stack_.push_back(Value::Option(new_option(false, Value::Nil())));
+            }
+          }
+          else if (method == "or_else")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("option.or_else() expects 1 argument");
+            }
+            if (opt->has_value)
+            {
+              stack_.push_back(receiver);
+            }
+            else
+            {
+              stack_.push_back(call_native(args[0], 0, nullptr));
+            }
+          }
+          else if (method == "to_list")
+          {
+            std::vector<Value> items;
+            if (opt->has_value) items.push_back(opt->value);
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else
+          {
+            throw std::runtime_error("Unknown option method '" + method + "'");
           }
         }
         else
@@ -4274,6 +5490,435 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         {
           store.events.resize(store.checkpoints.back());
           store.checkpoints.pop_back();
+        }
+        break;
+      }
+      // =====================================================================
+      // v0.7.0: Data types & data processing opcodes
+      // =====================================================================
+      case OpCode::OP_GET_ITER:
+      {
+        Value collection = pop();
+        auto* iter = new_iter_state();
+        iter->source = collection;
+        if (is_obj_type(collection, ObjType::OBJ_LIST))
+        {
+          auto* list = as_list(collection);
+          iter->position = 0;
+          iter->end = static_cast<int64_t>(list->items.size());
+          iter->step = 1;
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_RANGE))
+        {
+          auto* range = as_range(collection);
+          iter->position = range->start;
+          iter->end = range->end;
+          iter->step = range->step;
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_MAP))
+        {
+          auto* map = as_map(collection);
+          for (const auto& entry : map->entries)
+          {
+            std::unordered_map<std::string, Value> pair_map;
+            pair_map["key"] = Value::String(entry.first.c_str(), entry.first.size());
+            pair_map["value"] = entry.second;
+            iter->snapshot.push_back(Value::Map(new_map(std::move(pair_map))));
+          }
+          iter->position = 0;
+          iter->end = static_cast<int64_t>(iter->snapshot.size());
+          iter->step = 1;
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_SET))
+        {
+          auto* set = as_set(collection);
+          for (const auto& item : set->items)
+          {
+            iter->snapshot.push_back(item);
+          }
+          iter->position = 0;
+          iter->end = static_cast<int64_t>(iter->snapshot.size());
+          iter->step = 1;
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_STRING))
+        {
+          auto* str = as_string(collection);
+          for (std::size_t i = 0; i < str->length; ++i)
+          {
+            iter->snapshot.push_back(Value::String(str->chars + i, 1));
+          }
+          iter->position = 0;
+          iter->end = static_cast<int64_t>(iter->snapshot.size());
+          iter->step = 1;
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_TUPLE))
+        {
+          auto* tuple = as_tuple(collection);
+          iter->position = 0;
+          iter->end = static_cast<int64_t>(tuple->items.size());
+          iter->step = 1;
+        }
+        else
+        {
+          throw std::runtime_error(
+              "Type error: cannot iterate over " + value_type_name(collection));
+        }
+        stack_.push_back(Value::IterState(iter));
+        break;
+      }
+      case OpCode::OP_FOR_ITER:
+      {
+        const auto exit_offset = read_short(code, frame.ip);
+        Value& iter_val = stack_.back();
+        auto* iter = as_iter_state(iter_val);
+        bool done = false;
+        if (iter->step > 0)
+        {
+          done = iter->position >= iter->end;
+        }
+        else if (iter->step < 0)
+        {
+          done = iter->position <= iter->end;
+        }
+        else
+        {
+          done = true;
+        }
+        if (done)
+        {
+          frame.ip += exit_offset;
+        }
+        else
+        {
+          Value next_val;
+          if (!iter->snapshot.empty())
+          {
+            next_val = iter->snapshot[static_cast<std::size_t>(iter->position)];
+          }
+          else if (is_obj_type(iter->source, ObjType::OBJ_RANGE))
+          {
+            next_val = Value::Number(static_cast<double>(iter->position));
+          }
+          else if (is_obj_type(iter->source, ObjType::OBJ_LIST))
+          {
+            auto* list = as_list(iter->source);
+            next_val = list->items[static_cast<std::size_t>(iter->position)];
+          }
+          else if (is_obj_type(iter->source, ObjType::OBJ_TUPLE))
+          {
+            auto* tuple = as_tuple(iter->source);
+            next_val = tuple->items[static_cast<std::size_t>(iter->position)];
+          }
+          iter->position += iter->step;
+          stack_.push_back(next_val);
+        }
+        break;
+      }
+      case OpCode::OP_BUILD_SET:
+      {
+        const auto count = read_short(code, frame.ip);
+        std::unordered_set<Value, ValueHash, ValueEqual> items;
+        for (int i = count - 1; i >= 0; --i)
+        {
+          items.insert(stack_[stack_.size() - 1 - static_cast<std::size_t>(i)]);
+        }
+        for (uint16_t i = 0; i < count; ++i)
+        {
+          pop();
+        }
+        stack_.push_back(Value::Set(new_set(std::move(items))));
+        break;
+      }
+      case OpCode::OP_BUILD_TUPLE:
+      {
+        const auto count = read_short(code, frame.ip);
+        std::vector<Value> items;
+        items.reserve(count);
+        auto base = stack_.size() - count;
+        for (uint16_t i = 0; i < count; ++i)
+        {
+          items.push_back(stack_[base + i]);
+        }
+        for (uint16_t i = 0; i < count; ++i)
+        {
+          pop();
+        }
+        stack_.push_back(Value::Tuple(new_tuple(std::move(items))));
+        break;
+      }
+      case OpCode::OP_CONTAINS:
+      {
+        Value collection = pop();
+        Value element = pop();
+        bool found = false;
+        if (is_obj_type(collection, ObjType::OBJ_LIST))
+        {
+          auto* list = as_list(collection);
+          for (const auto& item : list->items)
+          {
+            if (values_equal(item, element))
+            {
+              found = true;
+              break;
+            }
+          }
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_SET))
+        {
+          auto* set = as_set(collection);
+          found = set->items.count(element) > 0;
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_MAP))
+        {
+          auto* map = as_map(collection);
+          if (element.is_string())
+          {
+            auto key = to_std_string(element);
+            found = map->entries.count(key) > 0;
+          }
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_STRING))
+        {
+          if (element.is_string())
+          {
+            auto haystack = to_std_string(collection);
+            auto needle = to_std_string(element);
+            found = haystack.find(needle) != std::string::npos;
+          }
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_RANGE))
+        {
+          if (element.is_number())
+          {
+            auto* range = as_range(collection);
+            auto val = static_cast<int64_t>(element.as_number());
+            if (range->step > 0)
+            {
+              found = val >= range->start && val < range->end && ((val - range->start) % range->step) == 0;
+            }
+            else if (range->step < 0)
+            {
+              found = val <= range->start && val > range->end && ((range->start - val) % (-range->step)) == 0;
+            }
+          }
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_TUPLE))
+        {
+          auto* tuple = as_tuple(collection);
+          for (const auto& item : tuple->items)
+          {
+            if (values_equal(item, element))
+            {
+              found = true;
+              break;
+            }
+          }
+        }
+        else
+        {
+          throw std::runtime_error(
+              "Type error: 'in' not supported for " + value_type_name(collection));
+        }
+        stack_.push_back(Value::Bool(found));
+        break;
+      }
+      case OpCode::OP_FORMAT_STRING:
+      {
+        const auto part_count = read_short(code, frame.ip);
+        std::string result;
+        auto base = stack_.size() - part_count;
+        for (uint16_t i = 0; i < part_count; ++i)
+        {
+          result += value_to_string(stack_[base + i]);
+        }
+        for (uint16_t i = 0; i < part_count; ++i)
+        {
+          pop();
+        }
+        stack_.push_back(Value::String(result.c_str(), result.size()));
+        break;
+      }
+      case OpCode::OP_UNPACK:
+      {
+        const auto count = read_short(code, frame.ip);
+        Value collection = pop();
+        if (is_obj_type(collection, ObjType::OBJ_LIST))
+        {
+          auto* list = as_list(collection);
+          if (list->items.size() != count)
+          {
+            throw std::runtime_error(
+                "Unpack error: expected " + std::to_string(count) +
+                " values, got " + std::to_string(list->items.size()));
+          }
+          for (uint16_t i = 0; i < count; ++i)
+          {
+            stack_.push_back(list->items[i]);
+          }
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_TUPLE))
+        {
+          auto* tuple = as_tuple(collection);
+          if (tuple->items.size() != count)
+          {
+            throw std::runtime_error(
+                "Unpack error: expected " + std::to_string(count) +
+                " values, got " + std::to_string(tuple->items.size()));
+          }
+          for (uint16_t i = 0; i < count; ++i)
+          {
+            stack_.push_back(tuple->items[i]);
+          }
+        }
+        else
+        {
+          throw std::runtime_error(
+              "Unpack error: can only unpack lists and tuples");
+        }
+        break;
+      }
+      case OpCode::OP_UNPACK_REST:
+      {
+        const auto before = read_short(code, frame.ip);
+        const auto after = read_short(code, frame.ip);
+        Value collection = pop();
+        std::vector<Value>* items = nullptr;
+        if (is_obj_type(collection, ObjType::OBJ_LIST))
+        {
+          items = &as_list(collection)->items;
+        }
+        else if (is_obj_type(collection, ObjType::OBJ_TUPLE))
+        {
+          items = &as_tuple(collection)->items;
+        }
+        else
+        {
+          throw std::runtime_error(
+              "Unpack error: can only unpack lists and tuples with rest");
+        }
+        auto total = static_cast<uint16_t>(items->size());
+        if (total < before + after)
+        {
+          throw std::runtime_error(
+              "Unpack error: not enough values (need at least " +
+              std::to_string(before + after) + ", got " + std::to_string(total) + ")");
+        }
+        for (uint16_t i = 0; i < before; ++i)
+        {
+          stack_.push_back((*items)[i]);
+        }
+        std::vector<Value> rest_items(items->begin() + before,
+                                       items->end() - after);
+        stack_.push_back(Value::List(new_list(std::move(rest_items))));
+        for (uint16_t i = 0; i < after; ++i)
+        {
+          stack_.push_back((*items)[total - after + i]);
+        }
+        break;
+      }
+      case OpCode::OP_SLICE:
+      {
+        const uint8_t flags = code[frame.ip++];
+        bool has_step = (flags & 0x04) != 0;
+        bool has_end = (flags & 0x02) != 0;
+        bool has_start = (flags & 0x01) != 0;
+        Value step_val = has_step ? pop() : Value::Number(1);
+        Value end_val = has_end ? pop() : Value::Nil();
+        Value start_val = has_start ? pop() : Value::Nil();
+        Value base_val = pop();
+        int64_t step = has_step ? static_cast<int64_t>(step_val.as_number()) : 1;
+        if (step == 0)
+        {
+          throw std::runtime_error("Slice step cannot be zero");
+        }
+        if (is_obj_type(base_val, ObjType::OBJ_LIST))
+        {
+          auto* list = as_list(base_val);
+          auto len = static_cast<int64_t>(list->items.size());
+          int64_t start = has_start ? static_cast<int64_t>(start_val.as_number()) : (step > 0 ? 0 : len - 1);
+          int64_t end = has_end ? static_cast<int64_t>(end_val.as_number()) : (step > 0 ? len : -len - 1);
+          if (start < 0) start += len;
+          if (end < 0) end += len;
+          start = std::max(int64_t(0), std::min(start, len));
+          end = std::max(int64_t(0), std::min(end, len));
+          std::vector<Value> result;
+          if (step > 0)
+          {
+            for (int64_t i = start; i < end; i += step)
+            {
+              result.push_back(list->items[static_cast<std::size_t>(i)]);
+            }
+          }
+          else
+          {
+            for (int64_t i = start; i > end; i += step)
+            {
+              if (i >= 0 && i < len)
+                result.push_back(list->items[static_cast<std::size_t>(i)]);
+            }
+          }
+          stack_.push_back(Value::List(new_list(std::move(result))));
+        }
+        else if (is_obj_type(base_val, ObjType::OBJ_STRING))
+        {
+          auto* str = as_string(base_val);
+          auto len = static_cast<int64_t>(str->length);
+          int64_t start = has_start ? static_cast<int64_t>(start_val.as_number()) : (step > 0 ? 0 : len - 1);
+          int64_t end = has_end ? static_cast<int64_t>(end_val.as_number()) : (step > 0 ? len : -len - 1);
+          if (start < 0) start += len;
+          if (end < 0) end += len;
+          start = std::max(int64_t(0), std::min(start, len));
+          end = std::max(int64_t(0), std::min(end, len));
+          std::string result;
+          if (step > 0)
+          {
+            for (int64_t i = start; i < end; i += step)
+            {
+              result += str->chars[static_cast<std::size_t>(i)];
+            }
+          }
+          else
+          {
+            for (int64_t i = start; i > end; i += step)
+            {
+              if (i >= 0 && i < len)
+                result += str->chars[static_cast<std::size_t>(i)];
+            }
+          }
+          stack_.push_back(Value::String(result.c_str(), result.size()));
+        }
+        else if (is_obj_type(base_val, ObjType::OBJ_TUPLE))
+        {
+          auto* tuple = as_tuple(base_val);
+          auto len = static_cast<int64_t>(tuple->items.size());
+          int64_t start = has_start ? static_cast<int64_t>(start_val.as_number()) : (step > 0 ? 0 : len - 1);
+          int64_t end = has_end ? static_cast<int64_t>(end_val.as_number()) : (step > 0 ? len : -len - 1);
+          if (start < 0) start += len;
+          if (end < 0) end += len;
+          start = std::max(int64_t(0), std::min(start, len));
+          end = std::max(int64_t(0), std::min(end, len));
+          std::vector<Value> result;
+          if (step > 0)
+          {
+            for (int64_t i = start; i < end; i += step)
+            {
+              result.push_back(tuple->items[static_cast<std::size_t>(i)]);
+            }
+          }
+          else
+          {
+            for (int64_t i = start; i > end; i += step)
+            {
+              if (i >= 0 && i < len)
+                result.push_back(tuple->items[static_cast<std::size_t>(i)]);
+            }
+          }
+          stack_.push_back(Value::Tuple(new_tuple(std::move(result))));
+        }
+        else
+        {
+          throw std::runtime_error(
+              "Slice error: cannot slice " + value_type_name(base_val));
         }
         break;
       }

@@ -1,0 +1,101 @@
+// v0.7.0 Data Types & Data Processing Examples
+// Showcasing new types, operators, and methods
+
+// === For-loops and Range ===
+emit "Fibonacci (first 10):";
+let fibs = [0, 1];
+for i in range(8) {
+  let n = fibs.len();
+  let a = fibs[n - 1];
+  let b = fibs[n - 2];
+  fibs.push(a + b);
+}
+emit fibs;
+
+// === Set type ===
+emit "Unique words:";
+let words = ["hello", "world", "hello", "neam", "world"];
+let unique_words = words.to_set();
+emit unique_words;
+
+// === Tuple type ===
+emit "Coordinate pair:";
+let point = (3.14, 2.72);
+emit f"x={point.0}, y={point.1}";
+
+// === F-strings ===
+let lang = "Neam";
+let version = "0.7.0";
+emit f"{lang} v{version} - Data Types Edition";
+
+// === Pipe operator ===
+emit "Top 3 sorted unique values:";
+let data = [5, 3, 1, 4, 2, 3, 5, 1];
+let result = data |> .unique() |> .sort() |> .reverse() |> .take(3);
+emit result;
+
+// === List methods ===
+emit "Statistics:";
+let scores = [85, 92, 78, 95, 88, 91, 76, 89];
+emit f"  Count: {scores.len()}";
+emit f"  Sum:   {scores.sum()}";
+emit f"  Mean:  {scores.mean()}";
+emit f"  Min:   {scores.min()}";
+emit f"  Max:   {scores.max()}";
+
+// === Destructuring ===
+emit "Destructuring:";
+let [first, second, ...rest] = [1, 2, 3, 4, 5];
+emit f"  first={first}, second={second}, rest={rest}";
+
+let (name, age) = ("Alice", 30);
+emit f"  name={name}, age={age}";
+
+// === In operator ===
+emit "Membership tests:";
+emit "  3 in [1,2,3]: " + (3 in [1, 2, 3]);
+emit f"  5 in range(10): {5 in range(10)}";
+let lo = "lo";
+let hello = "Hello";
+emit f"  lo in Hello: {lo in hello}";
+
+// === Slicing ===
+emit "Slicing:";
+let items = [10, 20, 30, 40, 50, 60, 70, 80];
+emit f"  items[2:5] = {items[2:5]}";
+emit f"  items[::2] = {items[::2]}";
+emit f"  items[:3]  = {items[:3]}";
+
+// === String methods ===
+emit "String processing:";
+let sentence = "the quick brown fox jumps over the lazy dog";
+let word_list = sentence.words();
+emit f"  Words: {word_list.len()}";
+emit f"  Reversed: {sentence.reverse()}";
+let fox = "fox";
+emit f"  Contains fox: {sentence.contains(fox)}";
+
+// === Enumerate and zip ===
+emit "Enumerate:";
+for item in ["alpha", "beta", "gamma"].enumerate() {
+  emit f"  {item.0}: {item.1}";
+}
+
+emit "Zip:";
+let keys = ["name", "age", "city"];
+let vals = ["Bob", "25", "NYC"];
+for pair in keys.zip(vals) {
+  emit f"  {pair.0} = {pair.1}";
+}
+
+// === Flatten and chunk ===
+emit "Flatten: " + [[1, 2], [3, 4], [5, 6]].flatten().join(", ");
+emit "Chunks:  " + [1, 2, 3, 4, 5, 6, 7].chunk(3).join(" | ");
+
+// === Option type ===
+emit "Option handling:";
+let maybe = Some(42);
+emit f"  Some(42).unwrap() = {maybe.unwrap()}";
+emit f"  None.unwrap_or(0) = {None.unwrap_or(0)}";
+emit f"  [].first() = {[].first()}";
+emit f"  [1,2,3].first() = {[1,2,3].first()}";

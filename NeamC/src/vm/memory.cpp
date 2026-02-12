@@ -115,6 +115,34 @@ void free_object(Obj* object)
       std::free(future);
       break;
     }
+    case ObjType::OBJ_RANGE:
+    {
+      auto* range = reinterpret_cast<ObjRange*>(object);
+      range->~ObjRange();
+      std::free(range);
+      break;
+    }
+    case ObjType::OBJ_ITER_STATE:
+    {
+      auto* iter = reinterpret_cast<ObjIterState*>(object);
+      iter->~ObjIterState();
+      std::free(iter);
+      break;
+    }
+    case ObjType::OBJ_SET:
+    {
+      auto* set = reinterpret_cast<ObjSet*>(object);
+      set->~ObjSet();
+      std::free(set);
+      break;
+    }
+    case ObjType::OBJ_TUPLE:
+    {
+      auto* tuple = reinterpret_cast<ObjTuple*>(object);
+      tuple->~ObjTuple();
+      std::free(tuple);
+      break;
+    }
   }
 }
 
@@ -276,6 +304,36 @@ void blacken_object(Obj* object, std::vector<Obj*>& gray_stack)
         {
           mark_value(*value);
         }
+      }
+      break;
+    }
+    case ObjType::OBJ_RANGE:
+      break;  // No GC-managed references
+    case ObjType::OBJ_ITER_STATE:
+    {
+      auto* iter = reinterpret_cast<ObjIterState*>(object);
+      mark_value(iter->source);
+      for (const auto& val : iter->snapshot)
+      {
+        mark_value(const_cast<Value&>(val));
+      }
+      break;
+    }
+    case ObjType::OBJ_SET:
+    {
+      auto* set = reinterpret_cast<ObjSet*>(object);
+      for (const auto& item : set->items)
+      {
+        mark_value(const_cast<Value&>(item));
+      }
+      break;
+    }
+    case ObjType::OBJ_TUPLE:
+    {
+      auto* tuple = reinterpret_cast<ObjTuple*>(object);
+      for (const auto& item : tuple->items)
+      {
+        mark_value(const_cast<Value&>(item));
       }
       break;
     }

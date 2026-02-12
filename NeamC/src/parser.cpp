@@ -682,7 +682,13 @@ void Parser::tokenize()
       {"args", TokenType::Args},
       {"body_template", TokenType::BodyTemplate},
       // v0.6.9: Security policy
-      {"policy", TokenType::Policy}};
+      {"policy", TokenType::Policy},
+      // v0.7.0: Data types keywords
+      {"for", TokenType::For},
+      {"in", TokenType::In},
+      {"break", TokenType::Break},
+      {"continue", TokenType::Continue},
+      {"not", TokenType::Not}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -724,7 +730,14 @@ void Parser::tokenize()
         add(TokenType::Hash);
         continue;
       case '.':
-        add(TokenType::Dot);
+        if (i + 2 < source_.size() && source_[i + 1] == '.' && source_[i + 2] == '.')
+        {
+          add(TokenType::DotDotDot, 3);
+        }
+        else
+        {
+          add(TokenType::Dot);
+        }
         continue;
       case '[':
         add(TokenType::LeftBracket);
@@ -737,6 +750,16 @@ void Parser::tokenize()
         continue;
       case '$':
         add(TokenType::Dollar);
+        continue;
+      case '|':
+        if (i + 1 < source_.size() && source_[i + 1] == '>')
+        {
+          add(TokenType::Pipe, 2);
+        }
+        else
+        {
+          ++i;  // skip unknown single |
+        }
         continue;
       case '+':
         add(TokenType::Plus);
@@ -1065,6 +1088,18 @@ StmtPtr Parser::parse_statement()
   if (match(TokenType::While))
   {
     return parse_while();
+  }
+  if (match(TokenType::For))
+  {
+    return parse_for_in();
+  }
+  if (match(TokenType::Break))
+  {
+    return parse_break_stmt();
+  }
+  if (match(TokenType::Continue))
+  {
+    return parse_continue_stmt();
   }
   if (match(TokenType::Return))
   {
@@ -3679,7 +3714,10 @@ SkillParam Parser::parse_skill_param()
       !match(TokenType::Model) && !match(TokenType::System) &&
       !match(TokenType::Timeout) && !match(TokenType::Description) &&
       !match(TokenType::Params) && !match(TokenType::BodyTemplate) &&
-      !match(TokenType::Policy))
+      !match(TokenType::Policy) &&
+      !match(TokenType::For) && !match(TokenType::In) &&
+      !match(TokenType::Break) && !match(TokenType::Continue) &&
+      !match(TokenType::Not))
   {
     error("Expected param name");
   }
@@ -4140,6 +4178,76 @@ std::vector<KnowledgeSource> Parser::parse_knowledge_sources()
 StmtPtr Parser::parse_let()
 {
   SourceSpan span = span_from_token(previous());
+
+  // v0.7.0: Check for destructuring patterns [a, b, ...rest] or (a, b)
+  if (check(TokenType::LeftBracket) || check(TokenType::LeftParen))
+  {
+    DestructurePattern pattern;
+    if (match(TokenType::LeftBracket))
+    {
+      pattern.kind = DestructurePattern::Kind::List;
+      int idx = 0;
+      do
+      {
+        if (match(TokenType::DotDotDot))
+        {
+          if (!match(TokenType::Identifier))
+          {
+            error("Expected identifier after '...'");
+          }
+          pattern.rest_name = previous().lexeme;
+          pattern.has_rest = true;
+          pattern.rest_position = idx;
+          ++idx;
+        }
+        else if (match(TokenType::Identifier))
+        {
+          pattern.names.push_back(previous().lexeme);
+          ++idx;
+        }
+        else
+        {
+          error("Expected identifier in destructuring pattern");
+        }
+      } while (match(TokenType::Comma));
+      if (!match(TokenType::RightBracket))
+      {
+        error("Expected ']' after destructuring pattern");
+      }
+    }
+    else
+    {
+      advance();  // consume (
+      pattern.kind = DestructurePattern::Kind::Tuple;
+      do
+      {
+        if (!match(TokenType::Identifier))
+        {
+          error("Expected identifier in tuple destructuring");
+        }
+        pattern.names.push_back(previous().lexeme);
+      } while (match(TokenType::Comma));
+      if (!match(TokenType::RightParen))
+      {
+        error("Expected ')' after tuple destructuring");
+      }
+    }
+    if (!match(TokenType::Equal))
+    {
+      error("Expected '=' after destructuring pattern");
+    }
+    auto initializer = parse_expression();
+    if (!match(TokenType::Semicolon))
+    {
+      error("Expected ';' after destructuring let");
+    }
+    span = merge_span(span, initializer->span);
+    auto stmt = std::make_unique<Statement>();
+    stmt->span = span;
+    stmt->node = DestructureLetStmt{std::move(pattern), std::move(initializer)};
+    return stmt;
+  }
+
   if (!match(TokenType::Identifier))
   {
     error("Expected identifier after 'let'");
@@ -4218,6 +4326,89 @@ StmtPtr Parser::parse_while()
   return make_while_stmt(std::move(condition), std::move(body), span);
 }
 
+// v0.7.0: For-in loop
+StmtPtr Parser::parse_for_in()
+{
+  SourceSpan span = span_from_token(previous());
+  std::string variable;
+  std::string second_variable;
+
+  // Check for (k, v) destructuring
+  if (match(TokenType::LeftParen))
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected identifier in for-in destructuring");
+    }
+    variable = previous().lexeme;
+    if (!match(TokenType::Comma))
+    {
+      error("Expected ',' in for-in destructuring");
+    }
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected second identifier in for-in destructuring");
+    }
+    second_variable = previous().lexeme;
+    if (!match(TokenType::RightParen))
+    {
+      error("Expected ')' after for-in destructuring");
+    }
+  }
+  else
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected identifier after 'for'");
+    }
+    variable = previous().lexeme;
+  }
+
+  if (!match(TokenType::In))
+  {
+    error("Expected 'in' after for variable");
+  }
+  auto iterable = parse_expression();
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after for-in iterable");
+  }
+  auto body = parse_block();
+  span = merge_span(span, iterable->span);
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ForInStmt{std::move(variable), std::move(second_variable),
+                          std::move(iterable), std::move(body)};
+  return stmt;
+}
+
+StmtPtr Parser::parse_break_stmt()
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after 'break'");
+  }
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = BreakStmt{};
+  return stmt;
+}
+
+StmtPtr Parser::parse_continue_stmt()
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Semicolon))
+  {
+    error("Expected ';' after 'continue'");
+  }
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ContinueStmt{};
+  return stmt;
+}
+
 ExprPtr Parser::parse_expression()
 {
   return parse_assignment();
@@ -4225,7 +4416,7 @@ ExprPtr Parser::parse_expression()
 
 ExprPtr Parser::parse_assignment()
 {
-  auto expr = parse_equality();
+  auto expr = parse_pipe();
   if (match(TokenType::Equal))
   {
     auto value = parse_assignment();
@@ -4234,21 +4425,129 @@ ExprPtr Parser::parse_assignment()
       auto span = merge_span(expr->span, value->span);
       return make_assignment(ident->name, std::move(value), span);
     }
+    // v0.7.0: Index assignment (x[i] = val)
+    if (auto idx = std::get_if<IndexExpr>(&expr->node))
+    {
+      auto span = merge_span(expr->span, value->span);
+      auto result = std::make_unique<Expression>();
+      result->span = span;
+      result->node = IndexAssignExpr{std::move(idx->base), std::move(idx->index), std::move(value)};
+      return result;
+    }
     error("Invalid assignment target");
+  }
+  return expr;
+}
+
+// v0.7.0: Pipe operator (|>) — desugars to function call
+ExprPtr Parser::parse_pipe()
+{
+  auto expr = parse_equality();
+  while (match(TokenType::Pipe))
+  {
+    // RHS is either .method(args) or fn(args)
+    if (match(TokenType::Dot))
+    {
+      // expr |> .method(args) → expr.method(args)
+      if (!match(TokenType::Identifier))
+      {
+        error("Expected method name after '|> .'");
+      }
+      auto method_name = previous().lexeme;
+      auto span = merge_span(expr->span, span_from_token(previous()));
+      auto get = std::make_unique<Expression>();
+      get->span = span;
+      get->node = GetExpr{std::move(expr), method_name};
+      if (match(TokenType::LeftParen))
+      {
+        std::vector<ExprPtr> args;
+        if (!check(TokenType::RightParen))
+        {
+          do
+          {
+            args.push_back(parse_expression());
+          } while (match(TokenType::Comma));
+        }
+        if (!match(TokenType::RightParen))
+        {
+          error("Expected ')' after pipe method arguments");
+        }
+        span = merge_span(span, span_from_token(previous()));
+        auto call = std::make_unique<Expression>();
+        call->span = span;
+        call->node = CallExpr{std::move(get), std::move(args)};
+        expr = std::move(call);
+      }
+      else
+      {
+        // No parens means call with no additional args
+        std::vector<ExprPtr> args;
+        auto call = std::make_unique<Expression>();
+        call->span = span;
+        call->node = CallExpr{std::move(get), std::move(args)};
+        expr = std::move(call);
+      }
+    }
+    else
+    {
+      // expr |> fn(args) → fn(expr, args)
+      auto fn_expr = parse_call();
+      auto span = merge_span(expr->span, fn_expr->span);
+      if (auto* call = std::get_if<CallExpr>(&fn_expr->node))
+      {
+        // Prepend expr as first argument
+        call->arguments.insert(call->arguments.begin(), std::move(expr));
+        fn_expr->span = span;
+        expr = std::move(fn_expr);
+      }
+      else
+      {
+        // Just a function name, call with expr as single arg
+        std::vector<ExprPtr> args;
+        args.push_back(std::move(expr));
+        auto result = std::make_unique<Expression>();
+        result->span = span;
+        result->node = CallExpr{std::move(fn_expr), std::move(args)};
+        expr = std::move(result);
+      }
+    }
   }
   return expr;
 }
 
 ExprPtr Parser::parse_equality()
 {
-  auto expr = parse_comparison();
+  auto expr = parse_contains();
   while (match(TokenType::BangEqual) || match(TokenType::EqualEqual))
   {
     const auto op_token = previous().type;
-    auto right = parse_comparison();
+    auto right = parse_contains();
     auto span = merge_span(expr->span, right->span);
     expr = make_binary(op_token == TokenType::EqualEqual ? BinaryOp::Equal : BinaryOp::NotEqual,
                        std::move(expr), std::move(right), span);
+  }
+  return expr;
+}
+
+// v0.7.0: Contains operator (in / not in)
+ExprPtr Parser::parse_contains()
+{
+  auto expr = parse_comparison();
+  if (match(TokenType::In))
+  {
+    auto right = parse_comparison();
+    auto span = merge_span(expr->span, right->span);
+    expr = make_binary(BinaryOp::In, std::move(expr), std::move(right), span);
+  }
+  else if (match(TokenType::Not))
+  {
+    if (!match(TokenType::In))
+    {
+      error("Expected 'in' after 'not'");
+    }
+    auto right = parse_comparison();
+    auto span = merge_span(expr->span, right->span);
+    expr = make_binary(BinaryOp::NotIn, std::move(expr), std::move(right), span);
   }
   return expr;
 }
@@ -4439,6 +4738,19 @@ ExprPtr Parser::parse_call()
     }
     if (match(TokenType::Dot))
     {
+      // v0.7.0: Tuple positional access (.0, .1, ...)
+      if (check(TokenType::Number))
+      {
+        auto num_tok = peek();
+        double val = std::strtod(num_tok.lexeme.c_str(), nullptr);
+        if (val >= 0 && val == static_cast<int>(val))
+        {
+          advance();
+          auto span = merge_span(expr->span, span_from_token(previous()));
+          expr = make_get(std::move(expr), previous().lexeme, span);
+          continue;
+        }
+      }
       if (!match(TokenType::Identifier))
       {
         error("Expected property name after '.'");
@@ -4449,7 +4761,66 @@ ExprPtr Parser::parse_call()
     }
     if (match(TokenType::LeftBracket))
     {
+      // v0.7.0: Check for slice syntax [start:end:step]
+      if (check(TokenType::Colon))
+      {
+        // [: ...] — no start
+        ExprPtr start_expr;
+        advance();  // consume ':'
+        ExprPtr end_expr;
+        ExprPtr step_expr;
+        if (!check(TokenType::RightBracket) && !check(TokenType::Colon))
+        {
+          end_expr = parse_expression();
+        }
+        if (match(TokenType::Colon))
+        {
+          if (!check(TokenType::RightBracket))
+          {
+            step_expr = parse_expression();
+          }
+        }
+        if (!match(TokenType::RightBracket))
+        {
+          error("Expected ']' after slice");
+        }
+        auto span = merge_span(expr->span, span_from_token(previous()));
+        auto slice = std::make_unique<Expression>();
+        slice->span = span;
+        slice->node = SliceExpr{std::move(expr), std::move(start_expr),
+                                 std::move(end_expr), std::move(step_expr)};
+        expr = std::move(slice);
+        continue;
+      }
       auto index = parse_expression();
+      // Check if this is a slice (colon after first expression)
+      if (match(TokenType::Colon))
+      {
+        ExprPtr end_expr;
+        ExprPtr step_expr;
+        if (!check(TokenType::RightBracket) && !check(TokenType::Colon))
+        {
+          end_expr = parse_expression();
+        }
+        if (match(TokenType::Colon))
+        {
+          if (!check(TokenType::RightBracket))
+          {
+            step_expr = parse_expression();
+          }
+        }
+        if (!match(TokenType::RightBracket))
+        {
+          error("Expected ']' after slice");
+        }
+        auto span = merge_span(expr->span, span_from_token(previous()));
+        auto slice = std::make_unique<Expression>();
+        slice->span = span;
+        slice->node = SliceExpr{std::move(expr), std::move(index),
+                                 std::move(end_expr), std::move(step_expr)};
+        expr = std::move(slice);
+        continue;
+      }
       if (!match(TokenType::RightBracket))
       {
         error("Expected ']' after index expression");
@@ -4537,6 +4908,12 @@ ExprPtr Parser::parse_primary()
   }
   if (match(TokenType::Identifier))
   {
+    // v0.7.0: F-string (f"Hello, {name}!")
+    if (previous().lexeme == "f" && check(TokenType::String))
+    {
+      advance();
+      return parse_fstring(previous().lexeme);
+    }
     return make_identifier(previous().lexeme, span_from_token(previous()));
   }
   if (match(TokenType::LeftBracket))
@@ -4599,14 +4976,109 @@ ExprPtr Parser::parse_primary()
   }
   if (match(TokenType::LeftParen))
   {
-    auto expr = parse_expression();
+    SourceSpan span = span_from_token(previous());
+    // v0.7.0: Empty tuple ()
+    if (match(TokenType::RightParen))
+    {
+      auto tuple = std::make_unique<Expression>();
+      tuple->span = merge_span(span, span_from_token(previous()));
+      tuple->node = TupleExpr{{}};
+      return tuple;
+    }
+    auto first = parse_expression();
+    // v0.7.0: Tuple with trailing comma or multiple elements
+    if (match(TokenType::Comma))
+    {
+      std::vector<ExprPtr> elements;
+      elements.push_back(std::move(first));
+      if (!check(TokenType::RightParen))
+      {
+        do
+        {
+          elements.push_back(parse_expression());
+        } while (match(TokenType::Comma));
+      }
+      if (!match(TokenType::RightParen))
+      {
+        error("Expected ')' after tuple elements");
+      }
+      auto tuple = std::make_unique<Expression>();
+      tuple->span = merge_span(span, span_from_token(previous()));
+      tuple->node = TupleExpr{std::move(elements)};
+      return tuple;
+    }
     if (!match(TokenType::RightParen))
     {
       error("Expected ')' after expression");
     }
-    return expr;
+    return first;
   }
   error("Unexpected token");
+}
+
+// v0.7.0: Parse f-string — extract {expr} segments
+ExprPtr Parser::parse_fstring(const std::string& raw)
+{
+  SourceSpan span = span_from_token(previous());
+  std::vector<FStringSegment> segments;
+  std::string text;
+  std::size_t i = 0;
+  while (i < raw.size())
+  {
+    if (raw[i] == '{')
+    {
+      if (!text.empty())
+      {
+        FStringSegment seg;
+        seg.is_expr = false;
+        seg.text = text;
+        segments.push_back(std::move(seg));
+        text.clear();
+      }
+      ++i;
+      std::string expr_str;
+      int depth = 1;
+      while (i < raw.size() && depth > 0)
+      {
+        if (raw[i] == '{') ++depth;
+        else if (raw[i] == '}') --depth;
+        if (depth > 0) expr_str += raw[i];
+        ++i;
+      }
+      // Sub-parse the expression (append ; so the parser accepts it as a statement)
+      Parser sub_parser(expr_str + ";");
+      auto sub_program = sub_parser.parse();
+      if (sub_program.statements.empty())
+      {
+        error("Empty expression in f-string");
+      }
+      auto* expr_stmt = std::get_if<ExpressionStmt>(&sub_program.statements[0]->node);
+      if (!expr_stmt)
+      {
+        error("Expected expression in f-string");
+      }
+      FStringSegment seg;
+      seg.is_expr = true;
+      seg.expr = std::move(expr_stmt->expression);
+      segments.push_back(std::move(seg));
+    }
+    else
+    {
+      text += raw[i];
+      ++i;
+    }
+  }
+  if (!text.empty())
+  {
+    FStringSegment seg;
+    seg.is_expr = false;
+    seg.text = text;
+    segments.push_back(std::move(seg));
+  }
+  auto result = std::make_unique<Expression>();
+  result->span = span;
+  result->node = FStringExpr{std::move(segments)};
+  return result;
 }
 
 std::unique_ptr<TypeExpression> Parser::parse_type_expression()
