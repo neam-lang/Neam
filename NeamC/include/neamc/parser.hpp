@@ -169,6 +169,40 @@ enum class TokenType
   Args,
   BodyTemplate,  // v0.6.8: HTTP body template
 
+  // v0.6.9: Security policy keyword
+  Policy,
+
+  // v0.7.0: Data types keywords and operators
+  For,
+  In,
+  Break,
+  Continue,
+  Not,
+  Pipe,         // |>
+  DotDotDot,    // ...
+
+  // v0.7.1: OOP — struct, impl blocks, method dispatch
+  Struct,
+  Fn,
+  SelfKw,
+  Mut,
+  Arrow,        // ->
+
+  // v0.7.1 Phase 2-5: trait, sealed, match, extend, derive, agentic patterns
+  Trait,        // "trait"
+  Sealed,       // "sealed"
+  Match,        // "match"
+  FatArrow,     // "=>"
+  Underscore,   // "_"
+  Extend,       // "extend"
+  Derive,       // "derive" (inside #[derive(...)])
+  Pipeline,     // "pipeline"
+  Dispatch,     // "dispatch"
+  Parallel,     // "parallel"
+  LoopPattern,  // "loop" (agentic loop pattern)
+  WillSet,      // "willSet"
+  DidSet,       // "didSet"
+
   Eof
 };
 
@@ -214,6 +248,7 @@ private:
   StmtPtr parse_budget(const Visibility& visibility);
   StmtPtr parse_guard(const Visibility& visibility);
   StmtPtr parse_guardchain(const Visibility& visibility);
+  StmtPtr parse_policy(const Visibility& visibility);
   StmtPtr parse_capability(const Visibility& visibility);
   StmtPtr parse_tool(const Visibility& visibility);
   StmtPtr parse_memory(const Visibility& visibility);
@@ -235,6 +270,19 @@ private:
   StmtPtr parse_checkpoint_statement();
   StmtPtr parse_rewind_statement();
   StmtPtr parse_let();
+  StmtPtr parse_for_in();
+  StmtPtr parse_break_stmt();
+  StmtPtr parse_continue_stmt();
+  StmtPtr parse_struct_decl(const Visibility& visibility);
+  StmtPtr parse_impl_block();
+  StmtPtr parse_trait_decl(const Visibility& visibility);
+  StmtPtr parse_sealed_decl(const Visibility& visibility);
+  StmtPtr parse_extend_block();
+  StmtPtr parse_pipeline_decl();
+  StmtPtr parse_dispatch_decl();
+  StmtPtr parse_parallel_decl();
+  StmtPtr parse_loop_pattern_decl();
+  ExprPtr parse_match_expr();
   StmtPtr parse_block();
   BlockStmt parse_block_node();
   StmtPtr parse_if();
@@ -256,13 +304,16 @@ private:
   std::vector<std::string> parse_import_items();
   ExprPtr parse_expression();
   ExprPtr parse_assignment();
+  ExprPtr parse_pipe();
   ExprPtr parse_equality();
+  ExprPtr parse_contains();
   ExprPtr parse_comparison();
   ExprPtr parse_term();
   ExprPtr parse_factor();
   ExprPtr parse_unary();
   ExprPtr parse_call();
   ExprPtr parse_primary();
+  ExprPtr parse_fstring(const std::string& raw);
   std::unique_ptr<TypeExpression> parse_type_expression();
 
   std::string source_;

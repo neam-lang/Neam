@@ -1,0 +1,206 @@
+// v0.7.0 Data Types & Data Processing E2E Test
+// Tests all Phase 1 features: types, operators, methods, constructs
+
+// ========================================
+// Phase 1A: ValueHash, Type Coercion, OP_SET_INDEX
+// ========================================
+
+// String + number coercion
+emit "Count: " + 5;
+// String * number repeat
+emit "x" * 3;
+// Number + string coercion
+emit 42 + " items";
+// List index assignment
+let xl = [1, 2, 3]; xl[0] = 10; emit xl;
+
+// ========================================
+// Phase 1B: For-loops, Range, Break, Continue
+// ========================================
+
+// Range iteration
+let r1 = [];
+for i in range(5) { r1.push(i); }
+emit r1;
+
+// List iteration
+let r2 = [];
+for x in [10, 20, 30] { r2.push(x); }
+emit r2;
+
+// Range with step
+let r3 = range(0, 10, 2).to_list();
+emit r3;
+
+// Break
+let r4 = [];
+for i in range(10) { if (i == 3) { break; } r4.push(i); }
+emit r4;
+
+// Continue
+let r5 = [];
+for i in range(5) { if (i == 2) { continue; } r5.push(i); }
+emit r5;
+
+// Nested loops
+let r6 = [];
+for i in range(3) {
+  for j in range(3) {
+    if (j == 1) { continue; }
+    r6.push(i * 10 + j);
+  }
+}
+emit r6;
+
+// String iteration
+let r7 = [];
+for c in "abc" { r7.push(c); }
+emit r7;
+
+// ========================================
+// Phase 1C: Set + Tuple
+// ========================================
+
+// Set deduplication
+let s1 = set(1, 2, 3, 2, 1);
+emit s1.len();
+
+// Set operations
+let s2 = set(1, 2, 3);
+let s3 = set(3, 4, 5);
+emit s2.contains(2);
+emit s2.is_subset(set(1, 2, 3, 4));
+
+// Tuple
+let t1 = (1, "hello", true);
+emit t1.0;
+emit t1.1;
+emit t1.2;
+emit t1.len();
+
+// Tuple as value
+emit (10, 20);
+emit (42,);
+
+// ========================================
+// Phase 1D: In operator, Pipe, F-strings
+// ========================================
+
+// In operator
+emit 3 in [1, 2, 3];
+emit 5 not in [1, 2, 3];
+emit 2 in range(5);
+emit "ello" in "Hello";
+emit 2 in set(1, 2, 3);
+emit 2 in (1, 2, 3);
+
+// Pipe operator
+let p1 = [3, 1, 2] |> .sort() |> .reverse();
+emit p1;
+
+// F-strings
+let name = "World";
+emit f"Hello, {name}!";
+emit f"2 + 3 = {2 + 3}";
+emit f"pi is about {3.14159}";
+
+// ========================================
+// Phase 1E: List enhanced methods
+// ========================================
+
+let numbers = [1, 2, 3, 4, 5];
+emit numbers.take(3);
+emit numbers.skip(2);
+emit numbers.contains(3);
+emit numbers.is_empty();
+emit numbers.first();
+emit numbers.last();
+emit numbers.sum();
+emit numbers.mean();
+emit numbers.min();
+emit numbers.max();
+emit numbers.join(", ");
+emit numbers.index_of(3);
+emit numbers.slice(1, 4);
+
+// Flatten, zip, enumerate
+emit [[1, 2], [3, 4]].flatten();
+emit [1, 2].zip(["a", "b"]);
+emit [10, 20].enumerate();
+emit [1, 1, 2, 2, 3].unique();
+emit [1, 2, 3, 4, 5].chunk(2);
+
+// To set
+emit [1, 2, 2, 3].to_set().len();
+
+// ========================================
+// Phase 1E: Map enhanced methods
+// ========================================
+
+let m1 = {"x": 1, "y": 2};
+emit m1.len();
+emit m1.is_empty();
+emit m1.get_or("x", 0);
+emit m1.get_or("z", 99);
+
+// ========================================
+// Phase 1E: String enhanced methods
+// ========================================
+
+let str = "Hello, World";
+emit str.len();
+emit str.is_empty();
+emit str.reverse();
+emit str.repeat(2);
+emit str.pad_left(20, ".");
+emit str.index_of("World");
+emit str.count("l");
+emit "hello world".words();
+emit "42".is_numeric();
+emit "abc".is_numeric();
+emit "42".to_number();
+
+// String indexing
+emit "Hello"[0];
+emit "Hello"[-1];
+
+// ========================================
+// Phase 1E: Option methods
+// ========================================
+
+emit Some(42).is_some();
+emit Some(42).is_none();
+emit Some(42).unwrap();
+emit Some(42).unwrap_or(0);
+emit None.is_some();
+emit None.is_none();
+emit None.unwrap_or(99);
+emit None.to_list();
+emit Some(5).to_list();
+
+// ========================================
+// Phase 1F: Destructuring
+// ========================================
+
+// List destructuring
+let [a1, b1, c1] = [10, 20, 30];
+emit a1; emit b1; emit c1;
+
+// Rest destructuring
+let [x1, ...rest1] = [1, 2, 3, 4, 5];
+emit x1;
+emit rest1;
+
+// Tuple destructuring
+let (p, q) = (100, 200);
+emit p; emit q;
+
+// ========================================
+// Phase 1F: Slicing
+// ========================================
+
+emit [10, 20, 30, 40, 50][1:4];
+emit [10, 20, 30, 40, 50][::2];
+emit "Hello, World"[0:5];
+
+emit "=== ALL E2E TESTS PASSED ===";

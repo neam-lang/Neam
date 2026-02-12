@@ -15,6 +15,7 @@
 
 #include <memory>
 
+#include "neamc/security/tool_policy.hpp"
 #include "neamc/vm/bytecode.hpp"
 #include "neamc/vm/mcp_client.hpp"
 #include "neamc/vm/memory.hpp"
@@ -127,6 +128,7 @@ private:
   {
     std::vector<std::string> required_capabilities;
     std::vector<std::string> guardchains;
+    std::string policy;  // v0.6.9: security policy reference
     std::string budget;
     std::string env;
     std::string memory;
@@ -177,9 +179,16 @@ private:
   std::unordered_map<std::string, GuardDef> guards_{};
   std::unordered_map<std::string, GuardChainDef> guardchains_{};
   std::unordered_map<std::string, ToolDef> tools_{};
+  std::unordered_map<std::string, security::PolicyDef> policies_{};  // v0.6.9
   std::unordered_map<std::string, MemoryStore> memory_stores_{};
   std::unordered_map<std::string, std::unordered_set<std::string>> entity_capabilities_{};
   std::unordered_map<std::string, std::unique_ptr<McpClient>> mcp_clients_{};
+  // v0.7.1: OOP runtime tables
+  std::unordered_map<std::string, ObjStructDef*> struct_defs_{};
+  std::unordered_map<std::string, ObjImplTable*> impl_tables_{};
+  // v0.7.1 Phase 2: trait + sealed runtime tables
+  std::unordered_map<std::string, ObjTraitDef*> trait_defs_{};
+  std::unordered_map<std::string, ObjSealedDef*> sealed_defs_{};
   ObjEnv* env_{nullptr};
   Table globals_{};
   Table interned_strings_{};

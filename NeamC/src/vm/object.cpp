@@ -171,6 +171,37 @@ ObjFuture* new_future(std::shared_ptr<async::Future<Value>> future)
   return obj_future;
 }
 
+ObjRange* new_range(int64_t start, int64_t end, int64_t step)
+{
+  auto* range = allocate_object<ObjRange>(ObjType::OBJ_RANGE);
+  range->start = start;
+  range->end = end;
+  range->step = step;
+  return range;
+}
+
+ObjIterState* new_iter_state()
+{
+  auto* iter = allocate_object<ObjIterState>(ObjType::OBJ_ITER_STATE);
+  return iter;
+}
+
+ObjSet* new_set(std::unordered_set<Value, ValueHash, ValueEqual> items)
+{
+  auto* set = allocate_object<ObjSet>(ObjType::OBJ_SET);
+  set->items = std::move(items);
+  return set;
+}
+
+ObjTuple* new_tuple(std::vector<Value> items)
+{
+  auto* tuple = allocate_object<ObjTuple>(ObjType::OBJ_TUPLE);
+  tuple->items = std::move(items);
+  tuple->hash_cache = 0;
+  tuple->hash_computed = false;
+  return tuple;
+}
+
 uint32_t hash_string(const char* key, std::size_t length)
 {
   constexpr uint32_t fnv_offset = 2166136261u;
