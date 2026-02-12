@@ -47,7 +47,10 @@ enum class BinaryOp
   Less,
   LessEqual,
   Equal,
-  NotEqual
+  NotEqual,
+  // v0.7.0
+  In,
+  NotIn
 };
 
 enum class UnaryOp
@@ -183,12 +186,100 @@ struct WithContextExpr
   ExprPtr value;
 };
 
+// v0.7.0: Index assignment (x[i] = val)
+struct IndexAssignExpr
+{
+  ExprPtr base;
+  ExprPtr index;
+  ExprPtr value;
+};
+
+// v0.7.0: Tuple expression ((a, b, c))
+struct TupleExpr
+{
+  std::vector<ExprPtr> elements;
+};
+
+// v0.7.0: F-string expression (f"Hello, {name}!")
+struct FStringSegment
+{
+  bool is_expr{false};
+  std::string text;
+  ExprPtr expr;
+};
+
+struct FStringExpr
+{
+  std::vector<FStringSegment> segments;
+};
+
+// v0.7.0: Slice expression (x[1:3:1])
+struct SliceExpr
+{
+  ExprPtr base;
+  ExprPtr start;  // may be null
+  ExprPtr end;    // may be null
+  ExprPtr step;   // may be null
+};
+
+// v0.7.1: Copy-with expression (p with (x: 5))
+struct CopyWithExpr
+{
+  ExprPtr object;
+  std::vector<std::pair<std::string, ExprPtr>> overrides;
+};
+
+// v0.7.1: Named construction (Point(x: 3, y: 4))
+struct NamedConstructExpr
+{
+  std::string type_name;
+  std::vector<std::pair<std::string, ExprPtr>> fields;
+};
+
+// v0.7.1: Property assignment (p.x = 5)
+struct SetPropertyExpr
+{
+  ExprPtr object;
+  std::string name;
+  ExprPtr value;
+};
+
+// v0.7.1 Phase 2: Match arm (must precede Expression)
+struct MatchArm
+{
+  std::string pattern_name;  // variant name or "_" for wildcard
+  std::vector<std::string> bindings;
+  ExprPtr guard;  // optional guard expression
+  ExprPtr body;
+};
+
+// v0.7.1 Phase 2: Match expression (must precede Expression)
+struct MatchExpr
+{
+  ExprPtr subject;
+  std::vector<MatchArm> arms;
+};
+
+// v0.7.0: Destructuring pattern
+struct DestructurePattern
+{
+  enum class Kind { List, Tuple, Map };
+  Kind kind;
+  std::vector<std::string> names;
+  std::string rest_name;  // for ...rest
+  bool has_rest{false};
+  int rest_position{-1};
+};
+
 struct Expression
 {
   using Variant =
       std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr,
                    GetExpr, IndexExpr, ListExpr, MapExpr, FileOpenExpr, PathLiteralExpr, TryExpr,
-                   PanicExpr, CatchPanicExpr, ContextExpr, WithContextExpr>;
+                   PanicExpr, CatchPanicExpr, ContextExpr, WithContextExpr,
+                   IndexAssignExpr, TupleExpr, FStringExpr, SliceExpr,
+                   CopyWithExpr, NamedConstructExpr, SetPropertyExpr,
+                   MatchExpr>;
   SourceSpan span;
   Variant node;
 };
@@ -327,6 +418,7 @@ struct SkillDecl
   std::string description;
   std::vector<SkillParam> params;
   FunctionDecl impl;
+  bool sensitive{false};  // v0.6.9 D10: requires human confirmation
 };
 
 // v0.6.7: External skill binding specification
@@ -364,6 +456,7 @@ struct ExternSkillDecl
   std::string description;
   std::vector<SkillParam> params;
   SkillBindingSpec binding;
+  bool sensitive{false};  // v0.6.9 D10: requires human confirmation
 };
 
 // v0.6.7: MCP server declaration
@@ -486,6 +579,17 @@ struct GuardDecl
   std::vector<std::unique_ptr<GuardHandler>> handlers;
 };
 
+// v0.6.9: Security policy declaration
+struct PolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> allow_tools;
+  std::vector<std::string> deny_tools;
+  std::vector<std::string> confirm_tools;
+  bool default_deny = true;
+};
+
 struct GuardChainDecl
 {
   Visibility visibility;
@@ -557,6 +661,148 @@ struct CheckpointStmt
 struct RewindStmt
 {
   ExprPtr target;
+};
+
+// v0.7.0: For-in loop
+struct ForInStmt
+{
+  std::string variable;
+  std::string second_variable;  // for (k, v) in map.entries()
+  ExprPtr iterable;
+  StmtPtr body;
+};
+
+// v0.7.1: Struct field definition
+struct FieldDef
+{
+  std::string name;
+  std::string type_name;  // optional type annotation
+  ExprPtr default_value;  // optional default
+  // v0.7.1 Phase 5: Property observers
+  StmtPtr will_set_body;  // optional: willSet(newVal) { ... }
+  std::string will_set_param;  // param name for willSet (default "newValue")
+  StmtPtr did_set_body;   // optional: didSet { ... }
+  ExprPtr guard_expr;     // optional: guard expression that must be true
+};
+
+// v0.7.1: Struct declaration
+struct StructDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> type_params;  // Phase 5: generic type parameters <T, U>
+  std::vector<FieldDef> fields;
+  bool is_mutable{false};
+};
+
+// v0.7.1: Method definition inside impl block
+struct MethodDef
+{
+  std::string name;
+  std::vector<std::string> parameters;  // does NOT include "self" — compiler adds it
+  StmtPtr body;  // always a BlockStmt
+  bool is_static{false};
+};
+
+// v0.7.1: Impl block
+struct ImplBlock
+{
+  std::string type_name;
+  std::optional<std::string> trait_name;  // None for inherent impl, "Trait" for trait impl
+  std::vector<MethodDef> methods;
+};
+
+// v0.7.1 Phase 2: Trait method signature (required — no body)
+struct TraitMethodSig
+{
+  std::string name;
+  std::vector<std::string> params;
+};
+
+// v0.7.1 Phase 2: Trait declaration
+struct TraitDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> supertraits;
+  std::vector<TraitMethodSig> required_methods;
+  std::vector<MethodDef> default_methods;
+};
+
+// v0.7.1 Phase 2: Sealed variant definition
+struct VariantDef
+{
+  std::string name;
+  std::vector<FieldDef> fields;
+};
+
+// v0.7.1 Phase 2: Sealed type declaration
+struct SealedDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<VariantDef> variants;
+};
+
+
+// v0.7.1 Phase 3: Extend block
+struct ExtendBlock
+{
+  std::string target;
+  std::vector<MethodDef> methods;
+};
+
+// v0.7.1 Phase 3: Derive annotation (attached to StructDecl)
+struct DeriveAnnotation
+{
+  std::vector<std::string> traits;
+};
+
+// v0.7.1 Phase 4: Pipeline declaration
+struct PipelineDecl
+{
+  std::string name;
+  std::vector<std::string> step_agents;
+};
+
+// v0.7.1 Phase 4: Dispatch declaration
+struct DispatchDecl
+{
+  std::string name;
+  std::string router_agent;
+  std::vector<std::pair<std::string, std::string>> routes;
+  std::optional<std::string> fallback_agent;
+};
+
+// v0.7.1 Phase 4: Parallel declaration
+struct ParallelDecl
+{
+  std::string name;
+  std::vector<std::string> agents;
+  std::string gather_agent;
+};
+
+// v0.7.1 Phase 4: Loop pattern declaration
+struct LoopPatternDecl
+{
+  std::string name;
+  std::string generator_agent;
+  std::string critic_agent;
+  int max_iterations{5};
+  ExprPtr stop_condition;
+};
+
+// v0.7.0: Break statement
+struct BreakStmt {};
+
+// v0.7.0: Continue statement
+struct ContinueStmt {};
+
+// v0.7.0: Destructuring let
+struct DestructureLetStmt
+{
+  DestructurePattern pattern;
+  ExprPtr initializer;
 };
 
 struct EnvConfig
@@ -633,6 +879,7 @@ struct AgentDecl
   std::vector<IdentifierRef> connected_knowledge;
   std::vector<IdentifierRef> required_capabilities;
   std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;  // v0.6.9: security policy reference
   std::optional<IdentifierRef> budget;
   std::optional<IdentifierRef> env;
   std::optional<IdentifierRef> memory;
@@ -668,10 +915,15 @@ struct Statement
       std::variant<ExpressionStmt, EmitStmt, BlockStmt, LetStmt, IfStmt, WhileStmt, ReturnStmt,
                    AssertStmt, WithStmt, TestDecl, TestSuiteDecl, FunctionDecl, SkillDecl,
                    KnowledgeDecl, BudgetDecl, GuardDecl, GuardChainDecl, CapabilityDecl,
+                   PolicyDecl,
                    ToolDecl, MemoryDecl, EnvDecl, ConnectorDecl, WorldModelDecl, PlanDecl,
                    SubagentDecl, AgentDecl, ModuleDecl, ImportDecl, ConstDecl, TypeAlias,
                    DocComment, GrantStmt, CheckpointStmt, RewindStmt,
-                   ExternSkillDecl, McpServerDecl, AdoptStmt>;
+                   ExternSkillDecl, McpServerDecl, AdoptStmt,
+                   ForInStmt, BreakStmt, ContinueStmt, DestructureLetStmt,
+                   StructDecl, ImplBlock,
+                   TraitDecl, SealedDecl, ExtendBlock,
+                   PipelineDecl, DispatchDecl, ParallelDecl, LoopPatternDecl>;
   SourceSpan span;
   Variant node;
 };

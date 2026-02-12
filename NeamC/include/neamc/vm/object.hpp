@@ -16,6 +16,7 @@
 #include "neamc/vm/external_skill.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/value.hpp"
+#include "neamc/vm/value_hash.hpp"
 
 namespace neamc::vm::async
 {
@@ -46,7 +47,20 @@ enum class ObjType
   OBJ_ENV,
   OBJ_KNOWLEDGE,
   OBJ_OPTION,
-  OBJ_FUTURE
+  OBJ_FUTURE,
+  // v0.7.0: Data types
+  OBJ_RANGE,
+  OBJ_ITER_STATE,
+  OBJ_SET,
+  OBJ_TUPLE,
+  // v0.7.1: OOP
+  OBJ_STRUCT_DEF,
+  OBJ_STRUCT,
+  OBJ_IMPL_TABLE,
+  // v0.7.1 Phase 2: trait + sealed
+  OBJ_TRAIT_DEF,
+  OBJ_SEALED_DEF,
+  OBJ_VARIANT
 };
 
 struct ObjString : Obj
@@ -90,6 +104,7 @@ struct ObjSkill : Obj
   std::vector<std::string> param_names;
   ObjFunction* impl{nullptr};              // Non-null for local skills
   ExternalSkillConfig* external{nullptr};   // Non-null for external skills (v0.6.7)
+  bool sensitive{false};                    // v0.6.9 D10: requires human confirmation
 };
 
 struct ObjContext : Obj
@@ -177,6 +192,38 @@ struct ObjFuture : Obj
   std::shared_ptr<async::Future<Value>> future;
 };
 
+// v0.7.0: Range type — represents a lazy integer sequence
+struct ObjRange : Obj
+{
+  int64_t start{0};
+  int64_t end{0};
+  int64_t step{1};
+};
+
+// v0.7.0: Iterator state — internal loop iterator
+struct ObjIterState : Obj
+{
+  Value source{Value::Nil()};
+  int64_t position{0};
+  int64_t end{0};
+  int64_t step{1};
+  std::vector<Value> snapshot;
+};
+
+// v0.7.0: Set type — unordered collection of unique hashable values
+struct ObjSet : Obj
+{
+  std::unordered_set<Value, ValueHash, ValueEqual> items;
+};
+
+// v0.7.0: Tuple type — immutable fixed-size collection
+struct ObjTuple : Obj
+{
+  std::vector<Value> items;
+  uint32_t hash_cache{0};
+  bool hash_computed{false};
+};
+
 ObjString* allocate_string(char* chars, std::size_t length, uint32_t hash);
 ObjString* copy_string(const char* chars, std::size_t length);
 ObjString* take_string(char* chars, std::size_t length);
@@ -198,6 +245,28 @@ ObjKnowledge* new_knowledge(ObjString* name, ObjString* vector_store, ObjString*
                             RetrievalStrategyOptions strategy_options = {});
 ObjOption* new_option(bool has_value, Value value);
 ObjFuture* new_future(std::shared_ptr<async::Future<Value>> future);
+// v0.7.0: New type factories
+ObjRange* new_range(int64_t start, int64_t end, int64_t step);
+ObjIterState* new_iter_state();
+ObjSet* new_set(std::unordered_set<Value, ValueHash, ValueEqual> items);
+ObjTuple* new_tuple(std::vector<Value> items);
+
+// v0.7.1: Struct type system — forward declares (definitions in struct_type.hpp)
+struct ObjStructDef;
+struct ObjStruct;
+struct ObjImplTable;
+ObjStructDef* new_struct_def(const std::string& name, const std::vector<std::string>& field_names,
+                             bool is_mutable);
+ObjStruct* new_struct(ObjStructDef* def, std::vector<Value> field_values);
+ObjImplTable* new_impl_table();
+
+// v0.7.1 Phase 2: Trait + sealed type system — forward declares (definitions in sealed_type.hpp)
+struct ObjTraitDef;
+struct ObjSealedDef;
+struct ObjVariant;
+ObjTraitDef* new_trait_def(const std::string& name);
+ObjSealedDef* new_sealed_def(const std::string& name);
+ObjVariant* new_variant(ObjSealedDef* sealed_def, uint16_t tag, std::vector<Value> field_values);
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

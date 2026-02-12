@@ -1,0 +1,77 @@
+// v0.7.1 Phase 5: Property Observers + Generics — E2E smoke test
+
+// === PROPERTY OBSERVERS ===
+
+// 1. Basic willSet/didSet on mutable struct
+mut struct Temperature {
+  value: number {
+    willSet(newVal) {
+      emit f"willSet: {newVal}";
+    }
+    didSet {
+      emit f"didSet: done";
+    }
+  }
+}
+
+let t = Temperature(25);
+emit f"1. initial = {t.value}";
+t.value = 30;
+emit f"2. after set = {t.value}";
+
+// 2. Guard expression
+mut struct PositiveCounter {
+  count: number {
+    guard count >= 0;
+  }
+}
+
+let pc = PositiveCounter(5);
+emit f"3. pc = {pc.count}";
+pc.count = 10;
+emit f"4. pc = {pc.count}";
+
+// 3. Struct without observers still works
+struct Point { x: number, y: number }
+
+impl Point {
+  fn magnitude(self) {
+    return self.x * self.x + self.y * self.y;
+  }
+}
+
+let p = Point(3, 4);
+emit f"5. magnitude = {p.magnitude()}";
+
+// 4. Generic type params (syntax parsing — type-erased at runtime)
+struct Pair<T, U> { first: T, second: U }
+
+let pair = Pair("hello", 42);
+emit f"6. pair = {pair}";
+emit f"7. first = {pair.first}";
+emit f"8. second = {pair.second}";
+
+// 5. All phases combined
+sealed Result {
+  Ok(value: string),
+  Err(error: string)
+}
+
+let r = Result.Ok("success");
+let msg = match r {
+  Ok(value) => f"got: {value}",
+  Err(error) => f"err: {error}",
+};
+emit f"9. result = {msg}";
+
+trait Describable {
+  fn describe(self);
+}
+
+impl Describable for Point {
+  fn describe(self) {
+    return f"Point({self.x}, {self.y})";
+  }
+}
+
+emit f"10. {p.describe()}";

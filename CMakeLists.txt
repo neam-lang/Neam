@@ -107,6 +107,11 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
+# Disable benchmark tests for cross-compilation (avoids -Werror issues)
+if(CMAKE_CROSSCOMPILING)
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+endif()
+
 FetchContent_GetProperties(usearch)
 if (NOT usearch_POPULATED)
     FetchContent_Populate(usearch)
@@ -128,6 +133,9 @@ endif ()
 FetchContent_MakeAvailable(googletest benchmark)
 if (TARGET benchmark)
     set_target_properties(benchmark PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(CMAKE_CROSSCOMPILING)
+        target_compile_options(benchmark PRIVATE -Wno-switch)
+    endif()
 endif ()
 
 find_package(CURL REQUIRED)
@@ -178,6 +186,14 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/deploy/kubernetes.cpp
     NeamC/src/deploy/terraform.cpp
     NeamC/src/deploy/deploy_scripts.cpp
+    NeamC/src/security/audit_log.cpp
+    NeamC/src/security/tool_policy.cpp
+    NeamC/src/security/injection_scanner.cpp
+    NeamC/src/security/network_policy.cpp
+    NeamC/src/security/credential_manager.cpp
+    NeamC/src/security/rate_limiter.cpp
+    NeamC/src/security/behavioral_monitor.cpp
+    NeamC/src/security/human_in_the_loop.cpp
     NeamC/src/vm/memory.cpp
     NeamC/src/vm/object.cpp
     NeamC/src/vm/external_skill.cpp
@@ -191,7 +207,10 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/llm/openai_adapter.cpp
     NeamC/src/vm/llm/provider_factory.cpp
     NeamC/src/vm/knowledge.cpp
+    NeamC/src/vm/struct_type.cpp
+    NeamC/src/vm/sealed_type.cpp
     NeamC/src/vm/value.cpp
+    NeamC/src/vm/value_hash.cpp
     NeamC/src/vm/runtime_type.cpp
     NeamC/src/vm/bytecode.cpp
     NeamC/src/vm/vm.cpp
@@ -455,6 +474,26 @@ add_executable(v068_test
 )
 target_link_libraries(v068_test PRIVATE neamc_core gtest_main)
 add_test(NAME v068_test COMMAND v068_test)
+
+# ============================================================================
+# v0.6.9 Test Targets
+# ============================================================================
+
+add_executable(v069_test
+    tests/unit/v069_test.cpp
+)
+target_link_libraries(v069_test PRIVATE neamc_core gtest_main)
+add_test(NAME v069_test COMMAND v069_test)
+
+# ============================================================================
+# v0.7.0 Test Targets
+# ============================================================================
+
+add_executable(v070_test
+    tests/unit/v070_test.cpp
+)
+target_link_libraries(v070_test PRIVATE neamc_core gtest_main)
+add_test(NAME v070_test COMMAND v070_test)
 
 # ============================================================================
 # Install targets (v0.6.5)

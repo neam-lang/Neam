@@ -10,7 +10,7 @@ namespace neamc::llm
 {
 namespace
 {
-std::string value_to_string(const neamc::vm::Value& value)
+std::string extract_string_value(const neamc::vm::Value& value)
 {
   if (!value.is_string())
   {
@@ -41,8 +41,8 @@ nlohmann::json objlist_to_messages_json(const neamc::vm::ObjList* list)
     {
       throw std::runtime_error("Message map missing role/content");
     }
-    messages.push_back({{"role", value_to_string(role_it->second)},
-                        {"content", value_to_string(content_it->second)}});
+    messages.push_back({{"role", extract_string_value(role_it->second)},
+                        {"content", extract_string_value(content_it->second)}});
   }
   return messages;
 }

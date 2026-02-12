@@ -524,6 +524,8 @@ void Compiler::emit_statement(const Statement& stmt)
           emit_build_map(chunk_, node.params.size());
           chunk_.write_op(OpCode::OP_CONST);
           chunk_.write_short(static_cast<uint16_t>(fn_constant));
+          // v0.6.9 D10: sensitive marker
+          chunk_.write_op(node.sensitive ? OpCode::OP_TRUE : OpCode::OP_FALSE);
           chunk_.write_op(OpCode::OP_DEFINE_SKILL);
         }
         else if constexpr (std::is_same_v<T, KnowledgeDecl>)
@@ -728,6 +730,42 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "guards")));
           emit_identifier_list(chunk_, node.guards);
           emit_build_map(chunk_, 1);
+          chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+        }
+        // v0.6.9: Policy codegen
+        else if constexpr (std::is_same_v<T, PolicyDecl>)
+        {
+          // Emit "allow" key + list
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "allow")));
+          emit_string_list(chunk_, node.allow_tools);
+
+          // Emit "deny" key + list
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "deny")));
+          emit_string_list(chunk_, node.deny_tools);
+
+          // Emit "confirm" key + list
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "confirm")));
+          emit_string_list(chunk_, node.confirm_tools);
+
+          // Emit "default_deny" key + value
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(
+              static_cast<uint16_t>(emit_string_constant(chunk_, "default_deny")));
+          if (node.default_deny)
+          {
+            chunk_.write_op(OpCode::OP_TRUE);
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_FALSE);
+          }
+
+          emit_build_map(chunk_, 4);
           chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
           chunk_.write_short(
               static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
@@ -1066,6 +1104,18 @@ void Compiler::emit_statement(const Statement& stmt)
           emit_identifier_list(chunk_, node.required_capabilities);
           emit_identifier_list(chunk_, node.guardchains);
 
+          // v0.6.9: emit policy reference
+          if (node.policy.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.policy->name)));
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+
           if (node.budget.has_value())
           {
             chunk_.write_op(OpCode::OP_CONST);
@@ -1267,6 +1317,8 @@ void Compiler::emit_statement(const Statement& stmt)
               break;
           }
           emit_build_map(chunk_, config_count);
+          // v0.6.9 D10: sensitive marker
+          chunk_.write_op(node.sensitive ? OpCode::OP_TRUE : OpCode::OP_FALSE);
           chunk_.write_op(OpCode::OP_DEFINE_EXTERN_SKILL);
         }
         else if constexpr (std::is_same_v<T, McpServerDecl>)
@@ -1340,6 +1392,491 @@ void Compiler::emit_statement(const Statement& stmt)
             chunk_.write_op(OpCode::OP_NIL);
           }
           chunk_.write_op(OpCode::OP_ADOPT_MCP_TOOLS);
+        }
+        // v0.7.0: For-in loop
+        else if constexpr (std::is_same_v<T, ForInStmt>)
+        {
+          // Emit iterable
+          emit_expression(*node.iterable);
+          chunk_.write_op(OpCode::OP_GET_ITER);
+
+          // Track the iterator as a hidden local so stack slot indices are correct.
+          // Use an outer scope for the iterator (persists across iterations).
+          begin_scope();
+          locals_.push_back(Local{"$iter", scope_depth_});
+
+          // Record loop start for continue
+          const auto loop_start = chunk_.code().size();
+          loop_starts_.push_back(loop_start);
+          break_patches_.emplace_back();
+          // Save local count before loop body locals (just the iterator)
+          loop_local_counts_.push_back(locals_.size());
+
+          // OP_FOR_ITER with exit placeholder
+          chunk_.write_op(OpCode::OP_FOR_ITER);
+          const auto exit_jump = chunk_.code().size();
+          chunk_.write_short(0);
+
+          // Define loop variable as local in inner scope
+          // (OP_FOR_ITER pushes next value onto stack)
+          begin_scope();
+          locals_.push_back(Local{node.variable, scope_depth_});
+
+          // If second variable exists (for (k,v) destructuring), we need to
+          // handle it by pushing map key and value
+          if (!node.second_variable.empty())
+          {
+            locals_.push_back(Local{node.second_variable, scope_depth_});
+            // Push a nil placeholder for second var (users use entry.key, entry.value)
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+
+          // Emit body
+          const auto* body_stmt = &node.body->node;
+          if (auto* block = std::get_if<BlockStmt>(body_stmt))
+          {
+            for (const auto& s : block->statements)
+            {
+              emit_statement(*s);
+            }
+          }
+          else
+          {
+            emit_statement(*node.body);
+          }
+
+          // Pop locals declared in body scope (loop var + any body locals, NOT iterator)
+          end_scope();
+
+          // OP_LOOP back to OP_FOR_ITER
+          chunk_.write_op(OpCode::OP_LOOP);
+          const auto loop_back_index = chunk_.code().size();
+          chunk_.write_short(0);
+          const auto back_offset = chunk_.code().size() - loop_start;
+          if (back_offset > std::numeric_limits<uint16_t>::max())
+          {
+            throw std::runtime_error("Loop body too large");
+          }
+          chunk_.patch_short(loop_back_index, static_cast<uint16_t>(back_offset));
+
+          // Patch exit jump (OP_FOR_ITER jumps here when done)
+          const auto exit_offset = chunk_.code().size() - exit_jump - 2;
+          if (exit_offset > std::numeric_limits<uint16_t>::max())
+          {
+            throw std::runtime_error("For-in exit jump too large");
+          }
+          chunk_.patch_short(exit_jump, static_cast<uint16_t>(exit_offset));
+
+          // Pop iterator via end_scope of the outer loop scope
+          end_scope();
+
+          // Patch breaks — break target is here (after iterator scope cleaned up)
+          for (auto break_offset : break_patches_.back())
+          {
+            const auto bp_offset = chunk_.code().size() - break_offset - 2;
+            chunk_.patch_short(break_offset, static_cast<uint16_t>(bp_offset));
+          }
+          break_patches_.pop_back();
+          loop_starts_.pop_back();
+          loop_local_counts_.pop_back();
+        }
+        else if constexpr (std::is_same_v<T, BreakStmt>)
+        {
+          if (break_patches_.empty())
+          {
+            throw std::runtime_error("'break' used outside of loop");
+          }
+          // Pop all body locals (loop var + anything declared in body)
+          const auto base_locals = loop_local_counts_.back();
+          for (std::size_t i = locals_.size(); i > base_locals; --i)
+          {
+            chunk_.write_op(OpCode::OP_POP);
+          }
+          // Pop the iterator (hidden $iter local in outer loop scope)
+          chunk_.write_op(OpCode::OP_POP);
+          chunk_.write_op(OpCode::OP_JUMP);
+          break_patches_.back().push_back(chunk_.code().size());
+          chunk_.write_short(0);
+        }
+        else if constexpr (std::is_same_v<T, ContinueStmt>)
+        {
+          if (loop_starts_.empty())
+          {
+            throw std::runtime_error("'continue' used outside of loop");
+          }
+          // Pop all locals declared inside the loop scope (but NOT the iterator)
+          const auto base_locals = loop_local_counts_.back();
+          for (std::size_t i = locals_.size(); i > base_locals; --i)
+          {
+            chunk_.write_op(OpCode::OP_POP);
+          }
+          chunk_.write_op(OpCode::OP_LOOP);
+          const auto target = chunk_.code().size();
+          chunk_.write_short(0);
+          const auto offset = chunk_.code().size() - loop_starts_.back();
+          if (offset > std::numeric_limits<uint16_t>::max())
+          {
+            throw std::runtime_error("Continue jump too large");
+          }
+          chunk_.patch_short(target, static_cast<uint16_t>(offset));
+        }
+        // v0.7.0: Destructuring let
+        else if constexpr (std::is_same_v<T, DestructureLetStmt>)
+        {
+          emit_expression(*node.initializer);
+          const auto& pattern = node.pattern;
+          if (pattern.has_rest)
+          {
+            // Count names before and after rest
+            int before = pattern.rest_position;
+            int after = static_cast<int>(pattern.names.size()) - before;
+            chunk_.write_op(OpCode::OP_UNPACK_REST);
+            chunk_.write_short(static_cast<uint16_t>(before));
+            chunk_.write_short(static_cast<uint16_t>(after));
+            // Stack now has (bottom to top): [name0, name1, ..., rest_list, nameN, ...]
+            if (scope_depth_ == 0)
+            {
+              // OP_DEFINE_GLOBAL takes from stack top, so define in reverse order:
+              // after names (reverse), rest, before names (reverse)
+              for (int i = static_cast<int>(pattern.names.size()) - 1; i >= before; --i)
+              {
+                const auto nc = chunk_.add_constant(
+                    vm::Value::String(pattern.names[i].c_str(), pattern.names[i].size()));
+                chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+                chunk_.write_short(static_cast<uint16_t>(nc));
+              }
+              // Rest variable
+              const auto nc = chunk_.add_constant(
+                  vm::Value::String(pattern.rest_name.c_str(), pattern.rest_name.size()));
+              chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+              chunk_.write_short(static_cast<uint16_t>(nc));
+              // Before names (reverse)
+              for (int i = before - 1; i >= 0; --i)
+              {
+                const auto nc2 = chunk_.add_constant(
+                    vm::Value::String(pattern.names[i].c_str(), pattern.names[i].size()));
+                chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+                chunk_.write_short(static_cast<uint16_t>(nc2));
+              }
+            }
+            else
+            {
+              // For locals, just register in forward order (stack slots match)
+              for (int i = 0; i < before; ++i)
+              {
+                locals_.push_back(Local{pattern.names[i], scope_depth_});
+              }
+              locals_.push_back(Local{pattern.rest_name, scope_depth_});
+              for (int i = before; i < static_cast<int>(pattern.names.size()); ++i)
+              {
+                locals_.push_back(Local{pattern.names[i], scope_depth_});
+              }
+            }
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_UNPACK);
+            chunk_.write_short(static_cast<uint16_t>(pattern.names.size()));
+            if (scope_depth_ == 0)
+            {
+              // OP_DEFINE_GLOBAL takes from stack top, so define in reverse order
+              for (int i = static_cast<int>(pattern.names.size()) - 1; i >= 0; --i)
+              {
+                const auto nc = chunk_.add_constant(
+                    vm::Value::String(pattern.names[i].c_str(), pattern.names[i].size()));
+                chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+                chunk_.write_short(static_cast<uint16_t>(nc));
+              }
+            }
+            else
+            {
+              for (const auto& name : pattern.names)
+              {
+                locals_.push_back(Local{name, scope_depth_});
+              }
+            }
+          }
+        }
+        // v0.7.1: Struct declaration
+        else if constexpr (std::is_same_v<T, StructDecl>)
+        {
+          // Push field names onto stack, then OP_DEFINE_STRUCT
+          for (const auto& field : node.fields)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, field.name)));
+          }
+          chunk_.write_op(OpCode::OP_DEFINE_STRUCT);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name)));
+          chunk_.write_byte(static_cast<uint8_t>(node.fields.size()));
+          chunk_.write_byte(node.is_mutable ? 1 : 0);
+
+          // v0.7.1 Phase 5: Compile property observer functions
+          for (const auto& field : node.fields)
+          {
+            if (field.will_set_body)
+            {
+              // Compile willSet as fn TypeName.$willSet_fieldName(self, newValue)
+              const auto* block_ptr = std::get_if<BlockStmt>(&field.will_set_body->node);
+              if (block_ptr)
+              {
+                auto fn_value = compile_block_function(
+                    node.name + ".$willSet_" + field.name,
+                    {"self", field.will_set_param}, *block_ptr);
+                const auto fn_const = chunk_.add_constant(std::move(fn_value));
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(fn_const));
+                chunk_.write_op(OpCode::OP_SET_FIELD_OBSERVER);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, node.name)));
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, field.name)));
+                chunk_.write_byte(0);  // kind = willSet
+              }
+            }
+            if (field.did_set_body)
+            {
+              const auto* block_ptr = std::get_if<BlockStmt>(&field.did_set_body->node);
+              if (block_ptr)
+              {
+                auto fn_value = compile_block_function(
+                    node.name + ".$didSet_" + field.name,
+                    {"self"}, *block_ptr);
+                const auto fn_const = chunk_.add_constant(std::move(fn_value));
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(fn_const));
+                chunk_.write_op(OpCode::OP_SET_FIELD_OBSERVER);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, node.name)));
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, field.name)));
+                chunk_.write_byte(1);  // kind = didSet
+              }
+            }
+            if (field.guard_expr)
+            {
+              // Compile guard as fn TypeName.$guard_fieldName(self, value) { return expr; }
+              // We need to wrap the expression in a function
+              auto guard_body = std::make_unique<Statement>();
+              guard_body->node = BlockStmt{{[&]() {
+                auto ret = std::make_unique<Statement>();
+                ret->node = ReturnStmt{std::move(const_cast<FieldDef&>(field).guard_expr)};
+                std::vector<StmtPtr> stmts;
+                stmts.push_back(std::move(ret));
+                return stmts;
+              }()}};
+
+              const auto* block_ptr = std::get_if<BlockStmt>(&guard_body->node);
+              if (block_ptr)
+              {
+                auto fn_value = compile_block_function(
+                    node.name + ".$guard_" + field.name,
+                    {"self", field.name}, *block_ptr);
+                const auto fn_const = chunk_.add_constant(std::move(fn_value));
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(fn_const));
+                chunk_.write_op(OpCode::OP_SET_FIELD_OBSERVER);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, node.name)));
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, field.name)));
+                chunk_.write_byte(2);  // kind = guard
+              }
+            }
+          }
+        }
+        // v0.7.1: Impl block
+        else if constexpr (std::is_same_v<T, ImplBlock>)
+        {
+          for (const auto& method : node.methods)
+          {
+            // Compile method as a function.
+            // For instance methods, prepend "self" as first parameter.
+            std::vector<std::string> full_params;
+            if (!method.is_static)
+            {
+              full_params.push_back("self");
+            }
+            for (const auto& p : method.parameters)
+            {
+              full_params.push_back(p);
+            }
+
+            const auto* block_ptr = std::get_if<BlockStmt>(&method.body->node);
+            if (!block_ptr)
+            {
+              throw std::runtime_error("Method body must be a block");
+            }
+            auto fn_value = compile_block_function(
+                node.type_name + "." + method.name, full_params, *block_ptr);
+            const auto fn_const = chunk_.add_constant(std::move(fn_value));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(fn_const));
+
+            // If this is a trait impl, use OP_IMPL_TRAIT
+            if (node.trait_name.has_value())
+            {
+              chunk_.write_op(OpCode::OP_IMPL_TRAIT);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, node.trait_name.value())));
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, node.type_name)));
+              chunk_.write_byte(method.is_static ? 1 : 0);
+            }
+            else
+            {
+              chunk_.write_op(OpCode::OP_IMPL_METHOD);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, node.type_name)));
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, method.name)));
+              chunk_.write_byte(method.is_static ? 1 : 0);
+            }
+          }
+        }
+        // v0.7.1 Phase 2: Trait declaration
+        else if constexpr (std::is_same_v<T, TraitDecl>)
+        {
+          // Compile default methods as functions first
+          for (const auto& method : node.default_methods)
+          {
+            std::vector<std::string> full_params;
+            if (!method.is_static) full_params.push_back("self");
+            for (const auto& p : method.parameters) full_params.push_back(p);
+            const auto* block_ptr = std::get_if<BlockStmt>(&method.body->node);
+            if (!block_ptr) throw std::runtime_error("Default method body must be a block");
+            auto fn_value = compile_block_function(
+                node.name + "." + method.name, full_params, *block_ptr);
+            chunk_.emit_constant(std::move(fn_value));
+          }
+          // Push required method names
+          for (const auto& req : node.required_methods)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, req.name)));
+          }
+          chunk_.write_op(OpCode::OP_DEFINE_TRAIT);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name)));
+          chunk_.write_byte(static_cast<uint8_t>(node.required_methods.size()));
+          chunk_.write_byte(static_cast<uint8_t>(node.default_methods.size()));
+        }
+        // v0.7.1 Phase 2: Sealed type declaration
+        else if constexpr (std::is_same_v<T, SealedDecl>)
+        {
+          // Push variant definitions: for each variant, push name + field names
+          for (const auto& variant : node.variants)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, variant.name)));
+            for (const auto& field : variant.fields)
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, field.name)));
+            }
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(variant.fields.size())));
+          }
+          chunk_.write_op(OpCode::OP_DEFINE_SEALED);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name)));
+          chunk_.write_byte(static_cast<uint8_t>(node.variants.size()));
+        }
+        // v0.7.1 Phase 3: Extend block — same as impl block, adds methods to existing type
+        else if constexpr (std::is_same_v<T, ExtendBlock>)
+        {
+          for (const auto& method : node.methods)
+          {
+            std::vector<std::string> full_params;
+            if (!method.is_static) full_params.push_back("self");
+            for (const auto& p : method.parameters) full_params.push_back(p);
+            const auto* block_ptr = std::get_if<BlockStmt>(&method.body->node);
+            if (!block_ptr) throw std::runtime_error("Extend method body must be a block");
+            auto fn_value = compile_block_function(
+                node.target + "." + method.name, full_params, *block_ptr);
+            const auto fn_const = chunk_.add_constant(std::move(fn_value));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(fn_const));
+            chunk_.write_op(OpCode::OP_IMPL_METHOD);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.target)));
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, method.name)));
+            chunk_.write_byte(method.is_static ? 1 : 0);
+          }
+        }
+        // v0.7.1 Phase 4: Agentic patterns — compiled to function definitions
+        else if constexpr (std::is_same_v<T, PipelineDecl>)
+        {
+          // Generate a function: fn PipelineName_run(input) { ... }
+          // For now, register the pipeline name as a global with step list
+          for (const auto& step : node.step_agents)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, step)));
+          }
+          chunk_.write_op(OpCode::OP_BUILD_LIST);
+          chunk_.write_short(static_cast<uint16_t>(node.step_agents.size()));
+          chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name + "_steps")));
+        }
+        else if constexpr (std::is_same_v<T, DispatchDecl>)
+        {
+          // Store dispatch config as a global map
+          for (const auto& [route_key, agent_name] : node.routes)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, route_key)));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, agent_name)));
+          }
+          chunk_.write_op(OpCode::OP_BUILD_MAP);
+          chunk_.write_short(static_cast<uint16_t>(node.routes.size()));
+          chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name + "_routes")));
+        }
+        else if constexpr (std::is_same_v<T, ParallelDecl>)
+        {
+          for (const auto& agent : node.agents)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, agent)));
+          }
+          chunk_.write_op(OpCode::OP_BUILD_LIST);
+          chunk_.write_short(static_cast<uint16_t>(node.agents.size()));
+          chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name + "_agents")));
+        }
+        else if constexpr (std::is_same_v<T, LoopPatternDecl>)
+        {
+          // Store loop pattern config as globals
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.generator_agent)));
+          chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name + "_generator")));
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.critic_agent)));
+          chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name + "_critic")));
+          chunk_.emit_constant(vm::Value::Number(static_cast<double>(node.max_iterations)));
+          chunk_.write_op(OpCode::OP_DEFINE_GLOBAL);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name + "_max_iterations")));
         }
       },
       stmt.node);
@@ -1438,6 +1975,13 @@ void Compiler::emit_expression(const Expression& expr)
               break;
             case BinaryOp::NotEqual:
               chunk_.write_op(OpCode::OP_EQUAL);
+              chunk_.write_op(OpCode::OP_NOT);
+              break;
+            case BinaryOp::In:
+              chunk_.write_op(OpCode::OP_CONTAINS);
+              break;
+            case BinaryOp::NotIn:
+              chunk_.write_op(OpCode::OP_CONTAINS);
               chunk_.write_op(OpCode::OP_NOT);
               break;
             default:
@@ -1578,6 +2122,221 @@ void Compiler::emit_expression(const Expression& expr)
           emit_expression(*node.value);
           chunk_.write_op(OpCode::OP_CALL_NATIVE);
           chunk_.write_byte(3);
+        }
+        // v0.7.0: Index assignment (x[i] = val)
+        else if constexpr (std::is_same_v<T, IndexAssignExpr>)
+        {
+          emit_expression(*node.base);
+          emit_expression(*node.index);
+          emit_expression(*node.value);
+          chunk_.write_op(OpCode::OP_SET_INDEX);
+        }
+        // v0.7.0: Tuple literal
+        else if constexpr (std::is_same_v<T, TupleExpr>)
+        {
+          for (const auto& element : node.elements)
+          {
+            emit_expression(*element);
+          }
+          chunk_.write_op(OpCode::OP_BUILD_TUPLE);
+          chunk_.write_short(static_cast<uint16_t>(node.elements.size()));
+        }
+        // v0.7.0: F-string
+        else if constexpr (std::is_same_v<T, FStringExpr>)
+        {
+          for (const auto& segment : node.segments)
+          {
+            if (segment.is_expr)
+            {
+              emit_expression(*segment.expr);
+            }
+            else
+            {
+              chunk_.emit_constant(vm::Value::String(segment.text.c_str(), segment.text.size()));
+            }
+          }
+          chunk_.write_op(OpCode::OP_FORMAT_STRING);
+          chunk_.write_short(static_cast<uint16_t>(node.segments.size()));
+        }
+        // v0.7.0: Slice expression
+        else if constexpr (std::is_same_v<T, SliceExpr>)
+        {
+          emit_expression(*node.base);
+          uint8_t flags = 0;
+          if (node.start)
+          {
+            emit_expression(*node.start);
+            flags |= 0x01;
+          }
+          if (node.end)
+          {
+            emit_expression(*node.end);
+            flags |= 0x02;
+          }
+          if (node.step)
+          {
+            emit_expression(*node.step);
+            flags |= 0x04;
+          }
+          chunk_.write_op(OpCode::OP_SLICE);
+          chunk_.write_byte(flags);
+        }
+        // v0.7.1: Copy-with expression
+        else if constexpr (std::is_same_v<T, CopyWithExpr>)
+        {
+          emit_expression(*node.object);
+          for (const auto& [name, value] : node.overrides)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, name)));
+            emit_expression(*value);
+          }
+          chunk_.write_op(OpCode::OP_COPY_WITH);
+          chunk_.write_byte(static_cast<uint8_t>(node.overrides.size()));
+        }
+        // v0.7.1: Named construction
+        else if constexpr (std::is_same_v<T, NamedConstructExpr>)
+        {
+          // Push field name/value pairs, then OP_CONSTRUCT_NAMED
+          for (const auto& [name, value] : node.fields)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, name)));
+            emit_expression(*value);
+          }
+          chunk_.write_op(OpCode::OP_CONSTRUCT_NAMED);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.type_name)));
+          chunk_.write_byte(static_cast<uint8_t>(node.fields.size()));
+        }
+        // v0.7.1: Property assignment (p.x = val)
+        else if constexpr (std::is_same_v<T, SetPropertyExpr>)
+        {
+          emit_expression(*node.object);
+          emit_expression(*node.value);
+          chunk_.write_op(OpCode::OP_SET_PROPERTY);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.name)));
+        }
+        // v0.7.1 Phase 2: Match expression
+        else if constexpr (std::is_same_v<T, MatchExpr>)
+        {
+          // Compile match subject onto stack.
+          emit_expression(*node.subject);
+
+          // Track the subject as a hidden local so binding slots align correctly.
+          auto subject_slot = static_cast<uint16_t>(locals_.size());
+          locals_.push_back(Local{"$match_subject", scope_depth_});
+
+          std::vector<std::size_t> exit_jumps;
+          auto arm_locals_start = locals_.size();  // includes $match_subject
+
+          for (std::size_t i = 0; i < node.arms.size(); ++i)
+          {
+            const auto& arm = node.arms[i];
+            bool is_last = (i == node.arms.size() - 1);
+
+            if (arm.pattern_name == "_")
+            {
+              // Wildcard — always matches. Pop subject, emit body.
+              chunk_.write_op(OpCode::OP_POP);
+              emit_expression(*arm.body);
+              // Body result replaces the subject on the stack.
+              if (!is_last)
+              {
+                exit_jumps.push_back(emit_jump(chunk_, OpCode::OP_JUMP));
+              }
+              // Restore locals for next arm (though wildcard is usually last)
+              locals_.resize(arm_locals_start);
+            }
+            else
+            {
+              // Copy subject for testing (GET_LOCAL pushes a copy)
+              chunk_.write_op(OpCode::OP_GET_LOCAL);
+              chunk_.write_short(subject_slot);
+
+              // Push variant name constant for MATCH_VARIANT
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, arm.pattern_name)));
+
+              chunk_.write_op(OpCode::OP_MATCH_VARIANT);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, arm.pattern_name)));
+              chunk_.write_byte(static_cast<uint8_t>(arm.bindings.size()));
+              auto skip_jump = emit_jump(chunk_, OpCode::OP_JUMP_IF_FALSE);
+
+              // Match succeeded — pop the true
+              chunk_.write_op(OpCode::OP_POP);
+
+              // Register bindings as locals (fields are on stack above subject)
+              for (const auto& binding_name : arm.bindings)
+              {
+                locals_.push_back(Local{binding_name, scope_depth_});
+              }
+
+              if (arm.guard)
+              {
+                emit_expression(*arm.guard);
+                auto guard_skip = emit_jump(chunk_, OpCode::OP_JUMP_IF_FALSE);
+                chunk_.write_op(OpCode::OP_POP);
+
+                // Evaluate body
+                emit_expression(*arm.body);
+
+                // Stack: [..., subject, field0,...,fieldN, result]
+                // Write result into subject slot, then clean up
+                chunk_.write_op(OpCode::OP_SET_LOCAL);
+                chunk_.write_short(subject_slot);
+                chunk_.write_op(OpCode::OP_POP);  // pop result dup
+                for (std::size_t b = 0; b < arm.bindings.size(); ++b)
+                  chunk_.write_op(OpCode::OP_POP);  // pop bindings
+                // Stack: [..., result(in subject slot)]
+
+                exit_jumps.push_back(emit_jump(chunk_, OpCode::OP_JUMP));
+
+                // Guard failed — pop guard result + bindings, try next arm
+                patch_jump(chunk_, guard_skip);
+                chunk_.write_op(OpCode::OP_POP);  // pop false guard
+                for (std::size_t b = 0; b < arm.bindings.size(); ++b)
+                  chunk_.write_op(OpCode::OP_POP);  // pop bindings
+              }
+              else
+              {
+                // Evaluate body
+                emit_expression(*arm.body);
+
+                // Stack: [..., subject, field0,...,fieldN, result]
+                // Write result into subject slot, then clean up
+                chunk_.write_op(OpCode::OP_SET_LOCAL);
+                chunk_.write_short(subject_slot);
+                chunk_.write_op(OpCode::OP_POP);  // pop result dup
+                for (std::size_t b = 0; b < arm.bindings.size(); ++b)
+                  chunk_.write_op(OpCode::OP_POP);  // pop bindings
+                // Stack: [..., result(in subject slot)]
+
+                exit_jumps.push_back(emit_jump(chunk_, OpCode::OP_JUMP));
+              }
+
+              // Patch skip: match failed — pop false
+              patch_jump(chunk_, skip_jump);
+              chunk_.write_op(OpCode::OP_POP);
+
+              // Restore locals for next arm
+              locals_.resize(arm_locals_start);
+            }
+          }
+
+          // Remove $match_subject local. The result value stays on the stack.
+          locals_.pop_back();
+
+          // Patch all exit jumps to here
+          for (auto jump : exit_jumps)
+          {
+            patch_jump(chunk_, jump);
+          }
         }
       },
       expr.node);
