@@ -84,6 +84,10 @@ void BytecodeCache::load_bytecode(const std::string& key, Bytecode&& bytecode)
 BytecodeCache::Stats BytecodeCache::stats() const
 {
   std::shared_lock lock(mutex_);
-  return {hits_.load(), misses_.load(), cache_.size()};
+  Stats st;
+  st.hits = hits_.load();
+  st.misses = misses_.load();
+  st.entries = cache_.size();
+  return st;
 }
 }  // namespace neamc::vm

@@ -276,7 +276,7 @@ else
 fi
 
 # Define core executables to build
-CORE_TARGETS="neamc neam neam-cli neam-api neam-pkg neam-lsp neam-dap neam-gym"
+CORE_TARGETS="neamc neam neam-cli neam-api neam-pkg neam-lambda neam-lsp neam-dap neam-gym"
 
 echo "Building with $NUM_CORES parallel jobs..."
 
@@ -315,7 +315,7 @@ print_step "Build complete"
 echo ""
 echo "Built executables:"
 BUILT_COUNT=0
-for exe in neamc neam neam-cli neam-api neam-pkg neam-lsp neam-dap neam-gym; do
+for exe in neamc neam neam-cli neam-api neam-pkg neam-lambda neam-lsp neam-dap neam-gym; do
     if [ -f "$exe" ]; then
         SIZE=$(ls -lh "$exe" | awk '{print $5}')
         echo "  - $exe ($SIZE)"
@@ -364,7 +364,7 @@ mkdir -p "$DIST_DIR"
 
 # Copy executables
 echo "Copying executables..."
-EXECUTABLES=(neamc neam neam-cli neam-api neam-pkg neam-lsp neam-dap neam-gym)
+EXECUTABLES=(neamc neam neam-cli neam-api neam-pkg neam-lambda neam-lsp neam-dap neam-gym)
 COPIED_COUNT=0
 
 for exe in "${EXECUTABLES[@]}"; do
@@ -410,7 +410,7 @@ else
     SUDO=""
 fi
 
-for exe in neamc neam neam-cli neam-api neam-pkg neam-lsp neam-dap neam-gym; do
+for exe in neamc neam neam-cli neam-api neam-pkg neam-lambda neam-lsp neam-dap neam-gym; do
     if [ -f "$exe" ]; then
         $SUDO cp "$exe" "$INSTALL_DIR/"
         $SUDO chmod +x "$INSTALL_DIR/$exe"

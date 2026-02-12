@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Neam v0.6.8 Installer
+# Neam v0.7.2 Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/neam-lang/Neam/main/install.sh | bash
 set -euo pipefail
 
-VERSION="0.6.8"
+VERSION="0.7.2"
 REPO="neam-lang/Neam"
 INSTALL_DIR="${NEAM_INSTALL_DIR:-/usr/local/bin}"
 
@@ -83,7 +83,7 @@ fi
 
 # Collect binaries — search recursively (archive may have bin/ subdirectory)
 BINS=()
-for b in neamc neam neam-api neam-pkg neamc.exe neam.exe neam-api.exe neam-pkg.exe; do
+for b in neamc neam neam-api neam-pkg neam-lambda neamc.exe neam.exe neam-api.exe neam-pkg.exe neam-lambda.exe; do
     found="$(find . -name "$b" -type f 2>/dev/null | head -1)"
     [ -n "$found" ] && BINS+=("$found")
 done
@@ -154,7 +154,7 @@ fi
 
 # Verify
 echo ""
-for b in neamc neam neam-api neam-pkg; do
+for b in neamc neam neam-api neam-pkg neam-lambda; do
     if command -v "$b" &>/dev/null; then
         ok "$b installed at $(command -v $b)"
     elif [ -f "${INSTALL_DIR}/$b" ]; then
