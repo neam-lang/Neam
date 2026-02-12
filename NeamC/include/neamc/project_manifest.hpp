@@ -75,7 +75,20 @@ struct DeployConfig
     int workers = 2;
     // v0.6.8: Lambda Web Adapter support
     std::string readiness_path = "/health";
+    int provisioned_concurrency = 0;  // v0.7.2: Lambda provisioned concurrency (0 = disabled)
   } serverless;
+};
+
+// v0.7.2: Agent entry from [[agents]] array-of-tables
+struct ManifestAgentEntry
+{
+  std::string id;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::string system_prompt;
+  std::string source;          // Optional: path to .neam file (bypasses template generation)
+  std::string knowledge_base;  // Optional: path to knowledge base file
 };
 
 struct FeatureConfig
@@ -102,6 +115,7 @@ struct ProjectManifest
   TestConfig test;
   DeployConfig deploy;
   FeatureConfig features;
+  std::vector<ManifestAgentEntry> agents;  // v0.7.2: [[agents]] entries
 };
 
 ProjectManifest parse_project_manifest(const std::string& toml);

@@ -20,8 +20,7 @@ ObjTraitDef* new_trait_def(const std::string& name)
       reallocate(nullptr, 0, sizeof(ObjTraitDef)));
   new (def) ObjTraitDef();
   def->type = ObjType::OBJ_TRAIT_DEF;
-  def->next = objects;
-  objects = def;
+  link_object(def);
   def->name = name;
   return def;
 }
@@ -32,8 +31,7 @@ ObjSealedDef* new_sealed_def(const std::string& name)
       reallocate(nullptr, 0, sizeof(ObjSealedDef)));
   new (def) ObjSealedDef();
   def->type = ObjType::OBJ_SEALED_DEF;
-  def->next = objects;
-  objects = def;
+  link_object(def);
   def->name = name;
   return def;
 }
@@ -45,8 +43,7 @@ ObjVariant* new_variant(ObjSealedDef* sealed_def, uint16_t tag,
       reallocate(nullptr, 0, sizeof(ObjVariant)));
   new (v) ObjVariant();
   v->type = ObjType::OBJ_VARIANT;
-  v->next = objects;
-  objects = v;
+  link_object(v);
   v->sealed_def = sealed_def;
   v->tag = tag;
   v->field_values = std::move(field_values);

@@ -27,9 +27,24 @@
 
 namespace neamc::vm
 {
+
+// v0.7.2: Fine-grained VM reset control for different use cases
+enum class ResetPolicy
+{
+  Minimal,   // stack + frames + emitted only. No GC. ~0.01ms
+  Standard,  // + gc_roots, skills, budgets, memory, knowledge. Run GC. ~0.05ms
+  Full,      // + guards, guardchains, tools, policies, extensions, capabilities. ~0.1ms
+  Complete   // + globals, interned_strings, re-register natives, OOP tables, mcp_clients. ~5ms
+};
+
 class VirtualMachine
 {
 public:
+  // v0.7.2: Per-VM GC state (accessed by memory.hpp allocate_object template)
+  Obj* objects_{nullptr};
+  std::size_t bytes_allocated_{0};
+  std::size_t next_gc_{1024 * 1024};
+
   enum class DebugEventType
   {
     BeforeAgentAsk,
@@ -57,6 +72,7 @@ public:
   };
   VirtualMachine();
   ~VirtualMachine();
+  void reset_for_reuse(ResetPolicy policy = ResetPolicy::Standard);
   Value run(const Bytecode& chunk);
   Value run(const Bytecode& chunk, std::istream* input, std::ostream* output);
   void set_io(std::istream* input, std::ostream* output);

@@ -67,8 +67,7 @@ ObjStructDef* new_struct_def(const std::string& name,
       reallocate(nullptr, 0, sizeof(ObjStructDef)));
   new (def) ObjStructDef();
   def->type = ObjType::OBJ_STRUCT_DEF;
-  def->next = objects;
-  objects = def;
+  link_object(def);
   def->name = name;
   def->field_names = field_names;
   def->is_mutable = is_mutable;
@@ -81,8 +80,7 @@ ObjStruct* new_struct(ObjStructDef* def, std::vector<Value> field_values)
       reallocate(nullptr, 0, sizeof(ObjStruct)));
   new (obj) ObjStruct();
   obj->type = ObjType::OBJ_STRUCT;
-  obj->next = objects;
-  objects = obj;
+  link_object(obj);
   obj->def = def;
   obj->fields = std::move(field_values);
   return obj;
@@ -94,8 +92,7 @@ ObjImplTable* new_impl_table()
       reallocate(nullptr, 0, sizeof(ObjImplTable)));
   new (table) ObjImplTable();
   table->type = ObjType::OBJ_IMPL_TABLE;
-  table->next = objects;
-  objects = table;
+  link_object(table);
   return table;
 }
 

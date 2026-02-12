@@ -853,7 +853,7 @@ int64_t VirtualMachine::BudgetTracker::elapsed_ms(int64_t now_ms) const
 
 VirtualMachine::VirtualMachine()
 {
-  current_vm = this;
+  set_current_vm(this);
   input_ = &std::cin;
   output_ = &std::cout;
   globals_.clear();
@@ -869,11 +869,70 @@ VirtualMachine::VirtualMachine()
 
 VirtualMachine::~VirtualMachine()
 {
-  if (current_vm == this)
+  set_current_vm(this);  // Ensure we're current for cleanup
+  free_objects(*this);
+  if (get_current_vm() == this)
   {
-    current_vm = nullptr;
+    set_current_vm(nullptr);
   }
-  free_objects();
+}
+
+void VirtualMachine::reset_for_reuse(ResetPolicy policy)
+{
+  // Minimal: stack + frames + emitted only. No GC. ~0.01ms
+  stack_.clear();
+  frames_.clear();
+  emitted_.clear();
+
+  if (policy == ResetPolicy::Minimal)
+  {
+    return;
+  }
+
+  // Standard: + gc_roots, skills, budgets, memory, knowledge. Run GC. ~0.05ms
+  gc_roots_.clear();
+  allowed_skills_.clear();
+  budget_trackers_.clear();
+  memory_stores_.clear();
+  knowledge_bases_.clear();
+
+  // Reset I/O and trace
+  input_ = &std::cin;
+  output_ = &std::cout;
+  trace_logger_ = TraceLogger{};
+
+  // Run GC to reclaim per-request objects
+  set_current_vm(this);
+  collect_garbage(*this);
+
+  if (policy == ResetPolicy::Standard)
+  {
+    return;
+  }
+
+  // Full: + guards, guardchains, tools, policies, extensions, capabilities. ~0.1ms
+  guards_.clear();
+  guardchains_.clear();
+  tools_.clear();
+  policies_.clear();
+  agent_extensions_.clear();
+  entity_capabilities_.clear();
+  budgets_.clear();
+
+  if (policy == ResetPolicy::Full)
+  {
+    return;
+  }
+
+  // Complete: + globals, interned_strings, OOP tables, mcp_clients. ~5ms
+  globals_ = Table{};
+  interned_strings_ = Table{};
+  struct_defs_.clear();
+  impl_tables_.clear();
+  trait_defs_.clear();
+  sealed_defs_.clear();
+  mcp_clients_.clear();
+  env_ = nullptr;
 }
 
 Value VirtualMachine::pop()

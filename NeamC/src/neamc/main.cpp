@@ -51,6 +51,8 @@ void usage()
   std::cout << "       neamc update [package] [--locked]\n";
   std::cout << "       neamc run-script <script>\n";
   std::cout << "       neamc new <name> [--template agent-basic]\n";
+  std::cout << "       neamc compile <file.neam> [-o output.neamb]\n";
+  std::cout << "       neamc compile --all [--output-dir <dir>]\n";
   std::cout << "       neamc generate-ci\n";
 }
 
@@ -1270,6 +1272,122 @@ int cmd_build(int argc, char** argv)
   return 0;
 }
 
+// v0.7.2: AOT compile subcommand — compile .neam files to .neamb bytecode
+int cmd_compile(int argc, char** argv)
+{
+  std::string input_file;
+  std::string output_file;
+  std::string output_dir;
+  bool all_mode = false;
+
+  for (int i = 2; i < argc; ++i)
+  {
+    std::string arg = argv[i];
+    if (arg == "--all")
+    {
+      all_mode = true;
+    }
+    else if (arg == "--output-dir" && i + 1 < argc)
+    {
+      output_dir = argv[++i];
+    }
+    else if (arg == "-o" && i + 1 < argc)
+    {
+      output_file = argv[++i];
+    }
+    else if (input_file.empty())
+    {
+      input_file = arg;
+    }
+    else
+    {
+      std::cerr << "Unknown argument: " << arg << "\n";
+      return 1;
+    }
+  }
+
+  if (all_mode)
+  {
+    // Batch mode: compile all .neam files found under src/
+    if (output_dir.empty()) output_dir = "build/bytecode";
+    std::filesystem::create_directories(output_dir);
+
+    int count = 0;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator("src"))
+    {
+      if (entry.path().extension() != ".neam") continue;
+
+      auto source = read_file(entry.path());
+      auto rel = std::filesystem::relative(entry.path(), "src");
+      auto out_path = std::filesystem::path(output_dir) / rel;
+      out_path.replace_extension(".neamb");
+
+      std::filesystem::create_directories(out_path.parent_path());
+
+      try
+      {
+        neamc::Pipeline pipeline;
+        auto unit = pipeline.compile(source, {});
+        std::ofstream out(out_path, std::ios::binary);
+        if (!out) { std::cerr << "Cannot write: " << out_path << "\n"; return 1; }
+        unit.chunk.serialize(out);
+        std::cout << "  " << entry.path().string() << " -> " << out_path.string() << "\n";
+        ++count;
+      }
+      catch (const std::exception& ex)
+      {
+        std::cerr << "Failed to compile " << entry.path().string() << ": " << ex.what() << "\n";
+        return 1;
+      }
+    }
+    std::cout << "Compiled " << count << " files to " << output_dir << "/\n";
+    return 0;
+  }
+
+  // Single file mode
+  if (input_file.empty())
+  {
+    std::cerr << "Usage: neamc compile <file.neam> [-o output.neamb]\n";
+    std::cerr << "       neamc compile --all [--output-dir <dir>]\n";
+    return 1;
+  }
+
+  if (output_file.empty())
+  {
+    if (!output_dir.empty())
+    {
+      std::filesystem::create_directories(output_dir);
+      auto stem = std::filesystem::path(input_file).stem().string();
+      output_file = (std::filesystem::path(output_dir) / (stem + ".neamb")).string();
+    }
+    else
+    {
+      output_file = input_file + "b";  // foo.neam -> foo.neamb
+    }
+  }
+
+  auto source = read_file(input_file);
+  try
+  {
+    neamc::Pipeline pipeline;
+    auto unit = pipeline.compile(source, {});
+    std::ofstream out(output_file, std::ios::binary);
+    if (!out)
+    {
+      std::cerr << "Cannot write: " << output_file << "\n";
+      return 1;
+    }
+    unit.chunk.serialize(out);
+    std::cout << "Compiled " << input_file << " -> " << output_file << "\n";
+  }
+  catch (const std::exception& ex)
+  {
+    std::cerr << "Compilation failed: " << ex.what() << "\n";
+    return 1;
+  }
+  return 0;
+}
+
 int compile_input(const std::vector<std::string>& args)
 {
   if (args.empty())
@@ -1439,6 +1557,10 @@ int main(int argc, char** argv)
   if (command == "generate-ci")
   {
     return cmd_generate_ci();
+  }
+  if (command == "compile")
+  {
+    return cmd_compile(argc, argv);
   }
 
   std::vector<std::string> args(argv + 1, argv + argc);

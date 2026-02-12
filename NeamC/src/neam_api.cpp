@@ -5,20 +5,28 @@
 //
 
 #include "neamc/api/http_server.hpp"
+#include "neamc/llm/http_client.hpp"
 #include "neamc/pipeline.hpp"
+#include "neamc/project_manifest.hpp"
 #include "neamc/security/audit_log.hpp"
 #include "neamc/security/behavioral_monitor.hpp"
 #include "neamc/security/credential_manager.hpp"
 #include "neamc/security/human_in_the_loop.hpp"
 #include "neamc/security/rate_limiter.hpp"
 #include "neamc/version.hpp"
+#include "neamc/vm/bytecode.hpp"
+#include "neamc/vm/bytecode_cache.hpp"
+#include "neamc/vm/metrics.hpp"
 #include "neamc/vm/vm.hpp"
+#include "neamc/vm/vm_pool.hpp"
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -233,6 +241,18 @@ private:
 // Request timeout in milliseconds (default 60s, configurable via --timeout)
 long g_request_timeout_ms = 60000;
 
+// v0.7.2 HotVM: Global pointers set in main(), used by handlers
+neamc::vm::BytecodeCache* g_bytecode_cache = nullptr;
+neamc::vm::VMPool* g_vm_pool = nullptr;
+neamc::vm::RequestMetrics* g_metrics = nullptr;
+std::atomic<bool> g_hotvm_ready{false};   // Set true after preload + warm
+std::atomic<bool> g_draining{false};      // v0.7.2 W9: Set on SIGTERM
+int g_drain_seconds = 10;                 // v0.7.2 W9: Graceful drain period
+bool g_warmstart_trace = false;           // v0.7.2 W8: NEAM_WARMSTART_TRACE
+
+// v0.7.2: Dynamic agents map (loaded from neam.toml or defaults)
+const std::map<std::string, AgentConfig>* g_active_agents = nullptr;
+
 // Generate Neam program for agent query
 std::string generate_neam_program(const std::string& agent_id, const std::string& query,
                                   const AgentConfig& config)
@@ -311,7 +331,88 @@ std::string escape_string(const std::string& input)
   return result;
 }
 
-// v0.6.8: Execute Neam program with per-request VM (no global mutex).
+// v0.7.2: Generate agent template with __query__ placeholder (cacheable)
+std::string generate_agent_template(const std::string& agent_id, const AgentConfig& config)
+{
+  std::ostringstream program;
+
+  // Add knowledge base if configured
+  if (!config.knowledge_base.empty())
+  {
+    program << "knowledge AgentKB {\n";
+    program << "  vector_store: \"usearch\"\n";
+    program << "  embedding_model: \"nomic-embed-text\"\n";
+    program << "  chunk_size: 200\n";
+    program << "  chunk_overlap: 50\n";
+    program << "  sources: [\n";
+    program << "    { type: \"file\", path: \"" << config.knowledge_base << "\" }\n";
+    program << "  ]\n";
+    program << "  retrieval_strategy: \"basic\"\n";
+    program << "  top_k: 3\n";
+    program << "}\n\n";
+  }
+
+  // Define agent
+  program << "agent QueryAgent {\n";
+  program << "  provider: \"" << config.provider << "\"\n";
+  program << "  model: \"" << config.model << "\"\n";
+  program << "  system: \"" << config.system_prompt << "\"";
+
+  if (!config.knowledge_base.empty())
+  {
+    program << "\n  connected_knowledge: [AgentKB]";
+  }
+
+  program << "\n}\n\n";
+
+  // Execute query using __query__ global injected at runtime
+  program << "{\n";
+  program << "  let response = QueryAgent.ask(__query__);\n";
+  program << "  emit response;\n";
+  program << "}\n";
+
+  return program.str();
+}
+
+// v0.7.2: Execute agent query using HotVM (pooled VM + cached bytecode)
+std::string execute_with_hotvm(const std::string& agent_id, const std::string& query,
+                               neamc::vm::VMPool& pool, neamc::vm::BytecodeCache& cache)
+{
+  try
+  {
+    auto vm = pool.acquire();
+    if (!vm.get())
+    {
+      return "Error: VM pool exhausted";
+    }
+
+    // Inject __query__ as global variable
+    auto* key_str = neamc::vm::copy_string("__query__", 9);
+    vm->globals().set(key_str, neamc::vm::Value::String(query.c_str(), query.size()));
+
+    // Get pre-compiled bytecode
+    const auto* bytecode = cache.get(agent_id);
+    if (!bytecode)
+    {
+      return "Error: Agent not preloaded: " + agent_id;
+    }
+
+    std::ostringstream out;
+    std::istringstream in;
+    vm->set_io(&in, &out);
+    vm->run(*bytecode);
+
+    const auto& emitted = vm->emitted();
+    return !emitted.empty() ? neamc::vm::value_to_string(emitted.back()) : out.str();
+    // PooledVM dtor returns VM to pool
+  }
+  catch (const std::exception& ex)
+  {
+    return std::string("Error: ") + ex.what();
+  }
+}
+
+// v0.6.8: Execute Neam program with per-request VM (fallback path).
 // Each request gets its own Pipeline + VM for full concurrency.
 std::string execute_neam_program(const std::string& source)
 {
@@ -347,7 +448,38 @@ std::string execute_neam_program(const std::string& source)
 neamc::api::HttpResponse handle_health(const neamc::api::HttpRequest&)
 {
   nlohmann::json response = {{"status", "healthy"}, {"version", NEAM_VERSION}, {"server", "neam-api"}};
+
+  // v0.7.2: HotVM metrics
+  if (g_bytecode_cache && g_vm_pool)
+  {
+    auto cs = g_bytecode_cache->stats();
+    auto ps = g_vm_pool->stats();
+    response["hotvm"] = {
+        {"cache_entries", cs.entries},
+        {"cache_hits", cs.hits},
+        {"cache_misses", cs.misses},
+        {"pool_total", ps.total},
+        {"pool_available", ps.available},
+        {"pool_in_use", ps.in_use},
+        {"pool_peak", ps.peak}};
+  }
+
   return neamc::api::HttpResponse::json(response);
+}
+
+// v0.7.2: Readiness probe — returns 503 until HotVM is initialized or when draining
+neamc::api::HttpResponse handle_ready(const neamc::api::HttpRequest&)
+{
+  if (!g_hotvm_ready.load() || g_draining.load())
+  {
+    std::string reason = g_draining.load() ? "draining" : "initializing";
+    nlohmann::json body = {{"status", reason}, {"version", NEAM_VERSION}};
+    auto resp = neamc::api::HttpResponse::json(body, 503);
+    resp.status_code = 503;
+    resp.status_text = "Service Unavailable";
+    return resp;
+  }
+  return handle_health(neamc::api::HttpRequest{});
 }
 
 // v0.6.9 D5: Rate limit helper — returns 429 response if limited
@@ -394,7 +526,8 @@ neamc::api::HttpResponse handle_list_agents(const neamc::api::HttpRequest& reque
 
   nlohmann::json agents_json = nlohmann::json::object();
 
-  for (const auto& [id, config] : kAgents)
+  const auto& agents = g_active_agents ? *g_active_agents : kAgents;
+  for (const auto& [id, config] : agents)
   {
     // v0.6.9 D7: Omit system prompts from response to prevent leakage
     agents_json[id] = {{"name", config.name},
@@ -492,12 +625,25 @@ neamc::api::HttpResponse handle_agent_ask(const neamc::api::HttpRequest& request
         std::to_string(limiter.input_limits().max_prompt_bytes) + " bytes");
   }
 
+  // v0.7.2 W9: Reject requests when draining
+  if (g_draining.load())
+  {
+    limiter.release_concurrent(api_key_fp);
+    nlohmann::json err = {{"error", "Service Unavailable"},
+                          {"message", "Server is shutting down"}};
+    auto resp = neamc::api::HttpResponse::json(err, 503);
+    resp.status_code = 503;
+    resp.status_text = "Service Unavailable";
+    return resp;
+  }
+
   // Find agent configuration
-  auto agent_it = kAgents.find(agent_id);
-  if (agent_it == kAgents.end())
+  const auto& agents = g_active_agents ? *g_active_agents : kAgents;
+  auto agent_it = agents.find(agent_id);
+  if (agent_it == agents.end())
   {
     std::vector<std::string> available;
-    for (const auto& [id, _] : kAgents)
+    for (const auto& [id, _] : agents)
     {
       available.push_back(id);
     }
@@ -527,13 +673,40 @@ neamc::api::HttpResponse handle_agent_ask(const neamc::api::HttpRequest& request
       "Agent invoked with query",
       {{"query_length", query.size()}, {"provider", config.provider}, {"model", config.model}}});
 
-  // Generate and execute Neam program
+  // Execute via HotVM (pooled VM + cached bytecode) or fallback
   auto start = std::chrono::steady_clock::now();
-  std::string program = generate_neam_program(agent_id, query, config);
-  std::string response = execute_neam_program(program);
+  std::string response;
+  if (g_vm_pool && g_bytecode_cache)
+  {
+    response = execute_with_hotvm(agent_id, query, *g_vm_pool, *g_bytecode_cache);
+  }
+  else
+  {
+    std::string program = generate_neam_program(agent_id, query, config);
+    response = execute_neam_program(program);
+  }
   auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                      std::chrono::steady_clock::now() - start)
                      .count();
+
+  // v0.7.2 W8: Record metrics
+  if (g_metrics)
+  {
+    neamc::vm::RequestTiming timing;
+    timing.total_us = static_cast<double>(elapsed) * 1000.0;  // ms -> us
+    timing.warm = (g_vm_pool != nullptr);
+    timing.agent_id = agent_id;
+    g_metrics->record(timing);
+
+    // Per-request trace when NEAM_WARMSTART_TRACE=1
+    if (g_warmstart_trace)
+    {
+      nlohmann::json trace = {{"agent", agent_id},
+                              {"total_us", timing.total_us},
+                              {"warm", timing.warm}};
+      std::cerr << trace.dump() << "\n";
+    }
+  }
 
   // v0.6.9 D5: Release concurrent slot
   limiter.release_concurrent(api_key_fp);
@@ -754,17 +927,70 @@ neamc::api::HttpResponse handle_list_confirmations(const neamc::api::HttpRequest
   return neamc::api::HttpResponse::json({{"pending", items}});
 }
 
+// v0.7.2 W8: GET /api/v1/metrics — detailed percentile metrics
+neamc::api::HttpResponse handle_metrics(const neamc::api::HttpRequest& request)
+{
+  if (!authenticate_request(request))
+  {
+    return unauthorized_response();
+  }
+
+  nlohmann::json response;
+
+  // Request percentiles
+  if (g_metrics)
+  {
+    auto snap = g_metrics->compute();
+    response["requests"] = {{"p50_ms", snap.p50_ms},
+                            {"p95_ms", snap.p95_ms},
+                            {"p99_ms", snap.p99_ms},
+                            {"count", snap.count}};
+  }
+
+  // VM pool stats
+  if (g_vm_pool)
+  {
+    auto ps = g_vm_pool->stats();
+    response["vm_pool"] = {{"total", ps.total},
+                           {"available", ps.available},
+                           {"in_use", ps.in_use},
+                           {"peak", ps.peak}};
+  }
+
+  // Bytecode cache stats
+  if (g_bytecode_cache)
+  {
+    auto cs = g_bytecode_cache->stats();
+    response["bytecode_cache"] = {{"entries", cs.entries},
+                                  {"hits", cs.hits},
+                                  {"misses", cs.misses}};
+  }
+
+  // LLM connection pool stats
+  auto llm_stats = neamc::llm::connection_pool_stats();
+  response["llm_pool"] = {{"created", llm_stats.created},
+                          {"reused", llm_stats.reused},
+                          {"evicted", llm_stats.evicted},
+                          {"idle", llm_stats.current_idle}};
+
+  return neamc::api::HttpResponse::json(response);
+}
+
 void print_usage(const char* program_name)
 {
   std::cout << "Usage: " << program_name << " [options]\n"
             << "\nOptions:\n"
-            << "  --host HOST       Host to bind to (default: 0.0.0.0)\n"
-            << "  --port PORT       Port to listen on (default: 8080)\n"
-            << "  --workers N       Thread pool size (default: 4)\n"
-            << "  --timeout MS      Request timeout in ms (default: 60000)\n"
-            << "  --audit-sink SINK Audit log sink: stderr|file|json (default: stderr)\n"
-            << "  --audit-log PATH  Audit log file path (when sink=file)\n"
-            << "  --help            Show this help message\n"
+            << "  --host HOST           Host to bind to (default: 0.0.0.0)\n"
+            << "  --port PORT           Port to listen on (default: 8080)\n"
+            << "  --workers N           Thread pool size (default: 4)\n"
+            << "  --timeout MS          Request timeout in ms (default: 60000)\n"
+            << "  --pool-size N         VM pool size override (default: workers value)\n"
+            << "  --llm-pool-size N     LLM connection pool size (default: 8)\n"
+            << "  --bytecode DIR        Load AOT-compiled .neamb files from directory\n"
+            << "  --drain-seconds N     Graceful shutdown drain period (default: 10)\n"
+            << "  --audit-sink SINK     Audit log sink: stderr|file|json (default: stderr)\n"
+            << "  --audit-log PATH      Audit log file path (when sink=file)\n"
+            << "  --help                Show this help message\n"
             << "\nEnvironment Variables:\n"
             << "  NEAM_API_KEY     API authentication key (required in production)\n"
             << "  NEAM_ADMIN_KEY   Admin API key for behavioral monitoring endpoints\n"
@@ -779,18 +1005,10 @@ void print_usage(const char* program_name)
             << "  POST /api/v1/confirm         Approve/deny tool (admin)\n"
             << "  GET  /api/v1/admin/confirmations Pending confirms (admin)\n"
             << "  GET  /health             Health check (alias)\n"
+            << "  GET  /api/v1/metrics     Request metrics\n"
             << "  GET  /ready              Readiness check (alias)\n"
-            << "\nAvailable Agents:\n";
-
-  for (const auto& [id, config] : kAgents)
-  {
-    std::cout << "  " << id << " - " << config.name;
-    if (!config.knowledge_base.empty())
-    {
-      std::cout << " (RAG)";
-    }
-    std::cout << "\n";
-  }
+            << "\nEnvironment Variables:\n"
+            << "  NEAM_WARMSTART_TRACE  Set to 1 for per-request JSON stderr logging\n";
 
   std::cout << "\nExample:\n"
             << "  curl -X POST http://localhost:8080/api/v1/agent/ask \\\n"
@@ -798,17 +1016,32 @@ void print_usage(const char* program_name)
             << "    -d '{\"agent_id\": \"assistant\", \"query\": \"Hello!\"}'\n";
 }
 
+// v0.7.2 W9: SIGTERM/SIGINT handler for graceful shutdown
+std::atomic<bool> g_shutdown_requested{false};
+
+void signal_handler(int sig)
+{
+  (void)sig;
+  g_draining.store(true);
+  g_shutdown_requested.store(true);
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
 {
+  auto init_start = std::chrono::steady_clock::now();
+
   std::string host = "0.0.0.0";
   int port = 8080;
   int workers = 4;
+  int pool_size = 0;  // 0 = use workers value
+  int llm_pool_size = 8;
+  std::string bytecode_dir;
   std::string audit_sink_str = "stderr";
   std::string audit_log_path;
 
-  // Parse command line arguments
+  // 1. Parse CLI args
   for (int i = 1; i < argc; ++i)
   {
     std::string arg = argv[i];
@@ -837,18 +1070,34 @@ int main(int argc, char** argv)
     else if (arg == "--workers" && i + 1 < argc)
     {
       workers = std::stoi(argv[++i]);
-      if (workers < 1)
-      {
-        workers = 1;
-      }
-      if (workers > 64)
-      {
-        workers = 64;
-      }
+      if (workers < 1) workers = 1;
+      if (workers > 64) workers = 64;
     }
     else if (arg == "--timeout" && i + 1 < argc)
     {
       g_request_timeout_ms = std::stol(argv[++i]);
+    }
+    else if (arg == "--pool-size" && i + 1 < argc)
+    {
+      pool_size = std::stoi(argv[++i]);
+      if (pool_size < 1) pool_size = 1;
+      if (pool_size > 128) pool_size = 128;
+    }
+    else if (arg == "--llm-pool-size" && i + 1 < argc)
+    {
+      llm_pool_size = std::stoi(argv[++i]);
+      if (llm_pool_size < 1) llm_pool_size = 1;
+      if (llm_pool_size > 256) llm_pool_size = 256;
+    }
+    else if (arg == "--bytecode" && i + 1 < argc)
+    {
+      bytecode_dir = argv[++i];
+    }
+    else if (arg == "--drain-seconds" && i + 1 < argc)
+    {
+      g_drain_seconds = std::stoi(argv[++i]);
+      if (g_drain_seconds < 1) g_drain_seconds = 1;
+      if (g_drain_seconds > 300) g_drain_seconds = 300;
     }
     else
     {
@@ -858,7 +1107,7 @@ int main(int argc, char** argv)
     }
   }
 
-  // Configure audit logging
+  // 2. Configure audit logging
   {
     auto sink = neamc::security::AuditSink::Stderr;
     if (audit_sink_str == "file")
@@ -872,13 +1121,144 @@ int main(int argc, char** argv)
     neamc::security::AuditLogger::instance().configure(sink, audit_log_path);
   }
 
+  // 3. Configure LLM connection pool
+  neamc::llm::ConnectionPoolConfig llm_cfg;
+  llm_cfg.max_pool_size = static_cast<size_t>(llm_pool_size);
+  neamc::llm::configure_connection_pool(llm_cfg);
+
   // Check for API key
-  const char* api_key = std::getenv("OPENAI_API_KEY");
-  if (!api_key || std::strlen(api_key) == 0)
+  const char* openai_key = std::getenv("OPENAI_API_KEY");
+  if (!openai_key || std::strlen(openai_key) == 0)
   {
     std::cerr << "Warning: OPENAI_API_KEY environment variable not set.\n";
     std::cerr << "         OpenAI agents will not work without it.\n\n";
   }
+
+  // Check NEAM_WARMSTART_TRACE
+  const char* trace_env = std::getenv("NEAM_WARMSTART_TRACE");
+  if (trace_env && std::string(trace_env) == "1")
+  {
+    g_warmstart_trace = true;
+  }
+
+  // 4. Load agents: neam.toml [[agents]] → fallback to kAgents
+  neamc::vm::BytecodeCache bytecode_cache;
+  std::map<std::string, AgentConfig> dynamic_agents;
+  bool using_manifest_agents = false;
+
+  {
+    auto manifest_path = std::filesystem::path("neam.toml");
+    if (std::filesystem::exists(manifest_path))
+    {
+      auto manifest = neamc::load_project_manifest(manifest_path);
+      if (!manifest.agents.empty())
+      {
+        for (const auto& entry : manifest.agents)
+        {
+          if (entry.id.empty()) continue;
+          AgentConfig cfg;
+          cfg.name = entry.name.empty() ? entry.id : entry.name;
+          cfg.provider = entry.provider.empty() ? "openai" : entry.provider;
+          cfg.model = entry.model.empty() ? "gpt-4o-mini" : entry.model;
+          cfg.system_prompt = entry.system_prompt;
+          cfg.knowledge_base = entry.knowledge_base;
+          dynamic_agents[entry.id] = cfg;
+
+          // Pre-compile: source file or generated template
+          if (!entry.source.empty())
+          {
+            bytecode_cache.precompile_file(entry.id, entry.source);
+          }
+          else
+          {
+            auto tmpl = generate_agent_template(entry.id, cfg);
+            bytecode_cache.preload(entry.id, tmpl);
+          }
+        }
+        using_manifest_agents = true;
+        std::cout << "Loaded " << manifest.agents.size()
+                  << " agents from neam.toml\n";
+      }
+    }
+  }
+
+  // Fallback to kAgents if no manifest agents
+  if (!using_manifest_agents)
+  {
+    for (const auto& [id, config] : kAgents)
+    {
+      std::string tmpl = generate_agent_template(id, config);
+      bytecode_cache.preload(id, tmpl);
+    }
+  }
+
+  // 5. Load AOT bytecode from --bytecode dir (overrides source-compiled)
+  if (!bytecode_dir.empty())
+  {
+    namespace fs = std::filesystem;
+    if (fs::exists(bytecode_dir) && fs::is_directory(bytecode_dir))
+    {
+      int aot_count = 0;
+      for (const auto& entry : fs::directory_iterator(bytecode_dir))
+      {
+        if (entry.path().extension() != ".neamb") continue;
+        std::ifstream in(entry.path(), std::ios::binary);
+        if (!in) continue;
+        auto bc = neamc::vm::Bytecode::deserialize(in);
+        std::string key = entry.path().stem().string();
+        bytecode_cache.load_bytecode(key, std::move(bc));
+        ++aot_count;
+      }
+      std::cout << "AOT: loaded " << aot_count << " bytecode files from "
+                << bytecode_dir << "\n";
+    }
+    else
+    {
+      std::cerr << "Warning: --bytecode directory not found: " << bytecode_dir << "\n";
+    }
+  }
+
+  // 6. Create VM pool with ResetPolicy
+  int effective_pool = pool_size > 0 ? pool_size : workers;
+  neamc::vm::VMPool::Config pool_cfg;
+  pool_cfg.min_vms = static_cast<size_t>(effective_pool);
+  pool_cfg.max_vms = static_cast<size_t>(effective_pool * 2);
+  pool_cfg.timeout_ms = g_request_timeout_ms;
+  pool_cfg.reset_policy = neamc::vm::ResetPolicy::Standard;
+  neamc::vm::VMPool vm_pool(pool_cfg);
+
+  // 7. Warm VM pool
+  vm_pool.warm(pool_cfg.min_vms);
+
+  // 8. Pre-warm LLM connections
+  neamc::llm::prewarm_connection_pool({"https://api.openai.com"});
+
+  // 9. Create RequestMetrics
+  neamc::vm::RequestMetrics metrics;
+
+  // Make pool/cache/metrics accessible to handlers
+  g_bytecode_cache = &bytecode_cache;
+  g_vm_pool = &vm_pool;
+  g_metrics = &metrics;
+  if (using_manifest_agents)
+  {
+    g_active_agents = &dynamic_agents;
+  }
+
+  // 10. Set ready, log startup time
+  g_hotvm_ready.store(true);
+  auto init_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - init_start)
+                          .count();
+
+  const auto& agents_ref = using_manifest_agents ? dynamic_agents : kAgents;
+  std::cout << "HotVM: " << agents_ref.size() << " agents precompiled, "
+            << effective_pool << " VMs warmed\n";
+  std::cout << "Ready in " << init_elapsed << "ms\n";
+
+  // 11. Install SIGTERM/SIGINT handler
+  std::signal(SIGTERM, signal_handler);
+  std::signal(SIGINT, signal_handler);
 
   try
   {
@@ -887,14 +1267,15 @@ int main(int argc, char** argv)
     // Enable CORS for cross-origin requests
     server.enable_cors();
 
-    // Register routes
+    // 12. Register routes including /api/v1/metrics
     server.get("/api/v1/health", handle_health);
     server.get("/api/v1/agents", handle_list_agents);
     server.post("/api/v1/agent/ask", handle_agent_ask);
+    server.get("/api/v1/metrics", handle_metrics);
 
-    // Root-level health aliases for K8s probes and Lambda Web Adapter
+    // Root-level health aliases for K8s probes
     server.get("/health", handle_health);
-    server.get("/ready", handle_health);
+    server.get("/ready", handle_ready);
 
     // Admin routes (D9 behavioral monitoring)
     server.post("/api/v1/admin/disable", handle_disable_agent);
@@ -908,26 +1289,40 @@ int main(int argc, char** argv)
     std::cout << "Starting Neam API Server...\n";
     std::cout << "  Host: " << host << "\n";
     std::cout << "  Port: " << port << "\n";
+    std::cout << "  Workers: " << workers << "\n";
+    std::cout << "  LLM pool: " << llm_pool_size << "\n";
+    if (!bytecode_dir.empty())
+    {
+      std::cout << "  Bytecode: " << bytecode_dir << "\n";
+    }
     std::cout << "  Audit: sink=" << audit_sink_str;
     if (!audit_log_path.empty())
     {
       std::cout << " file=" << audit_log_path;
     }
-    std::cout << "\n";
-    std::cout << "  Endpoints:\n";
-    std::cout << "    GET  /api/v1/health\n";
-    std::cout << "    GET  /api/v1/agents\n";
-    std::cout << "    POST /api/v1/agent/ask\n";
-    std::cout << "    POST /api/v1/admin/disable (admin)\n";
-    std::cout << "    POST /api/v1/admin/enable  (admin)\n";
-    std::cout << "    GET  /api/v1/admin/status  (admin)\n";
-    std::cout << "    POST /api/v1/confirm       (admin)\n";
-    std::cout << "    GET  /api/v1/admin/confirmations (admin)\n";
-    std::cout << "    GET  /health          (alias)\n";
-    std::cout << "    GET  /ready           (alias)\n";
-    std::cout << "\n";
+    std::cout << "\n\n";
 
-    server.run();
+    // 13. Run server in a thread for graceful shutdown
+    std::thread server_thread([&server]() {
+      server.run();
+    });
+
+    // Wait for shutdown signal
+    while (!g_shutdown_requested.load())
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Drain period — let in-flight requests complete
+    std::cout << "SIGTERM received, draining for " << g_drain_seconds << "s...\n";
+    std::this_thread::sleep_for(std::chrono::seconds(g_drain_seconds));
+
+    std::cout << "Shutdown complete.\n";
+    // server destructor will stop the server
+    if (server_thread.joinable())
+    {
+      server_thread.detach();
+    }
   }
   catch (const std::exception& ex)
   {

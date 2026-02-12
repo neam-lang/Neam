@@ -50,4 +50,23 @@ void http_post_streaming(const std::string& url, const std::string& body,
                          StreamChunkCallback chunk_callback,
                          long timeout_ms = 120000);
 
+// v0.7.2: Connection pool configuration and monitoring
+struct ConnectionPoolConfig
+{
+  size_t max_pool_size{8};      // Max idle connections
+  int stale_timeout_secs{60};   // Evict connections idle longer than this
+};
+
+struct ConnectionPoolStats
+{
+  uint64_t created{0};
+  uint64_t reused{0};
+  uint64_t evicted{0};
+  size_t current_idle{0};
+};
+
+void configure_connection_pool(const ConnectionPoolConfig& config);
+ConnectionPoolStats connection_pool_stats();
+void prewarm_connection_pool(const std::vector<std::string>& urls);
+
 }  // namespace neamc::llm

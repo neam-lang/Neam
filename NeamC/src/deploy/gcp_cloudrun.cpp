@@ -18,6 +18,10 @@ void generate_cloudrun_service(const DeployConfig& config, const std::string& ap
   file << "  name: " << app_name << "\n";
   file << "spec:\n";
   file << "  template:\n";
+  file << "    metadata:\n";
+  file << "      annotations:\n";
+  // v0.7.2: Keep at least 1 instance warm to avoid cold starts
+  file << "        autoscaling.knative.dev/minScale: \"1\"\n";
   file << "    spec:\n";
   file << "      containers:\n";
   file << "      - image: " << config.docker.image << "\n";

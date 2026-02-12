@@ -146,10 +146,10 @@ void generate_k8s_manifests(const DeployConfig::Kubernetes& config, const std::s
     f << "                name: " << name << "-secrets\n";
     f << "          startupProbe:\n";
     f << "            httpGet:\n";
-    f << "              path: /health\n";
+    f << "              path: /ready\n";
     f << "              port: http\n";
-    f << "            initialDelaySeconds: 5\n";
-    f << "            periodSeconds: 5\n";
+    f << "            initialDelaySeconds: 2\n";
+    f << "            periodSeconds: 3\n";
     f << "            failureThreshold: 12\n";
     f << "          livenessProbe:\n";
     f << "            httpGet:\n";

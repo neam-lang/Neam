@@ -213,7 +213,10 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/value_hash.cpp
     NeamC/src/vm/runtime_type.cpp
     NeamC/src/vm/bytecode.cpp
+    NeamC/src/vm/bytecode_cache.cpp
     NeamC/src/vm/vm.cpp
+    NeamC/src/vm/vm_pool.cpp
+    NeamC/src/vm/metrics.cpp
     NeamC/src/vm/trace.cpp
     NeamC/src/runtime/executor.cpp
     NeamC/src/types/type_repr.cpp
@@ -367,6 +370,13 @@ add_executable(neam-pkg
 target_link_libraries(neam-pkg PRIVATE neamc_core)
 target_link_libraries(neam-pkg PRIVATE nlohmann_json_schema_validator)
 
+# v0.7.2: Lambda custom runtime
+add_executable(neam-lambda
+    NeamC/src/neam_lambda.cpp
+)
+target_link_libraries(neam-lambda PRIVATE neamc_core)
+target_link_libraries(neam-lambda PRIVATE nlohmann_json_schema_validator)
+
 enable_testing()
 
 add_executable(vm_test
@@ -411,6 +421,17 @@ add_executable(vm_benchmark
     tests/benchmark/vm_benchmark.cpp
 )
 target_link_libraries(vm_benchmark PRIVATE neamc_core benchmark::benchmark)
+
+add_executable(hotvm_bench
+    tests/benchmark/hotvm_bench.cpp
+)
+target_link_libraries(hotvm_bench PRIVATE neamc_core)
+
+# v0.7.2: Memory benchmark with Google Benchmark
+add_executable(hotvm_memory_bench
+    tests/benchmark/hotvm_memory_bench.cpp
+)
+target_link_libraries(hotvm_memory_bench PRIVATE neamc_core benchmark::benchmark)
 
 add_executable(type_unification_test
     tests/types/unification_test.cpp
@@ -496,13 +517,29 @@ target_link_libraries(v070_test PRIVATE neamc_core gtest_main)
 add_test(NAME v070_test COMMAND v070_test)
 
 # ============================================================================
+# v0.7.2 Test Targets
+# ============================================================================
+
+add_executable(v072_phase2_test
+    tests/unit/v072_phase2_test.cpp
+)
+target_link_libraries(v072_phase2_test PRIVATE neamc_core gtest_main)
+add_test(NAME v072_phase2_test COMMAND v072_phase2_test)
+
+add_executable(v072_manifest_agents_test
+    tests/unit/v072_manifest_agents_test.cpp
+)
+target_link_libraries(v072_manifest_agents_test PRIVATE neamc_core gtest_main)
+add_test(NAME v072_manifest_agents_test COMMAND v072_manifest_agents_test)
+
+# ============================================================================
 # Install targets (v0.6.5)
 # ============================================================================
 
 include(GNUInstallDirs)
 
 # Executables
-install(TARGETS neamc neam neam-cli neam-pkg neam-api neam-lsp neam-dap neam-gym
+install(TARGETS neamc neam neam-cli neam-pkg neam-api neam-lambda neam-lsp neam-dap neam-gym
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Core static library

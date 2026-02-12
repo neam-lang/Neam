@@ -147,6 +147,7 @@ ProjectManifest parse_project_manifest(const std::string& toml)
 {
   ProjectManifest manifest;
   std::string section;
+  std::string array_table;  // v0.7.2: tracks [[agents]] context
   std::istringstream input(toml);
   std::string line;
   while (std::getline(input, line))
@@ -156,9 +157,25 @@ ProjectManifest parse_project_manifest(const std::string& toml)
     {
       continue;
     }
+
+    // v0.7.2: Detect [[array-of-tables]] (double brackets)
+    if (trimmed.size() >= 4 && trimmed[0] == '[' && trimmed[1] == '[' &&
+        trimmed[trimmed.size() - 1] == ']' && trimmed[trimmed.size() - 2] == ']')
+    {
+      array_table = trimmed.substr(2, trimmed.size() - 4);
+      array_table = trim(array_table);
+      section.clear();  // array-of-tables overrides section
+      if (array_table == "agents")
+      {
+        manifest.agents.emplace_back();  // Start new agent entry
+      }
+      continue;
+    }
+
     if (trimmed.front() == '[' && trimmed.back() == ']')
     {
       section = trimmed.substr(1, trimmed.size() - 2);
+      array_table.clear();  // regular section clears array-of-tables
       continue;
     }
 
@@ -359,6 +376,43 @@ ProjectManifest parse_project_manifest(const std::string& toml)
       else if (key == "readiness-path")
       {
         manifest.deploy.serverless.readiness_path = unquote(value);
+      }
+      else if (key == "provisioned-concurrency")
+      {
+        manifest.deploy.serverless.provisioned_concurrency = parse_int(value, 0);
+      }
+    }
+    // v0.7.2: Parse [[agents]] array-of-tables entries
+    else if (array_table == "agents" && !manifest.agents.empty())
+    {
+      auto& agent = manifest.agents.back();
+      if (key == "id")
+      {
+        agent.id = unquote(value);
+      }
+      else if (key == "name")
+      {
+        agent.name = unquote(value);
+      }
+      else if (key == "provider")
+      {
+        agent.provider = unquote(value);
+      }
+      else if (key == "model")
+      {
+        agent.model = unquote(value);
+      }
+      else if (key == "system-prompt")
+      {
+        agent.system_prompt = unquote(value);
+      }
+      else if (key == "source")
+      {
+        agent.source = unquote(value);
+      }
+      else if (key == "knowledge-base")
+      {
+        agent.knowledge_base = unquote(value);
       }
     }
     else if (section == "features")
