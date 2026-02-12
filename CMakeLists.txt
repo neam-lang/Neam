@@ -200,6 +200,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/llm/provider_factory.cpp
     NeamC/src/vm/knowledge.cpp
     NeamC/src/vm/value.cpp
+    NeamC/src/vm/value_hash.cpp
     NeamC/src/vm/runtime_type.cpp
     NeamC/src/vm/bytecode.cpp
     NeamC/src/vm/vm.cpp
@@ -473,6 +474,16 @@ add_executable(v069_test
 )
 target_link_libraries(v069_test PRIVATE neamc_core gtest_main)
 add_test(NAME v069_test COMMAND v069_test)
+
+# ============================================================================
+# v0.7.0 Test Targets
+# ============================================================================
+
+add_executable(v070_test
+    tests/unit/v070_test.cpp
+)
+target_link_libraries(v070_test PRIVATE neamc_core gtest_main)
+add_test(NAME v070_test COMMAND v070_test)
 
 # ============================================================================
 # Install targets (v0.6.5)

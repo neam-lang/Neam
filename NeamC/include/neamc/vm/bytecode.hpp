@@ -67,7 +67,19 @@ enum class OpCode : uint8_t
   // v0.6.7: External skill adoption
   OP_DEFINE_EXTERN_SKILL,  // Stack: [name, desc, param_names, params, binding_type, binding_config]
   OP_DEFINE_MCP_SERVER,    // Stack: [name, config_map]
-  OP_ADOPT_MCP_TOOLS       // Stack: [server_name, filter_list, alias_or_nil]
+  OP_ADOPT_MCP_TOOLS,      // Stack: [server_name, filter_list, alias_or_nil]
+
+  // v0.7.0: Data types & data processing
+  OP_SET_INDEX,       // Stack: [base, index, value] -> [value]
+  OP_GET_ITER,        // Stack: [collection] -> [iter_state]
+  OP_FOR_ITER,        // Operand: uint16 exit_offset. Stack: [iter_state] -> [iter_state, next_val] or jump
+  OP_BUILD_SET,       // Operand: uint16 count
+  OP_BUILD_TUPLE,     // Operand: uint16 count
+  OP_CONTAINS,        // Stack: [element, collection] -> [bool]
+  OP_FORMAT_STRING,   // Operand: uint16 part_count
+  OP_UNPACK,          // Operand: uint16 count
+  OP_UNPACK_REST,     // Operands: uint16 before_count, uint16 after_count
+  OP_SLICE            // Operand: uint8 flags (bit0=has_start, bit1=has_end, bit2=has_step)
 };
 
 class Bytecode

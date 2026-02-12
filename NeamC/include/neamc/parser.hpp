@@ -172,6 +172,15 @@ enum class TokenType
   // v0.6.9: Security policy keyword
   Policy,
 
+  // v0.7.0: Data types keywords and operators
+  For,
+  In,
+  Break,
+  Continue,
+  Not,
+  Pipe,         // |>
+  DotDotDot,    // ...
+
   Eof
 };
 
@@ -239,6 +248,9 @@ private:
   StmtPtr parse_checkpoint_statement();
   StmtPtr parse_rewind_statement();
   StmtPtr parse_let();
+  StmtPtr parse_for_in();
+  StmtPtr parse_break_stmt();
+  StmtPtr parse_continue_stmt();
   StmtPtr parse_block();
   BlockStmt parse_block_node();
   StmtPtr parse_if();
@@ -260,13 +272,16 @@ private:
   std::vector<std::string> parse_import_items();
   ExprPtr parse_expression();
   ExprPtr parse_assignment();
+  ExprPtr parse_pipe();
   ExprPtr parse_equality();
+  ExprPtr parse_contains();
   ExprPtr parse_comparison();
   ExprPtr parse_term();
   ExprPtr parse_factor();
   ExprPtr parse_unary();
   ExprPtr parse_call();
   ExprPtr parse_primary();
+  ExprPtr parse_fstring(const std::string& raw);
   std::unique_ptr<TypeExpression> parse_type_expression();
 
   std::string source_;

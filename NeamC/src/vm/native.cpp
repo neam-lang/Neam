@@ -59,29 +59,6 @@ double to_number(const Value& value)
   return value.as_number();
 }
 
-std::string value_to_string(const Value& value)
-{
-  if (value.is_string())
-  {
-    auto* str = as_string(value);
-    return std::string(str->chars, str->length);
-  }
-  if (value.is_number())
-  {
-    std::ostringstream out;
-    out << value.as_number();
-    return out.str();
-  }
-  if (value.is_bool())
-  {
-    return value.as_bool() ? "true" : "false";
-  }
-  if (value.is_nil())
-  {
-    return "nil";
-  }
-  return "<object>";
-}
 
 bool values_equal(const Value& lhs, const Value& rhs)
 {
@@ -1600,6 +1577,109 @@ Value crypto_hex_decode_native(VirtualMachine&, int arg_count, Value* args)
   const std::vector<uint8_t> bytes = hex_decode_string(hex);
   return bytes_to_list(bytes);
 }
+// v0.7.0: range() native — creates a Range object
+Value range_native(VirtualMachine& /*vm*/, int argCount, Value* args)
+{
+  if (argCount < 1 || argCount > 3)
+  {
+    throw std::runtime_error("range() expects 1-3 arguments");
+  }
+  int64_t start = 0;
+  int64_t end = 0;
+  int64_t step = 1;
+  if (argCount == 1)
+  {
+    if (!args[0].is_number()) throw std::runtime_error("range() argument must be a number");
+    end = static_cast<int64_t>(args[0].as_number());
+  }
+  else if (argCount == 2)
+  {
+    if (!args[0].is_number() || !args[1].is_number())
+      throw std::runtime_error("range() arguments must be numbers");
+    start = static_cast<int64_t>(args[0].as_number());
+    end = static_cast<int64_t>(args[1].as_number());
+  }
+  else
+  {
+    if (!args[0].is_number() || !args[1].is_number() || !args[2].is_number())
+      throw std::runtime_error("range() arguments must be numbers");
+    start = static_cast<int64_t>(args[0].as_number());
+    end = static_cast<int64_t>(args[1].as_number());
+    step = static_cast<int64_t>(args[2].as_number());
+    if (step == 0) throw std::runtime_error("range() step cannot be zero");
+  }
+  return Value::Range(new_range(start, end, step));
+}
+
+// v0.7.0: set() native — creates a Set from arguments
+Value set_native(VirtualMachine& /*vm*/, int argCount, Value* args)
+{
+  std::unordered_set<Value, ValueHash, ValueEqual> items;
+  for (int i = 0; i < argCount; ++i)
+  {
+    items.insert(args[i]);
+  }
+  return Value::Set(new_set(std::move(items)));
+}
+
+// v0.7.0: tuple() native — creates a Tuple from arguments
+Value tuple_native(VirtualMachine& /*vm*/, int argCount, Value* args)
+{
+  std::vector<Value> items;
+  items.reserve(argCount);
+  for (int i = 0; i < argCount; ++i)
+  {
+    items.push_back(args[i]);
+  }
+  return Value::Tuple(new_tuple(std::move(items)));
+}
+
+// v0.7.0: Some() native — wraps a value in Option
+Value some_native(VirtualMachine& /*vm*/, int argCount, Value* args)
+{
+  if (argCount != 1) throw std::runtime_error("Some() expects 1 argument");
+  return Value::Option(new_option(true, args[0]));
+}
+
+
+
+// v0.7.0: len() generic — returns length of string/list/map/set/tuple/range
+Value len_native(VirtualMachine& /*vm*/, int argCount, Value* args)
+{
+  if (argCount != 1) throw std::runtime_error("len() expects 1 argument");
+  const auto& val = args[0];
+  if (val.is_string())
+  {
+    return Value::Number(static_cast<double>(as_string(val)->length));
+  }
+  if (val.is_list())
+  {
+    return Value::Number(static_cast<double>(as_list(val)->items.size()));
+  }
+  if (val.is_map())
+  {
+    return Value::Number(static_cast<double>(as_map(val)->entries.size()));
+  }
+  if (val.is_set())
+  {
+    return Value::Number(static_cast<double>(as_set(val)->items.size()));
+  }
+  if (val.is_tuple())
+  {
+    return Value::Number(static_cast<double>(as_tuple(val)->items.size()));
+  }
+  if (val.is_range())
+  {
+    auto* range = as_range(val);
+    int64_t len = 0;
+    if (range->step > 0 && range->start < range->end)
+      len = (range->end - range->start + range->step - 1) / range->step;
+    else if (range->step < 0 && range->start > range->end)
+      len = (range->start - range->end + (-range->step) - 1) / (-range->step);
+    return Value::Number(static_cast<double>(len));
+  }
+  throw std::runtime_error("len() not supported for " + std::string(val.is_nil() ? "nil" : "this type"));
+}
 }  // namespace
 
 void register_core_natives(VirtualMachine& vm)
@@ -1674,5 +1754,14 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("crypto_base64_decode", 1, crypto_base64_decode_native);
   vm.define_native("crypto_hex_encode", 1, crypto_hex_encode_native);
   vm.define_native("crypto_hex_decode", 1, crypto_hex_decode_native);
+  // v0.7.0: Data types
+  vm.define_native("range", -1, range_native);
+  vm.define_native("set", -1, set_native);
+  vm.define_native("tuple", -1, tuple_native);
+  vm.define_native("Some", 1, some_native);
+  // None is a global value, not a function — so users write `None` not `None()`
+  auto* none_name = copy_string("None", 4);
+  vm.globals().set(none_name, Value::Option(new_option(false, Value::Nil())));
+  vm.define_native("len", 1, len_native);
 }
 }  // namespace neamc::vm

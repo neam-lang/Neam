@@ -47,7 +47,10 @@ enum class BinaryOp
   Less,
   LessEqual,
   Equal,
-  NotEqual
+  NotEqual,
+  // v0.7.0
+  In,
+  NotIn
 };
 
 enum class UnaryOp
@@ -183,12 +186,60 @@ struct WithContextExpr
   ExprPtr value;
 };
 
+// v0.7.0: Index assignment (x[i] = val)
+struct IndexAssignExpr
+{
+  ExprPtr base;
+  ExprPtr index;
+  ExprPtr value;
+};
+
+// v0.7.0: Tuple expression ((a, b, c))
+struct TupleExpr
+{
+  std::vector<ExprPtr> elements;
+};
+
+// v0.7.0: F-string expression (f"Hello, {name}!")
+struct FStringSegment
+{
+  bool is_expr{false};
+  std::string text;
+  ExprPtr expr;
+};
+
+struct FStringExpr
+{
+  std::vector<FStringSegment> segments;
+};
+
+// v0.7.0: Slice expression (x[1:3:1])
+struct SliceExpr
+{
+  ExprPtr base;
+  ExprPtr start;  // may be null
+  ExprPtr end;    // may be null
+  ExprPtr step;   // may be null
+};
+
+// v0.7.0: Destructuring pattern
+struct DestructurePattern
+{
+  enum class Kind { List, Tuple, Map };
+  Kind kind;
+  std::vector<std::string> names;
+  std::string rest_name;  // for ...rest
+  bool has_rest{false};
+  int rest_position{-1};
+};
+
 struct Expression
 {
   using Variant =
       std::variant<LiteralExpr, IdentifierExpr, AssignmentExpr, UnaryExpr, BinaryExpr, CallExpr,
                    GetExpr, IndexExpr, ListExpr, MapExpr, FileOpenExpr, PathLiteralExpr, TryExpr,
-                   PanicExpr, CatchPanicExpr, ContextExpr, WithContextExpr>;
+                   PanicExpr, CatchPanicExpr, ContextExpr, WithContextExpr,
+                   IndexAssignExpr, TupleExpr, FStringExpr, SliceExpr>;
   SourceSpan span;
   Variant node;
 };
@@ -572,6 +623,28 @@ struct RewindStmt
   ExprPtr target;
 };
 
+// v0.7.0: For-in loop
+struct ForInStmt
+{
+  std::string variable;
+  std::string second_variable;  // for (k, v) in map.entries()
+  ExprPtr iterable;
+  StmtPtr body;
+};
+
+// v0.7.0: Break statement
+struct BreakStmt {};
+
+// v0.7.0: Continue statement
+struct ContinueStmt {};
+
+// v0.7.0: Destructuring let
+struct DestructureLetStmt
+{
+  DestructurePattern pattern;
+  ExprPtr initializer;
+};
+
 struct EnvConfig
 {
   std::string key;
@@ -686,7 +759,8 @@ struct Statement
                    ToolDecl, MemoryDecl, EnvDecl, ConnectorDecl, WorldModelDecl, PlanDecl,
                    SubagentDecl, AgentDecl, ModuleDecl, ImportDecl, ConstDecl, TypeAlias,
                    DocComment, GrantStmt, CheckpointStmt, RewindStmt,
-                   ExternSkillDecl, McpServerDecl, AdoptStmt>;
+                   ExternSkillDecl, McpServerDecl, AdoptStmt,
+                   ForInStmt, BreakStmt, ContinueStmt, DestructureLetStmt>;
   SourceSpan span;
   Variant node;
 };

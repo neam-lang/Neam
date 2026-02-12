@@ -311,35 +311,6 @@ std::string escape_string(const std::string& input)
   return result;
 }
 
-// Convert Value to string representation
-std::string value_to_string(const neamc::vm::Value& value)
-{
-  if (value.is_nil())
-  {
-    return "nil";
-  }
-  if (value.is_bool())
-  {
-    return value.as_bool() ? "true" : "false";
-  }
-  if (value.is_number())
-  {
-    std::ostringstream ss;
-    ss << value.as_number();
-    return ss.str();
-  }
-  if (value.is_string())
-  {
-    auto* str = neamc::vm::as_string(value);
-    if (str && str->chars)
-    {
-      return std::string(str->chars, str->length);
-    }
-    return "";
-  }
-  return "<object>";
-}
-
 // v0.6.8: Execute Neam program with per-request VM (no global mutex).
 // Each request gets its own Pipeline + VM for full concurrency.
 std::string execute_neam_program(const std::string& source)
@@ -359,7 +330,7 @@ std::string execute_neam_program(const std::string& source)
     const auto& emitted = vm.emitted();
     if (!emitted.empty())
     {
-      return value_to_string(emitted.back());
+      return neamc::vm::value_to_string(emitted.back());
     }
 
     return output_stream.str();

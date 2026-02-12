@@ -41,5 +41,9 @@ private:
   vm::Chunk chunk_{};
   std::vector<Local> locals_{};
   int scope_depth_ = 0;
+  // v0.7.0: Loop tracking for break/continue
+  std::vector<std::size_t> loop_starts_;
+  std::vector<std::vector<std::size_t>> break_patches_;
+  std::vector<std::size_t> loop_local_counts_;  // locals count before loop scope (for cleanup on break)
 };
 }  // namespace neamc

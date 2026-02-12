@@ -4,7 +4,10 @@
 
 #include "neamc/vm/value.hpp"
 
+#include <cmath>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 
 #include "neamc/vm/object.hpp"
 
@@ -99,6 +102,26 @@ Value Value::Future(ObjFuture* future)
   return Value::ObjVal(reinterpret_cast<Obj*>(future));
 }
 
+Value Value::Range(ObjRange* range)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(range));
+}
+
+Value Value::IterState(ObjIterState* iter)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(iter));
+}
+
+Value Value::Set(ObjSet* set)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(set));
+}
+
+Value Value::Tuple(ObjTuple* tuple)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(tuple));
+}
+
 bool Value::as_bool() const
 {
   if (!is_bool())
@@ -184,6 +207,156 @@ bool Value::is_option() const
 bool Value::is_future() const
 {
   return is_obj_type(*this, ObjType::OBJ_FUTURE);
+}
+
+bool Value::is_range() const
+{
+  return is_obj_type(*this, ObjType::OBJ_RANGE);
+}
+
+bool Value::is_iter_state() const
+{
+  return is_obj_type(*this, ObjType::OBJ_ITER_STATE);
+}
+
+bool Value::is_set() const
+{
+  return is_obj_type(*this, ObjType::OBJ_SET);
+}
+
+bool Value::is_tuple() const
+{
+  return is_obj_type(*this, ObjType::OBJ_TUPLE);
+}
+
+std::string value_to_string(const Value& value)
+{
+  if (value.is_string())
+  {
+    auto* str = as_string(value);
+    return std::string(str->chars, str->length);
+  }
+  if (value.is_number())
+  {
+    double num = value.as_number();
+    if (num == static_cast<int64_t>(num) && std::abs(num) < 1e15)
+    {
+      return std::to_string(static_cast<int64_t>(num));
+    }
+    std::ostringstream out;
+    out << num;
+    return out.str();
+  }
+  if (value.is_bool())
+  {
+    return value.as_bool() ? "true" : "false";
+  }
+  if (value.is_nil())
+  {
+    return "nil";
+  }
+  if (value.is_list())
+  {
+    auto* list = as_list(value);
+    std::string result = "[";
+    for (std::size_t i = 0; i < list->items.size(); ++i)
+    {
+      if (i > 0) result += ", ";
+      if (list->items[i].is_string())
+      {
+        result += "\"" + value_to_string(list->items[i]) + "\"";
+      }
+      else
+      {
+        result += value_to_string(list->items[i]);
+      }
+    }
+    result += "]";
+    return result;
+  }
+  if (value.is_map())
+  {
+    auto* map = as_map(value);
+    std::string result = "{";
+    bool first = true;
+    for (const auto& entry : map->entries)
+    {
+      if (!first) result += ", ";
+      result += entry.first + ": ";
+      if (entry.second.is_string())
+      {
+        result += "\"" + value_to_string(entry.second) + "\"";
+      }
+      else
+      {
+        result += value_to_string(entry.second);
+      }
+      first = false;
+    }
+    result += "}";
+    return result;
+  }
+  if (value.is_option())
+  {
+    auto* opt = as_option(value);
+    if (opt->has_value)
+    {
+      return "Some(" + value_to_string(opt->value) + ")";
+    }
+    return "None";
+  }
+  if (value.is_set())
+  {
+    auto* set = as_set(value);
+    std::string result = "set(";
+    bool first = true;
+    for (const auto& item : set->items)
+    {
+      if (!first) result += ", ";
+      if (item.is_string())
+      {
+        result += "\"" + value_to_string(item) + "\"";
+      }
+      else
+      {
+        result += value_to_string(item);
+      }
+      first = false;
+    }
+    result += ")";
+    return result;
+  }
+  if (value.is_tuple())
+  {
+    auto* tuple = as_tuple(value);
+    std::string result = "(";
+    for (std::size_t i = 0; i < tuple->items.size(); ++i)
+    {
+      if (i > 0) result += ", ";
+      if (tuple->items[i].is_string())
+      {
+        result += "\"" + value_to_string(tuple->items[i]) + "\"";
+      }
+      else
+      {
+        result += value_to_string(tuple->items[i]);
+      }
+    }
+    if (tuple->items.size() == 1) result += ",";
+    result += ")";
+    return result;
+  }
+  if (value.is_range())
+  {
+    auto* range = as_range(value);
+    if (range->step == 1)
+    {
+      return "range(" + std::to_string(range->start) + ", " + std::to_string(range->end) + ")";
+    }
+    return "range(" + std::to_string(range->start) + ", " + std::to_string(range->end) +
+           ", " + std::to_string(range->step) + ")";
+  }
+  return "<object>";
 }
 
 bool is_obj_type(const Value& value, ObjType type)
@@ -297,5 +470,41 @@ ObjFuture* as_future(const Value& value)
     throw std::runtime_error("Expected future object");
   }
   return reinterpret_cast<ObjFuture*>(value.as.obj);
+}
+
+ObjRange* as_range(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_RANGE))
+  {
+    throw std::runtime_error("Expected range object");
+  }
+  return reinterpret_cast<ObjRange*>(value.as.obj);
+}
+
+ObjIterState* as_iter_state(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_ITER_STATE))
+  {
+    throw std::runtime_error("Expected iter_state object");
+  }
+  return reinterpret_cast<ObjIterState*>(value.as.obj);
+}
+
+ObjSet* as_set(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_SET))
+  {
+    throw std::runtime_error("Expected set object");
+  }
+  return reinterpret_cast<ObjSet*>(value.as.obj);
+}
+
+ObjTuple* as_tuple(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_TUPLE))
+  {
+    throw std::runtime_error("Expected tuple object");
+  }
+  return reinterpret_cast<ObjTuple*>(value.as.obj);
 }
 }  // namespace neamc::vm
