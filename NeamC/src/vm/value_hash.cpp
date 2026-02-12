@@ -9,6 +9,8 @@
 #include <stdexcept>
 
 #include "neamc/vm/object.hpp"
+#include "neamc/vm/struct_type.hpp"
+#include "neamc/vm/sealed_type.hpp"
 
 namespace neamc::vm
 {
@@ -55,6 +57,18 @@ std::size_t ValueHash::operator()(const Value& v) const
         tuple->hash_cache = static_cast<uint32_t>(seed);
         tuple->hash_computed = true;
         return seed;
+      }
+      // v0.7.1: Struct hashing
+      if (obj->type == ObjType::OBJ_STRUCT)
+      {
+        auto* s = reinterpret_cast<ObjStruct*>(obj);
+        return static_cast<std::size_t>(struct_hash(s));
+      }
+      // v0.7.1 Phase 2: Variant hashing
+      if (obj->type == ObjType::OBJ_VARIANT)
+      {
+        auto* v = reinterpret_cast<ObjVariant*>(obj);
+        return static_cast<std::size_t>(variant_hash(v));
       }
       throw std::runtime_error("Unhashable type: cannot hash this object");
     }
@@ -143,6 +157,20 @@ bool ValueEqual::operator()(const Value& a, const Value& b) const
         }
         return true;
       }
+      // v0.7.1: Struct structural equality
+      if (obj_a->type == ObjType::OBJ_STRUCT)
+      {
+        auto* sa = reinterpret_cast<ObjStruct*>(obj_a);
+        auto* sb = reinterpret_cast<ObjStruct*>(obj_b);
+        return struct_equal(sa, sb);
+      }
+      // v0.7.1 Phase 2: Variant structural equality
+      if (obj_a->type == ObjType::OBJ_VARIANT)
+      {
+        auto* va = reinterpret_cast<ObjVariant*>(obj_a);
+        auto* vb = reinterpret_cast<ObjVariant*>(obj_b);
+        return variant_equal(va, vb);
+      }
       return obj_a == obj_b;
     }
   }
@@ -168,6 +196,32 @@ bool is_hashable(const Value& v)
       for (const auto& item : tuple->items)
       {
         if (!is_hashable(item))
+        {
+          return false;
+        }
+      }
+      return true;
+    }
+    // v0.7.1: Structs are hashable if all fields are hashable
+    if (obj->type == ObjType::OBJ_STRUCT)
+    {
+      auto* s = reinterpret_cast<ObjStruct*>(obj);
+      for (const auto& field : s->fields)
+      {
+        if (!is_hashable(field))
+        {
+          return false;
+        }
+      }
+      return true;
+    }
+    // v0.7.1 Phase 2: Variants are hashable if all fields are hashable
+    if (obj->type == ObjType::OBJ_VARIANT)
+    {
+      auto* v = reinterpret_cast<ObjVariant*>(obj);
+      for (const auto& field : v->field_values)
+      {
+        if (!is_hashable(field))
         {
           return false;
         }

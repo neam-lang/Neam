@@ -1,0 +1,74 @@
+// v0.7.1 Phase 1: struct + impl + method dispatch — E2E smoke test
+
+// 1. Struct definition
+struct Point { x: number, y: number }
+
+// 2. Impl block with instance and static methods
+impl Point {
+  fn distance_to(self, other) {
+    let dx = self.x - other.x;
+    let dy = self.y - other.y;
+    return dx * dx + dy * dy;
+  }
+
+  fn origin() {
+    return Point(0, 0);
+  }
+
+  fn add(self, other) {
+    return Point(self.x + other.x, self.y + other.y);
+  }
+}
+
+// 3. Positional construction
+let p1 = Point(3, 4);
+// 4. Named construction
+let p2 = Point(x: 0, y: 0);
+
+emit f"p1 = {p1}";
+emit f"p2 = {p2}";
+
+// 5. Field access
+emit f"p1.x = {p1.x}";
+emit f"p1.y = {p1.y}";
+
+// 6. Method dispatch
+emit f"distance = {p1.distance_to(p2)}";
+
+// 7. Copy-with
+let p3 = p1 with (x: 10);
+emit f"p3 = {p3}";
+
+// 8. Structural equality
+emit p1 == Point(3, 4);
+emit p1 == p2;
+
+// 9. Static method
+let o = Point.origin();
+emit f"origin = {o}";
+
+// 10. Method chaining
+let p4 = p1.add(Point(1, 1));
+emit f"p1 + (1,1) = {p4}";
+
+// 11. Mutable struct
+mut struct Counter { value: number }
+
+impl Counter {
+  fn increment(self) {
+    self.value = self.value + 1;
+    return self;
+  }
+
+  fn get(self) {
+    return self.value;
+  }
+}
+
+let c = Counter(0);
+c.value = 5;
+emit f"counter = {c.value}";
+
+// 12. Copy-with on mutable struct
+let c2 = c with (value: 100);
+emit f"c2 = {c2}";

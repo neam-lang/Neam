@@ -52,7 +52,15 @@ enum class ObjType
   OBJ_RANGE,
   OBJ_ITER_STATE,
   OBJ_SET,
-  OBJ_TUPLE
+  OBJ_TUPLE,
+  // v0.7.1: OOP
+  OBJ_STRUCT_DEF,
+  OBJ_STRUCT,
+  OBJ_IMPL_TABLE,
+  // v0.7.1 Phase 2: trait + sealed
+  OBJ_TRAIT_DEF,
+  OBJ_SEALED_DEF,
+  OBJ_VARIANT
 };
 
 struct ObjString : Obj
@@ -242,6 +250,23 @@ ObjRange* new_range(int64_t start, int64_t end, int64_t step);
 ObjIterState* new_iter_state();
 ObjSet* new_set(std::unordered_set<Value, ValueHash, ValueEqual> items);
 ObjTuple* new_tuple(std::vector<Value> items);
+
+// v0.7.1: Struct type system — forward declares (definitions in struct_type.hpp)
+struct ObjStructDef;
+struct ObjStruct;
+struct ObjImplTable;
+ObjStructDef* new_struct_def(const std::string& name, const std::vector<std::string>& field_names,
+                             bool is_mutable);
+ObjStruct* new_struct(ObjStructDef* def, std::vector<Value> field_values);
+ObjImplTable* new_impl_table();
+
+// v0.7.1 Phase 2: Trait + sealed type system — forward declares (definitions in sealed_type.hpp)
+struct ObjTraitDef;
+struct ObjSealedDef;
+struct ObjVariant;
+ObjTraitDef* new_trait_def(const std::string& name);
+ObjSealedDef* new_sealed_def(const std::string& name);
+ObjVariant* new_variant(ObjSealedDef* sealed_def, uint16_t tag, std::vector<Value> field_values);
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

@@ -1,0 +1,98 @@
+// v0.7.1 Phase 3: Extend + Derive — E2E smoke test
+
+// === EXTEND BLOCKS ===
+
+// 1. Basic struct
+struct Point { x: number, y: number }
+
+impl Point {
+  fn magnitude(self) {
+    return self.x * self.x + self.y * self.y;
+  }
+}
+
+// 2. Extend with new method
+extend Point {
+  fn to_string(self) {
+    return f"({self.x}, {self.y})";
+  }
+
+  fn scale(self, factor) {
+    return Point(self.x * factor, self.y * factor);
+  }
+}
+
+let p = Point(3, 4);
+emit f"1. magnitude = {p.magnitude()}";
+emit f"2. to_string = {p.to_string()}";
+
+let scaled = p.scale(2);
+emit f"3. scaled = ({scaled.x}, {scaled.y})";
+
+// 3. Extend sealed type
+sealed Color {
+  Red,
+  Green,
+  Blue,
+  Custom(r: number, g: number, b: number)
+}
+
+extend Color {
+  fn name(self) {
+    return match self {
+      Red => "red",
+      Green => "green",
+      Blue => "blue",
+      Custom(r, g, b) => f"rgb({r},{g},{b})",
+    };
+  }
+}
+
+let c1 = Color.Red;
+let c2 = Color.Custom(255, 128, 0);
+emit f"4. color = {c1.name()}";
+emit f"5. custom = {c2.name()}";
+
+// 4. Multiple extends on same type
+extend Point {
+  fn negate(self) {
+    return Point(0 - self.x, 0 - self.y);
+  }
+}
+
+let neg = p.negate();
+emit f"6. negate = ({neg.x}, {neg.y})";
+
+// 5. Extend with static method
+extend Point {
+  fn unit_x() {
+    return Point(1, 0);
+  }
+}
+
+let ux = Point.unit_x();
+emit f"7. unit_x = ({ux.x}, {ux.y})";
+
+// === TRAIT IMPL ON SEALED ===
+
+// 6. Trait for sealed type
+trait Printable {
+  fn display(self);
+}
+
+impl Printable for Color {
+  fn display(self) {
+    return match self {
+      Red => "[RED]",
+      Green => "[GREEN]",
+      Blue => "[BLUE]",
+      Custom(r, g, b) => f"[{r},{g},{b}]",
+    };
+  }
+}
+
+emit f"8. display = {c1.display()}";
+emit f"9. display = {c2.display()}";
+
+// 7. Verify original methods still work
+emit f"10. still works = {p.magnitude()}";
