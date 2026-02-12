@@ -18,6 +18,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "neamc/security/network_policy.hpp"
+
 #ifndef _WIN32
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -34,8 +36,33 @@ namespace neamc::vm
 {
 namespace
 {
+// v0.6.9 D8: Template context determines how values are sanitized
+enum class TemplateContext { Plain, URL, Header, JSON };
+
+// Escape a string for JSON embedding (backslash-escapes special chars)
+std::string json_escape(const std::string& s)
+{
+  std::string out;
+  out.reserve(s.size());
+  for (char c : s)
+  {
+    switch (c)
+    {
+      case '"':  out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n";  break;
+      case '\r': out += "\\r";  break;
+      case '\t': out += "\\t";  break;
+      default:   out += c;      break;
+    }
+  }
+  return out;
+}
+
 // Replace {param} placeholders in a template string with values from JSON input.
-std::string expand_template(const std::string& tmpl, const nlohmann::json& input)
+// The TemplateContext controls how substituted values are sanitized.
+std::string expand_template(const std::string& tmpl, const nlohmann::json& input,
+                            TemplateContext context = TemplateContext::Plain)
 {
   std::string result = tmpl;
   // Match {param_name} patterns
@@ -50,13 +77,31 @@ std::string expand_template(const std::string& tmpl, const nlohmann::json& input
     if (input.contains(key))
     {
       const auto& val = input.at(key);
+      std::string value;
       if (val.is_string())
       {
-        result += val.get<std::string>();
+        value = val.get<std::string>();
       }
       else
       {
-        result += val.dump();
+        value = val.dump();
+      }
+      // v0.6.9 D8: Context-aware sanitization
+      switch (context)
+      {
+        case TemplateContext::URL:
+          result += security::url_encode_value(value);
+          break;
+        case TemplateContext::Header:
+          result += security::sanitize_header_value(value);
+          break;
+        case TemplateContext::JSON:
+          result += json_escape(value);
+          break;
+        case TemplateContext::Plain:
+        default:
+          result += value;
+          break;
       }
     }
     else
@@ -117,14 +162,14 @@ std::string dispatch_http_skill(ObjSkill* skill, const nlohmann::json& input)
 {
   const auto& cfg = *skill->external;
 
-  // Expand URL template with parameter values
-  std::string url = expand_template(cfg.http_url_template, input);
+  // Expand URL template with parameter values (URL-encoded for SSRF prevention)
+  std::string url = expand_template(cfg.http_url_template, input, TemplateContext::URL);
 
   // Build body if present
   std::string body;
   if (!cfg.http_body_template.empty())
   {
-    body = expand_template(cfg.http_body_template, input);
+    body = expand_template(cfg.http_body_template, input, TemplateContext::JSON);
   }
   else if (cfg.http_method == "POST" || cfg.http_method == "PUT" ||
            cfg.http_method == "PATCH")
@@ -136,7 +181,11 @@ std::string dispatch_http_skill(ObjSkill* skill, const nlohmann::json& input)
   std::vector<std::string> headers;
   for (const auto& [key, value] : cfg.http_headers)
   {
-    headers.push_back(key + ": " + expand_env_vars(value));
+    std::string hdr_val = security::sanitize_header_value(expand_env_vars(value));
+    if (!hdr_val.empty())
+    {
+      headers.push_back(key + ": " + hdr_val);
+    }
   }
   // Default Content-Type if not set
   bool has_content_type = false;

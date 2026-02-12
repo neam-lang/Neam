@@ -1,8 +1,9 @@
 //
-// Neam Virtual Machine - MCP Client (v0.6.8)
+// Neam Virtual Machine - MCP Client (v0.6.9)
 //
 // JSON-RPC 2.0 over stdio transport for Model Context Protocol.
 // Manages child MCP server processes and provides tools/list + tools/call.
+// v0.6.9 D6: Resource limits, environment isolation, hash pinning.
 //
 
 #pragma once
@@ -27,8 +28,13 @@ struct McpToolInfo
 class McpClient
 {
 public:
+  // v0.6.9 D6: Extended constructor with resource limits and hash pinning
   McpClient(const std::string& command, const std::vector<std::string>& args,
-            const std::unordered_map<std::string, std::string>& env = {});
+            const std::unordered_map<std::string, std::string>& env = {},
+            size_t max_memory_bytes = 268435456,   // 256MB
+            size_t max_cpu_seconds = 300,           // 5 min
+            long startup_timeout_ms = 30000,        // 30s
+            const std::string& expected_hash = ""); // SHA-256 of binary
   ~McpClient();
 
   McpClient(const McpClient&) = delete;
@@ -53,9 +59,20 @@ private:
   void start_process();
   void kill_process();
 
+  // v0.6.9 D6: Verify binary hash before launch
+  void verify_hash();
+  // v0.6.9 D6: Compute SHA-256 of a file
+  static std::string compute_sha256_file(const std::string& path);
+
   std::string command_;
   std::vector<std::string> args_;
   std::unordered_map<std::string, std::string> env_;
+
+  // v0.6.9 D6: Resource limits
+  size_t max_memory_bytes_;
+  size_t max_cpu_seconds_;
+  long startup_timeout_ms_;
+  std::string expected_hash_;
 
 #ifdef _WIN32
   void* child_handle_{nullptr};
