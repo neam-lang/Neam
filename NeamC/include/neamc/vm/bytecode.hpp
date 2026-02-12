@@ -79,7 +79,27 @@ enum class OpCode : uint8_t
   OP_FORMAT_STRING,   // Operand: uint16 part_count
   OP_UNPACK,          // Operand: uint16 count
   OP_UNPACK_REST,     // Operands: uint16 before_count, uint16 after_count
-  OP_SLICE            // Operand: uint8 flags (bit0=has_start, bit1=has_end, bit2=has_step)
+  OP_SLICE,           // Operand: uint8 flags (bit0=has_start, bit1=has_end, bit2=has_step)
+
+  // v0.7.1: OOP — struct + impl + method dispatch
+  OP_DEFINE_STRUCT,   // Operand: uint16 name_const, uint8 field_count, uint8 is_mutable
+  OP_IMPL_METHOD,     // Operand: uint16 type_name_const, uint16 method_name_const, uint8 is_static
+  OP_CONSTRUCT_NAMED, // Operand: uint16 type_name_const, uint8 field_count
+  OP_COPY_WITH,       // Operand: uint8 override_count
+  OP_SET_PROPERTY,    // Operand: uint16 name_const
+
+  // v0.7.1 Phase 2: trait + sealed + match
+  OP_DEFINE_TRAIT,    // Operand: uint16 name_const, uint8 required_count, uint8 default_count
+  OP_IMPL_TRAIT,      // Operand: uint16 trait_name_const, uint16 type_name_const, uint8 method_count
+  OP_DEFINE_SEALED,   // Operand: uint16 name_const, uint8 variant_count
+  OP_CONSTRUCT_VARIANT, // Operand: uint16 sealed_name_const, uint16 variant_name_const, uint8 arg_count
+  OP_MATCH_START,     // Operand: uint8 arm_count (sets up match context)
+  OP_MATCH_VARIANT,   // Operand: uint16 variant_name_const, uint8 bind_count, uint16 skip_offset
+  OP_MATCH_WILDCARD,  // No operands (always matches)
+  OP_MATCH_END,       // Cleanup match context
+
+  // v0.7.1 Phase 5: Property observers
+  OP_SET_FIELD_OBSERVER  // Operand: uint16 type_name, uint16 field_name, uint8 kind (0=willSet, 1=didSet, 2=guard)
 };
 
 class Bytecode

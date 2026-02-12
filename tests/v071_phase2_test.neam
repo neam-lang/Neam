@@ -1,0 +1,134 @@
+// v0.7.1 Phase 2: Traits + Sealed + Match — E2E smoke test
+
+// === TRAITS ===
+
+// 1. Basic trait definition
+trait Describable {
+  fn describe(self);
+}
+
+// 2. Struct implementing a trait
+struct Dog { name: string, breed: string }
+
+impl Describable for Dog {
+  fn describe(self) {
+    return f"Dog: {self.name} ({self.breed})";
+  }
+}
+
+let d = Dog("Rex", "Husky");
+emit f"1. {d.describe()}";
+
+// 3. Trait with default method
+trait Greetable {
+  fn greet(self);
+  fn farewell(self) {
+    return "Goodbye!";
+  }
+}
+
+struct Person { name: string }
+
+impl Greetable for Person {
+  fn greet(self) {
+    return f"Hello, I am {self.name}";
+  }
+}
+
+let p = Person("Alice");
+emit f"2. {p.greet()}";
+emit f"3. {p.farewell()}";
+
+// === SEALED TYPES ===
+
+// 4. Basic sealed type with unit + data variants
+sealed Shape {
+  Circle(radius: number),
+  Rectangle(width: number, height: number),
+  Point
+}
+
+// 5. Variant construction
+let c = Shape.Circle(5);
+let r = Shape.Rectangle(3, 4);
+let pt = Shape.Point;
+
+emit f"4. c = {c}";
+emit f"5. r = {r}";
+emit f"6. pt = {pt}";
+
+// 6. Impl block on sealed type
+impl Shape {
+  fn area(self) {
+    return match self {
+      Circle(radius) => 3.14159 * radius * radius,
+      Rectangle(width, height) => width * height,
+      Point => 0,
+    };
+  }
+
+  fn name(self) {
+    return match self {
+      Circle(radius) => "circle",
+      Rectangle(width, height) => "rectangle",
+      Point => "point",
+    };
+  }
+}
+
+emit f"7. circle area = {c.area()}";
+emit f"8. rect area = {r.area()}";
+emit f"9. point area = {pt.area()}";
+
+// === MATCH EXPRESSIONS ===
+
+// 7. Match as expression
+let desc = match c {
+  Circle(radius) => f"circle with radius {radius}",
+  Rectangle(width, height) => f"rect {width}x{height}",
+  Point => "a point",
+};
+emit f"10. {desc}";
+
+// 8. Match with wildcard
+let is_circle = match c {
+  Circle(radius) => true,
+  _ => false,
+};
+emit f"11. is_circle = {is_circle}";
+
+// 9. Match all variants
+let shape_name = match r {
+  Circle(radius) => "circle",
+  Rectangle(width, height) => "rectangle",
+  Point => "point",
+};
+emit f"12. shape_name = {shape_name}";
+
+// 10. Sealed type - agent state machine example
+sealed AgentState {
+  Idle,
+  Working(task: string),
+  Done(result: string),
+  Failed(error: string)
+}
+
+let state = AgentState.Working("summarize");
+
+let status = match state {
+  Idle => "waiting",
+  Working(task) => f"busy: {task}",
+  Done(result) => f"finished: {result}",
+  Failed(error) => f"error: {error}",
+};
+emit f"13. agent status = {status}";
+
+// 11. Unit variant match
+let idle_state = AgentState.Idle;
+let idle_status = match idle_state {
+  Idle => "idle",
+  Working(task) => "working",
+  Done(result) => "done",
+  Failed(error) => "failed",
+};
+emit f"14. idle = {idle_status}";

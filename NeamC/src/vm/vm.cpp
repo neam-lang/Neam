@@ -28,6 +28,8 @@
 #include "neamc/security/rate_limiter.hpp"
 #include "neamc/vm/async/future.hpp"
 #include "neamc/vm/external_skill.hpp"
+#include "neamc/vm/struct_type.hpp"
+#include "neamc/vm/sealed_type.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/schema.hpp"
 #include "neamc/vm/value_hash.hpp"
@@ -91,6 +93,8 @@ std::string value_type_name(const Value& value)
   if (value.is_set()) return "set";
   if (value.is_tuple()) return "tuple";
   if (value.is_option()) return "option";
+  if (value.is_struct()) return "struct";
+  if (value.is_struct_def()) return "struct_def";
   return "object";
 }
 
@@ -797,6 +801,18 @@ std::string opcode_name(OpCode op)
       return "OP_UNPACK_REST";
     case OpCode::OP_SLICE:
       return "OP_SLICE";
+    case OpCode::OP_DEFINE_STRUCT:
+      return "OP_DEFINE_STRUCT";
+    case OpCode::OP_IMPL_METHOD:
+      return "OP_IMPL_METHOD";
+    case OpCode::OP_CONSTRUCT_NAMED:
+      return "OP_CONSTRUCT_NAMED";
+    case OpCode::OP_COPY_WITH:
+      return "OP_COPY_WITH";
+    case OpCode::OP_SET_PROPERTY:
+      return "OP_SET_PROPERTY";
+    case OpCode::OP_SET_FIELD_OBSERVER:
+      return "OP_SET_FIELD_OBSERVER";
     default:
       return "OP_UNKNOWN";
   }
@@ -1394,6 +1410,27 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
           frames_.push_back(CallFrame{&skill->impl->chunk, skill->impl, 0, callee_index, true, skill_name});
         }
+        // v0.7.1: Struct positional construction — Point(3, 4)
+        else if (is_obj_type(callee, ObjType::OBJ_STRUCT_DEF))
+        {
+          auto* def = as_struct_def(callee);
+          if (arg_count != def->field_names.size())
+          {
+            throw std::runtime_error(
+                "Struct '" + def->name + "' expects " +
+                std::to_string(def->field_names.size()) +
+                " argument(s), got " + std::to_string(arg_count));
+          }
+          std::vector<Value> field_values(arg_count);
+          for (std::size_t i = 0; i < arg_count; ++i)
+          {
+            field_values[arg_count - 1 - i] = pop();
+          }
+          // Remove callee from stack
+          stack_.erase(stack_.begin() + static_cast<std::ptrdiff_t>(callee_index));
+          auto* instance = new_struct(def, std::move(field_values));
+          stack_.push_back(Value::Struct(instance));
+        }
         else
         {
           throw std::runtime_error(
@@ -1506,6 +1543,69 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           else if (key == "end") stack_.push_back(Value::Number(static_cast<double>(range->end)));
           else if (key == "step") stack_.push_back(Value::Number(static_cast<double>(range->step)));
           else throw std::runtime_error("Property error: unknown range property '" + key + "'");
+        }
+        // v0.7.1: Struct field access
+        else if (is_obj_type(receiver, ObjType::OBJ_STRUCT))
+        {
+          auto* obj = as_struct(receiver);
+          int idx = obj->def->field_index(key);
+          if (idx < 0)
+          {
+            throw std::runtime_error(
+                "Property error: '" + key + "' not found on struct '" +
+                obj->def->name + "'");
+          }
+          stack_.push_back(obj->fields[static_cast<std::size_t>(idx)]);
+        }
+        // v0.7.1 Phase 2: Sealed def property — unit variant access (Shape.Point)
+        else if (is_obj_type(receiver, ObjType::OBJ_SEALED_DEF))
+        {
+          auto* def = as_sealed_def(receiver);
+          auto tag_it = def->variant_index.find(key);
+          if (tag_it != def->variant_index.end())
+          {
+            const auto& variant_info = def->variants[tag_it->second];
+            if (variant_info.fields.empty())
+            {
+              // Unit variant — construct immediately
+              auto* v = new_variant(def, tag_it->second, {});
+              stack_.push_back(Value::Variant(v));
+            }
+            else
+            {
+              // Has fields — need to call with args, push a placeholder
+              // This will be handled by OP_INVOKE (Shape.Circle(5))
+              throw std::runtime_error(
+                  "Variant '" + key + "' has fields — use " + def->name + "." + key + "(...) syntax");
+            }
+          }
+          else
+          {
+            throw std::runtime_error(
+                "Property error: '" + key + "' not found on sealed type '" + def->name + "'");
+          }
+        }
+        // v0.7.1 Phase 2: Variant field access
+        else if (is_obj_type(receiver, ObjType::OBJ_VARIANT))
+        {
+          auto* v = as_variant(receiver);
+          const auto& info = v->sealed_def->variants[v->tag];
+          bool found = false;
+          for (const auto& field : info.fields)
+          {
+            if (field.name == key)
+            {
+              stack_.push_back(v->field_values[field.index]);
+              found = true;
+              break;
+            }
+          }
+          if (!found)
+          {
+            throw std::runtime_error(
+                "Property error: '" + key + "' not found on variant '" +
+                info.name + "' of sealed type '" + v->sealed_def->name + "'");
+          }
         }
         else
         {
@@ -4825,6 +4925,170 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             throw std::runtime_error("Unknown option method '" + method + "'");
           }
         }
+        // v0.7.1: Struct instance method dispatch
+        else if (is_obj_type(receiver, ObjType::OBJ_STRUCT))
+        {
+          auto* obj = as_struct(receiver);
+          auto table_it = impl_tables_.find(obj->def->name);
+          if (table_it == impl_tables_.end())
+          {
+            throw std::runtime_error(
+                "No impl block for struct '" + obj->def->name + "'");
+          }
+          auto method_it = table_it->second->methods.find(method);
+          if (method_it == table_it->second->methods.end())
+          {
+            throw std::runtime_error(
+                "Method '" + method + "' not found on struct '" +
+                obj->def->name + "'");
+          }
+          auto& entry = method_it->second;
+          if (entry.is_static)
+          {
+            throw std::runtime_error(
+                "Cannot call static method '" + method +
+                "' on instance. Use " + obj->def->name + "." + method + "() instead.");
+          }
+          auto* fn = entry.function;
+          // Instance method: self is first arg. Push self + args onto stack.
+          // fn->arity includes self.
+          if (fn->arity != static_cast<int>(arg_count) + 1)
+          {
+            throw std::runtime_error(
+                "Method '" + method + "' expects " +
+                std::to_string(fn->arity - 1) +
+                " argument(s), got " + std::to_string(arg_count));
+          }
+          // Push receiver (self) then args
+          std::size_t base_slot = stack_.size();
+          stack_.push_back(receiver);
+          for (std::size_t i = 0; i < arg_count; ++i)
+          {
+            stack_.push_back(args[i]);
+          }
+          frames_.push_back(CallFrame{&fn->chunk, fn, 0, base_slot, false, {}});
+        }
+        // v0.7.1: Static method dispatch — Type.method()
+        else if (is_obj_type(receiver, ObjType::OBJ_STRUCT_DEF))
+        {
+          auto* def = as_struct_def(receiver);
+          auto table_it = impl_tables_.find(def->name);
+          if (table_it == impl_tables_.end())
+          {
+            throw std::runtime_error(
+                "No impl block for struct '" + def->name + "'");
+          }
+          auto method_it = table_it->second->methods.find(method);
+          if (method_it == table_it->second->methods.end())
+          {
+            throw std::runtime_error(
+                "Static method '" + method + "' not found on struct '" +
+                def->name + "'");
+          }
+          auto& entry = method_it->second;
+          if (!entry.is_static)
+          {
+            throw std::runtime_error(
+                "Method '" + method + "' is not static on struct '" +
+                def->name + "'");
+          }
+          auto* fn = entry.function;
+          if (fn->arity != static_cast<int>(arg_count))
+          {
+            throw std::runtime_error(
+                "Static method '" + method + "' expects " +
+                std::to_string(fn->arity) +
+                " argument(s), got " + std::to_string(arg_count));
+          }
+          std::size_t base_slot = stack_.size();
+          for (std::size_t i = 0; i < arg_count; ++i)
+          {
+            stack_.push_back(args[i]);
+          }
+          frames_.push_back(CallFrame{&fn->chunk, fn, 0, base_slot, false, {}});
+        }
+        // v0.7.1 Phase 2: Sealed type — Shape.Circle(5) or Shape.Point
+        else if (is_obj_type(receiver, ObjType::OBJ_SEALED_DEF))
+        {
+          auto* def = as_sealed_def(receiver);
+          auto tag_it = def->variant_index.find(method);
+          if (tag_it != def->variant_index.end())
+          {
+            // Construct variant with args
+            auto tag = tag_it->second;
+            const auto& variant_info = def->variants[tag];
+            if (variant_info.fields.size() != arg_count)
+            {
+              throw std::runtime_error(
+                  "Variant '" + method + "' expects " +
+                  std::to_string(variant_info.fields.size()) +
+                  " field(s), got " + std::to_string(arg_count));
+            }
+            auto* v = new_variant(def, tag, std::vector<Value>(args.begin(), args.begin() + static_cast<std::ptrdiff_t>(arg_count)));
+            stack_.push_back(Value::Variant(v));
+          }
+          else
+          {
+            // Try impl table methods on sealed type
+            auto table_it = impl_tables_.find(def->name);
+            if (table_it != impl_tables_.end())
+            {
+              auto method_it = table_it->second->methods.find(method);
+              if (method_it != table_it->second->methods.end())
+              {
+                auto* fn = method_it->second.function;
+                std::size_t base_slot = stack_.size();
+                for (std::size_t i = 0; i < arg_count; ++i)
+                {
+                  stack_.push_back(args[i]);
+                }
+                frames_.push_back(CallFrame{&fn->chunk, fn, 0, base_slot, false, {}});
+              }
+              else
+              {
+                throw std::runtime_error(
+                    "No variant or method '" + method + "' on sealed type '" + def->name + "'");
+              }
+            }
+            else
+            {
+              throw std::runtime_error(
+                  "No variant '" + method + "' on sealed type '" + def->name + "'");
+            }
+          }
+        }
+        // v0.7.1 Phase 2: Variant method dispatch (via sealed type's impl table)
+        else if (is_obj_type(receiver, ObjType::OBJ_VARIANT))
+        {
+          auto* v = as_variant(receiver);
+          auto table_it = impl_tables_.find(v->sealed_def->name);
+          if (table_it != impl_tables_.end())
+          {
+            auto method_it = table_it->second->methods.find(method);
+            if (method_it != table_it->second->methods.end())
+            {
+              auto& entry = method_it->second;
+              auto* fn = entry.function;
+              std::size_t base_slot = stack_.size();
+              stack_.push_back(receiver);  // self
+              for (std::size_t i = 0; i < arg_count; ++i)
+              {
+                stack_.push_back(args[i]);
+              }
+              frames_.push_back(CallFrame{&fn->chunk, fn, 0, base_slot, false, {}});
+            }
+            else
+            {
+              throw std::runtime_error(
+                  "Method '" + method + "' not found on sealed type '" + v->sealed_def->name + "'");
+            }
+          }
+          else
+          {
+            throw std::runtime_error(
+                "No impl block for sealed type '" + v->sealed_def->name + "'");
+          }
+        }
         else
         {
           throw std::runtime_error("Invoke on non-object");
@@ -5919,6 +6183,386 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         {
           throw std::runtime_error(
               "Slice error: cannot slice " + value_type_name(base_val));
+        }
+        break;
+      }
+      // ---- v0.7.1: OOP opcodes ----
+      case OpCode::OP_DEFINE_STRUCT:
+      {
+        const auto name_index = read_short(code, frame.ip);
+        const auto field_count = code[frame.ip++];
+        const auto is_mutable = code[frame.ip++] != 0;
+        const std::string name = to_std_string(constants[name_index]);
+        std::vector<std::string> field_names;
+        // Field names are on stack in order (pushed first = bottom)
+        std::size_t base = stack_.size() - field_count;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          field_names.push_back(to_std_string(stack_[base + i]));
+        }
+        // Pop field names
+        stack_.resize(base);
+        auto* def = new_struct_def(name, field_names, is_mutable);
+        struct_defs_[name] = def;
+        // Register the struct def as a global so Point(...) calls work via OP_CALL
+        auto* name_str = copy_string(name.c_str(), name.size());
+        globals().set(name_str, Value::StructDef(def));
+        break;
+      }
+      case OpCode::OP_IMPL_METHOD:
+      {
+        const auto type_name_index = read_short(code, frame.ip);
+        const auto method_name_index = read_short(code, frame.ip);
+        const auto is_static = code[frame.ip++] != 0;
+        const std::string type_name = to_std_string(constants[type_name_index]);
+        const std::string method_name = to_std_string(constants[method_name_index]);
+        // Function is on top of stack
+        Value fn_val = pop();
+        auto* fn = as_function(fn_val);
+        // Get or create impl table for this type
+        auto& table = impl_tables_[type_name];
+        if (!table)
+        {
+          table = new_impl_table();
+          table->type_name = type_name;
+        }
+        MethodEntry entry;
+        entry.function = fn;
+        entry.is_static = is_static;
+        table->methods[method_name] = entry;
+        break;
+      }
+      case OpCode::OP_CONSTRUCT_NAMED:
+      {
+        const auto type_name_index = read_short(code, frame.ip);
+        const auto field_count = code[frame.ip++];
+        const std::string type_name = to_std_string(constants[type_name_index]);
+        auto def_it = struct_defs_.find(type_name);
+        if (def_it == struct_defs_.end())
+        {
+          throw std::runtime_error("Unknown struct type: " + type_name);
+        }
+        auto* def = def_it->second;
+        // Stack has pairs: [name0, val0, name1, val1, ...]
+        std::vector<Value> field_values(def->field_names.size(), Value::Nil());
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+          int idx = def->field_index(fname);
+          if (idx < 0)
+          {
+            throw std::runtime_error(
+                "Unknown field '" + fname + "' in struct '" + type_name + "'");
+          }
+          field_values[static_cast<std::size_t>(idx)] = fval;
+        }
+        stack_.resize(base);
+        auto* instance = new_struct(def, std::move(field_values));
+        stack_.push_back(Value::Struct(instance));
+        break;
+      }
+      case OpCode::OP_COPY_WITH:
+      {
+        const auto override_count = code[frame.ip++];
+        // Stack: [struct, name0, val0, name1, val1, ...]
+        std::size_t pair_base = stack_.size() - override_count * 2;
+        std::size_t struct_idx = pair_base - 1;
+        Value struct_val = stack_[struct_idx];
+        if (!struct_val.is_struct())
+        {
+          throw std::runtime_error(
+              "copy-with requires a struct, got " + value_type_name(struct_val));
+        }
+        auto* original = as_struct(struct_val);
+        std::vector<std::pair<std::string, Value>> overrides;
+        for (std::size_t i = 0; i < override_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[pair_base + i * 2]);
+          Value fval = stack_[pair_base + i * 2 + 1];
+          overrides.push_back({std::move(fname), fval});
+        }
+        stack_.resize(struct_idx);
+        auto* copy = struct_copy_with(original, overrides);
+        stack_.push_back(Value::Struct(copy));
+        break;
+      }
+      case OpCode::OP_SET_PROPERTY:
+      {
+        const auto name_index = read_short(code, frame.ip);
+        const std::string field_name = to_std_string(constants[name_index]);
+        // Stack: [object, value]
+        Value value = pop();
+        Value receiver = pop();
+        if (!receiver.is_struct())
+        {
+          throw std::runtime_error(
+              "Cannot set property '" + field_name + "' on " + value_type_name(receiver));
+        }
+        auto* obj = as_struct(receiver);
+
+        // v0.7.1 Phase 5: Run guard handler if present
+        auto guard_it = obj->def->guard_handlers.find(field_name);
+        if (guard_it != obj->def->guard_handlers.end())
+        {
+          auto guard_result = call_function(guard_it->second,
+              {receiver, value}, false, "");
+          if (!is_truthy(guard_result))
+          {
+            throw std::runtime_error(
+                "Guard failed for field '" + field_name + "' on " + obj->def->name);
+          }
+        }
+
+        // v0.7.1 Phase 5: Run willSet handler if present
+        auto ws_it = obj->def->will_set_handlers.find(field_name);
+        if (ws_it != obj->def->will_set_handlers.end())
+        {
+          call_function(ws_it->second, {receiver, value}, false, "");
+        }
+
+        obj->set_field(field_name, value);
+
+        // v0.7.1 Phase 5: Run didSet handler if present
+        auto ds_it = obj->def->did_set_handlers.find(field_name);
+        if (ds_it != obj->def->did_set_handlers.end())
+        {
+          call_function(ds_it->second, {receiver}, false, "");
+        }
+
+        stack_.push_back(value);  // Assignment expression yields the value
+        break;
+      }
+      // ---- v0.7.1 Phase 2: trait + sealed + match opcodes ----
+      case OpCode::OP_DEFINE_TRAIT:
+      {
+        const auto name_index = read_short(code, frame.ip);
+        const auto required_count = code[frame.ip++];
+        const auto default_count = code[frame.ip++];
+        const std::string name = to_std_string(constants[name_index]);
+
+        auto* def = new_trait_def(name);
+
+        // Pop required method names (on top of stack)
+        for (int i = required_count - 1; i >= 0; --i)
+        {
+          std::string method_name = to_std_string(pop());
+          TraitMethodInfo info;
+          info.name = std::move(method_name);
+          info.default_impl = nullptr;
+          def->methods.insert(def->methods.begin(), info);
+        }
+
+        // Pop default method functions (below required names on stack)
+        for (int i = default_count - 1; i >= 0; --i)
+        {
+          Value fn_val = pop();
+          auto* fn = as_function(fn_val);
+          TraitMethodInfo info;
+          info.name = std::string(fn->name->chars, fn->name->length);
+          // Strip prefix "TraitName." from function name
+          auto dot_pos = info.name.find('.');
+          if (dot_pos != std::string::npos)
+          {
+            info.name = info.name.substr(dot_pos + 1);
+          }
+          info.default_impl = fn;
+          def->methods.insert(def->methods.begin(), info);
+        }
+
+        trait_defs_[name] = def;
+        auto* name_str = copy_string(name.c_str(), name.size());
+        globals().set(name_str, Value::TraitDef(def));
+        break;
+      }
+      case OpCode::OP_IMPL_TRAIT:
+      {
+        const auto trait_name_index = read_short(code, frame.ip);
+        const auto type_name_index = read_short(code, frame.ip);
+        const auto is_static = code[frame.ip++] != 0;
+        const std::string trait_name = to_std_string(constants[trait_name_index]);
+        const std::string type_name = to_std_string(constants[type_name_index]);
+
+        Value fn_val = pop();
+        auto* fn = as_function(fn_val);
+
+        // Extract method name from function name (format: "TypeName.method_name")
+        std::string fn_full_name(fn->name->chars, fn->name->length);
+        std::string method_name = fn_full_name;
+        auto dot_pos = fn_full_name.find('.');
+        if (dot_pos != std::string::npos)
+        {
+          method_name = fn_full_name.substr(dot_pos + 1);
+        }
+
+        // Get or create impl table for this type
+        auto& table = impl_tables_[type_name];
+        if (!table)
+        {
+          table = new_impl_table();
+          table->type_name = type_name;
+        }
+
+        MethodEntry entry;
+        entry.function = fn;
+        entry.is_static = is_static;
+        table->methods[method_name] = entry;
+
+        // Also register default methods from the trait that weren't explicitly provided
+        if (!trait_name.empty())
+        {
+          auto trait_it = trait_defs_.find(trait_name);
+          if (trait_it != trait_defs_.end())
+          {
+            auto* trait_def = trait_it->second;
+            for (const auto& tm : trait_def->methods)
+            {
+              if (tm.default_impl && table->methods.find(tm.name) == table->methods.end())
+              {
+                MethodEntry default_entry;
+                default_entry.function = tm.default_impl;
+                default_entry.is_static = false;
+                table->methods[tm.name] = default_entry;
+              }
+            }
+          }
+        }
+        break;
+      }
+      case OpCode::OP_DEFINE_SEALED:
+      {
+        const auto name_index = read_short(code, frame.ip);
+        const auto variant_count = code[frame.ip++];
+        const std::string name = to_std_string(constants[name_index]);
+
+        auto* def = new_sealed_def(name);
+
+        // Pop variant definitions in reverse from stack.
+        // Stack layout per variant: [variant_name, field1_name, ..., fieldN_name, field_count]
+        // We need to read them in reverse order.
+        std::vector<VariantInfo> variants(variant_count);
+        for (int v = variant_count - 1; v >= 0; --v)
+        {
+          double fc = pop().as_number();
+          auto field_count = static_cast<int>(fc);
+          std::vector<VariantFieldInfo> fields(static_cast<std::size_t>(field_count));
+          for (int f = field_count - 1; f >= 0; --f)
+          {
+            std::string field_name = to_std_string(pop());
+            fields[static_cast<std::size_t>(f)] = VariantFieldInfo{
+                std::move(field_name), static_cast<uint16_t>(f)};
+          }
+          std::string variant_name = to_std_string(pop());
+          variants[static_cast<std::size_t>(v)] = VariantInfo{
+              std::move(variant_name), std::move(fields), static_cast<uint16_t>(v)};
+        }
+
+        for (std::size_t i = 0; i < variants.size(); ++i)
+        {
+          def->variant_index[variants[i].name] = static_cast<uint16_t>(i);
+        }
+        def->variants = std::move(variants);
+
+        sealed_defs_[name] = def;
+        auto* name_str = copy_string(name.c_str(), name.size());
+        globals().set(name_str, Value::SealedDef(def));
+        break;
+      }
+      case OpCode::OP_CONSTRUCT_VARIANT:
+      {
+        const auto sealed_name_index = read_short(code, frame.ip);
+        const auto variant_name_index = read_short(code, frame.ip);
+        const auto arg_count = code[frame.ip++];
+        const std::string sealed_name = to_std_string(constants[sealed_name_index]);
+        const std::string variant_name = to_std_string(constants[variant_name_index]);
+
+        auto def_it = sealed_defs_.find(sealed_name);
+        if (def_it == sealed_defs_.end())
+        {
+          throw std::runtime_error("Unknown sealed type: " + sealed_name);
+        }
+        auto* def = def_it->second;
+        auto tag_it = def->variant_index.find(variant_name);
+        if (tag_it == def->variant_index.end())
+        {
+          throw std::runtime_error(
+              "Unknown variant '" + variant_name + "' in sealed type '" + sealed_name + "'");
+        }
+
+        std::vector<Value> field_values;
+        std::size_t base = stack_.size() - arg_count;
+        for (std::size_t i = 0; i < arg_count; ++i)
+        {
+          field_values.push_back(stack_[base + i]);
+        }
+        stack_.resize(base);
+
+        auto* v = new_variant(def, tag_it->second, std::move(field_values));
+        stack_.push_back(Value::Variant(v));
+        break;
+      }
+      case OpCode::OP_MATCH_VARIANT:
+      {
+        const auto variant_name_index = read_short(code, frame.ip);
+        const auto bind_count = code[frame.ip++];
+        // Skip offset not used here — compiler uses JUMP_IF_FALSE instead
+        (void)bind_count;
+        const std::string variant_name = to_std_string(constants[variant_name_index]);
+
+        // Stack: [..., subject_dup, variant_name_const]
+        pop();  // pop the variant name constant (already read from operand)
+
+        Value subject = pop();  // pop the DUP'd subject
+
+        if (subject.is_variant())
+        {
+          auto* v = as_variant(subject);
+          auto tag_it = v->sealed_def->variant_index.find(variant_name);
+          if (tag_it != v->sealed_def->variant_index.end() && v->tag == tag_it->second)
+          {
+            // Match! Push field values as bindings, then push true
+            for (const auto& fv : v->field_values)
+            {
+              stack_.push_back(fv);
+            }
+            stack_.push_back(Value::Bool(true));
+            break;
+          }
+        }
+
+        // No match — push false
+        stack_.push_back(Value::Bool(false));
+        break;
+      }
+      case OpCode::OP_MATCH_START:
+      case OpCode::OP_MATCH_WILDCARD:
+      case OpCode::OP_MATCH_END:
+        // These are placeholders — actual logic is compiled via JUMP/JUMP_IF_FALSE
+        break;
+
+      case OpCode::OP_SET_FIELD_OBSERVER:
+      {
+        const auto type_name_index = read_short(code, frame.ip);
+        const auto field_name_index = read_short(code, frame.ip);
+        const auto kind = code[frame.ip++];
+        const std::string type_name = to_std_string(constants[type_name_index]);
+        const std::string field_name = to_std_string(constants[field_name_index]);
+
+        Value fn_val = pop();
+        auto* fn = as_function(fn_val);
+
+        // Find the struct def
+        auto it = struct_defs_.find(type_name);
+        if (it != struct_defs_.end())
+        {
+          auto* def = it->second;
+          if (kind == 0)
+            def->will_set_handlers[field_name] = fn;
+          else if (kind == 1)
+            def->did_set_handlers[field_name] = fn;
+          else if (kind == 2)
+            def->guard_handlers[field_name] = fn;
         }
         break;
       }

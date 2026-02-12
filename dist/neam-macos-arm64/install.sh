@@ -3,7 +3,7 @@
 
 INSTALL_DIR="${1:-/usr/local/bin}"
 
-echo "Installing Neam to $INSTALL_DIR..."
+echo "Installing Neam v0.7.1 to $INSTALL_DIR..."
 
 if [ ! -w "$INSTALL_DIR" ]; then
     echo "Need sudo access to install to $INSTALL_DIR"

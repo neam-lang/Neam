@@ -1,0 +1,71 @@
+// v0.7.1 Phase 4: Agentic Patterns — E2E smoke test
+
+// === PIPELINE ===
+
+pipeline ContentPipeline {
+  steps: [research, draft, review, publish]
+}
+
+emit f"1. pipeline steps = {ContentPipeline_steps}";
+
+// === DISPATCH ===
+
+dispatch TaskRouter {
+  router: classifier,
+  routes: {
+    code: coder,
+    text: writer,
+    data: analyst,
+  },
+  fallback: general,
+}
+
+emit f"2. dispatch routes = {TaskRouter_routes}";
+
+// === PARALLEL ===
+
+parallel MultiSearch {
+  agents: [web_search, doc_search, code_search],
+  gather: merge_results,
+}
+
+emit f"3. parallel agents = {MultiSearch_agents}";
+
+// === LOOP PATTERN ===
+
+loop RefineLoop {
+  generator: drafter,
+  critic: reviewer,
+  max_iterations: 3,
+}
+
+emit f"4. loop generator = {RefineLoop_generator}";
+emit f"5. loop critic = {RefineLoop_critic}";
+emit f"6. loop max_iter = {RefineLoop_max_iterations}";
+
+// === Combined: struct + sealed + agentic ===
+
+struct Task { name: string, category: string }
+
+impl Task {
+  fn describe(self) {
+    return f"Task({self.name}, {self.category})";
+  }
+}
+
+let t = Task("fix bug", "code");
+emit f"7. task = {t.describe()}";
+
+sealed PipelineStage {
+  Pending(task: string),
+  InProgress(task: string, step: string),
+  Complete(result: string)
+}
+
+let stage = PipelineStage.InProgress("fix bug", "review");
+let status = match stage {
+  Pending(task) => f"pending: {task}",
+  InProgress(task, step) => f"doing {step} on {task}",
+  Complete(result) => f"done: {result}",
+};
+emit f"8. stage = {status}";

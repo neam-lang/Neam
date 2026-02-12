@@ -10,6 +10,8 @@
 #include <string>
 
 #include "neamc/vm/object.hpp"
+#include "neamc/vm/struct_type.hpp"
+#include "neamc/vm/sealed_type.hpp"
 
 namespace neamc::vm
 {
@@ -122,6 +124,36 @@ Value Value::Tuple(ObjTuple* tuple)
   return Value::ObjVal(reinterpret_cast<Obj*>(tuple));
 }
 
+Value Value::StructDef(ObjStructDef* def)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(def));
+}
+
+Value Value::Struct(ObjStruct* obj)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(obj));
+}
+
+Value Value::ImplTable(ObjImplTable* table)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(table));
+}
+
+Value Value::TraitDef(ObjTraitDef* def)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(def));
+}
+
+Value Value::SealedDef(ObjSealedDef* def)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(def));
+}
+
+Value Value::Variant(ObjVariant* variant)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(variant));
+}
+
 bool Value::as_bool() const
 {
   if (!is_bool())
@@ -227,6 +259,36 @@ bool Value::is_set() const
 bool Value::is_tuple() const
 {
   return is_obj_type(*this, ObjType::OBJ_TUPLE);
+}
+
+bool Value::is_struct_def() const
+{
+  return is_obj_type(*this, ObjType::OBJ_STRUCT_DEF);
+}
+
+bool Value::is_struct() const
+{
+  return is_obj_type(*this, ObjType::OBJ_STRUCT);
+}
+
+bool Value::is_impl_table() const
+{
+  return is_obj_type(*this, ObjType::OBJ_IMPL_TABLE);
+}
+
+bool Value::is_trait_def() const
+{
+  return is_obj_type(*this, ObjType::OBJ_TRAIT_DEF);
+}
+
+bool Value::is_sealed_def() const
+{
+  return is_obj_type(*this, ObjType::OBJ_SEALED_DEF);
+}
+
+bool Value::is_variant() const
+{
+  return is_obj_type(*this, ObjType::OBJ_VARIANT);
 }
 
 std::string value_to_string(const Value& value)
@@ -355,6 +417,26 @@ std::string value_to_string(const Value& value)
     }
     return "range(" + std::to_string(range->start) + ", " + std::to_string(range->end) +
            ", " + std::to_string(range->step) + ")";
+  }
+  if (value.is_struct())
+  {
+    return struct_to_string(as_struct(value));
+  }
+  if (value.is_struct_def())
+  {
+    return "<struct " + as_struct_def(value)->name + ">";
+  }
+  if (value.is_variant())
+  {
+    return variant_to_string(as_variant(value));
+  }
+  if (value.is_sealed_def())
+  {
+    return sealed_def_to_string(as_sealed_def(value));
+  }
+  if (value.is_trait_def())
+  {
+    return "<trait " + as_trait_def(value)->name + ">";
   }
   return "<object>";
 }
@@ -506,5 +588,59 @@ ObjTuple* as_tuple(const Value& value)
     throw std::runtime_error("Expected tuple object");
   }
   return reinterpret_cast<ObjTuple*>(value.as.obj);
+}
+
+ObjStructDef* as_struct_def(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_STRUCT_DEF))
+  {
+    throw std::runtime_error("Expected struct_def object");
+  }
+  return reinterpret_cast<ObjStructDef*>(value.as.obj);
+}
+
+ObjStruct* as_struct(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_STRUCT))
+  {
+    throw std::runtime_error("Expected struct object");
+  }
+  return reinterpret_cast<ObjStruct*>(value.as.obj);
+}
+
+ObjImplTable* as_impl_table(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_IMPL_TABLE))
+  {
+    throw std::runtime_error("Expected impl_table object");
+  }
+  return reinterpret_cast<ObjImplTable*>(value.as.obj);
+}
+
+ObjTraitDef* as_trait_def(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_TRAIT_DEF))
+  {
+    throw std::runtime_error("Expected trait_def object");
+  }
+  return reinterpret_cast<ObjTraitDef*>(value.as.obj);
+}
+
+ObjSealedDef* as_sealed_def(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_SEALED_DEF))
+  {
+    throw std::runtime_error("Expected sealed_def object");
+  }
+  return reinterpret_cast<ObjSealedDef*>(value.as.obj);
+}
+
+ObjVariant* as_variant(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_VARIANT))
+  {
+    throw std::runtime_error("Expected variant object");
+  }
+  return reinterpret_cast<ObjVariant*>(value.as.obj);
 }
 }  // namespace neamc::vm

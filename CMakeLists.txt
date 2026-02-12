@@ -107,6 +107,11 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
+# Disable benchmark tests for cross-compilation (avoids -Werror issues)
+if(CMAKE_CROSSCOMPILING)
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+endif()
+
 FetchContent_GetProperties(usearch)
 if (NOT usearch_POPULATED)
     FetchContent_Populate(usearch)
@@ -128,6 +133,9 @@ endif ()
 FetchContent_MakeAvailable(googletest benchmark)
 if (TARGET benchmark)
     set_target_properties(benchmark PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(CMAKE_CROSSCOMPILING)
+        target_compile_options(benchmark PRIVATE -Wno-switch)
+    endif()
 endif ()
 
 find_package(CURL REQUIRED)
@@ -199,6 +207,8 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/llm/openai_adapter.cpp
     NeamC/src/vm/llm/provider_factory.cpp
     NeamC/src/vm/knowledge.cpp
+    NeamC/src/vm/struct_type.cpp
+    NeamC/src/vm/sealed_type.cpp
     NeamC/src/vm/value.cpp
     NeamC/src/vm/value_hash.cpp
     NeamC/src/vm/runtime_type.cpp

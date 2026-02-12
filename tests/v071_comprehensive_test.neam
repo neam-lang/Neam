@@ -1,0 +1,277 @@
+// v0.7.1 Comprehensive OOP Test — All 5 Phases
+// Tests: struct, impl, trait, sealed, match, extend, pipeline, dispatch, parallel, loop, observers, generics
+
+let pass = 0;
+let fail = 0;
+
+// === PHASE 1: Struct + Impl ===
+
+// T1: Positional construction
+struct Vec2 { x: number, y: number }
+let v = Vec2(3, 4);
+if (v.x == 3) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T1"; }
+
+// T2: Named construction
+let v2 = Vec2(x: 10, y: 20);
+if (v2.y == 20) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T2"; }
+
+// T3: Impl with instance method
+impl Vec2 {
+  fn length_sq(self) {
+    return self.x * self.x + self.y * self.y;
+  }
+  fn add(self, other) {
+    return Vec2(self.x + other.x, self.y + other.y);
+  }
+  fn origin() {
+    return Vec2(0, 0);
+  }
+}
+
+if (v.length_sq() == 25) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T3"; }
+
+// T4: Static method
+let o = Vec2.origin();
+if (o.x == 0) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T4"; }
+
+// T5: Method chaining
+let v3 = v.add(Vec2(1, 1));
+if (v3.x == 4) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T5"; }
+
+// T6: Copy-with
+let v4 = v with (x: 100);
+if (v4.x == 100) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T6"; }
+if (v4.y == 4) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T6b"; }
+
+// T7: Structural equality
+if (v == Vec2(3, 4)) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T7"; }
+
+// T8: Mutable struct
+mut struct Counter { value: number }
+impl Counter {
+  fn increment(self) {
+    self.value = self.value + 1;
+    return self;
+  }
+}
+let c = Counter(0);
+c.value = 5;
+if (c.value == 5) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T8"; }
+
+// T9: to_string representation
+let s = f"{v}";
+if (s == "Vec2(x: 3, y: 4)") { pass = pass + 1; } else { fail = fail + 1; emit f"FAIL T9: got {s}"; }
+
+// === PHASE 2: Traits + Sealed + Match ===
+
+// T10: Basic trait
+trait Describable {
+  fn describe(self);
+}
+
+struct Animal { name: string, kind: string }
+impl Describable for Animal {
+  fn describe(self) {
+    return f"{self.name} the {self.kind}";
+  }
+}
+
+let a = Animal("Rex", "dog");
+if (a.describe() == "Rex the dog") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T10"; }
+
+// T11: Trait with default method
+trait Loggable {
+  fn log_prefix(self);
+  fn log(self, message) {
+    return f"[{self.log_prefix()}] {message}";
+  }
+}
+
+struct Service { name: string }
+impl Loggable for Service {
+  fn log_prefix(self) {
+    return self.name;
+  }
+}
+
+let svc = Service("auth");
+if (svc.log("started") == "[auth] started") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T11"; }
+
+// T12: Sealed type with variants
+sealed Option {
+  Some(value: string),
+  None
+}
+
+let some = Option.Some("hello");
+let none = Option.None;
+
+// T13: Match expression
+let val = match some {
+  Some(value) => value,
+  None => "nothing",
+};
+if (val == "hello") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T13"; }
+
+// T14: Match on unit variant
+let val2 = match none {
+  Some(value) => value,
+  None => "nothing",
+};
+if (val2 == "nothing") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T14"; }
+
+// T15-17: Sealed with impl + match
+sealed Shape {
+  Circle(radius: number),
+  Rect(w: number, h: number),
+  Point
+}
+
+impl Shape {
+  fn area(self) {
+    return match self {
+      Circle(radius) => 3.14159 * radius * radius,
+      Rect(w, h) => w * h,
+      Point => 0,
+    };
+  }
+}
+
+let circle = Shape.Circle(10);
+let rect = Shape.Rect(5, 3);
+let pt = Shape.Point;
+
+if (rect.area() == 15) { pass = pass + 1; } else { fail = fail + 1; emit f"FAIL T15: {rect.area()}"; }
+if (pt.area() == 0) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T16"; }
+
+// T17: Wildcard match
+let is_circle = match circle {
+  Circle(r) => true,
+  _ => false,
+};
+if (is_circle == true) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T17"; }
+
+// T18: Agent state machine
+sealed AgentState {
+  Idle,
+  Running(task: string),
+  Error(msg: string)
+}
+
+let state = AgentState.Running("analyze");
+let desc = match state {
+  Idle => "waiting",
+  Running(task) => f"executing: {task}",
+  Error(msg) => f"failed: {msg}",
+};
+if (desc == "executing: analyze") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T18"; }
+
+// === PHASE 3: Extend ===
+
+// T19: Extend struct with new method
+extend Vec2 {
+  fn negate(self) {
+    return Vec2(0 - self.x, 0 - self.y);
+  }
+  fn scale(self, factor) {
+    return Vec2(self.x * factor, self.y * factor);
+  }
+}
+
+let neg = v.negate();
+if (neg.x == -3) { pass = pass + 1; } else { fail = fail + 1; emit f"FAIL T19: got {neg.x}"; }
+
+// T20: Extended method works
+let scaled = v.scale(3);
+if (scaled.x == 9) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T20"; }
+
+// T21: Original methods still work after extend
+if (v.length_sq() == 25) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T21"; }
+
+// T22: Extend sealed type
+extend Shape {
+  fn label(self) {
+    return match self {
+      Circle(r) => "circle",
+      Rect(w, h) => "rect",
+      Point => "point",
+    };
+  }
+}
+if (circle.label() == "circle") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T22"; }
+
+// === PHASE 4: Agentic Patterns ===
+
+// T23: Pipeline
+pipeline DataPipeline {
+  steps: [extract, transform, load]
+}
+if (DataPipeline_steps[0] == "extract") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T23"; }
+
+// T24: Dispatch
+dispatch Router {
+  router: classifier,
+  routes: {
+    billing: billing_agent,
+    tech: tech_agent,
+  },
+}
+if (Router_routes["billing"] == "billing_agent") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T24"; }
+
+// T25: Parallel
+parallel SearchTeam {
+  agents: [web, docs, code],
+  gather: merger,
+}
+if (SearchTeam_agents[1] == "docs") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T25"; }
+
+// T26: Loop pattern
+loop ReviewLoop {
+  generator: writer,
+  critic: reviewer,
+  max_iterations: 3,
+}
+if (ReviewLoop_max_iterations == 3) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T26"; }
+
+// === PHASE 5: Property Observers + Generics ===
+
+// T27: willSet/didSet
+mut struct Sensor {
+  reading: number {
+    willSet(newVal) {
+      emit f"sensor willSet: {newVal}";
+    }
+    didSet {
+      emit f"sensor didSet";
+    }
+  }
+}
+
+let sensor = Sensor(0);
+sensor.reading = 42;
+if (sensor.reading == 42) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T27"; }
+
+// T28: Guard
+mut struct Bounded {
+  value: number {
+    guard value >= 0;
+  }
+}
+
+let b = Bounded(10);
+b.value = 5;
+if (b.value == 5) { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T28"; }
+
+// T29: Generic type params (type-erased)
+struct Wrapper<T> { inner: T }
+let w = Wrapper("hello");
+if (w.inner == "hello") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T29"; }
+
+// T30: Generic with multiple params
+struct Entry<K, V> { key: K, val: V }
+let e = Entry("name", "Alice");
+if (e.key == "name") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T30"; }
+if (e.val == "Alice") { pass = pass + 1; } else { fail = fail + 1; emit "FAIL T31"; }
+
+// === Summary ===
+emit f"v0.7.1 OOP Tests: {pass} passed, {fail} failed out of {pass + fail}";

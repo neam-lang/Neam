@@ -181,6 +181,28 @@ enum class TokenType
   Pipe,         // |>
   DotDotDot,    // ...
 
+  // v0.7.1: OOP — struct, impl blocks, method dispatch
+  Struct,
+  Fn,
+  SelfKw,
+  Mut,
+  Arrow,        // ->
+
+  // v0.7.1 Phase 2-5: trait, sealed, match, extend, derive, agentic patterns
+  Trait,        // "trait"
+  Sealed,       // "sealed"
+  Match,        // "match"
+  FatArrow,     // "=>"
+  Underscore,   // "_"
+  Extend,       // "extend"
+  Derive,       // "derive" (inside #[derive(...)])
+  Pipeline,     // "pipeline"
+  Dispatch,     // "dispatch"
+  Parallel,     // "parallel"
+  LoopPattern,  // "loop" (agentic loop pattern)
+  WillSet,      // "willSet"
+  DidSet,       // "didSet"
+
   Eof
 };
 
@@ -251,6 +273,16 @@ private:
   StmtPtr parse_for_in();
   StmtPtr parse_break_stmt();
   StmtPtr parse_continue_stmt();
+  StmtPtr parse_struct_decl(const Visibility& visibility);
+  StmtPtr parse_impl_block();
+  StmtPtr parse_trait_decl(const Visibility& visibility);
+  StmtPtr parse_sealed_decl(const Visibility& visibility);
+  StmtPtr parse_extend_block();
+  StmtPtr parse_pipeline_decl();
+  StmtPtr parse_dispatch_decl();
+  StmtPtr parse_parallel_decl();
+  StmtPtr parse_loop_pattern_decl();
+  ExprPtr parse_match_expr();
   StmtPtr parse_block();
   BlockStmt parse_block_node();
   StmtPtr parse_if();

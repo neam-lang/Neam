@@ -9,6 +9,8 @@
 #include <vector>
 
 #include "neamc/vm/object.hpp"
+#include "neamc/vm/struct_type.hpp"
+#include "neamc/vm/sealed_type.hpp"
 #include "neamc/vm/async/future.hpp"
 #include "neamc/vm/table.hpp"
 #include "neamc/vm/vm.hpp"
@@ -141,6 +143,48 @@ void free_object(Obj* object)
       auto* tuple = reinterpret_cast<ObjTuple*>(object);
       tuple->~ObjTuple();
       std::free(tuple);
+      break;
+    }
+    case ObjType::OBJ_STRUCT_DEF:
+    {
+      auto* def = reinterpret_cast<ObjStructDef*>(object);
+      def->~ObjStructDef();
+      std::free(def);
+      break;
+    }
+    case ObjType::OBJ_STRUCT:
+    {
+      auto* obj = reinterpret_cast<ObjStruct*>(object);
+      obj->~ObjStruct();
+      std::free(obj);
+      break;
+    }
+    case ObjType::OBJ_IMPL_TABLE:
+    {
+      auto* table = reinterpret_cast<ObjImplTable*>(object);
+      table->~ObjImplTable();
+      std::free(table);
+      break;
+    }
+    case ObjType::OBJ_TRAIT_DEF:
+    {
+      auto* def = reinterpret_cast<ObjTraitDef*>(object);
+      def->~ObjTraitDef();
+      std::free(def);
+      break;
+    }
+    case ObjType::OBJ_SEALED_DEF:
+    {
+      auto* def = reinterpret_cast<ObjSealedDef*>(object);
+      def->~ObjSealedDef();
+      std::free(def);
+      break;
+    }
+    case ObjType::OBJ_VARIANT:
+    {
+      auto* v = reinterpret_cast<ObjVariant*>(object);
+      v->~ObjVariant();
+      std::free(v);
       break;
     }
   }
@@ -334,6 +378,60 @@ void blacken_object(Obj* object, std::vector<Obj*>& gray_stack)
       for (const auto& item : tuple->items)
       {
         mark_value(const_cast<Value&>(item));
+      }
+      break;
+    }
+    case ObjType::OBJ_STRUCT_DEF:
+      break;  // No GC-managed Value references (just std::string fields)
+    case ObjType::OBJ_STRUCT:
+    {
+      auto* obj = reinterpret_cast<ObjStruct*>(object);
+      if (obj->def)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(obj->def), gray_stack);
+      }
+      for (const auto& field : obj->fields)
+      {
+        mark_value(const_cast<Value&>(field));
+      }
+      break;
+    }
+    case ObjType::OBJ_IMPL_TABLE:
+    {
+      auto* table = reinterpret_cast<ObjImplTable*>(object);
+      for (const auto& entry : table->methods)
+      {
+        if (entry.second.function)
+        {
+          mark_object_inner(reinterpret_cast<Obj*>(entry.second.function), gray_stack);
+        }
+      }
+      break;
+    }
+    case ObjType::OBJ_TRAIT_DEF:
+    {
+      auto* def = reinterpret_cast<ObjTraitDef*>(object);
+      for (const auto& method : def->methods)
+      {
+        if (method.default_impl)
+        {
+          mark_object_inner(reinterpret_cast<Obj*>(method.default_impl), gray_stack);
+        }
+      }
+      break;
+    }
+    case ObjType::OBJ_SEALED_DEF:
+      break;  // No GC-managed Value references (just std::string fields)
+    case ObjType::OBJ_VARIANT:
+    {
+      auto* v = reinterpret_cast<ObjVariant*>(object);
+      if (v->sealed_def)
+      {
+        mark_object_inner(reinterpret_cast<Obj*>(v->sealed_def), gray_stack);
+      }
+      for (const auto& field : v->field_values)
+      {
+        mark_value(const_cast<Value&>(field));
       }
       break;
     }
