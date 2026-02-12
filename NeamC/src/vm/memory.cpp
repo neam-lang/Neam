@@ -17,14 +17,16 @@
 
 namespace neamc::vm
 {
-std::size_t bytes_allocated = 0;
-std::size_t next_gc = 1024 * 1024;
-Obj* objects = nullptr;
-VirtualMachine* current_vm = nullptr;
+// v0.7.2: Thread-local current VM (replaces global current_vm)
+// Each thread in the pool works with its own VM — no cross-VM corruption.
+static thread_local VirtualMachine* tl_current_vm = nullptr;
+
+VirtualMachine* get_current_vm() { return tl_current_vm; }
+void set_current_vm(VirtualMachine* vm) { tl_current_vm = vm; }
 
 // GC reentrancy guard — prevents heap corruption if GC triggers
 // during allocation within a GC cycle (v0.6.5 reliability fix)
-static bool gc_in_progress = false;
+static thread_local bool gc_in_progress = false;
 
 namespace
 {
@@ -439,16 +441,34 @@ void blacken_object(Obj* object, std::vector<Obj*>& gray_stack)
 }
 }  // namespace
 
+void link_object(Obj* object)
+{
+  auto* vm = get_current_vm();
+  if (vm)
+  {
+    object->next = vm->objects_;
+    vm->objects_ = object;
+  }
+  else
+  {
+    object->next = nullptr;
+  }
+}
+
 void* reallocate(void* pointer, std::size_t old_size, std::size_t new_size)
 {
-  bytes_allocated += new_size;
-  if (old_size > 0)
+  auto* vm = get_current_vm();
+  if (vm)
   {
-    bytes_allocated -= old_size;
-  }
-  if (new_size > old_size && bytes_allocated > next_gc && current_vm && !gc_in_progress)
-  {
-    collect_garbage(*current_vm);
+    vm->bytes_allocated_ += new_size;
+    if (old_size > 0)
+    {
+      vm->bytes_allocated_ -= old_size;
+    }
+    if (new_size > old_size && vm->bytes_allocated_ > vm->next_gc_ && !gc_in_progress)
+    {
+      collect_garbage(*vm);
+    }
   }
   if (new_size == 0)
   {
@@ -534,8 +554,9 @@ void collect_garbage(VirtualMachine& vm)
   }
   table_remove_white(vm.strings());
 
+  // v0.7.2: Sweep per-VM object list instead of global
   Obj* previous = nullptr;
-  Obj* current = objects;
+  Obj* current = vm.objects_;
   while (current)
   {
     if (current->marked)
@@ -554,25 +575,25 @@ void collect_garbage(VirtualMachine& vm)
       }
       else
       {
-        objects = current;
+        vm.objects_ = current;
       }
       free_object(unreached);
     }
   }
-  next_gc = std::max(bytes_allocated * 2, static_cast<std::size_t>(1024 * 1024));
+  vm.next_gc_ = std::max(vm.bytes_allocated_ * 2, static_cast<std::size_t>(1024 * 1024));
 }
 
-void free_objects()
+void free_objects(VirtualMachine& vm)
 {
-  Obj* object = objects;
+  Obj* object = vm.objects_;
   while (object)
   {
     Obj* next = object->next;
     free_object(object);
     object = next;
   }
-  objects = nullptr;
-  bytes_allocated = 0;
-  next_gc = 1024 * 1024;
+  vm.objects_ = nullptr;
+  vm.bytes_allocated_ = 0;
+  vm.next_gc_ = 1024 * 1024;
 }
 }  // namespace neamc::vm

@@ -94,6 +94,9 @@ size_t load_max_response_size()
 // ---------------------------------------------------------------------------
 // Connection pool — reuses CURL handles to avoid repeated TLS handshakes
 // ---------------------------------------------------------------------------
+// Forward declaration (defined below)
+void configure_tls(CURL* handle);
+
 struct PoolEntry
 {
   CURL* handle = nullptr;
@@ -109,6 +112,13 @@ public:
     return pool;
   }
 
+  void configure(size_t max_size, int stale_secs)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    max_pool_size_ = max_size;
+    stale_timeout_secs_ = stale_secs;
+  }
+
   CURL* acquire()
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -119,6 +129,7 @@ public:
       CURL* handle = pool_.back().handle;
       pool_.pop_back();
       curl_easy_reset(handle);
+      ++stat_reused_;
       LLMLogger::debug("http", "Reused pooled connection");
       return handle;
     }
@@ -126,6 +137,7 @@ public:
     CURL* handle = curl_easy_init();
     if (handle)
     {
+      ++stat_created_;
       LLMLogger::debug("http", "Created new connection");
     }
     return handle;
@@ -147,6 +159,47 @@ public:
     pool_.push_back({handle, std::chrono::steady_clock::now()});
   }
 
+  struct Stats
+  {
+    uint64_t created{0};
+    uint64_t reused{0};
+    uint64_t evicted{0};
+    size_t current_idle{0};
+  };
+
+  Stats stats() const
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return {stat_created_.load(), stat_reused_.load(), stat_evicted_.load(), pool_.size()};
+  }
+
+  // Pre-warm: establish TCP+TLS connections to URLs via CURLOPT_CONNECT_ONLY
+  void prewarm(const std::vector<std::string>& urls)
+  {
+    for (const auto& url : urls)
+    {
+      CURL* handle = curl_easy_init();
+      if (!handle) continue;
+
+      curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
+      curl_easy_setopt(handle, CURLOPT_CONNECT_ONLY, 1L);
+      curl_easy_setopt(handle, CURLOPT_TIMEOUT, 5L);
+      configure_tls(handle);
+
+      CURLcode res = curl_easy_perform(handle);
+      if (res == CURLE_OK)
+      {
+        LLMLogger::debug("http", "Pre-warmed connection to " + url);
+        release(handle);
+      }
+      else
+      {
+        LLMLogger::warn("http", "Pre-warm failed for " + url + ": " + curl_easy_strerror(res));
+        curl_easy_cleanup(handle);
+      }
+    }
+  }
+
   ~ConnectionPool()
   {
     for (auto& entry : pool_)
@@ -163,12 +216,14 @@ private:
   void evict_stale()
   {
     auto now = std::chrono::steady_clock::now();
+    auto timeout = std::chrono::seconds(stale_timeout_secs_);
     pool_.erase(std::remove_if(pool_.begin(), pool_.end(),
-                               [&now](const PoolEntry& e) {
-                                 bool stale = (now - e.last_used) > std::chrono::seconds(60);
+                               [&now, &timeout, this](const PoolEntry& e) {
+                                 bool stale = (now - e.last_used) > timeout;
                                  if (stale)
                                  {
                                    curl_easy_cleanup(e.handle);
+                                   ++stat_evicted_;
                                    LLMLogger::debug("http", "Evicted stale connection");
                                  }
                                  return stale;
@@ -176,9 +231,13 @@ private:
                 pool_.end());
   }
 
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
   std::vector<PoolEntry> pool_;
-  static constexpr std::size_t max_pool_size_ = 8;
+  size_t max_pool_size_{8};
+  int stale_timeout_secs_{60};
+  std::atomic<uint64_t> stat_created_{0};
+  std::atomic<uint64_t> stat_reused_{0};
+  std::atomic<uint64_t> stat_evicted_{0};
 };
 
 // ---------------------------------------------------------------------------
@@ -543,5 +602,22 @@ void http_post_streaming(const std::string& url, const std::string& body,
     curl_easy_cleanup(handle);
     throw std::runtime_error(std::string("HTTP streaming failed: ") + curl_easy_strerror(res));
   }
+}
+// v0.7.2: Connection pool configuration and monitoring free functions
+void configure_connection_pool(const ConnectionPoolConfig& config)
+{
+  ConnectionPool::instance().configure(config.max_pool_size, config.stale_timeout_secs);
+}
+
+ConnectionPoolStats connection_pool_stats()
+{
+  auto s = ConnectionPool::instance().stats();
+  return {s.created, s.reused, s.evicted, s.current_idle};
+}
+
+void prewarm_connection_pool(const std::vector<std::string>& urls)
+{
+  (void)curl_global();
+  ConnectionPool::instance().prewarm(urls);
 }
 }  // namespace neamc::llm
