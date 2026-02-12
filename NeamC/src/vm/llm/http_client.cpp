@@ -9,6 +9,7 @@
 #include <curl/curl.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <mutex>
@@ -170,7 +171,12 @@ public:
   Stats stats() const
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    return {stat_created_.load(), stat_reused_.load(), stat_evicted_.load(), pool_.size()};
+    Stats st;
+    st.created = stat_created_.load();
+    st.reused = stat_reused_.load();
+    st.evicted = stat_evicted_.load();
+    st.current_idle = pool_.size();
+    return st;
   }
 
   // Pre-warm: establish TCP+TLS connections to URLs via CURLOPT_CONNECT_ONLY
@@ -612,7 +618,12 @@ void configure_connection_pool(const ConnectionPoolConfig& config)
 ConnectionPoolStats connection_pool_stats()
 {
   auto s = ConnectionPool::instance().stats();
-  return {s.created, s.reused, s.evicted, s.current_idle};
+  ConnectionPoolStats result;
+  result.created = s.created;
+  result.reused = s.reused;
+  result.evicted = s.evicted;
+  result.current_idle = s.current_idle;
+  return result;
 }
 
 void prewarm_connection_pool(const std::vector<std::string>& urls)
