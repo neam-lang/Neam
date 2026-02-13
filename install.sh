@@ -83,7 +83,7 @@ fi
 
 # Collect binaries — search recursively (archive may have bin/ subdirectory)
 BINS=()
-for b in neamc neam neam-api neam-pkg neam-lambda neamc.exe neam.exe neam-api.exe neam-pkg.exe neam-lambda.exe; do
+for b in neamc neam neam-api neam-pkg neam-lambda neam-cli neam-lsp neam-dap neam-gym neamc.exe neam.exe neam-api.exe neam-pkg.exe neam-lambda.exe; do
     found="$(find . -name "$b" -type f 2>/dev/null | head -1)"
     [ -n "$found" ] && BINS+=("$found")
 done
@@ -154,7 +154,7 @@ fi
 
 # Verify
 echo ""
-for b in neamc neam neam-api neam-pkg neam-lambda; do
+for b in neamc neam neam-api neam-pkg neam-lambda neam-cli neam-lsp neam-dap neam-gym; do
     if command -v "$b" &>/dev/null; then
         ok "$b installed at $(command -v $b)"
     elif [ -f "${INSTALL_DIR}/$b" ]; then
