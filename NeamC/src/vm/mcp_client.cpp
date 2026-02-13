@@ -32,6 +32,12 @@
 #include "neamc/security/audit_log.hpp"
 #include "neamc/security/credential_manager.hpp"
 
+// environ must be declared at global scope — inside a namespace, the
+// C++ mangled symbol won't resolve against libc's unmangled `environ`.
+#if !defined(_WIN32) && !defined(__APPLE__)
+extern "C" char** environ;
+#endif
+
 namespace neamc::vm
 {
 
@@ -92,7 +98,6 @@ void McpClient::start_process()
 #ifdef __APPLE__
     *_NSGetEnviron() = nullptr;
 #else
-    extern char** environ;
     environ = nullptr;
 #endif
     for (const auto& [key, value] : clean_env)

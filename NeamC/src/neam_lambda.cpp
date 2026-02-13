@@ -27,6 +27,7 @@
 #include <sstream>
 #include <string>
 
+#include <curl/curl.h>
 #include <nlohmann/json.hpp>
 
 namespace
@@ -125,21 +126,90 @@ std::string execute_with_hotvm(const std::string& agent_id, const std::string& q
   }
 }
 
-// Lambda Runtime API helpers — use raw curl for minimal overhead
-std::string lambda_get(const std::string& url, std::string& request_id)
+// Lambda Runtime API helpers — direct curl to capture response headers
+struct LambdaInvocation
 {
-  auto result = neamc::llm::http_request("GET", url, "", {}, 0);  // 0 = no timeout (blocking)
-  // Extract request ID from response headers — we parse it from the URL after response
-  // In Lambda Runtime API, request ID is in Lambda-Runtime-Aws-Request-Id header
-  // But our http_request doesn't return headers. Extract from the invocation URL instead.
-  request_id.clear();
-  return result.body;
+  std::string request_id;
+  std::string event_body;
+};
+
+size_t write_cb(char* ptr, size_t size, size_t nmemb, void* userdata)
+{
+  auto* s = static_cast<std::string*>(userdata);
+  s->append(ptr, size * nmemb);
+  return size * nmemb;
+}
+
+size_t header_cb(char* ptr, size_t size, size_t nmemb, void* userdata)
+{
+  auto* inv = static_cast<LambdaInvocation*>(userdata);
+  std::string line(ptr, size * nmemb);
+  const std::string prefix = "lambda-runtime-aws-request-id:";
+  // Case-insensitive header match
+  std::string lower_line = line;
+  for (auto& c : lower_line)
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  if (lower_line.substr(0, prefix.size()) == prefix)
+  {
+    std::string val = line.substr(prefix.size());
+    while (!val.empty() && (val.front() == ' ' || val.front() == '\t'))
+      val.erase(val.begin());
+    while (!val.empty() && (val.back() == '\r' || val.back() == '\n' || val.back() == ' '))
+      val.pop_back();
+    inv->request_id = val;
+  }
+  return size * nmemb;
+}
+
+LambdaInvocation lambda_get_next(const std::string& url)
+{
+  LambdaInvocation inv;
+  std::string body;
+  CURL* curl = curl_easy_init();
+  if (!curl) throw std::runtime_error("curl_easy_init failed");
+
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
+  curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_cb);
+  curl_easy_setopt(curl, CURLOPT_HEADERDATA, &inv);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);
+
+  CURLcode res = curl_easy_perform(curl);
+  curl_easy_cleanup(curl);
+
+  if (res != CURLE_OK)
+    throw std::runtime_error(std::string("Lambda GET /next failed: ") +
+                             curl_easy_strerror(res));
+
+  inv.event_body = std::move(body);
+  return inv;
 }
 
 void lambda_post(const std::string& url, const std::string& body)
 {
-  neamc::llm::http_request("POST", url, body,
-                            {"Content-Type: application/json"}, 5000);
+  CURL* curl = curl_easy_init();
+  if (!curl) throw std::runtime_error("curl_easy_init failed for POST");
+
+  struct curl_slist* hdrs = nullptr;
+  hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+
+  std::string discard;
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_POST, 1L);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hdrs);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &discard);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+
+  CURLcode res = curl_easy_perform(curl);
+  curl_slist_free_all(hdrs);
+  curl_easy_cleanup(curl);
+
+  if (res != CURLE_OK)
+    std::cerr << "Lambda POST failed: " << curl_easy_strerror(res) << "\n";
 }
 
 // Load agents from neam.toml or use defaults
@@ -258,6 +328,9 @@ std::string handle_event(const std::string& event_json)
 
       std::string agent_id = req_body.value("agent_id", "");
       std::string query = req_body.value("query", "");
+      // Default to first agent if only one is configured
+      if (agent_id.empty() && g_agents.size() == 1)
+        agent_id = g_agents.begin()->first;
       if (agent_id.empty() || query.empty())
       {
         nlohmann::json apigw = {{"statusCode", 400},
@@ -355,27 +428,16 @@ int main(int argc, char** argv)
 
   while (true)
   {
+    std::string request_id = "unknown";
     try
     {
-      // GET next invocation (blocks until event arrives)
-      auto result = neamc::llm::http_request("GET", next_url, "", {}, 0);
-
-      // Extract request ID from the response
-      // Lambda Runtime API returns it in Lambda-Runtime-Aws-Request-Id header
-      // Since our http_request doesn't expose headers, we use a workaround:
-      // the request ID is also embedded in some event contexts.
-      // For now, generate a placeholder and extract from event if available.
-      std::string request_id = "unknown";
-
-      auto event = nlohmann::json::parse(result.body);
-      if (event.contains("requestContext") &&
-          event["requestContext"].contains("requestId"))
-      {
-        request_id = event["requestContext"]["requestId"].get<std::string>();
-      }
+      // GET next invocation — blocks until event arrives
+      // Uses direct curl to capture Lambda-Runtime-Aws-Request-Id header
+      auto inv = lambda_get_next(next_url);
+      request_id = inv.request_id;
 
       // Handle the event
-      std::string response = handle_event(result.body);
+      std::string response = handle_event(inv.event_body);
 
       // POST response
       std::string response_url = api_base + "/2018-06-01/runtime/invocation/" +
@@ -385,17 +447,16 @@ int main(int argc, char** argv)
     catch (const std::exception& ex)
     {
       std::cerr << "neam-lambda error: " << ex.what() << "\n";
-      // POST error
       try
       {
         nlohmann::json err = {{"errorMessage", ex.what()},
                               {"errorType", "RuntimeError"}};
-        std::string error_url = api_base + "/2018-06-01/runtime/invocation/unknown/error";
+        std::string error_url = api_base + "/2018-06-01/runtime/invocation/" +
+                                request_id + "/error";
         lambda_post(error_url, err.dump());
       }
       catch (...)
       {
-        // If we can't report the error, just log and continue
         std::cerr << "Failed to report error to Lambda runtime\n";
       }
     }
