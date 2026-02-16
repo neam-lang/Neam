@@ -354,14 +354,41 @@ private:
       return response;
     }
 
-    // Find route handler
+    // Find route handler — exact match first, then prefix match fallback
     auto method_it = routes_.find(request.method);
     if (method_it != routes_.end())
     {
+      // 1. Exact match
       auto path_it = method_it->second.find(request.path);
       if (path_it != method_it->second.end())
       {
         HttpResponse response = path_it->second(request);
+        if (cors_enabled_)
+        {
+          add_cors_headers(response);
+        }
+        return response;
+      }
+
+      // 2. Prefix match fallback — find longest registered prefix that matches
+      //    Enables parameterized routes like POST /api/v1/claw/ matching
+      //    /api/v1/claw/my_agent/sessions/abc/message
+      const RouteHandler* best_handler = nullptr;
+      std::size_t best_len = 0;
+      for (const auto& [registered_path, handler] : method_it->second)
+      {
+        if (registered_path.size() > best_len &&
+            registered_path.back() == '/' &&
+            request.path.size() >= registered_path.size() &&
+            request.path.compare(0, registered_path.size(), registered_path) == 0)
+        {
+          best_handler = &handler;
+          best_len = registered_path.size();
+        }
+      }
+      if (best_handler)
+      {
+        HttpResponse response = (*best_handler)(request);
         if (cors_enabled_)
         {
           add_cors_headers(response);

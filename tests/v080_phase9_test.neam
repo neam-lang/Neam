@@ -1,0 +1,200 @@
+// v0.8 Phase 9: API, CLI & Deploy backward compatibility tests
+// Verifies claw/forge declarations, spawn, dag_execute, OOP, and traits
+
+// === Test Infrastructure ===
+let pass_count = 0;
+let fail_count = 0;
+
+fun check_equal(a, b, label) {
+  if (a == b) {
+    emit "[PASS] " + label;
+    pass_count = pass_count + 1;
+  } else {
+    emit "[FAIL] " + label;
+    fail_count = fail_count + 1;
+  }
+  return nil;
+}
+
+fun check_true(val, label) {
+  if (val) {
+    emit "[PASS] " + label;
+    pass_count = pass_count + 1;
+  } else {
+    emit "[FAIL] " + label;
+    fail_count = fail_count + 1;
+  }
+  return nil;
+}
+
+fun check_type(val, expected_type, label) {
+  let t = typeof(val);
+  if (t == expected_type) {
+    emit "[PASS] " + label;
+    pass_count = pass_count + 1;
+  } else {
+    emit "[FAIL] " + label + " -- typeof=" + t + " expected=" + expected_type;
+    fail_count = fail_count + 1;
+  }
+  return nil;
+}
+
+// === Shared skill/guard definitions ===
+skill helper_skill {
+  description: "A test skill"
+  params: { input: string }
+  impl(val) {
+    return val;
+  }
+}
+
+guard input_guard {
+  description: "Validates input"
+  on_observation(text) { return text; }
+}
+
+guardchain safety_chain = [input_guard];
+
+fun always_pass(ctx) {
+  return true;
+}
+
+// -------------------------------------------------------
+// Test 1: Forge agent declaration compiles
+// -------------------------------------------------------
+forge agent TestForge {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a test builder"
+  skills: [helper_skill]
+  guards: [safety_chain]
+  loop: {
+    max_iterations: 5
+    max_cost: 1.0
+  }
+  verify: always_pass
+  checkpoint: "none"
+  workspace: "/tmp/test-forge"
+}
+check_true(true, "T1: forge agent declaration compiles");
+
+// -------------------------------------------------------
+// Test 2: Claw agent declaration compiles
+// -------------------------------------------------------
+claw agent TestClaw {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a test claw agent"
+  skills: [helper_skill]
+  guards: [safety_chain]
+  channels: [helper_skill]
+}
+check_true(true, "T2: claw agent declaration compiles");
+
+// -------------------------------------------------------
+// Test 3: spawn keyword still works (Phase 8 compat)
+// -------------------------------------------------------
+let r3 = spawn nonexistent_agent("hello");
+check_type(r3, "String", "T3: spawn keyword still works");
+
+// -------------------------------------------------------
+// Test 4: dag_execute still works (Phase 8 compat)
+// -------------------------------------------------------
+let r4 = dag_execute([]);
+check_type(r4, "Map", "T4: dag_execute still works");
+
+// -------------------------------------------------------
+// Test 5: struct + impl backward compat
+// -------------------------------------------------------
+struct Vec2 { x, y }
+
+impl Vec2 {
+  fn sum(self) {
+    return self.x + self.y;
+  }
+}
+
+let v = Vec2(10, 20);
+check_equal(v.sum(), 30, "T5: struct + impl backward compat");
+
+// -------------------------------------------------------
+// Test 6: trait + sealed + match backward compat
+// -------------------------------------------------------
+trait Describable {
+  fn describe(self);
+}
+
+sealed Color {
+  Red(),
+  Green(),
+  Blue()
+}
+
+let color = Color.Red();
+let name = match color {
+  Red() => "red",
+  Green() => "green",
+  Blue() => "blue",
+  _ => "unknown"
+};
+check_equal(name, "red", "T6: sealed + match backward compat");
+
+// -------------------------------------------------------
+// Test 7: Multiple forge agents can coexist
+// -------------------------------------------------------
+forge agent SecondForge {
+  provider: "openai"
+  model: "gpt-4o-mini"
+  system: "Second forge"
+  skills: [helper_skill]
+  loop: {
+    max_iterations: 3
+  }
+  verify: always_pass
+  checkpoint: "none"
+  workspace: "/tmp/test-forge-2"
+}
+check_true(true, "T7: multiple forge agents coexist");
+
+// -------------------------------------------------------
+// Test 8: Channel keyword as skill param name
+// -------------------------------------------------------
+skill test_channel_param {
+  description: "Test channel as param"
+  params: {
+    channel: string
+  }
+  impl(val) {
+    return val;
+  }
+}
+check_true(true, "T8: channel keyword as skill param");
+
+// -------------------------------------------------------
+// Test 9: Variables and functions still work
+// -------------------------------------------------------
+let x = 42;
+fun double(n) {
+  return n * 2;
+}
+check_equal(double(x), 84, "T9: variables and functions");
+
+// -------------------------------------------------------
+// Test 10: List and map operations
+// -------------------------------------------------------
+let nums = [1, 2, 3];
+let m = { "a": 1, "b": 2 };
+check_equal(len(nums), 3, "T10: list and map operations");
+
+// === Summary ===
+emit "";
+emit "=== Phase 9 Test Summary ===";
+emit "Passed: " + pass_count;
+emit "Failed: " + fail_count;
+emit "Total:  " + (pass_count + fail_count);
+
+if (fail_count > 0) {
+  emit "SOME TESTS FAILED";
+} else {
+  emit "ALL TESTS PASSED";
+}

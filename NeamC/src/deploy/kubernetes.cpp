@@ -173,8 +173,16 @@ void generate_k8s_manifests(const DeployConfig::Kubernetes& config, const std::s
     f << "          volumeMounts:\n";
     f << "            - name: tmp\n";
     f << "              mountPath: /tmp\n";
+    f << "            - name: session-storage\n";
+    f << "              mountPath: /app/sessions\n";
+    f << "            - name: forge-workspace\n";
+    f << "              mountPath: /app/workspace\n";
     f << "      volumes:\n";
     f << "        - name: tmp\n";
+    f << "          emptyDir: {}\n";
+    f << "        - name: session-storage\n";
+    f << "          emptyDir: {}\n";
+    f << "        - name: forge-workspace\n";
     f << "          emptyDir: {}\n";
   }
 
