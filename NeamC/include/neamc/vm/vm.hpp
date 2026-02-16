@@ -21,6 +21,7 @@
 #include "neamc/vm/bytecode.hpp"
 #include "neamc/vm/channel_adapter.hpp"
 #include "neamc/vm/lane_queue.hpp"
+#include "neamc/vm/memory_index.hpp"
 #include "neamc/vm/mcp_client.hpp"
 #include "neamc/vm/memory.hpp"
 #include "neamc/vm/native.hpp"
@@ -104,6 +105,10 @@ public:
   const std::unordered_map<std::string, ObjClawAgent*>& claw_agents() const { return claw_agents_; }
   LaneQueueEngine* lane_engine() { return lane_engine_.get(); }
   std::mutex& execution_mutex() { return execution_mutex_; }
+
+  // v0.8 Phase 7: Memory search public API
+  std::vector<MemorySearchResult> search_memory(const std::string& query,
+                                                std::size_t top_k);
 
 private:
   struct BudgetDefinition
@@ -227,6 +232,8 @@ private:
   std::unordered_map<std::string, ObjChannel*> channel_registry_{};
   std::unordered_map<std::string, std::unique_ptr<ChannelAdapter>> channel_adapters_{};
   std::unique_ptr<LaneQueueEngine> lane_engine_;
+  // v0.8 Phase 7: Memory indices per claw agent
+  std::unordered_map<std::string, std::unique_ptr<MemoryIndex>> memory_indices_;
   std::mutex execution_mutex_;
   ObjEnv* env_{nullptr};
   Table globals_{};
