@@ -282,6 +282,7 @@ struct ObjWorkspace;
 struct ObjLoopContext;
 ObjClawAgent* new_claw_agent();
 ObjForgeAgent* new_forge_agent();
+ObjLoopContext* new_loop_context();
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

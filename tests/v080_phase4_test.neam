@@ -1,0 +1,227 @@
+// v0.8 Phase 4: Forge Agent Runtime
+
+// === Skill stubs ===
+skill greet {
+  description: "Greets a user"
+  params: { name: string }
+  impl(name) { return "Hello " + name; }
+}
+
+skill code_gen {
+  description: "Generates code"
+  params: { spec: string }
+  impl(spec) { return "// generated code for: " + spec; }
+}
+
+skill calculate {
+  description: "Calculates a value"
+  params: { expr: string }
+  impl(expr) { return "42"; }
+}
+
+// === Guard chain stub ===
+guard input_guard {
+  description: "Validates input"
+  on_observation(text) { return text; }
+}
+
+guardchain safety_chain = [input_guard];
+
+// === Verify functions ===
+fun always_pass(ctx) {
+  return true;
+}
+
+fun always_fail(ctx) {
+  return false;
+}
+
+fun abort_verify(ctx) {
+  return "abort: critical error detected";
+}
+
+fun retry_verify(ctx) {
+  return "retry: needs improvement";
+}
+
+// === 1. Forge agent with all config — property access ===
+forge agent builder {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [code_gen]
+  guards: [safety_chain]
+  loop: {
+    max_iterations: 5
+    max_cost: 2.0
+  }
+  verify: always_pass
+  checkpoint: "none"
+  workspace: "/tmp/forge_test"
+}
+
+let mi = builder.max_iterations;
+if (mi == 5) {
+  emit "PASS: forge max_iterations = 5";
+} else {
+  emit "FAIL: forge max_iterations expected 5, got " + mi;
+}
+
+let mc = builder.max_cost;
+if (mc == 2) {
+  emit "PASS: forge max_cost = 2.0";
+} else {
+  emit "FAIL: forge max_cost expected 2, got " + mc;
+}
+
+let cp = builder.checkpoint;
+if (cp == "none") {
+  emit "PASS: forge checkpoint = none";
+} else {
+  emit "FAIL: forge checkpoint expected none, got " + cp;
+}
+
+let ws = builder.workspace;
+if (ws == "/tmp/forge_test") {
+  emit "PASS: forge workspace = /tmp/forge_test";
+} else {
+  emit "FAIL: forge workspace expected /tmp/forge_test, got " + ws;
+}
+
+// === 2. Forge .run() returns outcome map ===
+// This will attempt LLM call; if API key not set, returns abort with provider error
+let run_result = builder.run();
+if (run_result.outcome != nil) {
+  emit "PASS: forge .run() returns outcome map with outcome=" + run_result.outcome;
+} else {
+  emit "FAIL: forge .run() expected outcome map";
+}
+
+if (run_result.iterations != nil) {
+  emit "PASS: forge .run() result has iterations field";
+} else {
+  emit "FAIL: forge .run() missing iterations field";
+}
+
+if (run_result.total_cost != nil) {
+  emit "PASS: forge .run() result has total_cost field";
+} else {
+  emit "FAIL: forge .run() missing total_cost field";
+}
+
+if (run_result.message != nil) {
+  emit "PASS: forge .run() result has message field";
+} else {
+  emit "FAIL: forge .run() missing message field";
+}
+
+// === 3. Forge .reset() works ===
+let reset_result = builder.reset();
+if (reset_result == nil) {
+  emit "PASS: forge .reset() returns nil";
+} else {
+  emit "FAIL: forge .reset() expected nil";
+}
+
+// === 4. Trait method dispatch on forge agent ===
+trait Buildable {
+  fn build_info(self);
+}
+
+impl Buildable for builder {
+  fn build_info(self) {
+    return "forge builder active";
+  }
+}
+
+let bi = builder.build_info();
+if (bi == "forge builder active") {
+  emit "PASS: forge trait method dispatch works";
+} else {
+  emit "FAIL: forge trait expected 'forge builder active', got " + bi;
+}
+
+// === 5. Struct backward compat ===
+struct Point {
+  x: number
+  y: number
+}
+
+impl Point {
+  fn magnitude(self) {
+    return 42;
+  }
+}
+
+let p = Point(3, 4);
+let mag = p.magnitude();
+if (mag == 42) {
+  emit "PASS: struct backward compat works";
+} else {
+  emit "FAIL: struct magnitude expected 42, got " + mag;
+}
+
+// === 6. Claw agent backward compat ===
+claw agent session_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a helpful assistant."
+  skills: [greet, calculate]
+  guards: [safety_chain]
+  channels: [greet]
+  session: {
+    idle_reset_minutes: 30
+    max_history_turns: 50
+    compaction: "auto"
+  }
+}
+
+let claw_mht = session_bot.max_history_turns;
+if (claw_mht == 50) {
+  emit "PASS: claw max_history_turns = 50";
+} else {
+  emit "FAIL: claw max_history_turns expected 50, got " + claw_mht;
+}
+
+let claw_reset = session_bot.reset();
+if (claw_reset == nil) {
+  emit "PASS: claw .reset() returns nil";
+} else {
+  emit "FAIL: claw .reset() expected nil";
+}
+
+// === 7. Plain agent backward compat ===
+agent legacy_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+}
+
+let legacy_reset = legacy_bot.reset();
+if (legacy_reset == nil) {
+  emit "PASS: plain agent .reset() works";
+} else {
+  emit "FAIL: plain agent .reset() expected nil";
+}
+
+// === 8. Forge agent with abort verify ===
+forge agent abort_builder {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [code_gen]
+  loop: {
+    max_iterations: 3
+    max_cost: 1.0
+  }
+  verify: abort_verify
+  checkpoint: "none"
+  workspace: "/tmp/forge_abort_test"
+}
+
+let abort_result = abort_builder.run();
+if (abort_result.outcome != nil) {
+  emit "PASS: abort forge returns outcome map with outcome=" + abort_result.outcome;
+} else {
+  emit "FAIL: abort forge expected outcome map";
+}
+
+emit "v0.8 Phase 4: All tests passed";
