@@ -216,6 +216,12 @@ ObjForgeAgent* new_forge_agent()
   return forge;
 }
 
+ObjLoopContext* new_loop_context()
+{
+  auto* ctx = allocate_object<ObjLoopContext>(ObjType::OBJ_LOOP_CONTEXT);
+  return ctx;
+}
+
 uint32_t hash_string(const char* key, std::size_t length)
 {
   constexpr uint32_t fnv_offset = 2166136261u;

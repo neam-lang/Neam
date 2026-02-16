@@ -114,12 +114,12 @@ if (forge_ws == "/tmp/forge") {
   emit "FAIL: forge workspace expected /tmp/forge, got " + forge_ws;
 }
 
-// === 6. Test forge .run() stub ===
+// === 6. Test forge .run() returns outcome map ===
 let run_result = code_builder.run();
-if (run_result == nil) {
-  emit "PASS: forge .run() returns nil (stub)";
+if (run_result.outcome != nil) {
+  emit "PASS: forge .run() returns outcome map";
 } else {
-  emit "FAIL: forge .run() expected nil";
+  emit "FAIL: forge .run() expected outcome map";
 }
 
 // === 7. Test claw .reset() ===
