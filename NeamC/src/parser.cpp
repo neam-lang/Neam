@@ -5550,9 +5550,25 @@ ExprPtr Parser::parse_call()
           continue;
         }
       }
+      // v0.8: Accept identifiers AND keywords as property names
+      // (e.g., agent.model, agent.system, agent.checkpoint)
       if (!match(TokenType::Identifier))
       {
-        error("Expected property name after '.'");
+        // Try to accept any keyword token as a property name
+        auto tok = peek();
+        if (tok.type != TokenType::Eof && tok.type != TokenType::LeftParen &&
+            tok.type != TokenType::RightParen && tok.type != TokenType::LeftBrace &&
+            tok.type != TokenType::RightBrace && tok.type != TokenType::LeftBracket &&
+            tok.type != TokenType::RightBracket && tok.type != TokenType::Semicolon &&
+            tok.type != TokenType::Dot && tok.type != TokenType::Comma &&
+            !tok.lexeme.empty())
+        {
+          advance();
+        }
+        else
+        {
+          error("Expected property name after '.'");
+        }
       }
       auto span = merge_span(expr->span, span_from_token(previous()));
       expr = make_get(std::move(expr), previous().lexeme, span);

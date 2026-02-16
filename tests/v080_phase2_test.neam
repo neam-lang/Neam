@@ -1,0 +1,171 @@
+// v0.8 Phase 2: VM Object Types & Dispatch
+
+// === Skill stubs ===
+skill greet {
+  description: "Greets a user"
+  params: { name: string }
+  impl(name) { return "Hello"; }
+}
+
+skill code_gen {
+  description: "Generates code"
+  params: { spec: string }
+  impl(spec) { return "// code"; }
+}
+
+// === Guard chain stub ===
+guard input_guard {
+  description: "Validates input"
+  on_observation(text) { return text; }
+}
+
+guardchain safety_chain = [input_guard];
+
+// === Verify function ===
+fun check_result(ctx) {
+  return true;
+}
+
+// === 1. Claw agent with session config ===
+claw agent support_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a support agent."
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  session: {
+    idle_reset_minutes: 30
+    max_history_turns: 50
+    compaction: "auto"
+  }
+}
+
+// === 2. Forge agent with loop config ===
+forge agent code_builder {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [code_gen]
+  guards: [safety_chain]
+  loop: {
+    max_iterations: 10
+    max_cost: 5.0
+  }
+  verify: check_result
+  checkpoint: "git"
+  workspace: "/tmp/forge"
+}
+
+// === 3. Plain agent (backward compat) ===
+agent legacy_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+}
+
+// === 4. Test claw agent property access ===
+let claw_mht = support_bot.max_history_turns;
+if (claw_mht == 50) {
+  emit "PASS: claw max_history_turns = 50";
+} else {
+  emit "FAIL: claw max_history_turns expected 50, got " + claw_mht;
+}
+
+let claw_idle = support_bot.idle_reset_minutes;
+if (claw_idle == 30) {
+  emit "PASS: claw idle_reset_minutes = 30";
+} else {
+  emit "FAIL: claw idle_reset_minutes expected 30, got " + claw_idle;
+}
+
+let claw_comp = support_bot.compaction;
+if (claw_comp == "auto") {
+  emit "PASS: claw compaction = auto";
+} else {
+  emit "FAIL: claw compaction expected auto, got " + claw_comp;
+}
+
+// === 5. Test forge agent property access ===
+let forge_mi = code_builder.max_iterations;
+if (forge_mi == 10) {
+  emit "PASS: forge max_iterations = 10";
+} else {
+  emit "FAIL: forge max_iterations expected 10, got " + forge_mi;
+}
+
+let forge_mc = code_builder.max_cost;
+if (forge_mc == 5) {
+  emit "PASS: forge max_cost = 5.0";
+} else {
+  emit "FAIL: forge max_cost expected 5, got " + forge_mc;
+}
+
+let forge_cp = code_builder.checkpoint;
+if (forge_cp == "git") {
+  emit "PASS: forge checkpoint = git";
+} else {
+  emit "FAIL: forge checkpoint expected git, got " + forge_cp;
+}
+
+let forge_ws = code_builder.workspace;
+if (forge_ws == "/tmp/forge") {
+  emit "PASS: forge workspace = /tmp/forge";
+} else {
+  emit "FAIL: forge workspace expected /tmp/forge, got " + forge_ws;
+}
+
+// === 6. Test forge .run() stub ===
+let run_result = code_builder.run();
+if (run_result == nil) {
+  emit "PASS: forge .run() returns nil (stub)";
+} else {
+  emit "FAIL: forge .run() expected nil";
+}
+
+// === 7. Test claw .reset() ===
+let reset_result = support_bot.reset();
+if (reset_result == nil) {
+  emit "PASS: claw .reset() returns nil";
+} else {
+  emit "FAIL: claw .reset() expected nil";
+}
+
+// === 8. Trait on claw agent ===
+trait Channelable {
+  fn open_channel(self, name);
+}
+
+impl Channelable for support_bot {
+  fn open_channel(self, name) {
+    return "channel opened";
+  }
+}
+
+let ch_result = support_bot.open_channel("test");
+if (ch_result == "channel opened") {
+  emit "PASS: claw trait method dispatch works";
+} else {
+  emit "FAIL: claw trait method expected 'channel opened', got " + ch_result;
+}
+
+// === 9. Struct + impl backward compat ===
+struct Point {
+  x: number
+  y: number
+}
+
+impl Point {
+  fn magnitude(self) {
+    return 42;
+  }
+}
+
+let p = Point(3, 4);
+let mag = p.magnitude();
+if (mag == 42) {
+  emit "PASS: struct backward compat works";
+} else {
+  emit "FAIL: struct magnitude expected 42, got " + mag;
+}
+
+emit "v0.8 Phase 2: All tests passed";

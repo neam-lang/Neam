@@ -6,6 +6,8 @@
 
 #include <cstring>
 
+#include "neamc/vm/claw_agent_type.hpp"
+#include "neamc/vm/forge_agent_type.hpp"
 #include "neamc/vm/memory.hpp"
 #include "neamc/vm/table.hpp"
 #include "neamc/vm/vm.hpp"
@@ -200,6 +202,18 @@ ObjTuple* new_tuple(std::vector<Value> items)
   tuple->hash_cache = 0;
   tuple->hash_computed = false;
   return tuple;
+}
+
+ObjClawAgent* new_claw_agent()
+{
+  auto* claw = allocate_object<ObjClawAgent>(ObjType::OBJ_CLAW_AGENT);
+  return claw;
+}
+
+ObjForgeAgent* new_forge_agent()
+{
+  auto* forge = allocate_object<ObjForgeAgent>(ObjType::OBJ_FORGE_AGENT);
+  return forge;
 }
 
 uint32_t hash_string(const char* key, std::size_t length)

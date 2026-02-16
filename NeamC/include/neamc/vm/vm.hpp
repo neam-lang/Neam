@@ -206,6 +206,9 @@ private:
   // v0.7.1 Phase 2: trait + sealed runtime tables
   std::unordered_map<std::string, ObjTraitDef*> trait_defs_{};
   std::unordered_map<std::string, ObjSealedDef*> sealed_defs_{};
+  // v0.8: Agent type runtime registries
+  std::unordered_map<std::string, ObjClawAgent*> claw_agents_{};
+  std::unordered_map<std::string, ObjForgeAgent*> forge_agents_{};
   ObjEnv* env_{nullptr};
   Table globals_{};
   Table interned_strings_{};

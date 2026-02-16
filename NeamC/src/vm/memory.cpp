@@ -11,6 +11,8 @@
 #include "neamc/vm/object.hpp"
 #include "neamc/vm/struct_type.hpp"
 #include "neamc/vm/sealed_type.hpp"
+#include "neamc/vm/claw_agent_type.hpp"
+#include "neamc/vm/forge_agent_type.hpp"
 #include "neamc/vm/async/future.hpp"
 #include "neamc/vm/table.hpp"
 #include "neamc/vm/vm.hpp"
@@ -187,6 +189,41 @@ void free_object(Obj* object)
       auto* v = reinterpret_cast<ObjVariant*>(object);
       v->~ObjVariant();
       std::free(v);
+      break;
+    }
+    case ObjType::OBJ_CLAW_AGENT:
+    {
+      auto* claw = reinterpret_cast<ObjClawAgent*>(object);
+      claw->~ObjClawAgent();
+      std::free(claw);
+      break;
+    }
+    case ObjType::OBJ_FORGE_AGENT:
+    {
+      auto* forge = reinterpret_cast<ObjForgeAgent*>(object);
+      forge->~ObjForgeAgent();
+      std::free(forge);
+      break;
+    }
+    case ObjType::OBJ_CHANNEL:
+    {
+      auto* ch = reinterpret_cast<ObjChannel*>(object);
+      ch->~ObjChannel();
+      std::free(ch);
+      break;
+    }
+    case ObjType::OBJ_WORKSPACE:
+    {
+      auto* ws = reinterpret_cast<ObjWorkspace*>(object);
+      ws->~ObjWorkspace();
+      std::free(ws);
+      break;
+    }
+    case ObjType::OBJ_LOOP_CONTEXT:
+    {
+      auto* lc = reinterpret_cast<ObjLoopContext*>(object);
+      lc->~ObjLoopContext();
+      std::free(lc);
       break;
     }
   }
@@ -435,6 +472,53 @@ void blacken_object(Obj* object, std::vector<Obj*>& gray_stack)
       {
         mark_value(const_cast<Value&>(field));
       }
+      break;
+    }
+    case ObjType::OBJ_CLAW_AGENT:
+    {
+      auto* claw = reinterpret_cast<ObjClawAgent*>(object);
+      if (claw->name) mark_object_inner(reinterpret_cast<Obj*>(claw->name), gray_stack);
+      if (claw->provider) mark_object_inner(reinterpret_cast<Obj*>(claw->provider), gray_stack);
+      if (claw->model) mark_object_inner(reinterpret_cast<Obj*>(claw->model), gray_stack);
+      if (claw->endpoint) mark_object_inner(reinterpret_cast<Obj*>(claw->endpoint), gray_stack);
+      if (claw->api_key_env) mark_object_inner(reinterpret_cast<Obj*>(claw->api_key_env), gray_stack);
+      if (claw->system) mark_object_inner(reinterpret_cast<Obj*>(claw->system), gray_stack);
+      if (claw->skills) mark_object_inner(reinterpret_cast<Obj*>(claw->skills), gray_stack);
+      if (claw->connected_knowledge) mark_object_inner(reinterpret_cast<Obj*>(claw->connected_knowledge), gray_stack);
+      if (claw->context) mark_object_inner(reinterpret_cast<Obj*>(claw->context), gray_stack);
+      break;
+    }
+    case ObjType::OBJ_FORGE_AGENT:
+    {
+      auto* forge = reinterpret_cast<ObjForgeAgent*>(object);
+      if (forge->name) mark_object_inner(reinterpret_cast<Obj*>(forge->name), gray_stack);
+      if (forge->provider) mark_object_inner(reinterpret_cast<Obj*>(forge->provider), gray_stack);
+      if (forge->model) mark_object_inner(reinterpret_cast<Obj*>(forge->model), gray_stack);
+      if (forge->endpoint) mark_object_inner(reinterpret_cast<Obj*>(forge->endpoint), gray_stack);
+      if (forge->api_key_env) mark_object_inner(reinterpret_cast<Obj*>(forge->api_key_env), gray_stack);
+      if (forge->system) mark_object_inner(reinterpret_cast<Obj*>(forge->system), gray_stack);
+      if (forge->skills) mark_object_inner(reinterpret_cast<Obj*>(forge->skills), gray_stack);
+      if (forge->context) mark_object_inner(reinterpret_cast<Obj*>(forge->context), gray_stack);
+      if (forge->verify_fn) mark_object_inner(reinterpret_cast<Obj*>(forge->verify_fn), gray_stack);
+      break;
+    }
+    case ObjType::OBJ_CHANNEL:
+    {
+      auto* ch = reinterpret_cast<ObjChannel*>(object);
+      if (ch->name) mark_object_inner(reinterpret_cast<Obj*>(ch->name), gray_stack);
+      if (ch->config) mark_object_inner(reinterpret_cast<Obj*>(ch->config), gray_stack);
+      break;
+    }
+    case ObjType::OBJ_WORKSPACE:
+    {
+      auto* ws = reinterpret_cast<ObjWorkspace*>(object);
+      if (ws->path) mark_object_inner(reinterpret_cast<Obj*>(ws->path), gray_stack);
+      break;
+    }
+    case ObjType::OBJ_LOOP_CONTEXT:
+    {
+      auto* lc = reinterpret_cast<ObjLoopContext*>(object);
+      if (lc->forge_agent) mark_object_inner(reinterpret_cast<Obj*>(lc->forge_agent), gray_stack);
       break;
     }
   }

@@ -12,6 +12,8 @@
 #include "neamc/vm/object.hpp"
 #include "neamc/vm/struct_type.hpp"
 #include "neamc/vm/sealed_type.hpp"
+#include "neamc/vm/claw_agent_type.hpp"
+#include "neamc/vm/forge_agent_type.hpp"
 
 namespace neamc::vm
 {
@@ -154,6 +156,31 @@ Value Value::Variant(ObjVariant* variant)
   return Value::ObjVal(reinterpret_cast<Obj*>(variant));
 }
 
+Value Value::ClawAgent(ObjClawAgent* claw)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(claw));
+}
+
+Value Value::ForgeAgent(ObjForgeAgent* forge)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(forge));
+}
+
+Value Value::Channel(ObjChannel* channel)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(channel));
+}
+
+Value Value::Workspace(ObjWorkspace* workspace)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(workspace));
+}
+
+Value Value::LoopContext(ObjLoopContext* loop_ctx)
+{
+  return Value::ObjVal(reinterpret_cast<Obj*>(loop_ctx));
+}
+
 bool Value::as_bool() const
 {
   if (!is_bool())
@@ -289,6 +316,31 @@ bool Value::is_sealed_def() const
 bool Value::is_variant() const
 {
   return is_obj_type(*this, ObjType::OBJ_VARIANT);
+}
+
+bool Value::is_claw_agent() const
+{
+  return is_obj_type(*this, ObjType::OBJ_CLAW_AGENT);
+}
+
+bool Value::is_forge_agent() const
+{
+  return is_obj_type(*this, ObjType::OBJ_FORGE_AGENT);
+}
+
+bool Value::is_channel() const
+{
+  return is_obj_type(*this, ObjType::OBJ_CHANNEL);
+}
+
+bool Value::is_workspace() const
+{
+  return is_obj_type(*this, ObjType::OBJ_WORKSPACE);
+}
+
+bool Value::is_loop_context() const
+{
+  return is_obj_type(*this, ObjType::OBJ_LOOP_CONTEXT);
 }
 
 std::string value_to_string(const Value& value)
@@ -437,6 +489,34 @@ std::string value_to_string(const Value& value)
   if (value.is_trait_def())
   {
     return "<trait " + as_trait_def(value)->name + ">";
+  }
+  if (value.is_claw_agent())
+  {
+    auto* claw = as_claw_agent(value);
+    return "<claw agent " + std::string(claw->name->chars, claw->name->length) + ">";
+  }
+  if (value.is_forge_agent())
+  {
+    auto* forge = as_forge_agent(value);
+    return "<forge agent " + std::string(forge->name->chars, forge->name->length) + ">";
+  }
+  if (value.is_channel())
+  {
+    auto* ch = as_channel(value);
+    if (ch->name)
+      return "<channel " + std::string(ch->name->chars, ch->name->length) + ">";
+    return "<channel>";
+  }
+  if (value.is_workspace())
+  {
+    auto* ws = as_workspace(value);
+    if (ws->path)
+      return "<workspace " + std::string(ws->path->chars, ws->path->length) + ">";
+    return "<workspace>";
+  }
+  if (value.is_loop_context())
+  {
+    return "<loop_context>";
   }
   return "<object>";
 }
@@ -642,5 +722,50 @@ ObjVariant* as_variant(const Value& value)
     throw std::runtime_error("Expected variant object");
   }
   return reinterpret_cast<ObjVariant*>(value.as.obj);
+}
+
+ObjClawAgent* as_claw_agent(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_CLAW_AGENT))
+  {
+    throw std::runtime_error("Expected claw_agent object");
+  }
+  return reinterpret_cast<ObjClawAgent*>(value.as.obj);
+}
+
+ObjForgeAgent* as_forge_agent(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_FORGE_AGENT))
+  {
+    throw std::runtime_error("Expected forge_agent object");
+  }
+  return reinterpret_cast<ObjForgeAgent*>(value.as.obj);
+}
+
+ObjChannel* as_channel(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_CHANNEL))
+  {
+    throw std::runtime_error("Expected channel object");
+  }
+  return reinterpret_cast<ObjChannel*>(value.as.obj);
+}
+
+ObjWorkspace* as_workspace(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_WORKSPACE))
+  {
+    throw std::runtime_error("Expected workspace object");
+  }
+  return reinterpret_cast<ObjWorkspace*>(value.as.obj);
+}
+
+ObjLoopContext* as_loop_context(const Value& value)
+{
+  if (!is_obj_type(value, ObjType::OBJ_LOOP_CONTEXT))
+  {
+    throw std::runtime_error("Expected loop_context object");
+  }
+  return reinterpret_cast<ObjLoopContext*>(value.as.obj);
 }
 }  // namespace neamc::vm
