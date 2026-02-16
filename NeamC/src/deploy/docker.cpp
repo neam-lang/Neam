@@ -52,6 +52,7 @@ void generate_dockerfile(const DeployConfig& config, const std::string& app_name
   // Neam toolchain
   file << "# Neam toolchain\n";
   file << "COPY --from=toolchain /opt/neam/bin/neam-api   /usr/local/bin/neam-api\n";
+  file << "COPY --from=toolchain /opt/neam/bin/neam-forge /usr/local/bin/neam-forge\n";
   file << "COPY --from=toolchain /opt/neam/bin/neamc      /usr/local/bin/neamc\n";
   file << "COPY --from=toolchain /opt/neam/bin/neam       /usr/local/bin/neam\n";
   file << "COPY --from=toolchain /opt/neam/bin/neam-pkg   /usr/local/bin/neam-pkg\n";

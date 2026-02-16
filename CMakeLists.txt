@@ -387,6 +387,13 @@ add_executable(neam-lambda
 target_link_libraries(neam-lambda PRIVATE neamc_core)
 target_link_libraries(neam-lambda PRIVATE nlohmann_json_schema_validator)
 
+# v0.8 Phase 9: Forge CLI
+add_executable(neam-forge
+    NeamC/src/neam_forge.cpp
+)
+target_link_libraries(neam-forge PRIVATE neamc_core)
+target_link_libraries(neam-forge PRIVATE nlohmann_json_schema_validator)
+
 enable_testing()
 
 add_executable(vm_test
@@ -549,7 +556,7 @@ add_test(NAME v072_manifest_agents_test COMMAND v072_manifest_agents_test)
 include(GNUInstallDirs)
 
 # Executables
-install(TARGETS neamc neam neam-cli neam-pkg neam-api neam-lambda neam-lsp neam-dap neam-gym
+install(TARGETS neamc neam neam-cli neam-pkg neam-api neam-lambda neam-forge neam-lsp neam-dap neam-gym
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Core static library

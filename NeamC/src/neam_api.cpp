@@ -6,6 +6,8 @@
 
 #include "neamc/api/http_server.hpp"
 #include "neamc/llm/http_client.hpp"
+#include "neamc/llm/provider.hpp"
+#include "neamc/llm/provider_factory.hpp"
 #include "neamc/pipeline.hpp"
 #include "neamc/project_manifest.hpp"
 #include "neamc/security/audit_log.hpp"
@@ -16,7 +18,11 @@
 #include "neamc/version.hpp"
 #include "neamc/vm/bytecode.hpp"
 #include "neamc/vm/bytecode_cache.hpp"
+#include "neamc/vm/claw_agent_type.hpp"
+#include "neamc/vm/forge_agent_type.hpp"
+#include "neamc/vm/forge_loop.hpp"
 #include "neamc/vm/metrics.hpp"
+#include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/vm.hpp"
 #include "neamc/vm/vm_pool.hpp"
 
@@ -35,6 +41,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -252,6 +259,60 @@ bool g_warmstart_trace = false;           // v0.7.2 W8: NEAM_WARMSTART_TRACE
 
 // v0.7.2: Dynamic agents map (loaded from neam.toml or defaults)
 const std::map<std::string, AgentConfig>* g_active_agents = nullptr;
+
+// v0.8 Phase 9: Global VM pointer for claw/forge agent access
+neamc::vm::VirtualMachine* g_vm = nullptr;
+
+// v0.8 Phase 9: Session manager for claw agent endpoints
+neamc::vm::SessionManager g_session_manager;
+std::mutex g_session_mutex;
+
+// v0.8 Phase 9: Forge loop state tracking
+struct ForgeLoopState
+{
+  bool running{false};
+  bool stop_requested{false};
+  int iteration{0};
+  double total_cost{0.0};
+  std::string last_outcome;
+  std::thread loop_thread;
+};
+std::mutex g_forge_mutex;
+std::unordered_map<std::string, ForgeLoopState> g_forge_states;
+
+// Parse URL path into segments: "/api/v1/claw/my_agent" -> ["api","v1","claw","my_agent"]
+std::vector<std::string> parse_path_segments(const std::string& path)
+{
+  std::vector<std::string> segments;
+  std::string segment;
+  for (char c : path)
+  {
+    if (c == '/')
+    {
+      if (!segment.empty())
+      {
+        segments.push_back(segment);
+        segment.clear();
+      }
+    }
+    else
+    {
+      segment += c;
+    }
+  }
+  if (!segment.empty())
+  {
+    segments.push_back(segment);
+  }
+  return segments;
+}
+
+// Helper: convert ObjString* to std::string safely
+std::string obj_str(const neamc::vm::ObjString* s)
+{
+  if (!s || !s->chars) return "";
+  return std::string(s->chars, s->length);
+}
 
 // Generate Neam program for agent query
 std::string generate_neam_program(const std::string& agent_id, const std::string& query,
@@ -927,6 +988,433 @@ neamc::api::HttpResponse handle_list_confirmations(const neamc::api::HttpRequest
   return neamc::api::HttpResponse::json({{"pending", items}});
 }
 
+// ─── v0.8 Phase 9: Claw Agent Endpoints ─────────────────────────────────
+
+// GET /api/v1/claw — List claw agents
+neamc::api::HttpResponse handle_list_claw(const neamc::api::HttpRequest& request)
+{
+  if (!authenticate_request(request)) return unauthorized_response();
+  if (!g_vm)
+  {
+    return neamc::api::HttpResponse::error("VM not initialized", 503);
+  }
+
+  nlohmann::json agents = nlohmann::json::array();
+  for (const auto& [name, agent] : g_vm->claw_agents())
+  {
+    nlohmann::json entry;
+    entry["name"] = name;
+    entry["provider"] = obj_str(agent->provider);
+    entry["model"] = obj_str(agent->model);
+    entry["session_count"] = static_cast<int>(agent->sessions.size());
+
+    nlohmann::json channels = nlohmann::json::array();
+    for (const auto& ch : agent->channel_names)
+    {
+      channels.push_back(ch);
+    }
+    entry["channels"] = channels;
+    agents.push_back(entry);
+  }
+
+  return neamc::api::HttpResponse::json({{"claw_agents", agents}});
+}
+
+// POST /api/v1/claw/:agent/sessions/:key/message — Send message to claw session
+neamc::api::HttpResponse handle_claw_message(const neamc::api::HttpRequest& request)
+{
+  if (!authenticate_request(request)) return unauthorized_response();
+  if (!g_vm)
+  {
+    return neamc::api::HttpResponse::error("VM not initialized", 503);
+  }
+
+  // Parse path: /api/v1/claw/<agent>/sessions/<key>/message
+  auto segments = parse_path_segments(request.path);
+  // Expected: ["api","v1","claw",<agent>,"sessions",<key>,"message"]
+  if (segments.size() < 7 || segments[2] != "claw" || segments[4] != "sessions" ||
+      segments[6] != "message")
+  {
+    return neamc::api::HttpResponse::bad_request(
+        "Expected path: /api/v1/claw/:agent/sessions/:key/message");
+  }
+
+  const std::string agent_name = segments[3];
+  const std::string session_key = segments[5];
+
+  // Look up agent
+  const auto& claw_agents = g_vm->claw_agents();
+  auto it = claw_agents.find(agent_name);
+  if (it == claw_agents.end())
+  {
+    return neamc::api::HttpResponse::not_found("Claw agent not found: " + agent_name);
+  }
+  auto* agent = it->second;
+
+  // Parse body for message
+  nlohmann::json body;
+  try
+  {
+    body = nlohmann::json::parse(request.body);
+  }
+  catch (...)
+  {
+    return neamc::api::HttpResponse::bad_request("Invalid JSON body");
+  }
+
+  std::string message = body.value("message", "");
+  if (message.empty())
+  {
+    return neamc::api::HttpResponse::bad_request("Missing 'message' field");
+  }
+
+  try
+  {
+    // Use session manager to manage history
+    std::lock_guard<std::mutex> lock(g_session_mutex);
+    g_session_manager.append_message(agent, session_key, "user", message);
+
+    // Load history for context
+    auto history = g_session_manager.load_history(agent, session_key);
+
+    // Build prompt string from system + history
+    std::string prompt;
+    if (agent->system && agent->system->length > 0)
+    {
+      prompt += obj_str(agent->system) + "\n\n";
+    }
+    for (const auto& [role, content] : history)
+    {
+      prompt += role + ": " + content + "\n";
+    }
+
+    // Create LLM provider and call
+    std::string provider_str = obj_str(agent->provider);
+    std::string model_str = obj_str(agent->model);
+
+    std::string api_key;
+    if (agent->api_key_env && agent->api_key_env->length > 0)
+    {
+      const char* env_val = std::getenv(obj_str(agent->api_key_env).c_str());
+      if (env_val) api_key = env_val;
+    }
+
+    std::string endpoint;
+    if (agent->endpoint && agent->endpoint->length > 0)
+    {
+      endpoint = obj_str(agent->endpoint);
+    }
+
+    neamc::llm::ProviderConfig prov_config;
+    prov_config.model = model_str;
+    prov_config.api_key = api_key;
+    prov_config.endpoint = endpoint;
+    prov_config.temperature = agent->temperature;
+
+    auto provider = neamc::llm::create_provider(provider_str, prov_config);
+    if (!provider)
+    {
+      return neamc::api::HttpResponse::error("Failed to create provider: " + provider_str, 500);
+    }
+
+    std::string assistant_content = provider->complete(prompt);
+
+    // Append assistant response to session
+    g_session_manager.append_message(agent, session_key, "assistant", assistant_content);
+
+    return neamc::api::HttpResponse::json({
+        {"agent", agent_name},
+        {"session_key", session_key},
+        {"response", assistant_content}});
+  }
+  catch (const std::exception& ex)
+  {
+    return neamc::api::HttpResponse::error(
+        std::string("Claw agent error: ") + ex.what(), 500);
+  }
+}
+
+// ─── v0.8 Phase 9: Forge Agent Endpoints ────────────────────────────────
+
+// GET /api/v1/forge — List forge agents
+neamc::api::HttpResponse handle_list_forge(const neamc::api::HttpRequest& request)
+{
+  if (!authenticate_request(request)) return unauthorized_response();
+  if (!g_vm)
+  {
+    return neamc::api::HttpResponse::error("VM not initialized", 503);
+  }
+
+  nlohmann::json agents = nlohmann::json::array();
+  for (const auto& [name, agent] : g_vm->forge_agents())
+  {
+    bool running = false;
+    {
+      std::lock_guard<std::mutex> lock(g_forge_mutex);
+      auto it = g_forge_states.find(name);
+      if (it != g_forge_states.end())
+      {
+        running = it->second.running;
+      }
+    }
+
+    nlohmann::json entry;
+    entry["name"] = name;
+    entry["provider"] = obj_str(agent->provider);
+    entry["model"] = obj_str(agent->model);
+    entry["max_iterations"] = agent->loop_config.max_iterations;
+    entry["max_cost"] = agent->loop_config.max_cost;
+    entry["running"] = running;
+    agents.push_back(entry);
+  }
+
+  return neamc::api::HttpResponse::json({{"forge_agents", agents}});
+}
+
+// POST /api/v1/forge/:agent/start — Start forge loop
+neamc::api::HttpResponse handle_forge_action(const neamc::api::HttpRequest& request)
+{
+  if (!authenticate_request(request)) return unauthorized_response();
+  if (!g_vm)
+  {
+    return neamc::api::HttpResponse::error("VM not initialized", 503);
+  }
+
+  // Parse path: /api/v1/forge/<agent>/<action>
+  auto segments = parse_path_segments(request.path);
+  if (segments.size() < 5 || segments[2] != "forge")
+  {
+    return neamc::api::HttpResponse::bad_request(
+        "Expected path: /api/v1/forge/:agent/start|stop|status");
+  }
+
+  const std::string agent_name = segments[3];
+  const std::string action = segments[4];
+
+  // Look up agent
+  const auto& forge_agents = g_vm->forge_agents();
+  auto it = forge_agents.find(agent_name);
+  if (it == forge_agents.end())
+  {
+    return neamc::api::HttpResponse::not_found("Forge agent not found: " + agent_name);
+  }
+  auto* agent = it->second;
+
+  if (action == "status")
+  {
+    // GET /api/v1/forge/:agent/status
+    std::lock_guard<std::mutex> lock(g_forge_mutex);
+    auto state_it = g_forge_states.find(agent_name);
+    if (state_it == g_forge_states.end())
+    {
+      return neamc::api::HttpResponse::json({
+          {"agent", agent_name},
+          {"running", false},
+          {"iteration", 0},
+          {"total_cost", 0.0},
+          {"last_outcome", "not_started"}});
+    }
+    auto& state = state_it->second;
+    return neamc::api::HttpResponse::json({
+        {"agent", agent_name},
+        {"running", state.running},
+        {"iteration", state.iteration},
+        {"total_cost", state.total_cost},
+        {"last_outcome", state.last_outcome}});
+  }
+
+  if (action == "stop")
+  {
+    // POST /api/v1/forge/:agent/stop
+    std::lock_guard<std::mutex> lock(g_forge_mutex);
+    auto state_it = g_forge_states.find(agent_name);
+    if (state_it == g_forge_states.end() || !state_it->second.running)
+    {
+      return neamc::api::HttpResponse::json({
+          {"status", "not_running"}, {"agent", agent_name}});
+    }
+    state_it->second.stop_requested = true;
+    return neamc::api::HttpResponse::json({
+        {"status", "stopping"}, {"agent", agent_name}});
+  }
+
+  if (action == "start")
+  {
+    // POST /api/v1/forge/:agent/start
+    {
+      std::lock_guard<std::mutex> lock(g_forge_mutex);
+      auto state_it = g_forge_states.find(agent_name);
+      if (state_it != g_forge_states.end() && state_it->second.running)
+      {
+        return neamc::api::HttpResponse::json({
+            {"status", "already_running"}, {"agent", agent_name}}, 409);
+      }
+    }
+
+    // Parse optional overrides
+    nlohmann::json body;
+    if (!request.body.empty())
+    {
+      try { body = nlohmann::json::parse(request.body); }
+      catch (...) { return neamc::api::HttpResponse::bad_request("Invalid JSON body"); }
+    }
+
+    int max_iterations = body.value("max_iterations", agent->loop_config.max_iterations);
+    double max_cost = body.value("max_cost", agent->loop_config.max_cost);
+
+    // Initialize state
+    {
+      std::lock_guard<std::mutex> lock(g_forge_mutex);
+      auto& state = g_forge_states[agent_name];
+      state.running = true;
+      state.stop_requested = false;
+      state.iteration = 0;
+      state.total_cost = 0.0;
+      state.last_outcome = "running";
+    }
+
+    // Launch background thread with simplified single-turn forge loop
+    std::string a_name = agent_name;
+    std::thread forge_thread([a_name, agent, max_iterations, max_cost]() {
+      try
+      {
+        std::string provider_str = obj_str(agent->provider);
+        std::string model_str = obj_str(agent->model);
+
+        std::string api_key;
+        if (agent->api_key_env && agent->api_key_env->length > 0)
+        {
+          const char* env = std::getenv(obj_str(agent->api_key_env).c_str());
+          if (env) api_key = env;
+        }
+
+        std::string endpoint;
+        if (agent->endpoint && agent->endpoint->length > 0)
+        {
+          endpoint = obj_str(agent->endpoint);
+        }
+
+        neamc::llm::ProviderConfig prov_config;
+        prov_config.model = model_str;
+        prov_config.api_key = api_key;
+        prov_config.endpoint = endpoint;
+        prov_config.temperature = agent->temperature;
+
+        auto provider = neamc::llm::create_provider(provider_str, prov_config);
+        if (!provider)
+        {
+          std::lock_guard<std::mutex> lock(g_forge_mutex);
+          auto& s = g_forge_states[a_name];
+          s.running = false;
+          s.last_outcome = "aborted";
+          return;
+        }
+
+        std::string system_prompt;
+        if (agent->system && agent->system->length > 0)
+        {
+          system_prompt = obj_str(agent->system);
+        }
+
+        // Load plan tasks if plan_file set
+        std::vector<std::string> tasks;
+        if (!agent->loop_config.plan_file.empty())
+        {
+          tasks = neamc::vm::load_plan_tasks(agent->loop_config.plan_file);
+        }
+        if (tasks.empty())
+        {
+          tasks.push_back("Complete the assigned task");
+        }
+
+        std::string outcome_kind = "completed";
+        int iteration = 0;
+        double cost = 0.0;
+
+        for (int i = 0; i < max_iterations && static_cast<int>(i) < static_cast<int>(tasks.size()); ++i)
+        {
+          // Check stop requested
+          {
+            std::lock_guard<std::mutex> lock(g_forge_mutex);
+            if (g_forge_states[a_name].stop_requested)
+            {
+              outcome_kind = "aborted";
+              break;
+            }
+          }
+
+          iteration = i + 1;
+
+          // Build prompt string
+          std::string prompt;
+          if (!system_prompt.empty())
+          {
+            prompt = system_prompt + "\n\n";
+          }
+          prompt += "Task: " + tasks[i];
+
+          std::string resp = provider->complete(prompt);
+
+          // Estimate cost (chars/4 heuristic)
+          double tokens_est = static_cast<double>(resp.size()) / 4.0;
+          cost += tokens_est * 0.00001;  // rough cost estimate
+
+          // Update state
+          {
+            std::lock_guard<std::mutex> lock(g_forge_mutex);
+            auto& s = g_forge_states[a_name];
+            s.iteration = iteration;
+            s.total_cost = cost;
+          }
+
+          if (cost >= max_cost)
+          {
+            outcome_kind = "budget_exhausted";
+            break;
+          }
+
+          // Track progress
+          if (!agent->loop_config.progress_file.empty())
+          {
+            neamc::vm::mark_task_done(agent->loop_config.progress_file, iteration, tasks[i]);
+          }
+        }
+
+        if (outcome_kind == "completed" && iteration >= max_iterations)
+        {
+          outcome_kind = "max_iterations";
+        }
+
+        // Final state update
+        {
+          std::lock_guard<std::mutex> lock(g_forge_mutex);
+          auto& s = g_forge_states[a_name];
+          s.running = false;
+          s.last_outcome = outcome_kind;
+        }
+      }
+      catch (const std::exception& ex)
+      {
+        std::lock_guard<std::mutex> lock(g_forge_mutex);
+        auto& s = g_forge_states[a_name];
+        s.running = false;
+        s.last_outcome = std::string("error: ") + ex.what();
+      }
+    });
+
+    // Detach thread (state tracked via g_forge_states)
+    forge_thread.detach();
+
+    return neamc::api::HttpResponse::json({
+        {"status", "started"},
+        {"agent", agent_name},
+        {"max_iterations", max_iterations},
+        {"max_cost", max_cost}});
+  }
+
+  return neamc::api::HttpResponse::bad_request("Unknown action: " + action + ". Use start, stop, or status.");
+}
+
 // v0.7.2 W8: GET /api/v1/metrics — detailed percentile metrics
 neamc::api::HttpResponse handle_metrics(const neamc::api::HttpRequest& request)
 {
@@ -988,6 +1476,7 @@ void print_usage(const char* program_name)
             << "  --llm-pool-size N     LLM connection pool size (default: 8)\n"
             << "  --bytecode DIR        Load AOT-compiled .neamb files from directory\n"
             << "  --drain-seconds N     Graceful shutdown drain period (default: 10)\n"
+            << "  --program FILE        Load .neam file for claw/forge agents\n"
             << "  --audit-sink SINK     Audit log sink: stderr|file|json (default: stderr)\n"
             << "  --audit-log PATH      Audit log file path (when sink=file)\n"
             << "  --help                Show this help message\n"
@@ -1006,6 +1495,12 @@ void print_usage(const char* program_name)
             << "  GET  /api/v1/admin/confirmations Pending confirms (admin)\n"
             << "  GET  /health             Health check (alias)\n"
             << "  GET  /api/v1/metrics     Request metrics\n"
+            << "  GET  /api/v1/claw        List claw agents\n"
+            << "  POST /api/v1/claw/:agent/sessions/:key/message  Claw message\n"
+            << "  GET  /api/v1/forge       List forge agents\n"
+            << "  POST /api/v1/forge/:agent/start   Start forge loop\n"
+            << "  POST /api/v1/forge/:agent/stop    Stop forge loop\n"
+            << "  GET  /api/v1/forge/:agent/status  Forge loop status\n"
             << "  GET  /ready              Readiness check (alias)\n"
             << "\nEnvironment Variables:\n"
             << "  NEAM_WARMSTART_TRACE  Set to 1 for per-request JSON stderr logging\n";
@@ -1040,6 +1535,7 @@ int main(int argc, char** argv)
   std::string bytecode_dir;
   std::string audit_sink_str = "stderr";
   std::string audit_log_path;
+  std::string program_file;  // v0.8 Phase 9: optional .neam file for claw/forge agents
 
   // 1. Parse CLI args
   for (int i = 1; i < argc; ++i)
@@ -1098,6 +1594,10 @@ int main(int argc, char** argv)
       g_drain_seconds = std::stoi(argv[++i]);
       if (g_drain_seconds < 1) g_drain_seconds = 1;
       if (g_drain_seconds > 300) g_drain_seconds = 300;
+    }
+    else if (arg == "--program" && i + 1 < argc)
+    {
+      program_file = argv[++i];
     }
     else
     {
@@ -1245,6 +1745,42 @@ int main(int argc, char** argv)
     g_active_agents = &dynamic_agents;
   }
 
+  // 9.5. v0.8 Phase 9: Load .neam program for claw/forge agents
+  neamc::vm::VirtualMachine program_vm;
+  if (!program_file.empty())
+  {
+    try
+    {
+      std::ifstream pf(program_file);
+      if (!pf)
+      {
+        std::cerr << "Error: cannot open program file: " << program_file << "\n";
+        return 1;
+      }
+      std::string source((std::istreambuf_iterator<char>(pf)),
+                          std::istreambuf_iterator<char>());
+
+      neamc::Pipeline pipeline;
+      auto unit = pipeline.compile(source, {});
+
+      std::ostringstream out;
+      std::istringstream in;
+      program_vm.set_io(&in, &out);
+      program_vm.run(unit.chunk);
+
+      g_vm = &program_vm;
+
+      std::cout << "Loaded program: " << program_file
+                << " (" << g_vm->claw_agents().size() << " claw, "
+                << g_vm->forge_agents().size() << " forge agents)\n";
+    }
+    catch (const std::exception& ex)
+    {
+      std::cerr << "Error loading program: " << ex.what() << "\n";
+      return 1;
+    }
+  }
+
   // 10. Set ready, log startup time
   g_hotvm_ready.store(true);
   auto init_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1286,6 +1822,15 @@ int main(int argc, char** argv)
     server.post("/api/v1/confirm", handle_confirm);
     server.get("/api/v1/admin/confirmations", handle_list_confirmations);
 
+    // v0.8 Phase 9: Claw agent endpoints
+    server.get("/api/v1/claw", handle_list_claw);
+    server.post("/api/v1/claw/", handle_claw_message);  // prefix match
+
+    // v0.8 Phase 9: Forge agent endpoints
+    server.get("/api/v1/forge", handle_list_forge);
+    server.post("/api/v1/forge/", handle_forge_action);  // prefix match
+    server.get("/api/v1/forge/", handle_forge_action);   // prefix match for status
+
     std::cout << "Starting Neam API Server...\n";
     std::cout << "  Host: " << host << "\n";
     std::cout << "  Port: " << port << "\n";
@@ -1315,6 +1860,16 @@ int main(int argc, char** argv)
 
     // Drain period — let in-flight requests complete
     std::cout << "SIGTERM received, draining for " << g_drain_seconds << "s...\n";
+
+    // Signal all running forge loops to stop
+    {
+      std::lock_guard<std::mutex> lock(g_forge_mutex);
+      for (auto& [name, state] : g_forge_states)
+      {
+        if (state.running) state.stop_requested = true;
+      }
+    }
+
     std::this_thread::sleep_for(std::chrono::seconds(g_drain_seconds));
 
     std::cout << "Shutdown complete.\n";
