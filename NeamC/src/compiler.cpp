@@ -4,10 +4,12 @@
 
 #include "neamc/compiler.hpp"
 
+#include <cstdio>
 #include <iostream>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
+#include <unordered_set>
 #include <utility>
 
 #include "neamc/vm/object.hpp"
@@ -1182,6 +1184,7 @@ void Compiler::emit_statement(const Statement& stmt)
             chunk_.write_op(OpCode::OP_NIL);
           }
           chunk_.write_op(OpCode::OP_DEFINE_AGENT);
+          agent_types_[node.name] = AgentKind::Stateless;
         }
         // v0.8: Claw agent emit handler
         else if constexpr (std::is_same_v<T, ClawAgentDecl>)
@@ -1375,6 +1378,7 @@ void Compiler::emit_statement(const Statement& stmt)
           }
           else { chunk_.write_op(OpCode::OP_NIL); }
           chunk_.write_op(OpCode::OP_DEFINE_CLAW_AGENT);
+          agent_types_[node.name] = AgentKind::Claw;
         }
         // v0.8: Forge agent emit handler
         else if constexpr (std::is_same_v<T, ForgeAgentDecl>)
@@ -1535,6 +1539,7 @@ void Compiler::emit_statement(const Statement& stmt)
           }
           else { chunk_.write_op(OpCode::OP_NIL); }
           chunk_.write_op(OpCode::OP_DEFINE_FORGE_AGENT);
+          agent_types_[node.name] = AgentKind::Forge;
         }
         else if constexpr (std::is_same_v<T, GrantStmt>)
         {
@@ -2071,6 +2076,11 @@ void Compiler::emit_statement(const Statement& stmt)
             // If this is a trait impl, use OP_IMPL_TRAIT
             if (node.trait_name.has_value())
             {
+              // v0.8: Validate trait compatibility with agent type
+              if (is_neamclaw_trait(*node.trait_name))
+              {
+                validate_neamclaw_trait_compat(*node.trait_name, node.type_name);
+              }
               chunk_.write_op(OpCode::OP_IMPL_TRAIT);
               chunk_.write_short(static_cast<uint16_t>(
                   emit_string_constant(chunk_, node.trait_name.value())));
@@ -2694,4 +2704,51 @@ void Compiler::emit_expression(const Expression& expr)
       },
       expr.node);
 }
+// v0.8 Phase 1: NeamClaw trait helpers
+
+bool Compiler::is_neamclaw_trait(const std::string& name) const
+{
+  static const std::unordered_set<std::string> claw_traits = {
+      "Channelable", "Schedulable", "Sandboxable",
+      "Monitorable", "Orchestrable", "Searchable"};
+  return claw_traits.count(name) > 0;
+}
+
+void Compiler::validate_neamclaw_trait_compat(const std::string& trait,
+                                              const std::string& type)
+{
+  auto it = agent_types_.find(type);
+  if (it == agent_types_.end())
+  {
+    // Not an agent type — allow (could be a struct implementing the trait)
+    return;
+  }
+
+  AgentKind kind = it->second;
+
+  // Channelable and Schedulable are claw-only
+  if (trait == "Channelable" || trait == "Schedulable")
+  {
+    if (kind != AgentKind::Claw)
+    {
+      throw std::runtime_error(
+          "Trait '" + trait + "' can only be implemented by claw agents, but '" +
+          type + "' is " +
+          (kind == AgentKind::Forge ? "a forge agent" : "a stateless agent"));
+    }
+  }
+
+  // Orchestrable on stateless agents is a warning (likely mistake)
+  if (trait == "Orchestrable" && kind == AgentKind::Stateless)
+  {
+    compiler_warning("Trait 'Orchestrable' on stateless agent '" + type +
+                     "' — consider using a claw or forge agent instead");
+  }
+}
+
+void Compiler::compiler_warning(const std::string& message) const
+{
+  std::fprintf(stderr, "[neamc warning] %s\n", message.c_str());
+}
+
 }  // namespace neamc

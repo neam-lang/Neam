@@ -1,0 +1,112 @@
+// v0.8 Phase 1: Compiler opcodes + trait validation test
+
+// === Skill stubs ===
+skill greet {
+  description: "Greets a user"
+  params: { name: string }
+  impl(name) { return "Hello"; }
+}
+
+skill code_gen {
+  description: "Generates code"
+  params: { spec: string }
+  impl(spec) { return "// code"; }
+}
+
+// === Guard chain stub ===
+guard input_guard {
+  description: "Validates input"
+  on_observation(text) { return text; }
+}
+
+guardchain safety_chain = [input_guard];
+
+// === Verify function ===
+fun check_result(ctx) {
+  return true;
+}
+
+// === 1. Claw agent ===
+claw agent support_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a support agent."
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  session: {
+    idle_reset_minutes: 30
+    max_history_turns: 50
+    compaction: "auto"
+  }
+}
+
+// === 2. Forge agent ===
+forge agent code_builder {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [code_gen]
+  guards: [safety_chain]
+  loop: {
+    max_iterations: 10
+    max_cost: 5.0
+  }
+  verify: check_result
+  checkpoint: "git"
+  workspace: "/tmp/forge"
+}
+
+// === 3. Plain agent (backward compat) ===
+agent legacy_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+}
+
+// === 4. Struct + impl still works (backward compat) ===
+struct Point {
+  x: number
+  y: number
+}
+
+impl Point {
+  fn magnitude(self) {
+    return 42;
+  }
+}
+
+// === 5. Trait on a struct (non-agent) — should compile fine ===
+trait Searchable {
+  fn search(self, query);
+}
+
+struct Index {
+  name: string
+}
+
+impl Searchable for Index {
+  fn search(self, query) {
+    return "found";
+  }
+}
+
+// === 6. Trait on claw agent — Channelable is claw-only, should work ===
+trait Channelable {
+  fn open_channel(self, name);
+}
+
+impl Channelable for support_bot {
+  fn open_channel(self, name) {
+    return "channel opened";
+  }
+}
+
+// === Negative test (commented out — would cause compile error) ===
+// impl Channelable for code_builder { ... }
+// ^ Error: Channelable can only be implemented by claw agents
+
+// === Negative test 2 (commented out — would cause compile error) ===
+// impl Channelable for legacy_bot { ... }
+// ^ Error: Channelable can only be implemented by claw agents (legacy_bot is stateless)
+
+emit "v0.8 Phase 1: All tests passed — opcodes, agent tracking, trait validation";
