@@ -260,6 +260,13 @@ struct MatchExpr
   std::vector<MatchArm> arms;
 };
 
+// v0.8 Phase 8: Spawn expression
+struct SpawnExpr
+{
+  std::string agent_name;
+  std::vector<ExprPtr> arguments;
+};
+
 // v0.7.0: Destructuring pattern
 struct DestructurePattern
 {
@@ -279,7 +286,7 @@ struct Expression
                    PanicExpr, CatchPanicExpr, ContextExpr, WithContextExpr,
                    IndexAssignExpr, TupleExpr, FStringExpr, SliceExpr,
                    CopyWithExpr, NamedConstructExpr, SetPropertyExpr,
-                   MatchExpr>;
+                   MatchExpr, SpawnExpr>;
   SourceSpan span;
   Variant node;
 };

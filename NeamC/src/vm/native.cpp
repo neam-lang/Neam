@@ -22,6 +22,8 @@
 #include <thread>
 #include <unordered_map>
 
+#include "neamc/vm/dag_executor.hpp"
+
 #include <curl/curl.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
@@ -1819,6 +1821,82 @@ Value session_history_native(VirtualMachine& vm, int argCount, Value* args)
   return Value::List(new_list(std::move(result_list)));
 }
 
+// v0.8 Phase 8: spawn native — delegates to OP_SPAWN_AGENT logic via DagExecutor
+Value spawn_native(VirtualMachine& vm, int argCount, Value* args)
+{
+  if (argCount < 1 || !args[0].is_string())
+  {
+    std::string err = "spawn() requires agent name as first argument";
+    return Value::String(err.c_str(), err.size());
+  }
+  std::string agent_name = to_std_string(args[0]);
+  std::string task;
+  if (argCount >= 2 && args[1].is_string())
+  {
+    task = to_std_string(args[1]);
+  }
+
+  DagExecutor executor(vm);
+  return executor.spawn_agent(agent_name, task);
+}
+
+// v0.8 Phase 8: dag_execute native — parse list of node maps, run DAG
+Value dag_execute_native(VirtualMachine& vm, int argCount, Value* args)
+{
+  if (argCount < 1 || !args[0].is_list())
+  {
+    std::string err = "dag_execute() requires a list of node maps";
+    return Value::String(err.c_str(), err.size());
+  }
+
+  auto* list = as_list(args[0]);
+  std::vector<DagNode> nodes;
+
+  for (const auto& item : list->items)
+  {
+    if (!item.is_map()) continue;
+    auto* m = as_map(item);
+
+    DagNode node;
+    auto id_it = m->entries.find("id");
+    if (id_it != m->entries.end()) node.id = to_std_string(id_it->second);
+
+    auto agent_it = m->entries.find("agent");
+    if (agent_it != m->entries.end()) node.agent_name = to_std_string(agent_it->second);
+
+    auto task_it = m->entries.find("task");
+    if (task_it != m->entries.end()) node.task = to_std_string(task_it->second);
+
+    auto deps_it = m->entries.find("depends_on");
+    if (deps_it != m->entries.end() && deps_it->second.is_list())
+    {
+      auto* deps_list = as_list(deps_it->second);
+      for (const auto& d : deps_list->items)
+      {
+        if (d.is_string()) node.depends_on.push_back(to_std_string(d));
+      }
+    }
+
+    if (!node.id.empty() && !node.agent_name.empty())
+      nodes.push_back(std::move(node));
+  }
+
+  DagExecutor executor(vm);
+  try
+  {
+    auto results = executor.execute(nodes);
+    std::unordered_map<std::string, Value> result_map;
+    for (auto& [k, v] : results)
+      result_map[k] = std::move(v);
+    return Value::Map(new_map(std::move(result_map)));
+  }
+  catch (const std::exception& e)
+  {
+    std::string err = std::string("dag_execute error: ") + e.what();
+    return Value::String(err.c_str(), err.size());
+  }
+}
+
 }  // namespace
 
 void register_core_natives(VirtualMachine& vm)
@@ -1908,5 +1986,8 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("workspace_append", 2, workspace_append_native);
   vm.define_native("memory_search", -1, memory_search_native);
   vm.define_native("session_history", -1, session_history_native);
+  // v0.8 Phase 8: Multi-agent orchestration natives
+  vm.define_native("spawn", -1, spawn_native);
+  vm.define_native("dag_execute", 1, dag_execute_native);
 }
 }  // namespace neamc::vm

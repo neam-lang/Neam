@@ -1,0 +1,184 @@
+// v0.8 Phase 8: Multi-Agent Orchestration Tests
+// Tests for spawn keyword, dag_execute, and backward compat
+
+// === Test Infrastructure ===
+let pass_count = 0;
+let fail_count = 0;
+
+fun check_equal(a, b, label) {
+  if (a == b) {
+    emit "[PASS] " + label;
+    pass_count = pass_count + 1;
+  } else {
+    emit "[FAIL] " + label;
+    fail_count = fail_count + 1;
+  }
+  return nil;
+}
+
+fun check_true(val, label) {
+  if (val) {
+    emit "[PASS] " + label;
+    pass_count = pass_count + 1;
+  } else {
+    emit "[FAIL] " + label;
+    fail_count = fail_count + 1;
+  }
+  return nil;
+}
+
+fun check_type(val, expected_type, label) {
+  let t = typeof(val);
+  if (t == expected_type) {
+    emit "[PASS] " + label;
+    pass_count = pass_count + 1;
+  } else {
+    emit "[FAIL] " + label + " -- typeof=" + t + " expected=" + expected_type;
+    fail_count = fail_count + 1;
+  }
+  return nil;
+}
+
+// -------------------------------------------------------
+// Test 1: spawn keyword compiles (non-existent agent -> error string)
+// -------------------------------------------------------
+let r1 = spawn nonexistent("hello");
+check_type(r1, "String", "T1: spawn keyword compiles and returns String");
+
+// -------------------------------------------------------
+// Test 2: spawn non-existent agent returns error string
+// -------------------------------------------------------
+let r2 = spawn no_such_agent("task");
+let starts_with_agent = r2 == "Agent not found: no_such_agent";
+check_true(starts_with_agent, "T2: spawn non-existent agent returns error");
+
+// -------------------------------------------------------
+// Test 3: spawn with no args compiles
+// -------------------------------------------------------
+let r3 = spawn missing_agent();
+check_type(r3, "String", "T3: spawn with no args compiles");
+
+// -------------------------------------------------------
+// Test 4: Native spawn() function callable
+// -------------------------------------------------------
+let r4 = spawn("also_missing");
+check_type(r4, "String", "T4: native spawn() function callable");
+
+// -------------------------------------------------------
+// Test 5: Native spawn() returns error for missing agent
+// -------------------------------------------------------
+let r5 = spawn("no_agent_here", "do something");
+let r5_check = r5 == "Agent not found: no_agent_here";
+check_true(r5_check, "T5: native spawn() returns error for missing agent");
+
+// -------------------------------------------------------
+// Test 6: dag_execute with empty list returns empty map
+// -------------------------------------------------------
+let empty_result = dag_execute([]);
+check_type(empty_result, "Map", "T6: dag_execute with empty list returns Map");
+
+// -------------------------------------------------------
+// Test 7: dag_execute with single node (missing agent -> error in result)
+// -------------------------------------------------------
+let single_result = dag_execute([
+  { "id": "step1", "agent": "fake_agent", "task": "do stuff", "depends_on": [] }
+]);
+check_type(single_result, "Map", "T7: dag_execute with single node returns Map");
+
+// -------------------------------------------------------
+// Test 8: dag_execute with dependencies (structure check)
+// -------------------------------------------------------
+let dep_result = dag_execute([
+  { "id": "a", "agent": "missing1", "task": "first", "depends_on": [] },
+  { "id": "b", "agent": "missing2", "task": "second", "depends_on": ["a"] }
+]);
+check_type(dep_result, "Map", "T8: dag_execute with dependencies returns Map");
+
+// -------------------------------------------------------
+// Test 9: Backward compat: struct + impl still works
+// -------------------------------------------------------
+struct Point { x, y }
+
+impl Point {
+  fn magnitude(self) {
+    return self.x + self.y;
+  }
+}
+
+let p = Point(3, 4);
+check_equal(p.magnitude(), 7, "T9: struct + impl backward compat");
+
+// -------------------------------------------------------
+// Test 10: Backward compat: trait + impl for still works
+// -------------------------------------------------------
+trait Greetable {
+  fn greet(self);
+}
+
+struct Greeter { name }
+
+impl Greetable for Greeter {
+  fn greet(self) {
+    return "Hello from " + self.name;
+  }
+}
+
+let g = Greeter("Alice");
+check_equal(g.greet(), "Hello from Alice", "T10: trait + impl for backward compat");
+
+// -------------------------------------------------------
+// Test 11: Backward compat: sealed + match still works
+// -------------------------------------------------------
+sealed Shape {
+  Circle(radius: number),
+  Rect(w: number, h: number)
+}
+
+let c = Shape.Circle(5);
+let area = match c {
+  Circle(r) => r * r,
+  Rect(w, h) => w * h,
+  _ => 0
+};
+check_equal(area, 25, "T11: sealed + match backward compat");
+
+// -------------------------------------------------------
+// Test 12: spawn keyword as param name in skill
+// -------------------------------------------------------
+skill test_spawn_param {
+  description: "Test spawn as param name"
+  params: {
+    spawn: string
+  }
+  impl(val) {
+    return val;
+  }
+}
+check_true(true, "T12: spawn keyword accepted as skill param name");
+
+// -------------------------------------------------------
+// Test 13: Native dag_execute callable
+// -------------------------------------------------------
+let dag_result = dag_execute([]);
+let dag_is_map = typeof(dag_result) == "Map";
+check_true(dag_is_map, "T13: native dag_execute() callable");
+
+// -------------------------------------------------------
+// Test 14: spawn expression as part of let binding
+// -------------------------------------------------------
+let spawn_result = spawn fake_agent_14("task text");
+let is_str = typeof(spawn_result) == "String";
+check_true(is_str, "T14: spawn expression in let binding");
+
+// === Summary ===
+emit "";
+emit "=== Phase 8 Test Summary ===";
+emit "Passed: " + pass_count;
+emit "Failed: " + fail_count;
+emit "Total:  " + (pass_count + fail_count);
+
+if (fail_count > 0) {
+  emit "SOME TESTS FAILED";
+} else {
+  emit "ALL TESTS PASSED";
+}

@@ -8263,12 +8263,195 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       }
       case OpCode::OP_SPAWN_AGENT:
       {
-        Value config = pop();
-        Value agent_name = pop();
-        // Stub: return nil (full impl spawns sub-agent)
-        (void)config;
-        (void)agent_name;
-        stack_.push_back(Value::Nil());
+        Value config_val = pop();
+        Value agent_name_val = pop();
+        std::string agent_name = to_std_string(agent_name_val);
+
+        // Extract task string from config
+        std::string task;
+        if (config_val.is_string())
+        {
+          task = to_std_string(config_val);
+        }
+        else if (config_val.is_map())
+        {
+          auto* cmap = as_map(config_val);
+          auto task_it = cmap->entries.find("task");
+          if (task_it != cmap->entries.end())
+            task = to_std_string(task_it->second);
+        }
+
+        // Try claw agents first
+        auto claw_it = claw_agents_.find(agent_name);
+        if (claw_it != claw_agents_.end())
+        {
+          auto* claw = claw_it->second;
+
+          // Orchestrable on_spawn callback
+          if (has_trait_impl(impl_tables_, trait_defs_, agent_name, "Orchestrable"))
+          {
+            try
+            {
+              auto child_val = Value::String(agent_name.c_str(), agent_name.size());
+              invoke_trait_method(agent_name, "on_spawn", Value::Nil(), {child_val});
+            }
+            catch (...) {}
+          }
+
+          // Simplified single-turn LLM call (no tool loop)
+          try
+          {
+            llm::ProviderConfig prov_config;
+            prov_config.model = to_std_string(claw->model);
+            prov_config.endpoint = to_std_string(claw->endpoint);
+            prov_config.api_key = to_std_string(claw->api_key_env);
+            prov_config.temperature = claw->temperature;
+            prov_config.default_host = resolve_env_config(*this, "ollama_host", "NEAM_OLLAMA_HOST", "http://localhost:11434");
+            std::string pname = to_std_string(claw->provider);
+            if (!prov_config.api_key.empty())
+            {
+              if (const char* ev = std::getenv(prov_config.api_key.c_str()))
+                prov_config.api_key = ev;
+              else
+                prov_config.api_key.clear();
+            }
+            auto provider = llm::create_provider(pname, prov_config);
+            std::string sys = to_std_string(claw->system);
+            std::string prompt = sys.empty() ? task : (sys + "\n\n" + task);
+            std::string response = provider->complete(prompt);
+
+            // Orchestrable on_delegate callback
+            if (has_trait_impl(impl_tables_, trait_defs_, agent_name, "Orchestrable"))
+            {
+              try
+              {
+                auto res_val = Value::String(response.c_str(), response.size());
+                invoke_trait_method(agent_name, "on_delegate", Value::Nil(), {res_val});
+              }
+              catch (...) {}
+            }
+
+            stack_.push_back(Value::String(response.c_str(), response.size()));
+          }
+          catch (const std::exception& e)
+          {
+            std::string err = std::string("Spawn error (claw ") + agent_name + "): " + e.what();
+            stack_.push_back(Value::String(err.c_str(), err.size()));
+          }
+          break;
+        }
+
+        // Try forge agents
+        auto forge_it = forge_agents_.find(agent_name);
+        if (forge_it != forge_agents_.end())
+        {
+          auto* forge = forge_it->second;
+
+          // Orchestrable on_spawn callback
+          if (has_trait_impl(impl_tables_, trait_defs_, agent_name, "Orchestrable"))
+          {
+            try
+            {
+              auto child_val = Value::String(agent_name.c_str(), agent_name.size());
+              invoke_trait_method(agent_name, "on_spawn", Value::Nil(), {child_val});
+            }
+            catch (...) {}
+          }
+
+          // Build outcome map (full loop only via .run())
+          std::unordered_map<std::string, Value> outcome;
+          outcome["outcome"] = Value::String("completed", 9);
+          outcome["iterations"] = Value::Number(0);
+          outcome["total_cost"] = Value::Number(0.0);
+
+          // Try single-turn for task description
+          try
+          {
+            llm::ProviderConfig prov_config;
+            prov_config.model = to_std_string(forge->model);
+            prov_config.endpoint = to_std_string(forge->endpoint);
+            prov_config.api_key = to_std_string(forge->api_key_env);
+            prov_config.temperature = forge->temperature;
+            prov_config.default_host = resolve_env_config(*this, "ollama_host", "NEAM_OLLAMA_HOST", "http://localhost:11434");
+            std::string pname = to_std_string(forge->provider);
+            if (!prov_config.api_key.empty())
+            {
+              if (const char* ev = std::getenv(prov_config.api_key.c_str()))
+                prov_config.api_key = ev;
+              else
+                prov_config.api_key.clear();
+            }
+            auto provider = llm::create_provider(pname, prov_config);
+            std::string sys = to_std_string(forge->system);
+            std::string prompt = sys.empty() ? task : (sys + "\n\n" + task);
+            std::string response = provider->complete(prompt);
+            outcome["message"] = Value::String(response.c_str(), response.size());
+          }
+          catch (const std::exception& e)
+          {
+            std::string msg = std::string("Provider error: ") + e.what();
+            outcome["outcome"] = Value::String("aborted", 7);
+            outcome["message"] = Value::String(msg.c_str(), msg.size());
+          }
+
+          auto* result_map = new_map(std::move(outcome));
+          auto result_val = Value::Map(result_map);
+
+          // Orchestrable on_delegate callback
+          if (has_trait_impl(impl_tables_, trait_defs_, agent_name, "Orchestrable"))
+          {
+            try
+            {
+              invoke_trait_method(agent_name, "on_delegate", Value::Nil(), {result_val});
+            }
+            catch (...) {}
+          }
+
+          stack_.push_back(result_val);
+          break;
+        }
+
+        // Try legacy agents in globals
+        {
+          auto* name_str = copy_string(agent_name.c_str(), agent_name.size());
+          Value agent_val;
+          if (globals_.get(name_str, &agent_val) && agent_val.is_agent())
+          {
+            auto* agent = static_cast<ObjAgent*>(agent_val.as_obj());
+            try
+            {
+              llm::ProviderConfig prov_config;
+              prov_config.model = to_std_string(agent->model);
+              prov_config.endpoint = to_std_string(agent->endpoint);
+              prov_config.api_key = to_std_string(agent->api_key_env);
+              prov_config.temperature = agent->temperature;
+              prov_config.default_host = resolve_env_config(*this, "ollama_host", "NEAM_OLLAMA_HOST", "http://localhost:11434");
+              std::string pname = to_std_string(agent->provider);
+              if (!prov_config.api_key.empty())
+              {
+                if (const char* ev = std::getenv(prov_config.api_key.c_str()))
+                  prov_config.api_key = ev;
+                else
+                  prov_config.api_key.clear();
+              }
+              auto provider = llm::create_provider(pname, prov_config);
+              std::string sys = to_std_string(agent->system);
+              std::string prompt = sys.empty() ? task : (sys + "\n\n" + task);
+              std::string response = provider->complete(prompt);
+              stack_.push_back(Value::String(response.c_str(), response.size()));
+            }
+            catch (const std::exception& e)
+            {
+              std::string err = std::string("Spawn error (agent ") + agent_name + "): " + e.what();
+              stack_.push_back(Value::String(err.c_str(), err.size()));
+            }
+            break;
+          }
+        }
+
+        // Agent not found
+        std::string err = "Agent not found: " + agent_name;
+        stack_.push_back(Value::String(err.c_str(), err.size()));
         break;
       }
       case OpCode::OP_FORGE_ITERATE:

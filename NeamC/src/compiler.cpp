@@ -2720,6 +2720,24 @@ void Compiler::emit_expression(const Expression& expr)
             patch_jump(chunk_, jump);
           }
         }
+        // v0.8 Phase 8: Spawn expression
+        else if constexpr (std::is_same_v<T, SpawnExpr>)
+        {
+          // Push agent name as string constant
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(
+              emit_string_constant(chunk_, node.agent_name)));
+          // Push config arg (first arg or nil)
+          if (!node.arguments.empty())
+          {
+            emit_expression(*node.arguments[0]);
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+          chunk_.write_op(OpCode::OP_SPAWN_AGENT);
+        }
       },
       expr.node);
 }
