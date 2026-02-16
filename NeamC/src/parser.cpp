@@ -709,7 +709,8 @@ void Parser::tokenize()
       {"didSet", TokenType::DidSet},
       {"claw", TokenType::Claw},
       {"forge", TokenType::Forge},
-      {"channel", TokenType::Channel}};
+      {"channel", TokenType::Channel},
+      {"spawn", TokenType::Spawn}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -4521,7 +4522,7 @@ SkillParam Parser::parse_skill_param()
       !match(TokenType::Pipeline) && !match(TokenType::Dispatch) &&
       !match(TokenType::Parallel) && !match(TokenType::LoopPattern) &&
       !match(TokenType::Claw) && !match(TokenType::Forge) &&
-      !match(TokenType::Channel))
+      !match(TokenType::Channel) && !match(TokenType::Spawn))
   {
     error("Expected param name");
   }
@@ -5784,6 +5785,45 @@ ExprPtr Parser::parse_primary()
     }
     span = merge_span(span, span_from_token(previous()));
     return make_catch_panic_expr(std::move(closure), span);
+  }
+  // v0.8 Phase 8: spawn expression — `spawn agent_name(args...)`
+  // If followed by identifier (agent name), parse as spawn keyword.
+  // If followed by `(`, fall through to be treated as function call (native spawn).
+  if (match(TokenType::Spawn))
+  {
+    if (check(TokenType::Identifier))
+    {
+      SourceSpan span = span_from_token(previous());
+      advance();  // consume agent name
+      std::string agent_name = previous().lexeme;
+      if (!match(TokenType::LeftParen))
+      {
+        error("Expected '(' after agent name in spawn expression");
+      }
+      std::vector<ExprPtr> args;
+      if (!check(TokenType::RightParen))
+      {
+        while (true)
+        {
+          args.push_back(parse_expression());
+          if (!match(TokenType::Comma))
+          {
+            break;
+          }
+        }
+      }
+      if (!match(TokenType::RightParen))
+      {
+        error("Expected ')' after spawn arguments");
+      }
+      span = merge_span(span, span_from_token(previous()));
+      auto expr = std::make_unique<Expression>();
+      expr->span = span;
+      expr->node = SpawnExpr{std::move(agent_name), std::move(args)};
+      return expr;
+    }
+    // No identifier after spawn — treat "spawn" as an identifier (for native fn call)
+    return make_identifier("spawn", span_from_token(previous()));
   }
   // v0.7.1 Phase 2: match expression
   if (match(TokenType::Match))

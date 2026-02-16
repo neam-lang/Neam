@@ -103,6 +103,7 @@ public:
                             const std::vector<Value>& args);
   ObjChannel* get_channel(const std::string& name) const;
   const std::unordered_map<std::string, ObjClawAgent*>& claw_agents() const { return claw_agents_; }
+  const std::unordered_map<std::string, ObjForgeAgent*>& forge_agents() const { return forge_agents_; }
   LaneQueueEngine* lane_engine() { return lane_engine_.get(); }
   std::mutex& execution_mutex() { return execution_mutex_; }
 

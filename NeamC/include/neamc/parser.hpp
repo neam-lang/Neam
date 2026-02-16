@@ -207,6 +207,7 @@ enum class TokenType
   Claw,         // "claw" — prefix for claw agent
   Forge,        // "forge" — prefix for forge agent
   Channel,      // "channel" — channel declaration
+  Spawn,        // "spawn" — spawn sub-agent
 
   Eof
 };
