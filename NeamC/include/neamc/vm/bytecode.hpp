@@ -99,7 +99,11 @@ enum class OpCode : uint8_t
   OP_MATCH_END,       // Cleanup match context
 
   // v0.7.1 Phase 5: Property observers
-  OP_SET_FIELD_OBSERVER  // Operand: uint16 type_name, uint16 field_name, uint8 kind (0=willSet, 1=didSet, 2=guard)
+  OP_SET_FIELD_OBSERVER,  // Operand: uint16 type_name, uint16 field_name, uint8 kind (0=willSet, 1=didSet, 2=guard)
+
+  // v0.8: Agent type system
+  OP_DEFINE_CLAW_AGENT,   // Stack: [name, provider, model, endpoint|nil, api_key_env|nil, temperature|nil, system|nil, skills_list, knowledge_list, guardchains_list, policy|nil, budget|nil, env|nil, workspace|nil, session_config_map, channels_list, lanes_list, semantic_memory|nil]
+  OP_DEFINE_FORGE_AGENT   // Stack: [name, provider, model, endpoint|nil, api_key_env|nil, temperature|nil, system|nil, skills_list, guardchains_list, policy|nil, budget|nil, env|nil, workspace|nil, loop_config_map, verify_fn, checkpoint|nil]
 };
 
 class Bytecode

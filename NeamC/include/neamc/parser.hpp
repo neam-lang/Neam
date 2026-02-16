@@ -203,6 +203,10 @@ enum class TokenType
   WillSet,      // "willSet"
   DidSet,       // "didSet"
 
+  // v0.8: Agent type keywords
+  Claw,         // "claw" — prefix for claw agent
+  Forge,        // "forge" — prefix for forge agent
+
   Eof
 };
 
@@ -245,6 +249,15 @@ private:
   SkillBindingSpec parse_skill_binding();
   StmtPtr parse_knowledge(const Visibility& visibility);
   StmtPtr parse_agent(const Visibility& visibility);
+  StmtPtr parse_claw_agent(const Visibility& visibility);
+  StmtPtr parse_forge_agent(const Visibility& visibility);
+  // v0.8 config helpers
+  SessionConfig parse_session_config();
+  LoopConfig parse_loop_config();
+  SemanticMemoryConfig parse_semantic_memory_config();
+  std::vector<LaneConfig> parse_lane_configs();
+  bool match_identifier(const std::string& name);
+  void warning(const std::string& message) const;
   StmtPtr parse_budget(const Visibility& visibility);
   StmtPtr parse_guard(const Visibility& visibility);
   StmtPtr parse_guardchain(const Visibility& visibility);

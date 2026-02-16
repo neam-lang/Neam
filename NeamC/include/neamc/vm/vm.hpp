@@ -142,6 +142,7 @@ private:
 
   struct AgentExtension
   {
+    std::string agent_type;  // v0.8: "claw", "forge", or "" (legacy)
     std::vector<std::string> required_capabilities;
     std::vector<std::string> guardchains;
     std::string policy;  // v0.6.9: security policy reference
