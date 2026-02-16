@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
@@ -705,7 +706,9 @@ void Parser::tokenize()
       {"parallel", TokenType::Parallel},
       {"loop", TokenType::LoopPattern},
       {"willSet", TokenType::WillSet},
-      {"didSet", TokenType::DidSet}};
+      {"didSet", TokenType::DidSet},
+      {"claw", TokenType::Claw},
+      {"forge", TokenType::Forge}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -1087,6 +1090,17 @@ StmtPtr Parser::parse_declaration()
   if (match(TokenType::Knowledge))
   {
     return parse_knowledge(has_visibility ? visibility : Visibility{});
+  }
+  // v0.8: claw agent / forge agent dispatch
+  if (match(TokenType::Claw))
+  {
+    if (!match(TokenType::Agent)) { error("Expected 'agent' after 'claw'"); }
+    return parse_claw_agent(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Forge))
+  {
+    if (!match(TokenType::Agent)) { error("Expected 'agent' after 'forge'"); }
+    return parse_forge_agent(has_visibility ? visibility : Visibility{});
   }
   if (match(TokenType::Agent))
   {
@@ -2294,6 +2308,640 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
                          std::move(required_capabilities), std::move(guardchains),
                          std::move(policy), std::move(budget), std::move(env), std::move(memory),
                          std::move(world_model), std::move(plan), std::move(connector), span);
+}
+
+// v0.8: Helper — match identifier by name (for non-keyword field names)
+bool Parser::match_identifier(const std::string& name)
+{
+  if (check(TokenType::Identifier) && peek().lexeme == name)
+  {
+    advance();
+    return true;
+  }
+  return false;
+}
+
+// v0.8: Non-fatal warning to stderr
+void Parser::warning(const std::string& message) const
+{
+  std::fprintf(stderr, "Warning [line %zu]: %s\n", peek().line, message.c_str());
+}
+
+// v0.8: Parse session { ... } config block
+SessionConfig Parser::parse_session_config()
+{
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after session");
+  }
+  SessionConfig config;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("idle_reset_minutes"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after idle_reset_minutes"); }
+      if (!match(TokenType::Number)) { error("Expected number for idle_reset_minutes"); }
+      config.idle_reset_minutes = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match_identifier("daily_reset_hour"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after daily_reset_hour"); }
+      if (!match(TokenType::Number)) { error("Expected number for daily_reset_hour"); }
+      config.daily_reset_hour = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match_identifier("max_history_turns"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after max_history_turns"); }
+      if (!match(TokenType::Number)) { error("Expected number for max_history_turns"); }
+      config.max_history_turns = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match_identifier("compaction"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after compaction"); }
+      if (!match(TokenType::String)) { error("Expected string for compaction"); }
+      config.compaction = previous().lexeme;
+      continue;
+    }
+    error("Unexpected token in session block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated session block");
+  }
+  return config;
+}
+
+// v0.8: Parse loop { ... } config block
+LoopConfig Parser::parse_loop_config()
+{
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after loop");
+  }
+  LoopConfig config;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    // max_iterations is a keyword (TokenType::MaxIterations)
+    if (match(TokenType::MaxIterations))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after max_iterations"); }
+      if (!match(TokenType::Number)) { error("Expected number for max_iterations"); }
+      config.max_iterations = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match_identifier("max_cost"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after max_cost"); }
+      if (!match(TokenType::Number)) { error("Expected number for max_cost"); }
+      config.max_cost = std::strtod(previous().lexeme.c_str(), nullptr);
+      continue;
+    }
+    if (match_identifier("max_tokens"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after max_tokens"); }
+      if (!match(TokenType::Number)) { error("Expected number for max_tokens"); }
+      config.max_tokens = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      continue;
+    }
+    if (match_identifier("prompt_file"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after prompt_file"); }
+      if (!match(TokenType::String)) { error("Expected string for prompt_file"); }
+      config.prompt_file = previous().lexeme;
+      continue;
+    }
+    if (match_identifier("plan_file"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after plan_file"); }
+      if (!match(TokenType::String)) { error("Expected string for plan_file"); }
+      config.plan_file = previous().lexeme;
+      continue;
+    }
+    if (match_identifier("progress_file"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after progress_file"); }
+      if (!match(TokenType::String)) { error("Expected string for progress_file"); }
+      config.progress_file = previous().lexeme;
+      continue;
+    }
+    if (match_identifier("learnings_file"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after learnings_file"); }
+      if (!match(TokenType::String)) { error("Expected string for learnings_file"); }
+      config.learnings_file = previous().lexeme;
+      continue;
+    }
+    error("Unexpected token in loop block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated loop block");
+  }
+  return config;
+}
+
+// v0.8: Parse semantic_memory { ... } config block
+SemanticMemoryConfig Parser::parse_semantic_memory_config()
+{
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after semantic_memory");
+  }
+  SemanticMemoryConfig config;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("backend"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after backend"); }
+      if (!match(TokenType::String)) { error("Expected string for backend"); }
+      config.backend = previous().lexeme;
+      continue;
+    }
+    if (match_identifier("search"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after search"); }
+      if (!match(TokenType::String)) { error("Expected string for search"); }
+      config.search = previous().lexeme;
+      continue;
+    }
+    if (match_identifier("flush_on_compact"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after flush_on_compact"); }
+      if (match(TokenType::True))
+      {
+        config.flush_on_compact = true;
+      }
+      else if (match(TokenType::False))
+      {
+        config.flush_on_compact = false;
+      }
+      else
+      {
+        error("Expected true or false for flush_on_compact");
+      }
+      continue;
+    }
+    error("Unexpected token in semantic_memory block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated semantic_memory block");
+  }
+  return config;
+}
+
+// v0.8: Parse lanes { name: { concurrency: N, priority: "..." } ... }
+std::vector<LaneConfig> Parser::parse_lane_configs()
+{
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after lanes");
+  }
+  std::vector<LaneConfig> lanes;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected lane name");
+    }
+    LaneConfig lane;
+    lane.name = previous().lexeme;
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after lane name");
+    }
+    if (!match(TokenType::LeftBrace))
+    {
+      error("Expected '{' for lane config");
+    }
+    while (!check(TokenType::RightBrace) && !is_at_end())
+    {
+      if (match_identifier("concurrency"))
+      {
+        if (!match(TokenType::Colon)) { error("Expected ':' after concurrency"); }
+        if (!match(TokenType::Number)) { error("Expected number for concurrency"); }
+        lane.concurrency = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+        continue;
+      }
+      if (match_identifier("priority"))
+      {
+        if (!match(TokenType::Colon)) { error("Expected ':' after priority"); }
+        if (!match(TokenType::String)) { error("Expected string for priority"); }
+        lane.priority = previous().lexeme;
+        continue;
+      }
+      error("Unexpected token in lane config");
+    }
+    if (!match(TokenType::RightBrace))
+    {
+      error("Unterminated lane config block");
+    }
+    lanes.push_back(std::move(lane));
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated lanes block");
+  }
+  return lanes;
+}
+
+// v0.8: Parse claw agent declaration
+StmtPtr Parser::parse_claw_agent(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected claw agent name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after claw agent name");
+  }
+
+  // Common fields
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> connected_knowledge;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+  std::optional<std::string> workspace;
+  // Claw-specific
+  SessionConfig session;
+  std::vector<IdentifierRef> channels;
+  std::vector<LaneConfig> lanes;
+  std::optional<SemanticMemoryConfig> semantic_memory;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Provider))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after provider"); }
+      if (!match(TokenType::String)) { error("Expected string literal for provider"); }
+      provider = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Model))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after model"); }
+      if (!match(TokenType::String)) { error("Expected string literal for model"); }
+      model = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Endpoint))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after endpoint"); }
+      if (!match(TokenType::String)) { error("Expected string literal for endpoint"); }
+      endpoint = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::ApiKeyEnv))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after api_key_env"); }
+      if (!match(TokenType::String)) { error("Expected string literal for api_key_env"); }
+      api_key_env = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Temperature))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after temperature"); }
+      if (!match(TokenType::Number)) { error("Expected number literal for temperature"); }
+      temperature = std::strtod(previous().lexeme.c_str(), nullptr);
+      continue;
+    }
+    if (match(TokenType::System))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after system"); }
+      if (!match(TokenType::String)) { error("Expected string literal for system"); }
+      system = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Skills))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after skills"); }
+      skills = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::ConnectedKnowledge))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after connected_knowledge"); }
+      connected_knowledge = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::Guards))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after guards"); }
+      guardchains = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::Policy))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after policy"); }
+      if (!match(TokenType::Identifier)) { error("Expected policy identifier"); }
+      policy = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::Budget))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after budget"); }
+      if (!match(TokenType::Identifier)) { error("Expected budget identifier"); }
+      budget = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::Env))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after env"); }
+      if (!match(TokenType::Identifier)) { error("Expected env identifier"); }
+      env = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    // Claw-specific: session
+    if (match_identifier("session"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after session"); }
+      session = parse_session_config();
+      continue;
+    }
+    // Claw-specific: channels
+    if (match_identifier("channels"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after channels"); }
+      channels = parse_identifier_list();
+      continue;
+    }
+    // Claw-specific: lanes
+    if (match_identifier("lanes"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after lanes"); }
+      lanes = parse_lane_configs();
+      continue;
+    }
+    // Claw-specific: semantic_memory
+    if (match_identifier("semantic_memory"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after semantic_memory"); }
+      semantic_memory = parse_semantic_memory_config();
+      continue;
+    }
+    // Claw-specific: workspace
+    if (match_identifier("workspace"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after workspace"); }
+      if (!match(TokenType::String)) { error("Expected string for workspace"); }
+      workspace = previous().lexeme;
+      continue;
+    }
+    // Field rejection: forge-only fields
+    if (match_identifier("verify"))
+    {
+      error("'verify' is not valid on a claw agent. Use 'forge agent' for verification-driven loops.");
+    }
+    if (match(TokenType::Checkpoint))
+    {
+      error("'checkpoint' is not valid on a claw agent. Use 'forge agent' for checkpointed loops.");
+    }
+    if (match(TokenType::LoopPattern))
+    {
+      error("'loop' is not valid on a claw agent. Use 'forge agent' for iteration loops.");
+    }
+    // Deprecation: mode field
+    if (match_identifier("mode"))
+    {
+      warning("'mode' field is deprecated in v0.8. Use 'claw agent' or 'forge agent' keywords instead.");
+      if (!match(TokenType::Colon)) { error("Expected ':' after mode"); }
+      if (!match(TokenType::String)) { error("Expected string for mode"); }
+      continue;
+    }
+    error("Unexpected token in claw agent block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated claw agent block");
+  }
+  if (!provider.has_value())
+  {
+    error("Claw agent missing required field: provider");
+  }
+  if (!model.has_value())
+  {
+    error("Claw agent missing required field: model");
+  }
+  if (channels.empty())
+  {
+    error("Claw agent missing required field: channels (must be non-empty)");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ClawAgentDecl{
+      std::move(visibility), std::move(name), std::move(*provider), std::move(*model),
+      std::move(endpoint), std::move(api_key_env), std::move(temperature), std::move(system),
+      std::move(skills), std::move(connected_knowledge), std::move(guardchains),
+      std::move(policy), std::move(budget), std::move(env), std::move(workspace),
+      std::move(session), std::move(channels), std::move(lanes), std::move(semantic_memory)};
+  return stmt;
+}
+
+// v0.8: Parse forge agent declaration
+StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected forge agent name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after forge agent name");
+  }
+
+  // Common fields
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+  std::optional<std::string> workspace;
+  // Forge-specific
+  LoopConfig loop;
+  ExprPtr verify;
+  std::optional<std::string> checkpoint;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Provider))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after provider"); }
+      if (!match(TokenType::String)) { error("Expected string literal for provider"); }
+      provider = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Model))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after model"); }
+      if (!match(TokenType::String)) { error("Expected string literal for model"); }
+      model = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Endpoint))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after endpoint"); }
+      if (!match(TokenType::String)) { error("Expected string literal for endpoint"); }
+      endpoint = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::ApiKeyEnv))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after api_key_env"); }
+      if (!match(TokenType::String)) { error("Expected string literal for api_key_env"); }
+      api_key_env = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Temperature))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after temperature"); }
+      if (!match(TokenType::Number)) { error("Expected number literal for temperature"); }
+      temperature = std::strtod(previous().lexeme.c_str(), nullptr);
+      continue;
+    }
+    if (match(TokenType::System))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after system"); }
+      if (!match(TokenType::String)) { error("Expected string literal for system"); }
+      system = previous().lexeme;
+      continue;
+    }
+    if (match(TokenType::Skills))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after skills"); }
+      skills = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::Guards))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after guards"); }
+      guardchains = parse_identifier_list();
+      continue;
+    }
+    if (match(TokenType::Policy))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after policy"); }
+      if (!match(TokenType::Identifier)) { error("Expected policy identifier"); }
+      policy = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::Budget))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after budget"); }
+      if (!match(TokenType::Identifier)) { error("Expected budget identifier"); }
+      budget = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    if (match(TokenType::Env))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after env"); }
+      if (!match(TokenType::Identifier)) { error("Expected env identifier"); }
+      env = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      continue;
+    }
+    // Forge-specific: loop
+    if (match(TokenType::LoopPattern))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after loop"); }
+      loop = parse_loop_config();
+      continue;
+    }
+    // Forge-specific: verify
+    if (match_identifier("verify"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after verify"); }
+      verify = parse_expression();
+      continue;
+    }
+    // Forge-specific: checkpoint
+    if (match(TokenType::Checkpoint))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after checkpoint"); }
+      if (!match(TokenType::String)) { error("Expected string for checkpoint"); }
+      checkpoint = previous().lexeme;
+      continue;
+    }
+    // Forge-specific: workspace
+    if (match_identifier("workspace"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after workspace"); }
+      if (!match(TokenType::String)) { error("Expected string for workspace"); }
+      workspace = previous().lexeme;
+      continue;
+    }
+    // Field rejection: claw-only fields
+    if (match_identifier("session"))
+    {
+      error("'session' is not valid on a forge agent. Use 'claw agent' for session management.");
+    }
+    if (match_identifier("channels"))
+    {
+      error("'channels' is not valid on a forge agent. Use 'claw agent' for multi-channel support.");
+    }
+    if (match_identifier("lanes"))
+    {
+      error("'lanes' is not valid on a forge agent. Use 'claw agent' for lane queues.");
+    }
+    // Deprecation: mode field
+    if (match_identifier("mode"))
+    {
+      warning("'mode' field is deprecated in v0.8. Use 'claw agent' or 'forge agent' keywords instead.");
+      if (!match(TokenType::Colon)) { error("Expected ':' after mode"); }
+      if (!match(TokenType::String)) { error("Expected string for mode"); }
+      continue;
+    }
+    error("Unexpected token in forge agent block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated forge agent block");
+  }
+  if (!provider.has_value())
+  {
+    error("Forge agent missing required field: provider");
+  }
+  if (!model.has_value())
+  {
+    error("Forge agent missing required field: model");
+  }
+  if (!verify)
+  {
+    error("Forge agent missing required field: verify");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ForgeAgentDecl{
+      std::move(visibility), std::move(name), std::move(*provider), std::move(*model),
+      std::move(endpoint), std::move(api_key_env), std::move(temperature), std::move(system),
+      std::move(skills), std::move(guardchains),
+      std::move(policy), std::move(budget), std::move(env), std::move(workspace),
+      std::move(loop), std::move(verify), std::move(checkpoint)};
+  return stmt;
 }
 
 StmtPtr Parser::parse_budget(const Visibility& visibility)
@@ -3811,7 +4459,8 @@ SkillParam Parser::parse_skill_param()
       !match(TokenType::Trait) && !match(TokenType::Sealed) &&
       !match(TokenType::Match) && !match(TokenType::Extend) &&
       !match(TokenType::Pipeline) && !match(TokenType::Dispatch) &&
-      !match(TokenType::Parallel) && !match(TokenType::LoopPattern))
+      !match(TokenType::Parallel) && !match(TokenType::LoopPattern) &&
+      !match(TokenType::Claw) && !match(TokenType::Forge))
   {
     error("Expected param name");
   }

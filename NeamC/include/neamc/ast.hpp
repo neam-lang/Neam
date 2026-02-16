@@ -888,6 +888,91 @@ struct AgentDecl
   std::optional<IdentifierRef> connector;
 };
 
+// v0.8: Session configuration for claw agents
+struct SessionConfig
+{
+  std::optional<int> idle_reset_minutes;
+  std::optional<int> daily_reset_hour;
+  std::optional<int> max_history_turns;
+  std::optional<std::string> compaction;  // "auto", "manual", "disabled"
+};
+
+// v0.8: Loop configuration for forge agents
+struct LoopConfig
+{
+  std::optional<int> max_iterations;
+  std::optional<double> max_cost;
+  std::optional<int> max_tokens;
+  std::optional<std::string> prompt_file;
+  std::optional<std::string> plan_file;
+  std::optional<std::string> progress_file;
+  std::optional<std::string> learnings_file;
+};
+
+// v0.8: Semantic memory configuration for claw agents
+struct SemanticMemoryConfig
+{
+  std::optional<std::string> backend;  // "sqlite", "none"
+  std::optional<std::string> search;   // "hybrid", "vector", "keyword", "none"
+  bool flush_on_compact{false};
+};
+
+// v0.8: Lane configuration for claw agents
+struct LaneConfig
+{
+  std::string name;
+  int concurrency{1};
+  std::optional<std::string> priority;
+};
+
+// v0.8: Claw agent declaration (conversational, multi-channel)
+struct ClawAgentDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> connected_knowledge;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+  std::optional<std::string> workspace;
+  // Claw-specific fields
+  SessionConfig session;
+  std::vector<IdentifierRef> channels;
+  std::vector<LaneConfig> lanes;
+  std::optional<SemanticMemoryConfig> semantic_memory;
+};
+
+// v0.8: Forge agent declaration (verification-driven loop)
+struct ForgeAgentDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+  std::optional<std::string> workspace;
+  // Forge-specific fields
+  LoopConfig loop;
+  ExprPtr verify;       // required: fun(ctx) -> VerifyResult
+  std::optional<std::string> checkpoint;  // "git", "snapshot", "none"
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -923,7 +1008,8 @@ struct Statement
                    ForInStmt, BreakStmt, ContinueStmt, DestructureLetStmt,
                    StructDecl, ImplBlock,
                    TraitDecl, SealedDecl, ExtendBlock,
-                   PipelineDecl, DispatchDecl, ParallelDecl, LoopPatternDecl>;
+                   PipelineDecl, DispatchDecl, ParallelDecl, LoopPatternDecl,
+                   ClawAgentDecl, ForgeAgentDecl>;
   SourceSpan span;
   Variant node;
 };

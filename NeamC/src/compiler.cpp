@@ -1183,6 +1183,359 @@ void Compiler::emit_statement(const Statement& stmt)
           }
           chunk_.write_op(OpCode::OP_DEFINE_AGENT);
         }
+        // v0.8: Claw agent emit handler
+        else if constexpr (std::is_same_v<T, ClawAgentDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // provider
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.provider)));
+          // model
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.model)));
+          // endpoint
+          if (node.endpoint.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.endpoint.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // api_key_env
+          if (node.api_key_env.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.api_key_env.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // temperature
+          if (node.temperature.has_value())
+          {
+            chunk_.emit_constant(vm::Value::Number(node.temperature.value()));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // system
+          if (node.system.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.system.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // skills list
+          emit_identifier_list(chunk_, node.skills);
+          // connected_knowledge list
+          emit_identifier_list(chunk_, node.connected_knowledge);
+          // guardchains list
+          emit_identifier_list(chunk_, node.guardchains);
+          // policy
+          if (node.policy.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.policy->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // budget
+          if (node.budget.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.budget->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // env
+          if (node.env.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.env->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // workspace
+          if (node.workspace.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.workspace.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // session config as map
+          {
+            std::size_t count = 0;
+            const auto& s = node.session;
+            if (s.idle_reset_minutes.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "idle_reset_minutes")));
+              chunk_.emit_constant(vm::Value::Number(static_cast<double>(*s.idle_reset_minutes)));
+              ++count;
+            }
+            if (s.daily_reset_hour.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "daily_reset_hour")));
+              chunk_.emit_constant(vm::Value::Number(static_cast<double>(*s.daily_reset_hour)));
+              ++count;
+            }
+            if (s.max_history_turns.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "max_history_turns")));
+              chunk_.emit_constant(vm::Value::Number(static_cast<double>(*s.max_history_turns)));
+              ++count;
+            }
+            if (s.compaction.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "compaction")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, *s.compaction)));
+              ++count;
+            }
+            emit_build_map(chunk_, count);
+          }
+          // channels list
+          emit_identifier_list(chunk_, node.channels);
+          // lanes list (list of maps)
+          for (const auto& lane : node.lanes)
+          {
+            std::size_t lcount = 1;  // name is always present
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, "name")));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, lane.name)));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, "concurrency")));
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(lane.concurrency)));
+            ++lcount;
+            if (lane.priority.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "priority")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, *lane.priority)));
+              ++lcount;
+            }
+            emit_build_map(chunk_, lcount);
+          }
+          emit_build_list(chunk_, node.lanes.size());
+          // semantic_memory
+          if (node.semantic_memory.has_value())
+          {
+            std::size_t scount = 0;
+            const auto& sm = *node.semantic_memory;
+            if (sm.backend.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "backend")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, *sm.backend)));
+              ++scount;
+            }
+            if (sm.search.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "search")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, *sm.search)));
+              ++scount;
+            }
+            // flush_on_compact
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, "flush_on_compact")));
+            if (sm.flush_on_compact)
+            {
+              chunk_.write_op(OpCode::OP_TRUE);
+            }
+            else
+            {
+              chunk_.write_op(OpCode::OP_FALSE);
+            }
+            ++scount;
+            emit_build_map(chunk_, scount);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          chunk_.write_op(OpCode::OP_DEFINE_CLAW_AGENT);
+        }
+        // v0.8: Forge agent emit handler
+        else if constexpr (std::is_same_v<T, ForgeAgentDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // provider
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.provider)));
+          // model
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.model)));
+          // endpoint
+          if (node.endpoint.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.endpoint.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // api_key_env
+          if (node.api_key_env.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.api_key_env.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // temperature
+          if (node.temperature.has_value())
+          {
+            chunk_.emit_constant(vm::Value::Number(node.temperature.value()));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // system
+          if (node.system.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.system.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // skills list
+          emit_identifier_list(chunk_, node.skills);
+          // guardchains list
+          emit_identifier_list(chunk_, node.guardchains);
+          // policy
+          if (node.policy.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.policy->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // budget
+          if (node.budget.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.budget->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // env
+          if (node.env.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.env->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // workspace
+          if (node.workspace.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.workspace.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // loop config as map
+          {
+            std::size_t count = 0;
+            const auto& lp = node.loop;
+            if (lp.max_iterations.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "max_iterations")));
+              chunk_.emit_constant(vm::Value::Number(static_cast<double>(*lp.max_iterations)));
+              ++count;
+            }
+            if (lp.max_cost.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "max_cost")));
+              chunk_.emit_constant(vm::Value::Number(*lp.max_cost));
+              ++count;
+            }
+            if (lp.max_tokens.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "max_tokens")));
+              chunk_.emit_constant(vm::Value::Number(static_cast<double>(*lp.max_tokens)));
+              ++count;
+            }
+            if (lp.prompt_file.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "prompt_file")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, *lp.prompt_file)));
+              ++count;
+            }
+            if (lp.plan_file.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "plan_file")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, *lp.plan_file)));
+              ++count;
+            }
+            if (lp.progress_file.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "progress_file")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, *lp.progress_file)));
+              ++count;
+            }
+            if (lp.learnings_file.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "learnings_file")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, *lp.learnings_file)));
+              ++count;
+            }
+            emit_build_map(chunk_, count);
+          }
+          // verify expression
+          emit_expression(*node.verify);
+          // checkpoint
+          if (node.checkpoint.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.checkpoint.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          chunk_.write_op(OpCode::OP_DEFINE_FORGE_AGENT);
+        }
         else if constexpr (std::is_same_v<T, GrantStmt>)
         {
           chunk_.write_op(OpCode::OP_CONST);

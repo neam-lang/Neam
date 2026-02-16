@@ -813,6 +813,10 @@ std::string opcode_name(OpCode op)
       return "OP_SET_PROPERTY";
     case OpCode::OP_SET_FIELD_OBSERVER:
       return "OP_SET_FIELD_OBSERVER";
+    case OpCode::OP_DEFINE_CLAW_AGENT:
+      return "OP_DEFINE_CLAW_AGENT";
+    case OpCode::OP_DEFINE_FORGE_AGENT:
+      return "OP_DEFINE_FORGE_AGENT";
     default:
       return "OP_UNKNOWN";
   }
@@ -6623,6 +6627,112 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           else if (kind == 2)
             def->guard_handlers[field_name] = fn;
         }
+        break;
+      }
+      // v0.8: Claw agent — pop all stack values and register as agent
+      case OpCode::OP_DEFINE_CLAW_AGENT:
+      {
+        Value semantic_memory_value = pop();  // semantic_memory map or nil
+        Value lanes_value = pop();            // lanes list
+        Value channels_value = pop();         // channels list
+        Value session_value = pop();          // session config map
+        Value workspace_value = pop();        // workspace or nil
+        Value env_value = pop();
+        Value budget_value = pop();
+        Value policy_value = pop();
+        Value guardchains_value = pop();
+        Value knowledge_value = pop();
+        Value skills_value = pop();
+        Value system_value = pop();
+        Value temperature_value = pop();
+        Value api_key_env_value = pop();
+        Value endpoint_value = pop();
+        Value model_value = pop();
+        Value provider_value = pop();
+        Value name_value = pop();
+
+        // Register as a standard agent (reuse existing infrastructure)
+        auto* name = as_string(name_value);
+        auto* provider = as_string(provider_value);
+        auto* model = as_string(model_value);
+        ObjString* endpoint = endpoint_value.is_nil() ? nullptr : as_string(endpoint_value);
+        ObjString* api_key_env = api_key_env_value.is_nil() ? nullptr : as_string(api_key_env_value);
+        ObjString* system = system_value.is_nil() ? nullptr : as_string(system_value);
+        double temperature = temperature_value.is_nil() ? 0.0 : temperature_value.as_number();
+        auto* skills = as_list(skills_value);
+        auto* connected_knowledge = as_list(knowledge_value);
+        auto* context = new_context();
+        auto* agent = new_agent(name, provider, model, endpoint, api_key_env, system,
+                                temperature, skills, connected_knowledge, context);
+        globals_.set(name, Value::Agent(agent));
+
+        AgentExtension extension;
+        extension.agent_type = "claw";
+        for (const auto& guard : as_list(guardchains_value)->items)
+        {
+          extension.guardchains.push_back(to_std_string(guard));
+        }
+        if (policy_value.is_string())
+          extension.policy = to_std_string(policy_value);
+        if (budget_value.is_string())
+          extension.budget = to_std_string(budget_value);
+        if (env_value.is_string())
+          extension.env = to_std_string(env_value);
+        // Store claw-specific config as metadata (session, channels, lanes, semantic_memory)
+        // Full implementation in Phase 1
+        agent_extensions_[to_std_string(name)] = std::move(extension);
+        break;
+      }
+      // v0.8: Forge agent — pop all stack values and register as agent
+      case OpCode::OP_DEFINE_FORGE_AGENT:
+      {
+        Value checkpoint_value = pop();  // checkpoint string or nil
+        Value verify_value = pop();      // verify function
+        Value loop_value = pop();        // loop config map
+        Value workspace_value = pop();   // workspace or nil
+        Value env_value = pop();
+        Value budget_value = pop();
+        Value policy_value = pop();
+        Value guardchains_value = pop();
+        Value skills_value = pop();
+        Value system_value = pop();
+        Value temperature_value = pop();
+        Value api_key_env_value = pop();
+        Value endpoint_value = pop();
+        Value model_value = pop();
+        Value provider_value = pop();
+        Value name_value = pop();
+
+        // Register as a standard agent
+        auto* name = as_string(name_value);
+        auto* provider = as_string(provider_value);
+        auto* model = as_string(model_value);
+        ObjString* endpoint = endpoint_value.is_nil() ? nullptr : as_string(endpoint_value);
+        ObjString* api_key_env = api_key_env_value.is_nil() ? nullptr : as_string(api_key_env_value);
+        ObjString* system = system_value.is_nil() ? nullptr : as_string(system_value);
+        double temperature = temperature_value.is_nil() ? 0.0 : temperature_value.as_number();
+        auto* skills = as_list(skills_value);
+        auto* empty_knowledge = new_list(std::vector<Value>{});
+        auto* context = new_context();
+        auto* agent = new_agent(name, provider, model, endpoint, api_key_env, system,
+                                temperature, skills, empty_knowledge, context);
+        globals_.set(name, Value::Agent(agent));
+
+        AgentExtension extension;
+        extension.agent_type = "forge";
+        for (const auto& guard : as_list(guardchains_value)->items)
+        {
+          extension.guardchains.push_back(to_std_string(guard));
+        }
+        if (policy_value.is_string())
+          extension.policy = to_std_string(policy_value);
+        if (budget_value.is_string())
+          extension.budget = to_std_string(budget_value);
+        if (env_value.is_string())
+          extension.env = to_std_string(env_value);
+        // Store forge-specific config as metadata (loop, verify, checkpoint)
+        // Full implementation in Phase 1
+        agent_extensions_[to_std_string(name)] = std::move(extension);
         break;
       }
       default:
