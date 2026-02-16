@@ -171,6 +171,7 @@ private:
 
   void emit_debug_event(DebugEventType type, std::string label, std::size_t ip,
                         std::string payload);
+  void register_builtin_traits();
   Value run_internal(const Bytecode& chunk);
   Value run_frames(std::size_t target_frame_count);
   Value call_function(ObjFunction* fn, const std::vector<Value>& args, bool is_tool,

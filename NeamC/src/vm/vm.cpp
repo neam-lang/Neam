@@ -216,6 +216,37 @@ bool matches_pattern(const std::string& pattern, const std::string& required)
   return false;
 }
 
+// v0.8 Phase 5: Check if a type has a specific method in its impl table
+bool has_impl_method(const std::unordered_map<std::string, ObjImplTable*>& impl_tables,
+                     const std::string& type_name, const std::string& method_name)
+{
+  auto it = impl_tables.find(type_name);
+  if (it == impl_tables.end()) return false;
+  return it->second->methods.count(method_name) > 0;
+}
+
+// v0.8 Phase 5: Check if a type implements a trait (all required methods present)
+bool has_trait_impl(const std::unordered_map<std::string, ObjImplTable*>& impl_tables,
+                    const std::unordered_map<std::string, ObjTraitDef*>& trait_defs,
+                    const std::string& type_name, const std::string& trait_name)
+{
+  auto trait_it = trait_defs.find(trait_name);
+  if (trait_it == trait_defs.end()) return false;
+
+  auto impl_it = impl_tables.find(type_name);
+  if (impl_it == impl_tables.end()) return false;
+
+  // Check that all required methods (no default) are present
+  for (const auto& m : trait_it->second->methods)
+  {
+    if (!m.default_impl && impl_it->second->methods.count(m.name) == 0)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 struct ReActResponse
 {
   std::string thought;
@@ -899,6 +930,9 @@ VirtualMachine::VirtualMachine()
   auto* std_name = copy_string("std", 3);
   globals_.set(std_name, Value::Map(std_map));
   env_ = env;
+
+  // v0.8 Phase 5: Register built-in trait definitions
+  register_builtin_traits();
 }
 
 VirtualMachine::~VirtualMachine()
@@ -909,6 +943,88 @@ VirtualMachine::~VirtualMachine()
   {
     set_current_vm(nullptr);
   }
+}
+
+// v0.8 Phase 5: Create a minimal ObjFunction that returns nil (OP_NIL + OP_RETURN)
+static ObjFunction* make_nil_function(const std::string& name, int arity)
+{
+  auto* fn = new_function();
+  fn->arity = arity;
+  fn->name = copy_string(name.c_str(), name.size());
+  fn->chunk.write_op(OpCode::OP_NIL);
+  fn->chunk.write_op(OpCode::OP_RETURN);
+  return fn;
+}
+
+void VirtualMachine::register_builtin_traits()
+{
+  // Helper lambda: register a single trait with required + default methods
+  struct MethodSpec
+  {
+    std::string name;
+    int arity;            // includes 'self' parameter
+    bool has_default;     // true = default (nil-returning), false = required
+  };
+
+  auto register_trait = [this](const std::string& trait_name,
+                               const std::vector<MethodSpec>& methods) {
+    auto* def = new_trait_def(trait_name);
+
+    for (const auto& m : methods)
+    {
+      TraitMethodInfo info;
+      info.name = m.name;
+      if (m.has_default)
+      {
+        info.default_impl = make_nil_function(trait_name + "." + m.name, m.arity);
+      }
+      else
+      {
+        info.default_impl = nullptr;
+      }
+      def->methods.push_back(info);
+    }
+
+    trait_defs_[trait_name] = def;
+    auto* name_str = copy_string(trait_name.c_str(), trait_name.size());
+    globals_.set(name_str, Value::TraitDef(def));
+  };
+
+  // 1. Schedulable — heartbeat and cron scheduling for agents
+  register_trait("Schedulable", {
+    {"on_heartbeat",      1, false},   // required: (self)
+    {"heartbeat_interval", 1, false},  // required: (self) -> number (ms)
+    {"on_cron",           2, true},    // default:  (self, id) -> nil
+  });
+
+  // 2. Channelable — inter-agent messaging channels
+  register_trait("Channelable", {
+    {"channels",    1, false},   // required: (self) -> list of channel names
+    {"on_message",  2, false},   // required: (self, msg)
+  });
+
+  // 3. Sandboxable — sandbox/isolation configuration
+  register_trait("Sandboxable", {
+    {"sandbox_config", 1, false},   // required: (self) -> config map
+  });
+
+  // 4. Monitorable — behavioral monitoring and anomaly detection
+  register_trait("Monitorable", {
+    {"baseline",    1, false},   // required: (self) -> baseline map
+    {"on_anomaly",  2, false},   // required: (self, event)
+  });
+
+  // 5. Orchestrable — multi-agent orchestration callbacks
+  register_trait("Orchestrable", {
+    {"on_spawn",     2, true},   // default: (self, child) -> nil
+    {"on_delegate",  2, true},   // default: (self, result) -> nil
+  });
+
+  // 6. Searchable — RAG/search configuration
+  register_trait("Searchable", {
+    {"search_config", 1, false},   // required: (self) -> config map
+    {"on_index",      2, true},    // default:  (self, doc) -> nil
+  });
 }
 
 void VirtualMachine::reset_for_reuse(ResetPolicy policy)
@@ -967,6 +1083,15 @@ void VirtualMachine::reset_for_reuse(ResetPolicy policy)
   sealed_defs_.clear();
   mcp_clients_.clear();
   env_ = nullptr;
+
+  // Re-register core natives and built-in traits after Complete reset
+  register_core_natives(*this);
+  register_builtin_traits();
+  auto* env = new_env();
+  auto* std_map = new_map({{"env", Value::Env(env)}});
+  auto* std_name = copy_string("std", 3);
+  globals_.set(std_name, Value::Map(std_map));
+  env_ = env;
 }
 
 Value VirtualMachine::pop()
@@ -3348,7 +3473,33 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           }
           else
           {
-            throw std::runtime_error("Unknown agent method");
+            // v0.8 Phase 5: Fall through to impl_tables_ for trait methods
+            const std::string agent_type_name(agent->name->chars, agent->name->length);
+            auto table_it = impl_tables_.find(agent_type_name);
+            if (table_it != impl_tables_.end())
+            {
+              auto method_it = table_it->second->methods.find(method);
+              if (method_it != table_it->second->methods.end())
+              {
+                auto* fn = method_it->second.function;
+                std::size_t base_slot = stack_.size();
+                stack_.push_back(receiver);  // self
+                for (std::size_t i = 0; i < arg_count; ++i)
+                {
+                  stack_.push_back(args[i]);
+                }
+                frames_.push_back(CallFrame{&fn->chunk, fn, 0, base_slot, false, {}});
+              }
+              else
+              {
+                throw std::runtime_error(
+                    "Method '" + method + "' not found on agent '" + agent_type_name + "'");
+              }
+            }
+            else
+            {
+              throw std::runtime_error("Unknown agent method");
+            }
           }
         }
         else if (is_obj_type(receiver, ObjType::OBJ_CLAW_AGENT))
