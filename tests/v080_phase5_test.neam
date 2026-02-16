@@ -1,0 +1,291 @@
+// v0.8 Phase 5: Built-in Traits
+
+// === Skill stubs for agents ===
+skill greet {
+  description: "Greets a user"
+  params: { name: string }
+  impl(name) { return "Hello " + name; }
+}
+
+skill analyze {
+  description: "Analyzes data"
+  params: { data: string }
+  impl(data) { return "analysis of " + data; }
+}
+
+// === Guard chain stub ===
+guard input_guard {
+  description: "Validates input"
+  on_observation(text) { return text; }
+}
+
+guardchain safety_chain = [input_guard];
+
+// === Verify function for forge agents ===
+fun always_pass(ctx) {
+  return true;
+}
+
+// ====================================================================
+// 1. Schedulable trait — impl for claw agent
+// ====================================================================
+claw agent scheduler_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  system: "You are a scheduler."
+}
+
+impl Schedulable for scheduler_bot {
+  fn on_heartbeat(self) {
+    return "heartbeat fired";
+  }
+  fn heartbeat_interval(self) {
+    return 5000;
+  }
+  fn on_cron(self, id) {
+    return "cron:" + id;
+  }
+}
+
+let r1a = scheduler_bot.on_heartbeat();
+if (r1a == "heartbeat fired") { emit "PASS: 1a Schedulable on_heartbeat"; } else { emit "FAIL: 1a expected heartbeat fired, got " + to_string(r1a); }
+
+let r1b = scheduler_bot.heartbeat_interval();
+if (r1b == 5000) { emit "PASS: 1b Schedulable heartbeat_interval"; } else { emit "FAIL: 1b expected 5000, got " + to_string(r1b); }
+
+let r1c = scheduler_bot.on_cron("daily");
+if (r1c == "cron:daily") { emit "PASS: 1c Schedulable on_cron explicit"; } else { emit "FAIL: 1c expected cron:daily, got " + to_string(r1c); }
+
+// ====================================================================
+// 2. Channelable trait — impl for claw agent
+// ====================================================================
+claw agent messenger_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  system: "You are a messenger."
+}
+
+impl Channelable for messenger_bot {
+  fn channels(self) {
+    return ["events", "commands"];
+  }
+  fn on_message(self, msg) {
+    return "received:" + msg;
+  }
+}
+
+let r2a = messenger_bot.channels();
+if (len(r2a) == 2) { emit "PASS: 2a Channelable channels count"; } else { emit "FAIL: 2a expected 2 channels, got " + to_string(len(r2a)); }
+
+let r2b = messenger_bot.on_message("hello");
+if (r2b == "received:hello") { emit "PASS: 2b Channelable on_message"; } else { emit "FAIL: 2b expected received:hello, got " + to_string(r2b); }
+
+// ====================================================================
+// 3. Sandboxable trait — impl for forge agent
+// ====================================================================
+forge agent sandbox_builder {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [analyze]
+  guards: [safety_chain]
+  loop: {
+    max_iterations: 3
+    max_cost: 1.0
+  }
+  verify: always_pass
+  checkpoint: "none"
+  workspace: "/tmp/sandbox_test"
+}
+
+impl Sandboxable for sandbox_builder {
+  fn sandbox_config(self) {
+    return {"network": false, "filesystem": "readonly", "timeout": 30};
+  }
+}
+
+let sc = sandbox_builder.sandbox_config();
+if (sc["filesystem"] == "readonly") { emit "PASS: 3a Sandboxable filesystem"; } else { emit "FAIL: 3a expected readonly, got " + to_string(sc["filesystem"]); }
+if (sc["timeout"] == 30) { emit "PASS: 3b Sandboxable timeout"; } else { emit "FAIL: 3b expected 30, got " + to_string(sc["timeout"]); }
+
+// ====================================================================
+// 4. Monitorable trait — impl for claw agent
+// ====================================================================
+claw agent monitored_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  system: "You are monitored."
+}
+
+impl Monitorable for monitored_bot {
+  fn baseline(self) {
+    return {"avg_latency": 200, "max_calls": 100};
+  }
+  fn on_anomaly(self, event) {
+    return "alert:" + event;
+  }
+}
+
+let bl = monitored_bot.baseline();
+if (bl["avg_latency"] == 200) { emit "PASS: 4a Monitorable baseline avg_latency"; } else { emit "FAIL: 4a expected 200, got " + to_string(bl["avg_latency"]); }
+if (bl["max_calls"] == 100) { emit "PASS: 4b Monitorable baseline max_calls"; } else { emit "FAIL: 4b expected 100"; }
+
+let r4c = monitored_bot.on_anomaly("spike");
+if (r4c == "alert:spike") { emit "PASS: 4c Monitorable on_anomaly"; } else { emit "FAIL: 4c expected alert:spike, got " + to_string(r4c); }
+
+// ====================================================================
+// 5. Orchestrable trait — default methods fill in
+// ====================================================================
+claw agent orchestrator_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  system: "You orchestrate."
+}
+
+// Impl with only on_spawn — on_delegate should get default (nil-returning)
+impl Orchestrable for orchestrator_bot {
+  fn on_spawn(self, child) {
+    return "spawned:" + child;
+  }
+}
+
+let r5a = orchestrator_bot.on_spawn("worker");
+if (r5a == "spawned:worker") { emit "PASS: 5a Orchestrable on_spawn explicit"; } else { emit "FAIL: 5a expected spawned:worker, got " + to_string(r5a); }
+
+let r5b = orchestrator_bot.on_delegate("done");
+if (r5b == nil) { emit "PASS: 5b Orchestrable on_delegate default nil"; } else { emit "FAIL: 5b expected nil, got " + to_string(r5b); }
+
+// ====================================================================
+// 6. Searchable trait — impl for forge agent
+// ====================================================================
+forge agent search_builder {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [analyze]
+  guards: [safety_chain]
+  loop: {
+    max_iterations: 3
+    max_cost: 1.0
+  }
+  verify: always_pass
+  checkpoint: "none"
+  workspace: "/tmp/search_test"
+}
+
+impl Searchable for search_builder {
+  fn search_config(self) {
+    return {"strategy": "hybrid", "top_k": 10};
+  }
+}
+
+let src = search_builder.search_config();
+if (src["strategy"] == "hybrid") { emit "PASS: 6a Searchable search_config strategy"; } else { emit "FAIL: 6a expected hybrid"; }
+if (src["top_k"] == 10) { emit "PASS: 6b Searchable search_config top_k"; } else { emit "FAIL: 6b expected 10"; }
+
+// on_index should have default (nil-returning)
+let r6c = search_builder.on_index("doc1");
+if (r6c == nil) { emit "PASS: 6c Searchable on_index default nil"; } else { emit "FAIL: 6c expected nil, got " + to_string(r6c); }
+
+// ====================================================================
+// 7. Struct backward compat — built-in traits still work with structs
+// ====================================================================
+struct Point { x: number, y: number }
+
+impl Monitorable for Point {
+  fn baseline(self) {
+    return {"x": self.x, "y": self.y};
+  }
+  fn on_anomaly(self, event) {
+    return "point anomaly";
+  }
+}
+
+let p = Point(10, 20);
+let pb = p.baseline();
+if (pb["x"] == 10) { emit "PASS: 7a Struct Monitorable baseline x"; } else { emit "FAIL: 7a expected 10, got " + to_string(pb["x"]); }
+let r7b = p.on_anomaly("drift");
+if (r7b == "point anomaly") { emit "PASS: 7b Struct Monitorable on_anomaly"; } else { emit "FAIL: 7b expected point anomaly"; }
+
+// ====================================================================
+// 8. Plain agent backward compat — Monitorable (unrestricted trait)
+// ====================================================================
+agent plain_agent {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  system: "You are a plain agent."
+}
+
+impl Monitorable for plain_agent {
+  fn baseline(self) {
+    return {"type": "plain", "status": "ok"};
+  }
+  fn on_anomaly(self, event) {
+    return "plain alert:" + event;
+  }
+}
+
+let r8a = plain_agent.baseline();
+if (r8a["type"] == "plain") { emit "PASS: 8a Plain agent Monitorable baseline"; } else { emit "FAIL: 8a expected plain"; }
+let r8b = plain_agent.on_anomaly("drift");
+if (r8b == "plain alert:drift") { emit "PASS: 8b Plain agent on_anomaly"; } else { emit "FAIL: 8b expected plain alert:drift"; }
+
+// ====================================================================
+// 9. Multiple traits on same agent
+// ====================================================================
+claw agent multi_trait_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  system: "Multi-trait bot."
+}
+
+impl Schedulable for multi_trait_bot {
+  fn on_heartbeat(self) {
+    return "multi heartbeat";
+  }
+  fn heartbeat_interval(self) {
+    return 3000;
+  }
+}
+
+impl Channelable for multi_trait_bot {
+  fn channels(self) {
+    return ["alpha"];
+  }
+  fn on_message(self, msg) {
+    return "multi:" + msg;
+  }
+}
+
+let r9a = multi_trait_bot.on_heartbeat();
+if (r9a == "multi heartbeat") { emit "PASS: 9a Multi-trait Schedulable"; } else { emit "FAIL: 9a expected multi heartbeat"; }
+let r9b = multi_trait_bot.on_message("test");
+if (r9b == "multi:test") { emit "PASS: 9b Multi-trait Channelable"; } else { emit "FAIL: 9b expected multi:test"; }
+let r9c = multi_trait_bot.on_cron("hourly");
+if (r9c == nil) { emit "PASS: 9c Multi-trait Schedulable default on_cron nil"; } else { emit "FAIL: 9c expected nil"; }
+
+// ====================================================================
+// 10. Claw/Forge property access — backward compat from Phase 3/4
+// ====================================================================
+if (scheduler_bot.name == "scheduler_bot") { emit "PASS: 10a Claw .name"; } else { emit "FAIL: 10a"; }
+if (scheduler_bot.provider == "openai") { emit "PASS: 10b Claw .provider"; } else { emit "FAIL: 10b"; }
+if (sandbox_builder.name == "sandbox_builder") { emit "PASS: 10c Forge .name"; } else { emit "FAIL: 10c"; }
+if (sandbox_builder.checkpoint == "none") { emit "PASS: 10d Forge .checkpoint"; } else { emit "FAIL: 10d"; }
+
+emit "";
+emit "=== v0.8 Phase 5 Complete ===";
