@@ -1,0 +1,198 @@
+// v0.8 Phase 6: Channels & Lanes
+
+// === Skill stubs ===
+skill greet {
+  description: "Greets a user"
+  params: { name: string }
+  impl(name) { return "Hello " + name; }
+}
+
+skill analyze {
+  description: "Analyzes data"
+  params: { data: string }
+  impl(data) { return "analysis of " + data; }
+}
+
+// === Guard chain stub ===
+guard input_guard {
+  description: "Validates input"
+  on_observation(text) { return text; }
+}
+
+guardchain safety_chain = [input_guard];
+
+// ====================================================================
+// 1. Channel declaration compiles
+// ====================================================================
+channel cli_chan {
+  type: "cli"
+}
+
+emit "PASS: 1 channel declaration compiles";
+
+// ====================================================================
+// 2. Claw agent with channels + lanes
+// ====================================================================
+claw agent support_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  lanes: { main: { concurrency: 2 } }
+  system: "You are a support agent."
+}
+
+emit "PASS: 2 claw agent with channels and lanes";
+
+// ====================================================================
+// 3. channel_names property access
+// ====================================================================
+let names = support_bot.channel_names;
+if (len(names) == 1) {
+  emit "PASS: 3 channel_names count";
+} else {
+  emit "FAIL: 3 expected 1 channel_name, got " + to_string(len(names));
+}
+
+// ====================================================================
+// 4. lanes property access (count, name, concurrency)
+// ====================================================================
+let lanes = support_bot.lanes;
+if (len(lanes) == 1) {
+  let first = lanes[0];
+  let lname = first["name"];
+  let lconc = first["concurrency"];
+  if (lname == "main") {
+    if (lconc == 2) {
+      emit "PASS: 4 lanes property";
+    } else {
+      emit "FAIL: 4 expected concurrency 2, got " + to_string(lconc);
+    }
+  } else {
+    emit "FAIL: 4 expected lane name main, got " + to_string(lname);
+  }
+} else {
+  emit "FAIL: 4 expected 1 lane, got " + to_string(len(lanes));
+}
+
+// ====================================================================
+// 5. Channelable trait methods still dispatch
+// ====================================================================
+claw agent channel_test_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  system: "Channel test."
+}
+
+impl Channelable for channel_test_bot {
+  fn channels(self) {
+    return ["events", "commands"];
+  }
+  fn on_message(self, msg) {
+    return "got:" + msg;
+  }
+}
+
+let ch_result = channel_test_bot.on_message("hello");
+if (ch_result == "got:hello") {
+  emit "PASS: 5 Channelable dispatch";
+} else {
+  emit "FAIL: 5 expected got:hello, got " + to_string(ch_result);
+}
+
+// ====================================================================
+// 6. Schedulable trait methods still dispatch (direct call, not background)
+// ====================================================================
+claw agent sched_test_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  channels: [greet]
+  system: "Sched test."
+}
+
+impl Schedulable for sched_test_bot {
+  fn on_heartbeat(self) {
+    return "beat";
+  }
+  fn heartbeat_interval(self) {
+    return 10000;
+  }
+}
+
+let sched_r = sched_test_bot.on_heartbeat();
+if (sched_r == "beat") {
+  emit "PASS: 6 Schedulable dispatch";
+} else {
+  emit "FAIL: 6 expected beat, got " + to_string(sched_r);
+}
+
+// ====================================================================
+// 7. Multiple channels on same agent
+// ====================================================================
+claw agent multi_chan_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet, analyze]
+  guards: [safety_chain]
+  channels: [greet, analyze]
+  system: "Multi channel."
+}
+
+let mc_names = multi_chan_bot.channel_names;
+if (len(mc_names) == 2) {
+  emit "PASS: 7 multiple channels on same agent";
+} else {
+  emit "FAIL: 7 expected 2 channel_names, got " + to_string(len(mc_names));
+}
+
+// ====================================================================
+// 8. Multiple channels defined
+// ====================================================================
+channel http_chan {
+  type: "http"
+}
+
+emit "PASS: 8 multiple channels defined";
+
+// ====================================================================
+// 9. Legacy agent backward compat
+// ====================================================================
+agent legacy_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+  guards: [safety_chain]
+  system: "I am a legacy agent."
+}
+
+let legacy_name = legacy_bot.name;
+if (legacy_name == "legacy_bot") {
+  emit "PASS: 9 legacy agent compat";
+} else {
+  emit "FAIL: 9 expected legacy_bot, got " + to_string(legacy_name);
+}
+
+// ====================================================================
+// 10. Phase 5 backward compat (struct + Monitorable)
+// ====================================================================
+struct Point {
+  x: number
+  y: number
+}
+
+let p = Point(10, 20);
+if (p.x == 10) {
+  if (p.y == 20) {
+    emit "PASS: 10 struct backward compat";
+  } else {
+    emit "FAIL: 10 expected y=20, got " + to_string(p.y);
+  }
+} else {
+  emit "FAIL: 10 expected x=10, got " + to_string(p.x);
+}

@@ -36,6 +36,8 @@
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/context_builder.hpp"
 #include "neamc/vm/compaction.hpp"
+#include "neamc/vm/channels/cli_channel.hpp"
+#include "neamc/vm/channels/http_channel.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/schema.hpp"
 #include "neamc/vm/value_hash.hpp"
@@ -1074,7 +1076,7 @@ void VirtualMachine::reset_for_reuse(ResetPolicy policy)
     return;
   }
 
-  // Complete: + globals, interned_strings, OOP tables, mcp_clients. ~5ms
+  // Complete: + globals, interned_strings, OOP tables, mcp_clients, channels, lanes. ~5ms
   globals_ = Table{};
   interned_strings_ = Table{};
   struct_defs_.clear();
@@ -1082,6 +1084,11 @@ void VirtualMachine::reset_for_reuse(ResetPolicy policy)
   trait_defs_.clear();
   sealed_defs_.clear();
   mcp_clients_.clear();
+  claw_agents_.clear();
+  forge_agents_.clear();
+  channel_registry_.clear();
+  channel_adapters_.clear();
+  if (lane_engine_) { lane_engine_->stop(); lane_engine_.reset(); }
   env_ = nullptr;
 
   // Re-register core natives and built-in traits after Complete reset
@@ -1732,6 +1739,28 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             stack_.push_back(Value::String(claw->compaction.c_str(), claw->compaction.size()));
           else if (key == "workspace")
             stack_.push_back(Value::String(claw->workspace.c_str(), claw->workspace.size()));
+          else if (key == "channel_names")
+          {
+            std::vector<Value> items;
+            for (const auto& ch : claw->channel_names)
+            {
+              items.push_back(Value::String(ch.c_str(), ch.size()));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
+          else if (key == "lanes")
+          {
+            std::vector<Value> items;
+            for (const auto& lane : claw->lanes)
+            {
+              std::unordered_map<std::string, Value> entries;
+              entries["name"] = Value::String(lane.name.c_str(), lane.name.size());
+              entries["concurrency"] = Value::Number(static_cast<double>(lane.concurrency));
+              entries["priority"] = Value::String(lane.priority.c_str(), lane.priority.size());
+              items.push_back(Value::Map(new_map(std::move(entries))));
+            }
+            stack_.push_back(Value::List(new_list(std::move(items))));
+          }
           else
             throw std::runtime_error("Property error: unknown claw agent property '" + key + "'");
         }
@@ -7966,6 +7995,17 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         if (env_value.is_string())
           extension.env = to_std_string(env_value);
         agent_extensions_[agent_name] = std::move(extension);
+
+        // v0.8 Phase 6: Initialize lane engine from claw agent lanes
+        if (!claw->lanes.empty())
+        {
+          if (!lane_engine_)
+            lane_engine_ = std::make_unique<LaneQueueEngine>();
+          for (const auto& lane : claw->lanes)
+          {
+            lane_engine_->configure_lane(lane.name, lane.concurrency, 0);
+          }
+        }
         break;
       }
       // v0.8: Forge agent — create typed ObjForgeAgent
@@ -8049,14 +8089,36 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         agent_extensions_[agent_name] = std::move(extension);
         break;
       }
-      // v0.8 Phase 1: Runtime operation stubs
+      // v0.8 Phase 6: Channel registration
       case OpCode::OP_DEFINE_CHANNEL:
       {
-        Value config = pop();  // config map
-        Value name = pop();    // channel name
-        // Stub: register channel (full impl in Phase 2)
-        (void)config;
-        (void)name;
+        Value config_value = pop();  // config map
+        Value name_value = pop();    // channel name
+        std::string ch_name = to_std_string(name_value);
+
+        // Create channel object
+        auto* channel = new_channel();
+        channel->name = as_string(name_value);
+        channel->config = config_value.is_map() ? as_map(config_value) : nullptr;
+
+        // Register in channel_registry_ and globals_
+        channel_registry_[ch_name] = channel;
+        globals_.set(channel->name, Value::ObjVal(reinterpret_cast<Obj*>(channel)));
+
+        // Create adapter based on "type" config field
+        std::string ch_type;
+        if (config_value.is_map())
+        {
+          ch_type = map_string_value(as_map(config_value), "type");
+        }
+        if (ch_type == "cli")
+        {
+          channel_adapters_[ch_name] = std::make_unique<CLIChannelAdapter>();
+        }
+        else if (ch_type == "http")
+        {
+          channel_adapters_[ch_name] = std::make_unique<HTTPChannelAdapter>();
+        }
         break;
       }
       case OpCode::OP_WORKSPACE_READ:
@@ -8323,5 +8385,55 @@ void VirtualMachine::emit_debug_event(DebugEventType type, std::string label, st
     return;
   }
   debug_hook_(DebugEvent{type, std::move(label), ip, std::move(payload)});
+}
+
+// v0.8 Phase 6: Public trait query + invocation methods
+bool VirtualMachine::has_agent_trait_impl(const std::string& type, const std::string& trait) const
+{
+  return has_trait_impl(impl_tables_, trait_defs_, type, trait);
+}
+
+Value VirtualMachine::invoke_trait_method(const std::string& type, const std::string& method,
+                                          Value self, const std::vector<Value>& args)
+{
+  std::lock_guard<std::mutex> lock(execution_mutex_);
+
+  // Look up method in impl_tables_
+  auto impl_it = impl_tables_.find(type);
+  if (impl_it != impl_tables_.end())
+  {
+    auto method_it = impl_it->second->methods.find(method);
+    if (method_it != impl_it->second->methods.end() && method_it->second.function)
+    {
+      std::vector<Value> call_args;
+      call_args.push_back(self);
+      for (const auto& a : args) call_args.push_back(a);
+      return call_function(method_it->second.function, call_args, false, "");
+    }
+  }
+
+  // Fall back to trait default methods
+  for (const auto& [tname, tdef] : trait_defs_)
+  {
+    for (const auto& m : tdef->methods)
+    {
+      if (m.name == method && m.default_impl)
+      {
+        std::vector<Value> call_args;
+        call_args.push_back(self);
+        for (const auto& a : args) call_args.push_back(a);
+        return call_function(m.default_impl, call_args, false, "");
+      }
+    }
+  }
+
+  throw std::runtime_error("Method '" + method + "' not found for type '" + type + "'");
+}
+
+ObjChannel* VirtualMachine::get_channel(const std::string& name) const
+{
+  auto it = channel_registry_.find(name);
+  if (it != channel_registry_.end()) return it->second;
+  return nullptr;
 }
 }  // namespace neamc::vm

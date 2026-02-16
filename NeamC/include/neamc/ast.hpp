@@ -973,6 +973,14 @@ struct ForgeAgentDecl
   std::optional<std::string> checkpoint;  // "git", "snapshot", "none"
 };
 
+// v0.8 Phase 6: Channel declaration
+struct ChannelDecl
+{
+  std::string name;
+  std::unordered_map<std::string, std::string> config;
+  SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -1009,7 +1017,7 @@ struct Statement
                    StructDecl, ImplBlock,
                    TraitDecl, SealedDecl, ExtendBlock,
                    PipelineDecl, DispatchDecl, ParallelDecl, LoopPatternDecl,
-                   ClawAgentDecl, ForgeAgentDecl>;
+                   ClawAgentDecl, ForgeAgentDecl, ChannelDecl>;
   SourceSpan span;
   Variant node;
 };

@@ -206,6 +206,7 @@ enum class TokenType
   // v0.8: Agent type keywords
   Claw,         // "claw" — prefix for claw agent
   Forge,        // "forge" — prefix for forge agent
+  Channel,      // "channel" — channel declaration
 
   Eof
 };
@@ -251,6 +252,7 @@ private:
   StmtPtr parse_agent(const Visibility& visibility);
   StmtPtr parse_claw_agent(const Visibility& visibility);
   StmtPtr parse_forge_agent(const Visibility& visibility);
+  StmtPtr parse_channel_decl();
   // v0.8 config helpers
   SessionConfig parse_session_config();
   LoopConfig parse_loop_config();
