@@ -817,6 +817,28 @@ std::string opcode_name(OpCode op)
       return "OP_DEFINE_CLAW_AGENT";
     case OpCode::OP_DEFINE_FORGE_AGENT:
       return "OP_DEFINE_FORGE_AGENT";
+    case OpCode::OP_DEFINE_CHANNEL:
+      return "OP_DEFINE_CHANNEL";
+    case OpCode::OP_WORKSPACE_READ:
+      return "OP_WORKSPACE_READ";
+    case OpCode::OP_WORKSPACE_WRITE:
+      return "OP_WORKSPACE_WRITE";
+    case OpCode::OP_MEMORY_SEARCH:
+      return "OP_MEMORY_SEARCH";
+    case OpCode::OP_SPAWN_AGENT:
+      return "OP_SPAWN_AGENT";
+    case OpCode::OP_FORGE_ITERATE:
+      return "OP_FORGE_ITERATE";
+    case OpCode::OP_VERIFY:
+      return "OP_VERIFY";
+    case OpCode::OP_COMPACT:
+      return "OP_COMPACT";
+    case OpCode::OP_FLUSH:
+      return "OP_FLUSH";
+    case OpCode::OP_SESSION_HISTORY:
+      return "OP_SESSION_HISTORY";
+    case OpCode::OP_FORGE_RUN:
+      return "OP_FORGE_RUN";
     default:
       return "OP_UNKNOWN";
   }
@@ -6733,6 +6755,95 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         // Store forge-specific config as metadata (loop, verify, checkpoint)
         // Full implementation in Phase 1
         agent_extensions_[to_std_string(name)] = std::move(extension);
+        break;
+      }
+      // v0.8 Phase 1: Runtime operation stubs
+      case OpCode::OP_DEFINE_CHANNEL:
+      {
+        Value config = pop();  // config map
+        Value name = pop();    // channel name
+        // Stub: register channel (full impl in Phase 2)
+        (void)config;
+        (void)name;
+        break;
+      }
+      case OpCode::OP_WORKSPACE_READ:
+      {
+        Value path = pop();
+        // Stub: return nil (full impl reads from workspace dir)
+        (void)path;
+        stack_.push_back(Value::Nil());
+        break;
+      }
+      case OpCode::OP_WORKSPACE_WRITE:
+      {
+        Value content = pop();
+        Value path = pop();
+        // Stub: return true (full impl writes to workspace dir)
+        (void)content;
+        (void)path;
+        stack_.push_back(Value::Bool(true));
+        break;
+      }
+      case OpCode::OP_MEMORY_SEARCH:
+      {
+        Value top_k = pop();
+        Value query = pop();
+        // Stub: return empty list (full impl queries semantic memory)
+        (void)top_k;
+        (void)query;
+        stack_.push_back(Value::List(new_list(std::vector<Value>{})));
+        break;
+      }
+      case OpCode::OP_SPAWN_AGENT:
+      {
+        Value config = pop();
+        Value agent_name = pop();
+        // Stub: return nil (full impl spawns sub-agent)
+        (void)config;
+        (void)agent_name;
+        stack_.push_back(Value::Nil());
+        break;
+      }
+      case OpCode::OP_FORGE_ITERATE:
+      {
+        // Stub: no-op (full impl advances forge loop iteration)
+        break;
+      }
+      case OpCode::OP_VERIFY:
+      {
+        // Stub: return nil (full impl calls forge verify callback)
+        stack_.push_back(Value::Nil());
+        break;
+      }
+      case OpCode::OP_COMPACT:
+      {
+        // Stub: no-op (full impl triggers claw session compaction)
+        break;
+      }
+      case OpCode::OP_FLUSH:
+      {
+        // Stub: no-op (full impl flushes claw memory to workspace)
+        break;
+      }
+      case OpCode::OP_SESSION_HISTORY:
+      {
+        Value limit = pop();
+        Value key = pop();
+        // Stub: return empty list (full impl queries session history)
+        (void)limit;
+        (void)key;
+        stack_.push_back(Value::List(new_list(std::vector<Value>{})));
+        break;
+      }
+      case OpCode::OP_FORGE_RUN:
+      {
+        Value config = pop();
+        Value agent_name = pop();
+        // Stub: return nil (full impl runs forge loop to completion)
+        (void)config;
+        (void)agent_name;
+        stack_.push_back(Value::Nil());
         break;
       }
       default:

@@ -103,7 +103,20 @@ enum class OpCode : uint8_t
 
   // v0.8: Agent type system
   OP_DEFINE_CLAW_AGENT,   // Stack: [name, provider, model, endpoint|nil, api_key_env|nil, temperature|nil, system|nil, skills_list, knowledge_list, guardchains_list, policy|nil, budget|nil, env|nil, workspace|nil, session_config_map, channels_list, lanes_list, semantic_memory|nil]
-  OP_DEFINE_FORGE_AGENT   // Stack: [name, provider, model, endpoint|nil, api_key_env|nil, temperature|nil, system|nil, skills_list, guardchains_list, policy|nil, budget|nil, env|nil, workspace|nil, loop_config_map, verify_fn, checkpoint|nil]
+  OP_DEFINE_FORGE_AGENT,  // Stack: [name, provider, model, endpoint|nil, api_key_env|nil, temperature|nil, system|nil, skills_list, guardchains_list, policy|nil, budget|nil, env|nil, workspace|nil, loop_config_map, verify_fn, checkpoint|nil]
+
+  // v0.8 Phase 1: Runtime operation opcodes
+  OP_DEFINE_CHANNEL,    // Stack: [name, config_map] -> []
+  OP_WORKSPACE_READ,    // Stack: [path] -> [content]
+  OP_WORKSPACE_WRITE,   // Stack: [path, content] -> [bool]
+  OP_MEMORY_SEARCH,     // Stack: [query, top_k] -> [results_list]
+  OP_SPAWN_AGENT,       // Stack: [agent_name, config_map] -> [result]
+  OP_FORGE_ITERATE,     // Start next forge loop iteration -> []
+  OP_VERIFY,            // Run forge verify callback -> [VerifyResult]
+  OP_COMPACT,           // Trigger claw session compaction -> []
+  OP_FLUSH,             // Flush claw memory to workspace -> []
+  OP_SESSION_HISTORY,   // Stack: [key, limit] -> [history_list]
+  OP_FORGE_RUN,         // Stack: [agent_name, config_map] -> [LoopOutcome]
 };
 
 class Bytecode

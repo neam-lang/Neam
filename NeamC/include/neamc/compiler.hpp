@@ -38,6 +38,14 @@ private:
   void emit_expression(const Expression& expr);
   void emit_block(const BlockStmt& block);
 
+  // v0.8 Phase 1: Agent type tracking for trait validation
+  enum class AgentKind { Stateless, Claw, Forge };
+  std::unordered_map<std::string, AgentKind> agent_types_;
+
+  bool is_neamclaw_trait(const std::string& name) const;
+  void validate_neamclaw_trait_compat(const std::string& trait, const std::string& type);
+  void compiler_warning(const std::string& message) const;
+
   vm::Chunk chunk_{};
   std::vector<Local> locals_{};
   int scope_depth_ = 0;
