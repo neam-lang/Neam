@@ -15,8 +15,12 @@
 
 #include <memory>
 
+#include <mutex>
+
 #include "neamc/security/tool_policy.hpp"
 #include "neamc/vm/bytecode.hpp"
+#include "neamc/vm/channel_adapter.hpp"
+#include "neamc/vm/lane_queue.hpp"
 #include "neamc/vm/mcp_client.hpp"
 #include "neamc/vm/memory.hpp"
 #include "neamc/vm/native.hpp"
@@ -91,6 +95,15 @@ public:
   Table& strings() { return interned_strings_; }
   ObjEnv* env() const { return env_; }
   std::unordered_map<std::string, ObjKnowledge*>& knowledge_bases() { return knowledge_bases_; }
+
+  // v0.8 Phase 6: Channel + Lane + Trait public API
+  bool has_agent_trait_impl(const std::string& type, const std::string& trait) const;
+  Value invoke_trait_method(const std::string& type, const std::string& method, Value self,
+                            const std::vector<Value>& args);
+  ObjChannel* get_channel(const std::string& name) const;
+  const std::unordered_map<std::string, ObjClawAgent*>& claw_agents() const { return claw_agents_; }
+  LaneQueueEngine* lane_engine() { return lane_engine_.get(); }
+  std::mutex& execution_mutex() { return execution_mutex_; }
 
 private:
   struct BudgetDefinition
@@ -210,6 +223,11 @@ private:
   // v0.8: Agent type runtime registries
   std::unordered_map<std::string, ObjClawAgent*> claw_agents_{};
   std::unordered_map<std::string, ObjForgeAgent*> forge_agents_{};
+  // v0.8 Phase 6: Channels, lanes, execution mutex
+  std::unordered_map<std::string, ObjChannel*> channel_registry_{};
+  std::unordered_map<std::string, std::unique_ptr<ChannelAdapter>> channel_adapters_{};
+  std::unique_ptr<LaneQueueEngine> lane_engine_;
+  std::mutex execution_mutex_;
   ObjEnv* env_{nullptr};
   Table globals_{};
   Table interned_strings_{};

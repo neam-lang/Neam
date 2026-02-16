@@ -221,6 +221,10 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/context_builder.cpp
     NeamC/src/vm/compaction.cpp
     NeamC/src/vm/forge_loop.cpp
+    NeamC/src/vm/lane_queue.cpp
+    NeamC/src/vm/channels/cli_channel.cpp
+    NeamC/src/vm/channels/http_channel.cpp
+    NeamC/src/vm/schedulable_runtime.cpp
     NeamC/src/vm/trace.cpp
     NeamC/src/runtime/executor.cpp
     NeamC/src/types/type_repr.cpp

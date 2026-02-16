@@ -708,7 +708,8 @@ void Parser::tokenize()
       {"willSet", TokenType::WillSet},
       {"didSet", TokenType::DidSet},
       {"claw", TokenType::Claw},
-      {"forge", TokenType::Forge}};
+      {"forge", TokenType::Forge},
+      {"channel", TokenType::Channel}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -1101,6 +1102,10 @@ StmtPtr Parser::parse_declaration()
   {
     if (!match(TokenType::Agent)) { error("Expected 'agent' after 'forge'"); }
     return parse_forge_agent(has_visibility ? visibility : Visibility{});
+  }
+  if (match(TokenType::Channel))
+  {
+    return parse_channel_decl();
   }
   if (match(TokenType::Agent))
   {
@@ -2944,6 +2949,61 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
   return stmt;
 }
 
+// v0.8 Phase 6: Parse channel declaration
+// Syntax: channel my_channel { type: "cli", prompt: "> " }
+StmtPtr Parser::parse_channel_decl()
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected channel name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after channel name");
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    // key: value pairs where key is identifier and value is string or number
+    if (!match(TokenType::Identifier) && !match(TokenType::Type))
+    {
+      error("Expected config key in channel declaration");
+    }
+    const auto key = previous().lexeme;
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after channel config key");
+    }
+    if (match(TokenType::String))
+    {
+      config[key] = previous().lexeme;
+    }
+    else if (match(TokenType::Number))
+    {
+      config[key] = previous().lexeme;
+    }
+    else
+    {
+      error("Expected string or number value for channel config");
+    }
+    // Allow optional comma between entries
+    match(TokenType::Comma);
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Expected '}' after channel config");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ChannelDecl{name, std::move(config), span};
+  return stmt;
+}
+
 StmtPtr Parser::parse_budget(const Visibility& visibility)
 {
   SourceSpan span = span_from_token(previous());
@@ -4460,7 +4520,8 @@ SkillParam Parser::parse_skill_param()
       !match(TokenType::Match) && !match(TokenType::Extend) &&
       !match(TokenType::Pipeline) && !match(TokenType::Dispatch) &&
       !match(TokenType::Parallel) && !match(TokenType::LoopPattern) &&
-      !match(TokenType::Claw) && !match(TokenType::Forge))
+      !match(TokenType::Claw) && !match(TokenType::Forge) &&
+      !match(TokenType::Channel))
   {
     error("Expected param name");
   }

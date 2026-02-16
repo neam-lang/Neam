@@ -216,6 +216,12 @@ ObjForgeAgent* new_forge_agent()
   return forge;
 }
 
+ObjChannel* new_channel()
+{
+  auto* ch = allocate_object<ObjChannel>(ObjType::OBJ_CHANNEL);
+  return ch;
+}
+
 ObjLoopContext* new_loop_context()
 {
   auto* ctx = allocate_object<ObjLoopContext>(ObjType::OBJ_LOOP_CONTEXT);

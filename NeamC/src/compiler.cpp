@@ -1541,6 +1541,25 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_op(OpCode::OP_DEFINE_FORGE_AGENT);
           agent_types_[node.name] = AgentKind::Forge;
         }
+        // v0.8 Phase 6: Channel declaration
+        else if constexpr (std::is_same_v<T, ChannelDecl>)
+        {
+          // Push name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // Push config as map
+          std::size_t count = 0;
+          for (const auto& [key, value] : node.config)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, key)));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, value)));
+            ++count;
+          }
+          emit_build_map(chunk_, count);
+          chunk_.write_op(OpCode::OP_DEFINE_CHANNEL);
+        }
         else if constexpr (std::is_same_v<T, GrantStmt>)
         {
           chunk_.write_op(OpCode::OP_CONST);
