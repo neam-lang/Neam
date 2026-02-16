@@ -37,6 +37,12 @@ struct ObjImplTable;
 struct ObjTraitDef;
 struct ObjSealedDef;
 struct ObjVariant;
+// v0.8
+struct ObjClawAgent;
+struct ObjForgeAgent;
+struct ObjChannel;
+struct ObjWorkspace;
+struct ObjLoopContext;
 
 enum class ValueType
 {
@@ -86,6 +92,12 @@ struct Value
   static Value TraitDef(ObjTraitDef* def);
   static Value SealedDef(ObjSealedDef* def);
   static Value Variant(ObjVariant* variant);
+  // v0.8
+  static Value ClawAgent(ObjClawAgent* claw);
+  static Value ForgeAgent(ObjForgeAgent* forge);
+  static Value Channel(ObjChannel* channel);
+  static Value Workspace(ObjWorkspace* workspace);
+  static Value LoopContext(ObjLoopContext* loop_ctx);
 
   bool is_nil() const { return type == ValueType::Nil; }
   bool is_bool() const { return type == ValueType::Bool; }
@@ -116,6 +128,12 @@ struct Value
   bool is_trait_def() const;
   bool is_sealed_def() const;
   bool is_variant() const;
+  // v0.8
+  bool is_claw_agent() const;
+  bool is_forge_agent() const;
+  bool is_channel() const;
+  bool is_workspace() const;
+  bool is_loop_context() const;
 
   bool as_bool() const;
   double as_number() const;
@@ -149,5 +167,11 @@ ObjImplTable* as_impl_table(const Value& value);
 ObjTraitDef* as_trait_def(const Value& value);
 ObjSealedDef* as_sealed_def(const Value& value);
 ObjVariant* as_variant(const Value& value);
+// v0.8
+ObjClawAgent* as_claw_agent(const Value& value);
+ObjForgeAgent* as_forge_agent(const Value& value);
+ObjChannel* as_channel(const Value& value);
+ObjWorkspace* as_workspace(const Value& value);
+ObjLoopContext* as_loop_context(const Value& value);
 
 }  // namespace neamc::vm

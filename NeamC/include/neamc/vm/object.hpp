@@ -60,7 +60,13 @@ enum class ObjType
   // v0.7.1 Phase 2: trait + sealed
   OBJ_TRAIT_DEF,
   OBJ_SEALED_DEF,
-  OBJ_VARIANT
+  OBJ_VARIANT,
+  // v0.8: Agent type system
+  OBJ_CLAW_AGENT,
+  OBJ_FORGE_AGENT,
+  OBJ_CHANNEL,
+  OBJ_WORKSPACE,
+  OBJ_LOOP_CONTEXT
 };
 
 struct ObjString : Obj
@@ -267,6 +273,15 @@ struct ObjVariant;
 ObjTraitDef* new_trait_def(const std::string& name);
 ObjSealedDef* new_sealed_def(const std::string& name);
 ObjVariant* new_variant(ObjSealedDef* sealed_def, uint16_t tag, std::vector<Value> field_values);
+
+// v0.8: Claw/Forge agent type system — forward declares (definitions in claw_agent_type.hpp / forge_agent_type.hpp)
+struct ObjClawAgent;
+struct ObjForgeAgent;
+struct ObjChannel;
+struct ObjWorkspace;
+struct ObjLoopContext;
+ObjClawAgent* new_claw_agent();
+ObjForgeAgent* new_forge_agent();
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

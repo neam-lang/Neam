@@ -30,6 +30,8 @@
 #include "neamc/vm/external_skill.hpp"
 #include "neamc/vm/struct_type.hpp"
 #include "neamc/vm/sealed_type.hpp"
+#include "neamc/vm/claw_agent_type.hpp"
+#include "neamc/vm/forge_agent_type.hpp"
 #include "neamc/vm/knowledge.hpp"
 #include "neamc/vm/schema.hpp"
 #include "neamc/vm/value_hash.hpp"
@@ -95,6 +97,8 @@ std::string value_type_name(const Value& value)
   if (value.is_option()) return "option";
   if (value.is_struct()) return "struct";
   if (value.is_struct_def()) return "struct_def";
+  if (value.is_claw_agent()) return "claw_agent";
+  if (value.is_forge_agent()) return "forge_agent";
   return "object";
 }
 
@@ -1577,6 +1581,54 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             throw std::runtime_error(
                 "Property error: unknown agent property '" + key + "'");
           }
+        }
+        else if (is_obj_type(receiver, ObjType::OBJ_CLAW_AGENT))
+        {
+          auto* claw = as_claw_agent(receiver);
+          if (key == "context")
+            stack_.push_back(Value::Context(claw->context));
+          else if (key == "provider" && claw->provider)
+            stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(claw->provider)));
+          else if (key == "model" && claw->model)
+            stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(claw->model)));
+          else if (key == "name" && claw->name)
+            stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(claw->name)));
+          else if (key == "skills" && claw->skills)
+            stack_.push_back(Value::List(claw->skills));
+          else if (key == "max_history_turns")
+            stack_.push_back(Value::Number(static_cast<double>(claw->max_history_turns)));
+          else if (key == "idle_reset_minutes")
+            stack_.push_back(Value::Number(static_cast<double>(claw->idle_reset_minutes)));
+          else if (key == "compaction")
+            stack_.push_back(Value::String(claw->compaction.c_str(), claw->compaction.size()));
+          else if (key == "workspace")
+            stack_.push_back(Value::String(claw->workspace.c_str(), claw->workspace.size()));
+          else
+            throw std::runtime_error("Property error: unknown claw agent property '" + key + "'");
+        }
+        else if (is_obj_type(receiver, ObjType::OBJ_FORGE_AGENT))
+        {
+          auto* forge = as_forge_agent(receiver);
+          if (key == "context")
+            stack_.push_back(Value::Context(forge->context));
+          else if (key == "provider" && forge->provider)
+            stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(forge->provider)));
+          else if (key == "model" && forge->model)
+            stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(forge->model)));
+          else if (key == "name" && forge->name)
+            stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(forge->name)));
+          else if (key == "skills" && forge->skills)
+            stack_.push_back(Value::List(forge->skills));
+          else if (key == "max_iterations")
+            stack_.push_back(Value::Number(static_cast<double>(forge->loop_config.max_iterations)));
+          else if (key == "max_cost")
+            stack_.push_back(Value::Number(forge->loop_config.max_cost));
+          else if (key == "checkpoint")
+            stack_.push_back(Value::String(forge->checkpoint.c_str(), forge->checkpoint.size()));
+          else if (key == "workspace")
+            stack_.push_back(Value::String(forge->workspace.c_str(), forge->workspace.size()));
+          else
+            throw std::runtime_error("Property error: unknown forge agent property '" + key + "'");
         }
         // v0.7.0: Tuple positional access (.0, .1, ...)
         else if (is_obj_type(receiver, ObjType::OBJ_TUPLE))
@@ -3293,6 +3345,176 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           else
           {
             throw std::runtime_error("Unknown agent method");
+          }
+        }
+        else if (is_obj_type(receiver, ObjType::OBJ_CLAW_AGENT))
+        {
+          auto* claw = as_claw_agent(receiver);
+          if (method == "ask")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("ClawAgent.ask expects 1 argument");
+            }
+            std::string query = to_std_string(args[0]);
+            // Stub: delegate to base agent .ask() flow
+            // Full session-aware implementation in Phase 3
+            if (!claw->context)
+            {
+              claw->context = new_context();
+            }
+            claw->context->history.push_back({"user", query});
+
+            const std::string claw_name(claw->name->chars, claw->name->length);
+
+            // Build ProviderConfig
+            llm::ProviderConfig config;
+            config.model = to_std_string(claw->model);
+            config.endpoint = to_std_string(claw->endpoint);
+            config.api_key = to_std_string(claw->api_key_env);
+            config.temperature = claw->temperature;
+            config.default_host =
+                resolve_env_config(*this, "ollama_host", "NEAM_OLLAMA_HOST",
+                                   "http://localhost:11434");
+            std::string provider_name = to_std_string(claw->provider);
+
+            // Resolve api_key env var
+            if (!config.api_key.empty())
+            {
+              if (const char* env_val = std::getenv(config.api_key.c_str()))
+                config.api_key = env_val;
+              else
+                config.api_key.clear();
+            }
+
+            auto provider = llm::create_provider(provider_name, config);
+
+            // Build messages
+            std::vector<llm::Message> messages;
+            std::string system_str = to_std_string(claw->system);
+            if (!system_str.empty())
+              messages.push_back({"system", system_str});
+            for (const auto& msg : claw->context->history)
+            {
+              messages.push_back({msg.role, msg.content});
+            }
+
+            std::string reply = provider->chat(messages);
+            claw->context->history.push_back({"assistant", reply});
+            stack_.push_back(Value::String(reply.c_str(), reply.size()));
+          }
+          else if (method == "reset")
+          {
+            if (claw->context)
+            {
+              claw->context->history.clear();
+            }
+            claw->sessions.clear();
+            stack_.push_back(Value::Nil());
+          }
+          else
+          {
+            // Check impl_tables_ for trait methods on this claw agent
+            std::string claw_name(claw->name->chars, claw->name->length);
+            auto table_it = impl_tables_.find(claw_name);
+            if (table_it != impl_tables_.end())
+            {
+              auto method_it = table_it->second->methods.find(method);
+              if (method_it != table_it->second->methods.end())
+              {
+                auto* fn = method_it->second.function;
+                std::size_t base_slot = stack_.size();
+                stack_.push_back(receiver);  // self
+                for (std::size_t i = 0; i < arg_count; ++i)
+                {
+                  stack_.push_back(args[i]);
+                }
+                frames_.push_back(CallFrame{&fn->chunk, fn, 0, base_slot, false, {}});
+              }
+              else
+              {
+                throw std::runtime_error(
+                    "Method '" + method + "' not found on claw agent '" + claw_name + "'");
+              }
+            }
+            else
+            {
+              throw std::runtime_error(
+                  "Unknown method '" + method + "' on claw agent '" + claw_name + "'");
+            }
+          }
+        }
+        else if (is_obj_type(receiver, ObjType::OBJ_FORGE_AGENT))
+        {
+          auto* forge = as_forge_agent(receiver);
+          if (method == "run")
+          {
+            // Stub: return nil (full forge loop in Phase 4)
+            // In Phase 4 this will implement the iterative build-verify loop
+            stack_.push_back(Value::Nil());
+          }
+          else if (method == "ask")
+          {
+            if (arg_count != 1)
+            {
+              throw std::runtime_error("ForgeAgent.ask expects 1 argument");
+            }
+            std::string query = to_std_string(args[0]);
+            if (!forge->context)
+            {
+              forge->context = new_context();
+            }
+            forge->context->history.push_back({"user", query});
+
+            // Build ProviderConfig
+            llm::ProviderConfig config;
+            config.model = to_std_string(forge->model);
+            config.endpoint = to_std_string(forge->endpoint);
+            config.api_key = to_std_string(forge->api_key_env);
+            config.temperature = forge->temperature;
+            config.default_host =
+                resolve_env_config(*this, "ollama_host", "NEAM_OLLAMA_HOST",
+                                   "http://localhost:11434");
+            std::string provider_name = to_std_string(forge->provider);
+
+            // Resolve api_key env var
+            if (!config.api_key.empty())
+            {
+              if (const char* env_val = std::getenv(config.api_key.c_str()))
+                config.api_key = env_val;
+              else
+                config.api_key.clear();
+            }
+
+            auto provider = llm::create_provider(provider_name, config);
+
+            // Build messages
+            std::vector<llm::Message> messages;
+            std::string system_str = to_std_string(forge->system);
+            if (!system_str.empty())
+              messages.push_back({"system", system_str});
+            for (const auto& msg : forge->context->history)
+            {
+              messages.push_back({msg.role, msg.content});
+            }
+
+            std::string reply = provider->chat(messages);
+            forge->context->history.push_back({"assistant", reply});
+            stack_.push_back(Value::String(reply.c_str(), reply.size()));
+          }
+          else if (method == "reset")
+          {
+            if (forge->context)
+            {
+              forge->context->history.clear();
+            }
+            stack_.push_back(Value::Nil());
+          }
+          else
+          {
+            std::string forge_name(forge->name->chars, forge->name->length);
+            throw std::runtime_error(
+                "Unknown method '" + method + "' on forge agent '" + forge_name + "'");
           }
         }
         else if (is_obj_type(receiver, ObjType::OBJ_CONTEXT))
@@ -6651,7 +6873,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         }
         break;
       }
-      // v0.8: Claw agent — pop all stack values and register as agent
+      // v0.8: Claw agent — create typed ObjClawAgent
       case OpCode::OP_DEFINE_CLAW_AGENT:
       {
         Value semantic_memory_value = pop();  // semantic_memory map or nil
@@ -6673,21 +6895,81 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value provider_value = pop();
         Value name_value = pop();
 
-        // Register as a standard agent (reuse existing infrastructure)
-        auto* name = as_string(name_value);
-        auto* provider = as_string(provider_value);
-        auto* model = as_string(model_value);
-        ObjString* endpoint = endpoint_value.is_nil() ? nullptr : as_string(endpoint_value);
-        ObjString* api_key_env = api_key_env_value.is_nil() ? nullptr : as_string(api_key_env_value);
-        ObjString* system = system_value.is_nil() ? nullptr : as_string(system_value);
-        double temperature = temperature_value.is_nil() ? 0.0 : temperature_value.as_number();
-        auto* skills = as_list(skills_value);
-        auto* connected_knowledge = as_list(knowledge_value);
-        auto* context = new_context();
-        auto* agent = new_agent(name, provider, model, endpoint, api_key_env, system,
-                                temperature, skills, connected_knowledge, context);
-        globals_.set(name, Value::Agent(agent));
+        // Create typed claw agent object
+        auto* claw = new_claw_agent();
+        claw->name = as_string(name_value);
+        claw->provider = as_string(provider_value);
+        claw->model = as_string(model_value);
+        claw->endpoint = endpoint_value.is_nil() ? nullptr : as_string(endpoint_value);
+        claw->api_key_env = api_key_env_value.is_nil() ? nullptr : as_string(api_key_env_value);
+        claw->system = system_value.is_nil() ? nullptr : as_string(system_value);
+        claw->temperature = temperature_value.is_nil() ? 0.0 : temperature_value.as_number();
+        claw->skills = as_list(skills_value);
+        claw->connected_knowledge = as_list(knowledge_value);
+        claw->context = new_context();
 
+        // Parse session config
+        if (session_value.is_map())
+        {
+          auto* session_map = as_map(session_value);
+          claw->idle_reset_minutes = static_cast<int>(map_number_value(session_map, "idle_reset_minutes"));
+          if (claw->idle_reset_minutes == 0) claw->idle_reset_minutes = 60;
+          claw->daily_reset_hour = static_cast<int>(map_number_value(session_map, "daily_reset_hour"));
+          if (claw->daily_reset_hour == 0) claw->daily_reset_hour = 4;
+          int mht = static_cast<int>(map_number_value(session_map, "max_history_turns"));
+          claw->max_history_turns = (mht > 0) ? mht : 100;
+          std::string comp = map_string_value(session_map, "compaction");
+          if (!comp.empty()) claw->compaction = comp;
+        }
+
+        // Parse channels list
+        if (channels_value.is_list())
+        {
+          for (const auto& ch : as_list(channels_value)->items)
+          {
+            if (ch.is_string())
+              claw->channel_names.push_back(to_std_string(ch));
+          }
+        }
+
+        // Parse lanes list
+        if (lanes_value.is_list())
+        {
+          for (const auto& lane_val : as_list(lanes_value)->items)
+          {
+            if (lane_val.is_map())
+            {
+              auto* lane_map = as_map(lane_val);
+              LaneConfig lc;
+              lc.name = map_string_value(lane_map, "name");
+              int conc = static_cast<int>(map_number_value(lane_map, "concurrency"));
+              if (conc > 0) lc.concurrency = conc;
+              std::string prio = map_string_value(lane_map, "priority");
+              if (!prio.empty()) lc.priority = prio;
+              claw->lanes.push_back(std::move(lc));
+            }
+          }
+        }
+
+        // Parse semantic memory config
+        if (semantic_memory_value.is_map())
+        {
+          auto* mem_map = as_map(semantic_memory_value);
+          claw->memory_backend = map_string_value(mem_map, "backend");
+          claw->memory_search = map_string_value(mem_map, "search");
+          claw->flush_on_compact = map_bool_value(mem_map, "flush_on_compact", false);
+        }
+
+        // Workspace
+        if (workspace_value.is_string())
+          claw->workspace = to_std_string(workspace_value);
+
+        // Store in globals and registry
+        std::string agent_name(claw->name->chars, claw->name->length);
+        globals_.set(claw->name, Value::ClawAgent(claw));
+        claw_agents_[agent_name] = claw;
+
+        // Also register AgentExtension for backward compat (guards, policy, budget, env)
         AgentExtension extension;
         extension.agent_type = "claw";
         for (const auto& guard : as_list(guardchains_value)->items)
@@ -6700,12 +6982,10 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           extension.budget = to_std_string(budget_value);
         if (env_value.is_string())
           extension.env = to_std_string(env_value);
-        // Store claw-specific config as metadata (session, channels, lanes, semantic_memory)
-        // Full implementation in Phase 1
-        agent_extensions_[to_std_string(name)] = std::move(extension);
+        agent_extensions_[agent_name] = std::move(extension);
         break;
       }
-      // v0.8: Forge agent — pop all stack values and register as agent
+      // v0.8: Forge agent — create typed ObjForgeAgent
       case OpCode::OP_DEFINE_FORGE_AGENT:
       {
         Value checkpoint_value = pop();  // checkpoint string or nil
@@ -6725,21 +7005,52 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         Value provider_value = pop();
         Value name_value = pop();
 
-        // Register as a standard agent
-        auto* name = as_string(name_value);
-        auto* provider = as_string(provider_value);
-        auto* model = as_string(model_value);
-        ObjString* endpoint = endpoint_value.is_nil() ? nullptr : as_string(endpoint_value);
-        ObjString* api_key_env = api_key_env_value.is_nil() ? nullptr : as_string(api_key_env_value);
-        ObjString* system = system_value.is_nil() ? nullptr : as_string(system_value);
-        double temperature = temperature_value.is_nil() ? 0.0 : temperature_value.as_number();
-        auto* skills = as_list(skills_value);
-        auto* empty_knowledge = new_list(std::vector<Value>{});
-        auto* context = new_context();
-        auto* agent = new_agent(name, provider, model, endpoint, api_key_env, system,
-                                temperature, skills, empty_knowledge, context);
-        globals_.set(name, Value::Agent(agent));
+        // Create typed forge agent object
+        auto* forge = new_forge_agent();
+        forge->name = as_string(name_value);
+        forge->provider = as_string(provider_value);
+        forge->model = as_string(model_value);
+        forge->endpoint = endpoint_value.is_nil() ? nullptr : as_string(endpoint_value);
+        forge->api_key_env = api_key_env_value.is_nil() ? nullptr : as_string(api_key_env_value);
+        forge->system = system_value.is_nil() ? nullptr : as_string(system_value);
+        forge->temperature = temperature_value.is_nil() ? 0.0 : temperature_value.as_number();
+        forge->skills = as_list(skills_value);
+        forge->context = new_context();
 
+        // Parse loop config
+        if (loop_value.is_map())
+        {
+          auto* loop_map = as_map(loop_value);
+          int mi = static_cast<int>(map_number_value(loop_map, "max_iterations"));
+          if (mi > 0) forge->loop_config.max_iterations = mi;
+          double mc = map_number_value(loop_map, "max_cost");
+          if (mc > 0.0) forge->loop_config.max_cost = mc;
+          int mt = static_cast<int>(map_number_value(loop_map, "max_tokens"));
+          if (mt > 0) forge->loop_config.max_tokens = mt;
+          forge->loop_config.prompt_file = map_string_value(loop_map, "prompt_file");
+          forge->loop_config.plan_file = map_string_value(loop_map, "plan_file");
+          forge->loop_config.progress_file = map_string_value(loop_map, "progress_file");
+          forge->loop_config.learnings_file = map_string_value(loop_map, "learnings_file");
+        }
+
+        // Verify function
+        if (verify_value.is_function())
+          forge->verify_fn = as_function(verify_value);
+
+        // Checkpoint
+        if (checkpoint_value.is_string())
+          forge->checkpoint = to_std_string(checkpoint_value);
+
+        // Workspace
+        if (workspace_value.is_string())
+          forge->workspace = to_std_string(workspace_value);
+
+        // Store in globals and registry
+        std::string agent_name(forge->name->chars, forge->name->length);
+        globals_.set(forge->name, Value::ForgeAgent(forge));
+        forge_agents_[agent_name] = forge;
+
+        // Also register AgentExtension for backward compat
         AgentExtension extension;
         extension.agent_type = "forge";
         for (const auto& guard : as_list(guardchains_value)->items)
@@ -6752,9 +7063,7 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           extension.budget = to_std_string(budget_value);
         if (env_value.is_string())
           extension.env = to_std_string(env_value);
-        // Store forge-specific config as metadata (loop, verify, checkpoint)
-        // Full implementation in Phase 1
-        agent_extensions_[to_std_string(name)] = std::move(extension);
+        agent_extensions_[agent_name] = std::move(extension);
         break;
       }
       // v0.8 Phase 1: Runtime operation stubs
