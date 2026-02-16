@@ -33,6 +33,9 @@
 #include "neamc/vm/async/executor.hpp"
 #include "neamc/vm/runtime_type.hpp"
 #include "neamc/vm/vm.hpp"
+#include "neamc/vm/memory_index.hpp"
+#include "neamc/vm/session_manager.hpp"
+#include "neamc/vm/claw_agent_type.hpp"
 
 namespace neamc::vm
 {
@@ -1680,6 +1683,142 @@ Value len_native(VirtualMachine& /*vm*/, int argCount, Value* args)
   }
   throw std::runtime_error("len() not supported for " + std::string(val.is_nil() ? "nil" : "this type"));
 }
+
+// v0.8 Phase 7: Workspace and memory native functions
+
+Value workspace_read_native(VirtualMachine& vm, int argCount, Value* args)
+{
+  if (argCount != 1) throw std::runtime_error("workspace_read() expects 1 argument");
+  std::string rel_path = to_std_string(args[0]);
+
+  // Reject path traversal
+  if (rel_path.find("..") != std::string::npos) return Value::Nil();
+
+  // Resolve via first claw agent workspace
+  const auto& claw_agents = vm.claw_agents();
+  if (claw_agents.empty()) return Value::Nil();
+  auto* claw = claw_agents.begin()->second;
+  if (claw->workspace.empty()) return Value::Nil();
+
+  fs::path full = fs::path(claw->workspace) / rel_path;
+  fs::path canonical_ws = fs::weakly_canonical(fs::path(claw->workspace));
+  fs::path canonical_full = fs::weakly_canonical(full);
+  if (canonical_full.string().rfind(canonical_ws.string(), 0) != 0) return Value::Nil();
+
+  std::ifstream in(full);
+  if (!in.is_open()) return Value::Nil();
+  std::string content((std::istreambuf_iterator<char>(in)),
+                      std::istreambuf_iterator<char>());
+  return Value::String(content.c_str(), content.size());
+}
+
+Value workspace_write_native(VirtualMachine& vm, int argCount, Value* args)
+{
+  if (argCount != 2) throw std::runtime_error("workspace_write() expects 2 arguments");
+  std::string rel_path = to_std_string(args[0]);
+  std::string content = to_std_string(args[1]);
+
+  if (rel_path.find("..") != std::string::npos) return Value::Bool(false);
+
+  const auto& claw_agents = vm.claw_agents();
+  if (claw_agents.empty()) return Value::Bool(false);
+  auto* claw = claw_agents.begin()->second;
+  if (claw->workspace.empty()) return Value::Bool(false);
+
+  fs::path full = fs::path(claw->workspace) / rel_path;
+  fs::path canonical_ws = fs::weakly_canonical(fs::path(claw->workspace));
+  fs::path canonical_full = fs::weakly_canonical(full);
+  if (canonical_full.string().rfind(canonical_ws.string(), 0) != 0) return Value::Bool(false);
+
+  if (full.has_parent_path()) fs::create_directories(full.parent_path());
+  std::ofstream out(full, std::ios::trunc);
+  if (!out.is_open()) return Value::Bool(false);
+  out << content;
+  return Value::Bool(true);
+}
+
+Value workspace_append_native(VirtualMachine& vm, int argCount, Value* args)
+{
+  if (argCount != 2) throw std::runtime_error("workspace_append() expects 2 arguments");
+  std::string rel_path = to_std_string(args[0]);
+  std::string content = to_std_string(args[1]);
+
+  if (rel_path.find("..") != std::string::npos) return Value::Bool(false);
+
+  const auto& claw_agents = vm.claw_agents();
+  if (claw_agents.empty()) return Value::Bool(false);
+  auto* claw = claw_agents.begin()->second;
+  if (claw->workspace.empty()) return Value::Bool(false);
+
+  fs::path full = fs::path(claw->workspace) / rel_path;
+  fs::path canonical_ws = fs::weakly_canonical(fs::path(claw->workspace));
+  fs::path canonical_full = fs::weakly_canonical(full);
+  if (canonical_full.string().rfind(canonical_ws.string(), 0) != 0) return Value::Bool(false);
+
+  if (full.has_parent_path()) fs::create_directories(full.parent_path());
+  std::ofstream out(full, std::ios::app);
+  if (!out.is_open()) return Value::Bool(false);
+  out << content;
+  return Value::Bool(true);
+}
+
+Value memory_search_native(VirtualMachine& vm, int argCount, Value* args)
+{
+  if (argCount < 1) throw std::runtime_error("memory_search() expects at least 1 argument");
+  std::string query = to_std_string(args[0]);
+  std::size_t top_k = 5;
+  if (argCount >= 2 && args[1].is_number())
+  {
+    top_k = static_cast<std::size_t>(args[1].as_number());
+  }
+
+  auto results = vm.search_memory(query, top_k);
+  std::vector<Value> result_list;
+  for (const auto& r : results)
+  {
+    std::unordered_map<std::string, Value> m;
+    m["file_path"] = Value::String(r.file_path.c_str(), r.file_path.size());
+    m["chunk"] = Value::String(r.chunk.c_str(), r.chunk.size());
+    m["score"] = Value::Number(static_cast<double>(r.score));
+    result_list.push_back(Value::Map(new_map(std::move(m))));
+  }
+  return Value::List(new_list(std::move(result_list)));
+}
+
+Value session_history_native(VirtualMachine& vm, int argCount, Value* args)
+{
+  const auto& claw_agents = vm.claw_agents();
+  if (claw_agents.empty())
+  {
+    return Value::List(new_list(std::vector<Value>{}));
+  }
+  auto* claw = claw_agents.begin()->second;
+
+  std::string session_key = "default";
+  int limit = -1;
+  if (argCount >= 1 && args[0].is_string())
+  {
+    session_key = to_std_string(args[0]);
+  }
+  if (argCount >= 2 && args[1].is_number())
+  {
+    limit = static_cast<int>(args[1].as_number());
+  }
+
+  SessionManager sm;
+  auto history = sm.load_history(claw, session_key, limit);
+
+  std::vector<Value> result_list;
+  for (const auto& [role, content] : history)
+  {
+    std::unordered_map<std::string, Value> m;
+    m["role"] = Value::String(role.c_str(), role.size());
+    m["content"] = Value::String(content.c_str(), content.size());
+    result_list.push_back(Value::Map(new_map(std::move(m))));
+  }
+  return Value::List(new_list(std::move(result_list)));
+}
+
 }  // namespace
 
 void register_core_natives(VirtualMachine& vm)
@@ -1763,5 +1902,11 @@ void register_core_natives(VirtualMachine& vm)
   auto* none_name = copy_string("None", 4);
   vm.globals().set(none_name, Value::Option(new_option(false, Value::Nil())));
   vm.define_native("len", 1, len_native);
+  // v0.8 Phase 7: Workspace and memory natives
+  vm.define_native("workspace_read", 1, workspace_read_native);
+  vm.define_native("workspace_write", 2, workspace_write_native);
+  vm.define_native("workspace_append", 2, workspace_append_native);
+  vm.define_native("memory_search", -1, memory_search_native);
+  vm.define_native("session_history", -1, session_history_native);
 }
 }  // namespace neamc::vm

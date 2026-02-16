@@ -1,0 +1,142 @@
+// v0.8 Phase 7: Memory & Search Test Suite
+// Tests workspace_read/write/append, memory_search, session_history
+
+// === Skill stubs (required for claw agent) ===
+skill helper_skill {
+  description: "A helper skill"
+  params: { input: string }
+  impl(input) { return input; }
+}
+
+// === Guard chain stub ===
+guard input_guard {
+  description: "Validates input"
+  on_observation(text) { return text; }
+}
+guardchain safety_chain = [input_guard];
+
+// === Claw agent with workspace + memory ===
+claw agent memory_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [helper_skill]
+  guards: [safety_chain]
+  channels: [helper_skill]
+  workspace: "/tmp/neam_phase7_test"
+  semantic_memory: {
+    backend: "local"
+    search: "hybrid"
+    flush_on_compact: true
+  }
+  system: "You are a test agent."
+}
+
+// ====================================================================
+// 1. workspace_write returns true
+// ====================================================================
+let w1 = workspace_write("hello.txt", "Hello, Neam!");
+if (w1 == true) { emit "PASS: 1 workspace_write returns true"; } else { emit "FAIL: 1 workspace_write returned " + json_stringify(w1); }
+
+// ====================================================================
+// 2. workspace_read returns content
+// ====================================================================
+let r1 = workspace_read("hello.txt");
+if (r1 == "Hello, Neam!") { emit "PASS: 2 workspace_read returns content"; } else { emit "FAIL: 2 workspace_read returned " + json_stringify(r1); }
+
+// ====================================================================
+// 3. workspace_append returns true
+// ====================================================================
+let a1 = workspace_append("hello.txt", " More text.");
+if (a1 == true) { emit "PASS: 3 workspace_append returns true"; } else { emit "FAIL: 3 workspace_append returned " + json_stringify(a1); }
+
+// ====================================================================
+// 4. Append content correct
+// ====================================================================
+let r2 = workspace_read("hello.txt");
+if (r2 == "Hello, Neam! More text.") { emit "PASS: 4 append content correct"; } else { emit "FAIL: 4 expected appended content, got " + json_stringify(r2); }
+
+// ====================================================================
+// 5. Read non-existent file returns nil
+// ====================================================================
+let r3 = workspace_read("nonexistent_file_xyz.txt");
+if (r3 == nil) { emit "PASS: 5 read non-existent returns nil"; } else { emit "FAIL: 5 expected nil, got " + json_stringify(r3); }
+
+// ====================================================================
+// 6. Path traversal rejected
+// ====================================================================
+let r4 = workspace_read("../../../etc/passwd");
+if (r4 == nil) { emit "PASS: 6 path traversal rejected"; } else { emit "FAIL: 6 path traversal was not rejected"; }
+
+// ====================================================================
+// 7. Write with subdirectory creation
+// ====================================================================
+let w2 = workspace_write("sub/dir/file.txt", "nested content");
+if (w2 == true) { emit "PASS: 7a write with subdirectory creation"; } else { emit "FAIL: 7a subdirectory write failed"; }
+let r5 = workspace_read("sub/dir/file.txt");
+if (r5 == "nested content") { emit "PASS: 7b read nested file"; } else { emit "FAIL: 7b expected nested content, got " + json_stringify(r5); }
+
+// ====================================================================
+// 8. memory_search returns list
+// ====================================================================
+workspace_write("docs/guide.md", "Neam is a compiled DSL for building AI agents. It supports claw and forge agent types.");
+workspace_write("docs/api.md", "The API provides workspace_read and workspace_write functions for file operations.");
+
+let results = memory_search("AI agents");
+if (typeof(results) == "List") { emit "PASS: 8 memory_search returns list"; } else { emit "FAIL: 8 memory_search did not return list, got " + typeof(results); }
+
+// ====================================================================
+// 9. Search result fields
+// ====================================================================
+if (len(results) > 0) {
+  let first = results[0];
+  if (typeof(first["file_path"]) == "String") { emit "PASS: 9a search result has file_path"; } else { emit "FAIL: 9a no file_path"; }
+  if (typeof(first["chunk"]) == "String") { emit "PASS: 9b search result has chunk"; } else { emit "FAIL: 9b no chunk"; }
+  if (typeof(first["score"]) == "Number") { emit "PASS: 9c search result has score"; } else { emit "FAIL: 9c no score"; }
+} else {
+  emit "FAIL: 9a search result has file_path (empty results)";
+  emit "FAIL: 9b search result has chunk (empty results)";
+  emit "FAIL: 9c search result has score (empty results)";
+}
+
+// ====================================================================
+// 10. session_history returns list
+// ====================================================================
+let hist = session_history();
+if (typeof(hist) == "List") { emit "PASS: 10 session_history returns list"; } else { emit "FAIL: 10 session_history did not return list"; }
+
+// ====================================================================
+// 11. Claw workspace property access
+// ====================================================================
+if (memory_bot.workspace == "/tmp/neam_phase7_test") { emit "PASS: 11 claw workspace property"; } else { emit "FAIL: 11 workspace property mismatch"; }
+
+// ====================================================================
+// 12. memory_search with explicit top_k
+// ====================================================================
+let results2 = memory_search("file operations", 1);
+if (typeof(results2) == "List") { emit "PASS: 12a memory_search with top_k returns list"; } else { emit "FAIL: 12a memory_search with top_k failed"; }
+if (len(results2) <= 1) { emit "PASS: 12b top_k limits results"; } else { emit "FAIL: 12b top_k did not limit, got " + json_stringify(len(results2)); }
+
+// ====================================================================
+// 13. Write traversal rejected
+// ====================================================================
+let w3 = workspace_write("../escape.txt", "bad");
+if (w3 == false) { emit "PASS: 13 write traversal rejected"; } else { emit "FAIL: 13 write traversal not rejected"; }
+
+// ====================================================================
+// 14. Backward compat — struct + impl
+// ====================================================================
+struct Point {
+  x,
+  y
+}
+
+impl Point {
+  fn magnitude(self) {
+    return self.x + self.y;
+  }
+}
+
+let p = Point(10, 20);
+if (p.magnitude() == 30) { emit "PASS: 14 backward compat struct+impl"; } else { emit "FAIL: 14 struct+impl broken"; }
+
+emit "Phase 7 test suite complete.";

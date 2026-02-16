@@ -220,6 +220,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/session_manager.cpp
     NeamC/src/vm/context_builder.cpp
     NeamC/src/vm/compaction.cpp
+    NeamC/src/vm/memory_index.cpp
     NeamC/src/vm/forge_loop.cpp
     NeamC/src/vm/lane_queue.cpp
     NeamC/src/vm/channels/cli_channel.cpp

@@ -18,6 +18,7 @@
 #include <regex>
 #include <sstream>
 #include <stdexcept>
+#include <filesystem>
 #include <unordered_map>
 
 #include "neamc/llm/provider_factory.hpp"
@@ -39,6 +40,7 @@
 #include "neamc/vm/channels/cli_channel.hpp"
 #include "neamc/vm/channels/http_channel.hpp"
 #include "neamc/vm/knowledge.hpp"
+#include "neamc/vm/memory_index.hpp"
 #include "neamc/vm/schema.hpp"
 #include "neamc/vm/value_hash.hpp"
 
@@ -247,6 +249,42 @@ bool has_trait_impl(const std::unordered_map<std::string, ObjImplTable*>& impl_t
     }
   }
   return true;
+}
+
+// v0.8 Phase 7: Workspace path resolution helpers
+namespace fs = std::filesystem;
+
+std::string resolve_workspace_path(
+    const std::unordered_map<std::string, ObjClawAgent*>& claw_agents,
+    const std::string& rel_path)
+{
+  if (claw_agents.empty()) return "";
+  auto* claw = claw_agents.begin()->second;
+  if (claw->workspace.empty()) return "";
+
+  // Reject path traversal
+  if (rel_path.find("..") != std::string::npos) return "";
+
+  fs::path ws(claw->workspace);
+  fs::path full = ws / rel_path;
+
+  // Verify canonical stays within workspace
+  fs::path canonical_ws = fs::weakly_canonical(ws);
+  fs::path canonical_full = fs::weakly_canonical(full);
+  auto ws_str = canonical_ws.string();
+  auto full_str = canonical_full.string();
+  if (full_str.rfind(ws_str, 0) != 0) return "";
+
+  return full.string();
+}
+
+void ensure_parent_dirs(const std::string& path)
+{
+  fs::path p(path);
+  if (p.has_parent_path())
+  {
+    fs::create_directories(p.parent_path());
+  }
 }
 
 struct ReActResponse
@@ -1086,6 +1124,7 @@ void VirtualMachine::reset_for_reuse(ResetPolicy policy)
   mcp_clients_.clear();
   claw_agents_.clear();
   forge_agents_.clear();
+  memory_indices_.clear();
   channel_registry_.clear();
   channel_adapters_.clear();
   if (lane_engine_) { lane_engine_->stop(); lane_engine_.reset(); }
@@ -3631,6 +3670,25 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
                   assembled = ctx_builder.build(claw, session);
                   // Persist compaction
                   sm.compact(claw, "default", summary);
+                }
+              }
+            }
+
+            // v0.8 Phase 7: Inject memory context into system prompt
+            if (!claw->memory_search.empty() && claw->memory_search != "none")
+            {
+              auto mi_it = memory_indices_.find(claw_name);
+              if (mi_it != memory_indices_.end())
+              {
+                auto mem_results = mi_it->second->search(query, 3);
+                if (!mem_results.empty())
+                {
+                  std::string mem_section = "\n\n[Relevant memory context]\n";
+                  for (const auto& mr : mem_results)
+                  {
+                    mem_section += "- " + mr.file_path + ": " + mr.chunk + "\n";
+                  }
+                  assembled.system_prompt += mem_section;
                 }
               }
             }
@@ -8006,6 +8064,20 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
             lane_engine_->configure_lane(lane.name, lane.concurrency, 0);
           }
         }
+
+        // v0.8 Phase 7: Initialize memory index if workspace + memory configured
+        if (!claw->workspace.empty() &&
+            claw->memory_backend != "none" && !claw->memory_backend.empty() &&
+            claw->memory_search != "none" && !claw->memory_search.empty())
+        {
+          auto idx = std::make_unique<MemoryIndex>(
+              claw->workspace, claw->memory_search);
+          idx->load();
+          idx->reindex_changed();
+          idx->save();
+          memory_indices_[agent_name] = std::move(idx);
+        }
+
         break;
       }
       // v0.8: Forge agent — create typed ObjForgeAgent
@@ -8123,30 +8195,70 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
       }
       case OpCode::OP_WORKSPACE_READ:
       {
-        Value path = pop();
-        // Stub: return nil (full impl reads from workspace dir)
-        (void)path;
-        stack_.push_back(Value::Nil());
+        Value path_val = pop();
+        std::string rel_path = to_std_string(path_val);
+        std::string full_path = resolve_workspace_path(claw_agents_, rel_path);
+        if (full_path.empty())
+        {
+          stack_.push_back(Value::Nil());
+          break;
+        }
+        std::ifstream in(full_path);
+        if (!in.is_open())
+        {
+          stack_.push_back(Value::Nil());
+          break;
+        }
+        std::string content((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+        stack_.push_back(Value::String(content.c_str(), content.size()));
         break;
       }
       case OpCode::OP_WORKSPACE_WRITE:
       {
-        Value content = pop();
-        Value path = pop();
-        // Stub: return true (full impl writes to workspace dir)
-        (void)content;
-        (void)path;
+        Value content_val = pop();
+        Value path_val = pop();
+        std::string rel_path = to_std_string(path_val);
+        std::string content = to_std_string(content_val);
+        std::string full_path = resolve_workspace_path(claw_agents_, rel_path);
+        if (full_path.empty())
+        {
+          stack_.push_back(Value::Bool(false));
+          break;
+        }
+        ensure_parent_dirs(full_path);
+        std::ofstream out(full_path, std::ios::trunc);
+        if (!out.is_open())
+        {
+          stack_.push_back(Value::Bool(false));
+          break;
+        }
+        out << content;
         stack_.push_back(Value::Bool(true));
         break;
       }
       case OpCode::OP_MEMORY_SEARCH:
       {
-        Value top_k = pop();
-        Value query = pop();
-        // Stub: return empty list (full impl queries semantic memory)
-        (void)top_k;
-        (void)query;
-        stack_.push_back(Value::List(new_list(std::vector<Value>{})));
+        Value top_k_val = pop();
+        Value query_val = pop();
+        std::string query = to_std_string(query_val);
+        std::size_t top_k = 5;
+        if (top_k_val.is_number())
+        {
+          top_k = static_cast<std::size_t>(top_k_val.as_number());
+        }
+
+        auto results = search_memory(query, top_k);
+        std::vector<Value> result_list;
+        for (const auto& r : results)
+        {
+          std::unordered_map<std::string, Value> m;
+          m["file_path"] = Value::String(r.file_path.c_str(), r.file_path.size());
+          m["chunk"] = Value::String(r.chunk.c_str(), r.chunk.size());
+          m["score"] = Value::Number(static_cast<double>(r.score));
+          result_list.push_back(Value::Map(new_map(std::move(m))));
+        }
+        stack_.push_back(Value::List(new_list(std::move(result_list))));
         break;
       }
       case OpCode::OP_SPAWN_AGENT:
@@ -8252,6 +8364,18 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               j["role"] = role;
               j["content"] = content;
               out << j.dump() << "\n";
+            }
+
+            // v0.8 Phase 7: Reindex memory on flush if flush_on_compact
+            if (claw->flush_on_compact)
+            {
+              std::string aname(claw->name->chars, claw->name->length);
+              auto mi_it = memory_indices_.find(aname);
+              if (mi_it != memory_indices_.end())
+              {
+                mi_it->second->reindex_changed();
+                mi_it->second->save();
+              }
             }
           }
         }
@@ -8435,5 +8559,16 @@ ObjChannel* VirtualMachine::get_channel(const std::string& name) const
   auto it = channel_registry_.find(name);
   if (it != channel_registry_.end()) return it->second;
   return nullptr;
+}
+
+std::vector<MemorySearchResult> VirtualMachine::search_memory(const std::string& query,
+                                                              std::size_t top_k)
+{
+  if (memory_indices_.empty()) return {};
+  // Use first claw agent's memory index (matches existing Phase 3 pattern)
+  auto it = memory_indices_.begin();
+  // Reindex changed files before searching for fresh results
+  it->second->reindex_changed();
+  return it->second->search(query, top_k);
 }
 }  // namespace neamc::vm
