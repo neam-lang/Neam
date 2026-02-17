@@ -1,0 +1,137 @@
+// DeepSearch searcher
+
+module std.agents.special.deepsearch.searcher;
+
+use std.rag.retriever;
+
+// === Searcher Type ===
+
+pub fun create(config) {
+  return {
+    web_search: config.web_search_tool,
+    rag_retriever: config.rag_retriever,
+    parallel_limit: config.parallel_searches,
+    max_sources: config.max_sources_per_query
+  };
+}
+
+// === Search Operations ===
+
+pub fun search(searcher, sub_query, options) {
+  let results = [];
+
+  if (searcher.web_search != nil) {
+    let web_results = execute_web_search(searcher, sub_query.text, options);
+    results = concat(results, web_results);
+  }
+
+  if (searcher.rag_retriever != nil) {
+    let rag_results = execute_rag_search(searcher, sub_query.text, options);
+    results = concat(results, rag_results);
+  }
+
+  results = deduplicate_results(results);
+  results = rank_results(results, sub_query.text);
+
+  return take(results, searcher.max_sources);
+}
+
+pub fun execute_web_search(searcher, query, options) {
+  let search_params = {
+    query: query,
+    limit: searcher.max_sources,
+    exclude_domains: options.exclude_domains,
+    preferred_sources: options.preferred_sources
+  };
+
+  if (options.time_range != nil) {
+    search_params.date_range = options.time_range;
+  }
+
+  let raw_results = searcher.web_search.search(search_params);
+  let normalized = normalize_web_results(raw_results);
+
+  return map(normalized, fun(r) {
+    return search_result(
+      r.url || r.id,
+      r.title || "Result",
+      r.snippet || r.content || "",
+      "web",
+      r.published_date || r.date,
+      nil
+    );
+  });
+}
+
+pub fun execute_rag_search(searcher, query, options) {
+  let docs = retriever.retrieve(searcher.rag_retriever, query);
+
+  return map(docs, fun(d) {
+    return search_result(
+      d.id,
+      d.metadata.title || "Document",
+      d.content,
+      "rag",
+      d.metadata.created_at,
+      d.score
+    );
+  });
+}
+
+pub fun search_result(id, title, content, source_type, date, score) {
+  return {
+    id: id,
+    title: title,
+    content: content,
+    source_type: source_type,
+    date: date,
+    score: score,
+    citations: []
+  };
+}
+
+pub fun deduplicate_results(results) {
+  let seen = {};
+  let unique = [];
+  for (r in results) {
+    let key = lowercase(r.title) + ":" + r.source_type;
+    if (seen[key] == nil) {
+      seen[key] = true;
+      push(unique, r);
+    }
+  }
+  return unique;
+}
+
+pub fun rank_results(results, query) {
+  return sort_by(results, fun(r) {
+    let score = r.score || 0.5;
+    if (r.date != nil && days_since(r.date) < 30) {
+      score = score + 0.2;
+    }
+    return -score;
+  });
+}
+
+fun normalize_web_results(raw_results) {
+  if (raw_results == nil) {
+    return [];
+  }
+  if (raw_results.ok) {
+    return raw_results.value || [];
+  }
+  if (raw_results.results != nil) {
+    return raw_results.results;
+  }
+  return raw_results;
+}
+
+fun days_since(date_value) {
+  if (date_value == nil) {
+    return 999999;
+  }
+  if (typeof(date_value) == "number") {
+    return (now() - date_value) / 86400000;
+  }
+  return 999999;
+}

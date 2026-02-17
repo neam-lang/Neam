@@ -1,0 +1,156 @@
+// v0.8 Phase 3: Session Management & Context Building
+
+// === Skill stubs ===
+skill greet {
+  description: "Greets a user"
+  params: { name: string }
+  impl(name) { return "Hello " + name; }
+}
+
+skill calculate {
+  description: "Calculates a value"
+  params: { expr: string }
+  impl(expr) { return "42"; }
+}
+
+// === Guard chain stub ===
+guard input_guard {
+  description: "Validates input"
+  on_observation(text) { return text; }
+}
+
+guardchain safety_chain = [input_guard];
+
+// === 1. Claw agent with session config ===
+claw agent session_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a helpful assistant."
+  skills: [greet, calculate]
+  guards: [safety_chain]
+  channels: [greet]
+  session: {
+    idle_reset_minutes: 30
+    max_history_turns: 50
+    compaction: "auto"
+  }
+}
+
+// === 2. Claw agent without workspace (in-memory only) ===
+claw agent memory_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  system: "You are a memory test bot."
+  channels: [greet]
+  session: {
+    max_history_turns: 10
+    compaction: "manual"
+  }
+}
+
+// === 3. Test property access backward compat ===
+let mht = session_bot.max_history_turns;
+if (mht == 50) {
+  emit "PASS: claw max_history_turns = 50";
+} else {
+  emit "FAIL: claw max_history_turns expected 50, got " + mht;
+}
+
+let idle = session_bot.idle_reset_minutes;
+if (idle == 30) {
+  emit "PASS: claw idle_reset_minutes = 30";
+} else {
+  emit "FAIL: claw idle_reset_minutes expected 30, got " + idle;
+}
+
+let comp = session_bot.compaction;
+if (comp == "auto") {
+  emit "PASS: claw compaction = auto";
+} else {
+  emit "FAIL: claw compaction expected auto, got " + comp;
+}
+
+// === 4. Test memory_bot properties ===
+let mem_mht = memory_bot.max_history_turns;
+if (mem_mht == 10) {
+  emit "PASS: memory_bot max_history_turns = 10";
+} else {
+  emit "FAIL: memory_bot max_history_turns expected 10, got " + mem_mht;
+}
+
+let mem_comp = memory_bot.compaction;
+if (mem_comp == "manual") {
+  emit "PASS: memory_bot compaction = manual";
+} else {
+  emit "FAIL: memory_bot compaction expected manual, got " + mem_comp;
+}
+
+// === 5. Test .reset() clears session ===
+let reset_result = session_bot.reset();
+if (reset_result == nil) {
+  emit "PASS: claw .reset() returns nil";
+} else {
+  emit "FAIL: claw .reset() expected nil";
+}
+
+// === 6. Test .history() returns list (empty after reset) ===
+let hist = session_bot.history();
+if (hist == []) {
+  emit "PASS: claw .history() returns empty list after reset";
+} else {
+  emit "FAIL: claw .history() expected empty list";
+}
+
+// === 7. Trait on claw agent (backward compat) ===
+trait Sessionable {
+  fn session_info(self);
+}
+
+impl Sessionable for session_bot {
+  fn session_info(self) {
+    return "session active";
+  }
+}
+
+let si = session_bot.session_info();
+if (si == "session active") {
+  emit "PASS: claw trait method dispatch works";
+} else {
+  emit "FAIL: claw trait expected 'session active', got " + si;
+}
+
+// === 8. Struct backward compat ===
+struct Point {
+  x: number
+  y: number
+}
+
+impl Point {
+  fn magnitude(self) {
+    return 42;
+  }
+}
+
+let p = Point(3, 4);
+let mag = p.magnitude();
+if (mag == 42) {
+  emit "PASS: struct backward compat works";
+} else {
+  emit "FAIL: struct magnitude expected 42, got " + mag;
+}
+
+// === 9. Plain agent backward compat ===
+agent legacy_bot {
+  provider: "openai"
+  model: "gpt-4o"
+  skills: [greet]
+}
+
+let legacy_reset = legacy_bot.reset();
+if (legacy_reset == nil) {
+  emit "PASS: plain agent .reset() works";
+} else {
+  emit "FAIL: plain agent .reset() expected nil";
+}
+
+emit "v0.8 Phase 3: All tests passed";

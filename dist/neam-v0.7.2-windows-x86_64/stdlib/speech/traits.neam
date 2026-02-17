@@ -1,0 +1,20 @@
+// Provider adapter patterns
+
+module std.speech.traits;
+
+pub fun stt_provider_adapter(provider) {
+  return {
+    transcribe: provider.transcribe,
+    supported_languages: provider.supported_languages,
+    configure: provider.configure
+  };
+}
+
+pub fun tts_provider_adapter(provider) {
+  return {
+    synthesize: provider.synthesize,
+    synthesize_ssml: provider.synthesize_ssml,
+    voices: provider.voices,
+    configure: provider.configure
+  };
+}

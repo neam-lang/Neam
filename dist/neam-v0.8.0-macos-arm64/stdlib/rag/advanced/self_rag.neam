@@ -1,0 +1,166 @@
+// Self-reflective RAG
+
+module std.rag.advanced.self_rag;
+
+use std.rag.retriever;
+
+pub fun reflection_retrieve() { return { kind: "Retrieve" }; }
+pub fun reflection_relevant() { return { kind: "IsRelevant" }; }
+pub fun reflection_supported() { return { kind: "IsSupported" }; }
+pub fun reflection_useful() { return { kind: "IsUseful" }; }
+
+pub fun self_rag_config(llm) {
+  return {
+    llm: llm,
+    retriever: nil,
+    enable_retrieval_decision: true,
+    enable_relevance_check: true,
+    enable_support_check: true,
+    enable_utility_check: true,
+    retrieval_threshold: 0.5,
+    max_iterations: 3
+  };
+}
+
+pub fun with_self_rag_retriever(config, retriever_instance) {
+  config.retriever = retriever_instance;
+  return config;
+}
+
+pub fun with_retrieval_decision(config, enabled) {
+  config.enable_retrieval_decision = enabled;
+  return config;
+}
+
+pub fun with_relevance_check(config, enabled) {
+  config.enable_relevance_check = enabled;
+  return config;
+}
+
+pub fun with_support_check(config, enabled) {
+  config.enable_support_check = enabled;
+  return config;
+}
+
+pub fun with_utility_check(config, enabled) {
+  config.enable_utility_check = enabled;
+  return config;
+}
+
+pub fun self_rag_chain(config) {
+  return {
+    kind: "SelfRAGChain",
+    config: config
+  };
+}
+
+pub fun run_self_rag(chain, question) {
+  let config = chain.config;
+  let reflection_log = [];
+
+  let needs_retrieval = true;
+  if (config.enable_retrieval_decision) {
+    needs_retrieval = decide_retrieval(config.llm, question);
+    push(reflection_log, {
+      token: reflection_retrieve(),
+      decision: needs_retrieval,
+      reason: "Evaluated if retrieval needed"
+    });
+  }
+
+  let context_docs = [];
+  if (needs_retrieval && config.retriever != nil) {
+    let retrieved = retriever.retrieve(config.retriever, question);
+
+    if (config.enable_relevance_check) {
+      for (doc in retrieved) {
+        let is_relevant = check_relevance(config.llm, question, doc);
+        doc.is_relevant = is_relevant;
+        push(reflection_log, {
+          token: reflection_relevant(),
+          document_id: doc.id,
+          decision: is_relevant
+        });
+
+        if (is_relevant) {
+          push(context_docs, doc);
+        }
+      }
+    } else {
+      context_docs = retrieved;
+    }
+  }
+
+  let response = generate_with_context(config.llm, question, context_docs);
+
+  let is_supported = true;
+  if (config.enable_support_check && len(context_docs) > 0) {
+    is_supported = check_support(config.llm, response, context_docs);
+    push(reflection_log, {
+      token: reflection_supported(),
+      decision: is_supported
+    });
+
+    if (!is_supported) {
+      response = regenerate_grounded(config.llm, question, context_docs, response);
+    }
+  }
+
+  let is_useful = true;
+  if (config.enable_utility_check) {
+    is_useful = check_utility(config.llm, question, response);
+    push(reflection_log, {
+      token: reflection_useful(),
+      decision: is_useful
+    });
+  }
+
+  return {
+    answer: response,
+    sources: context_docs,
+    reflections: reflection_log,
+    is_grounded: is_supported,
+    is_useful: is_useful
+  };
+}
+
+fun decide_retrieval(llm, question) {
+  let prompt = "Determine if external knowledge retrieval is needed to answer this question, or if it can be answered from general knowledge.\n\nQuestion: " + question + "\n\nRespond with only 'retrieve' or 'no_retrieve':";
+  let response = lowercase(trim(llm.generate(prompt)));
+  return starts_with(response, "retrieve");
+}
+
+fun check_relevance(llm, question, doc) {
+  let prompt = "Is this document relevant to the question?\n\nQuestion: " + question + "\n\nDocument: " + doc.content + "\n\nRespond with only 'relevant' or 'not_relevant':";
+  let response = lowercase(trim(llm.generate(prompt)));
+  return starts_with(response, "relevant");
+}
+
+fun check_support(llm, response, docs) {
+  let context = join(map(docs, fun(d) { d.content }), "\n\n");
+  let prompt = "Is the following response fully supported by the provided context?\n\nContext:\n" + context + "\n\nResponse: " + response + "\n\nRespond with only 'supported' or 'not_supported':";
+  let llm_response = lowercase(trim(llm.generate(prompt)));
+  return starts_with(llm_response, "supported");
+}
+
+fun check_utility(llm, question, response) {
+  let prompt = "Does this response usefully answer the question?\n\nQuestion: " + question + "\n\nResponse: " + response + "\n\nRespond with only 'useful' or 'not_useful':";
+  let llm_response = lowercase(trim(llm.generate(prompt)));
+  return starts_with(llm_response, "useful");
+}
+
+fun generate_with_context(llm, question, docs) {
+  if (len(docs) == 0) {
+    return llm.generate("Answer this question: " + question);
+  }
+
+  let context = join(map(docs, fun(d) { d.content }), "\n\n---\n\n");
+  let prompt = "Use the following context to answer the question.\n\nContext:\n" + context + "\n\nQuestion: " + question + "\n\nAnswer:";
+  return llm.generate(prompt);
+}
+
+fun regenerate_grounded(llm, question, docs, previous_response) {
+  let context = join(map(docs, fun(d) { d.content }), "\n\n---\n\n");
+  let prompt = "Your previous response was not fully grounded in the context. Please answer again, using ONLY information from the context. If the answer cannot be found, say so.\n\nContext:\n" + context + "\n\nQuestion: " + question + "\n\nPrevious response (not grounded): " + previous_response + "\n\nGrounded answer:";
+  return llm.generate(prompt);
+}
