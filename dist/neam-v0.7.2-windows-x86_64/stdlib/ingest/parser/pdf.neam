@@ -1,0 +1,55 @@
+// PDF parser configuration
+
+module std.ingest.parser.pdf;
+
+// Page range
+pub fun page_range(start, end) {
+  return { start: start, end: end };
+}
+
+pub fun page_range_all() {
+  return { start: 1, end: nil };
+}
+
+// PDF parser
+pub fun pdf_parser() {
+  return {
+    kind: "PDF",
+    ocr: std.ingest.parser.ocr.ocr_disabled(),
+    extract_images: false,
+    extract_tables: true,
+    extract_forms: false,
+    password: nil,
+    page_range: page_range_all()
+  };
+}
+
+pub fun with_ocr(parser, ocr) {
+  parser.ocr = ocr;
+  return parser;
+}
+
+pub fun with_extract_images(parser, extract) {
+  parser.extract_images = extract;
+  return parser;
+}
+
+pub fun with_extract_tables(parser, extract) {
+  parser.extract_tables = extract;
+  return parser;
+}
+
+pub fun with_extract_forms(parser, extract) {
+  parser.extract_forms = extract;
+  return parser;
+}
+
+pub fun with_password(parser, password) {
+  parser.password = password;
+  return parser;
+}
+
+pub fun with_pages(parser, start, end) {
+  parser.page_range = page_range(start, end);
+  return parser;
+}

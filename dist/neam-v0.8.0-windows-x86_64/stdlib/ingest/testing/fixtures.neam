@@ -1,0 +1,51 @@
+// Ingest test fixtures
+
+module std.ingest.testing.fixtures;
+
+// Document fixtures
+pub fun sample_text(length) {
+  return raw_document(generate_lorem_ipsum(length), "text/plain", {});
+}
+
+pub fun sample_pdf(pages) {
+  return raw_document(generate_pdf_bytes(pages), "application/pdf", { page_count: pages });
+}
+
+pub fun sample_docx(paragraphs) {
+  return raw_document(generate_docx_bytes(paragraphs), "application/vnd.openxmlformats-officedocument.wordprocessingml.document", {});
+}
+
+pub fun sample_xlsx(rows, cols) {
+  return raw_document(generate_xlsx_bytes(rows, cols), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", {});
+}
+
+pub fun sample_pptx(slides) {
+  return raw_document(generate_pptx_bytes(slides), "application/vnd.openxmlformats-officedocument.presentationml.presentation", {});
+}
+
+pub fun sample_json(records) {
+  let data = [];
+  for (i in range(0, records)) {
+    push(data, { id: i, name: "Record " + str(i), value: random_float() });
+  }
+  return raw_document(json_stringify(data), "application/json", {});
+}
+
+pub fun sample_logs(entries, format) {
+  return raw_document(generate_log_entries(entries, format), "text/plain", {});
+}
+
+pub fun sample_code(language, functions) {
+  return raw_document(generate_code_sample(language, functions), get_code_mime_type(language), {});
+}
+
+pub fun sample_markdown(sections, code_blocks) {
+  return raw_document(generate_markdown_sample(sections, code_blocks), "text/markdown", {});
+}
+
+// Predefined fixtures
+pub fun fixture_simple_text() { return sample_text(500); }
+pub fun fixture_simple_pdf() { return sample_pdf(3); }
+pub fun fixture_simple_docx() { return sample_docx(10); }
+pub fun fixture_simple_xlsx() { return sample_xlsx(100, 5); }
+pub fun fixture_python_code() { return sample_code(std.ingest.parser.code.lang_python(), 5); }

@@ -1,0 +1,100 @@
+// Browser navigator
+
+module std.agents.special.browser.navigator;
+
+// === Navigator ===
+
+pub fun create(config) {
+  return {
+    timeout_ms: config.timeout_ms,
+    max_retries: config.max_retries
+  };
+}
+
+// === Navigation Operations ===
+
+pub fun goto(navigator, browser, url) {
+  let page = native.browser_new_page(browser);
+  let result = native.page_goto(page, url, { timeout: navigator.timeout_ms });
+
+  if (!result.ok) {
+    return { ok: false, error: { kind: "NavigationError", url: url, detail: result.error } };
+  }
+
+  native.page_wait_for_load_state(page, "networkidle");
+
+  return { ok: true, value: { page: page, url: url, status: result.status } };
+}
+
+pub fun click(navigator, page, element) {
+  return with_retry(navigator, fun() {
+    return native.element_click(element, { timeout: navigator.timeout_ms });
+  });
+}
+
+pub fun type_text(navigator, page, element, text) {
+  return with_retry(navigator, fun() {
+    native.element_clear(element);
+    return native.element_type(element, text, { delay: 50 });
+  });
+}
+
+pub fun scroll(navigator, page, direction, amount) {
+  let delta = direction == "down" ? amount : -amount;
+  return native.page_evaluate(page, "window.scrollBy(0, " + str(delta) + ")");
+}
+
+pub fun wait_for(navigator, page, condition, timeout_ms) {
+  let actual_timeout = timeout_ms || navigator.timeout_ms;
+
+  if (typeof(condition) == "string") {
+    return native.page_wait_for_selector(page, condition, { timeout: actual_timeout });
+  }
+
+  if (condition.kind == "Navigation") {
+    return native.page_wait_for_navigation(page, { timeout: actual_timeout });
+  }
+
+  if (condition.kind == "Function") {
+    return native.page_wait_for_function(page, condition.fn, { timeout: actual_timeout });
+  }
+
+  return { ok: false, error: { kind: "UnknownCondition", condition: condition } };
+}
+
+pub fun query_selector(navigator, page, selector) {
+  return native.page_query_selector(page, selector);
+}
+
+pub fun query_selector_all(navigator, page, selector) {
+  return native.page_query_selector_all(page, selector);
+}
+
+pub fun screenshot(navigator, page) {
+  let buffer = native.page_screenshot(page, { type: "png", full_page: false });
+  return { ok: true, value: { data: buffer, format: "png" } };
+}
+
+pub fun screenshot_full(navigator, page) {
+  let buffer = native.page_screenshot(page, { type: "png", full_page: true });
+  return { ok: true, value: { data: buffer, format: "png" } };
+}
+
+// === Retry Logic ===
+
+pub fun with_retry(navigator, operation) {
+  let attempts = 0;
+  let last_error = nil;
+
+  while (attempts < navigator.max_retries) {
+    let result = operation();
+    if (result.ok) {
+      return result;
+    }
+    last_error = result.error;
+    attempts = attempts + 1;
+    sleep(100 * attempts);
+  }
+
+  return { ok: false, error: last_error };
+}

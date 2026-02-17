@@ -1,0 +1,39 @@
+// Video parser configuration
+
+module std.ingest.parser.video;
+
+// Frame extraction config
+pub fun frame_extraction_config(enabled, interval_seconds, total_frames, caption_frames, ocr_frames) {
+  return {
+    enabled: enabled,
+    interval_seconds: interval_seconds,
+    total_frames: total_frames,
+    caption_frames: caption_frames,
+    ocr_frames: ocr_frames
+  };
+}
+
+pub fun frame_extraction_disabled() {
+  return frame_extraction_config(false, nil, nil, false, false);
+}
+
+// Video parser
+pub fun video_parser() {
+  return {
+    kind: "Video",
+    transcribe: std.ingest.parser.audio.transcribe_disabled(),
+    extract_frames: frame_extraction_disabled(),
+    extract_subtitles: true,
+    extract_metadata: true
+  };
+}
+
+pub fun with_frame_extraction(parser, config) {
+  parser.extract_frames = config;
+  return parser;
+}
+
+pub fun with_subtitles(parser, extract) {
+  parser.extract_subtitles = extract;
+  return parser;
+}

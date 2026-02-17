@@ -1,0 +1,144 @@
+// DeepSearch synthesizer
+
+module std.agents.special.deepsearch.synthesizer;
+
+// === Synthesizer Type ===
+
+pub fun create(llm) {
+  return {
+    llm: llm,
+    synthesis_prompt: DEFAULT_SYNTHESIS_PROMPT,
+    citation_style: "numbered"
+  };
+}
+
+// === Synthesis Operations ===
+
+pub fun synthesize(synthesizer, original_query, search_results, plan) {
+  let grouped = group_by_relevance(search_results, plan.sub_queries);
+
+  let sections = [];
+  for (sub_query in plan.sub_queries) {
+    let relevant_results = grouped[sub_query.text] || [];
+    if (len(relevant_results) > 0) {
+      let section = synthesize_section(synthesizer, sub_query, relevant_results);
+      push(sections, section);
+    }
+  }
+
+  let summary = generate_summary(synthesizer, original_query, sections);
+
+  return research_report(
+    original_query,
+    summary,
+    sections,
+    extract_all_citations(search_results),
+    now()
+  );
+}
+
+pub fun research_report(query, summary, sections, citations, generated_at) {
+  return {
+    kind: "ResearchReport",
+    query: query,
+    summary: summary,
+    sections: sections,
+    citations: citations,
+    generated_at: generated_at,
+    word_count: count_words(summary) + sum(map(sections, fun(s) { count_words(s.content); }))
+  };
+}
+
+pub fun synthesize_section(synthesizer, sub_query, results) {
+  let context = format_results_for_synthesis(results);
+  let prompt = replace(synthesizer.synthesis_prompt, "{query}", sub_query.text);
+  prompt = replace(prompt, "{context}", context);
+
+  let content = synthesizer.llm.generate(prompt);
+
+  return {
+    title: sub_query.text,
+    content: content,
+    sources: map(results, fun(r) { r.id; }),
+    confidence: calculate_confidence(results)
+  };
+}
+
+pub fun generate_summary(synthesizer, query, sections) {
+  let section_summaries = join(map(sections, fun(s) { s.title + ": " + take_first_sentence(s.content); }), "\n");
+
+  let prompt = "Based on the following research sections, write a concise executive summary (2-3 paragraphs) answering the original query.\n\nOriginal Query: " + query + "\n\nSections:\n" + section_summaries + "\n\nExecutive Summary:";
+
+  return synthesizer.llm.generate(prompt);
+}
+
+pub fun extract_all_citations(results) {
+  let citations = [];
+  let index = 1;
+  for (r in results) {
+    push(citations, {
+      index: index,
+      id: r.id,
+      title: r.title,
+      source_type: r.source_type,
+      url: r.id,
+      accessed_at: now()
+    });
+    index = index + 1;
+  }
+  return citations;
+}
+
+fun group_by_relevance(results, sub_queries) {
+  let grouped = {};
+  for (sub_query in sub_queries) {
+    grouped[sub_query.text] = [];
+  }
+
+  for (result in results) {
+    for (sub_query in sub_queries) {
+      let needle = lowercase(sub_query.text);
+      let haystack = lowercase(result.title + " " + result.content);
+      if (contains(haystack, needle)) {
+        push(grouped[sub_query.text], result);
+      }
+    }
+  }
+
+  for (sub_query in sub_queries) {
+    if (len(grouped[sub_query.text]) == 0) {
+      grouped[sub_query.text] = results;
+    }
+  }
+
+  return grouped;
+}
+
+fun format_results_for_synthesis(results) {
+  let blocks = [];
+  for (r in results) {
+    push(blocks, "Title: " + r.title + "\nSource: " + r.source_type + "\nContent: " + take(r.content, 2000));
+  }
+  return join(blocks, "\n\n");
+}
+
+fun calculate_confidence(results) {
+  let count = len(results);
+  if (count == 0) { return 0.0; }
+  let score = 0.4 + (count * 0.1);
+  if (score > 0.95) { score = 0.95; }
+  return score;
+}
+
+fun take_first_sentence(text) {
+  let parts = split(text, ".");
+  if (len(parts) == 0) { return text; }
+  return trim(parts[0]) + ".";
+}
+
+fun count_words(text) {
+  let words = split(trim(text), " ");
+  return len(filter(words, fun(w) { len(trim(w)) > 0; }));
+}
+
+let DEFAULT_SYNTHESIS_PROMPT = "Based on the following search results, provide a comprehensive answer to the question. Include relevant facts and cite sources using [1], [2], etc.\n\nQuestion: {query}\n\nSearch Results:\n{context}\n\nAnswer:";

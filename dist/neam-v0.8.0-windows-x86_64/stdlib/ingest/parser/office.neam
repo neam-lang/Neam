@@ -1,0 +1,106 @@
+// Office document parsers
+
+module std.ingest.parser.office;
+
+// DOCX parser
+pub fun docx_parser() {
+  return {
+    kind: "DOCX",
+    extract_images: false,
+    extract_tables: true,
+    extract_comments: false,
+    extract_headers_footers: false,
+    preserve_formatting: false
+  };
+}
+
+pub fun with_comments(parser, extract) {
+  parser.extract_comments = extract;
+  return parser;
+}
+
+pub fun with_headers_footers(parser, extract) {
+  parser.extract_headers_footers = extract;
+  return parser;
+}
+
+pub fun with_formatting(parser, preserve) {
+  parser.preserve_formatting = preserve;
+  return parser;
+}
+
+// PPTX parser
+pub fun pptx_parser() {
+  return {
+    kind: "PPTX",
+    extract_images: false,
+    extract_tables: true,
+    extract_notes: true,
+    extract_charts: false,
+    slides_as_sections: true
+  };
+}
+
+pub fun with_notes(parser, extract) {
+  parser.extract_notes = extract;
+  return parser;
+}
+
+pub fun with_charts(parser, extract) {
+  parser.extract_charts = extract;
+  return parser;
+}
+
+pub fun with_slides_as_sections(parser, as_sections) {
+  parser.slides_as_sections = as_sections;
+  return parser;
+}
+
+// Sheet selection
+pub fun sheet_all() {
+  return { kind: "All" };
+}
+
+pub fun sheet_by_name(names) {
+  return { kind: "ByName", names: names };
+}
+
+pub fun sheet_by_index(indices) {
+  return { kind: "ByIndex", indices: indices };
+}
+
+pub fun sheet_first() {
+  return { kind: "First" };
+}
+
+// XLSX parser
+pub fun xlsx_parser() {
+  return {
+    kind: "XLSX",
+    sheets: sheet_all(),
+    header_row: 1,
+    include_formulas: false,
+    include_comments: false,
+    date_format: "YYYY-MM-DD"
+  };
+}
+
+pub fun with_sheets(parser, selection) {
+  parser.sheets = selection;
+  return parser;
+}
+
+pub fun with_header_row(parser, row) {
+  parser.header_row = row;
+  return parser;
+}
+
+pub fun with_formulas(parser, include) {
+  parser.include_formulas = include;
+  return parser;
+}
+
+pub fun with_date_format(parser, format) {
+  parser.date_format = format;
+  return parser;
+}

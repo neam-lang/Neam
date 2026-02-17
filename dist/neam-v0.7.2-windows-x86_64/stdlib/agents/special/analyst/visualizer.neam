@@ -1,0 +1,57 @@
+// Analyst visualizer
+
+module std.agents.special.analyst.visualizer;
+
+// === Visualizer ===
+
+pub fun create(config) {
+  return {
+    formats: config.visualization_formats,
+    max_points: 200
+  };
+}
+
+pub fun visualize(visualizer, results, plan) {
+  let visuals = [];
+  for (format in visualizer.formats) {
+    if (format == "table") {
+      push(visuals, table_from_statistics(results.statistics));
+    } else if (format == "chart") {
+      push(visuals, chart_from_patterns(results.patterns));
+    } else if (format == "heatmap") {
+      push(visuals, heatmap_placeholder(results.patterns));
+    }
+  }
+  return visuals;
+}
+
+fun table_from_statistics(stats) {
+  if (stats == nil) {
+    return { kind: "Table", rows: [] };
+  }
+  let rows = [];
+  for (col in keys(stats.columns)) {
+    let entry = stats.columns[col];
+    push(rows, {
+      column: col,
+      type: entry.type,
+      summary: entry
+    });
+  }
+  return { kind: "Table", rows: rows };
+}
+
+fun chart_from_patterns(patterns) {
+  return {
+    kind: "Chart",
+    chart_type: "summary",
+    data: patterns
+  };
+}
+
+fun heatmap_placeholder(patterns) {
+  return {
+    kind: "Heatmap",
+    data: patterns
+  };
+}

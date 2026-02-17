@@ -1,0 +1,51 @@
+// Special agents test mocks
+
+module std.agents.special.testing.mocks;
+
+pub fun mock_llm(responses) {
+  return {
+    responses: responses || [],
+    generate: fun(prompt) {
+      for (r in responses || []) {
+        if (contains(prompt, r.pattern)) {
+          return r.response;
+        }
+      }
+      return "Mock response";
+    }
+  };
+}
+
+pub fun mock_web_search() {
+  return {
+    search: fun(params) {
+      return [
+        { url: "https://example.com/a", title: "Example A", snippet: "Result A" },
+        { url: "https://example.com/b", title: "Example B", snippet: "Result B" }
+      ];
+    }
+  };
+}
+
+pub fun mock_retriever(records) {
+  return {
+    records: records || [],
+    retrieve: fun(query) {
+      return map(records || [], fun(r) {
+        return {
+          id: r.id || "doc",
+          content: r.content || "content",
+          metadata: r.metadata || {},
+          score: r.score || 0.8
+        };
+      });
+    }
+  };
+}
+
+pub fun mock_browser() {
+  return {
+    pages: [],
+    launch: fun() { return { ok: true, value: {} }; }
+  };
+}
