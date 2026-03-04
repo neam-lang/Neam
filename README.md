@@ -1,3 +1,10 @@
+<div align="center">
+<img src="assets/neam-logo.jpeg" alt="Neam Logo" width="120" />
+
+https://github.com/neam-lang/Neam/raw/main/assets/neam-robot.mp4
+
+</div>
+
 # Neam
 
 **The programming language for AI agents.**
