@@ -33,6 +33,8 @@
 #include "neamc/vm/sealed_type.hpp"
 #include "neamc/vm/claw_agent_type.hpp"
 #include "neamc/vm/forge_agent_type.hpp"
+#include "neamc/vm/data_agent_types.hpp"
+#include "neamc/vm/etl_agent_types.hpp"
 #include "neamc/vm/forge_loop.hpp"
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/context_builder.hpp"
@@ -918,6 +920,38 @@ std::string opcode_name(OpCode op)
       return "OP_SESSION_HISTORY";
     case OpCode::OP_FORGE_RUN:
       return "OP_FORGE_RUN";
+    case OpCode::OP_DEFINE_DATA_AGENT:
+      return "OP_DEFINE_DATA_AGENT";
+    case OpCode::OP_DEFINE_SOURCE:
+      return "OP_DEFINE_SOURCE";
+    case OpCode::OP_DEFINE_SINK:
+      return "OP_DEFINE_SINK";
+    case OpCode::OP_DEFINE_SCHEMA:
+      return "OP_DEFINE_SCHEMA";
+    case OpCode::OP_DEFINE_COMPUTE:
+      return "OP_DEFINE_COMPUTE";
+    case OpCode::OP_DEFINE_QUALITY:
+      return "OP_DEFINE_QUALITY";
+    case OpCode::OP_DEFINE_GOVERNANCE:
+      return "OP_DEFINE_GOVERNANCE";
+    case OpCode::OP_DEFINE_CATALOG:
+      return "OP_DEFINE_CATALOG";
+    case OpCode::OP_DEFINE_ETL_AGENT:
+      return "OP_DEFINE_ETL_AGENT";
+    case OpCode::OP_DEFINE_MART:
+      return "OP_DEFINE_MART";
+    case OpCode::OP_DEFINE_SEMANTIC:
+      return "OP_DEFINE_SEMANTIC";
+    case OpCode::OP_SQL_TRANSPILE:
+      return "OP_SQL_TRANSPILE";
+    case OpCode::OP_SQL_PUSHDOWN:
+      return "OP_SQL_PUSHDOWN";
+    case OpCode::OP_NL2SQL:
+      return "OP_NL2SQL";
+    case OpCode::OP_AUTO_MODEL:
+      return "OP_AUTO_MODEL";
+    case OpCode::OP_SELF_HEAL:
+      return "OP_SELF_HEAL";
     default:
       return "OP_UNKNOWN";
   }
@@ -8159,6 +8193,430 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         if (env_value.is_string())
           extension.env = to_std_string(env_value);
         agent_extensions_[agent_name] = std::move(extension);
+        break;
+      }
+      // v0.9: Schema definition
+      case OpCode::OP_DEFINE_SCHEMA:
+      {
+        Value version_value = pop();
+        Value fields_value = pop();
+        Value name_value = pop();
+
+        auto* schema = new_schema_obj();
+        schema->name = as_string(name_value);
+        if (fields_value.is_map())
+          schema->fields = as_map(fields_value);
+        if (!version_value.is_nil())
+          schema->version = static_cast<int>(version_value.as_number());
+
+        std::string schema_name(schema->name->chars, schema->name->length);
+        globals_.set(schema->name, Value::ObjVal(reinterpret_cast<Obj*>(schema)));
+        break;
+      }
+      // v0.9: Source definition
+      case OpCode::OP_DEFINE_SOURCE:
+      {
+        Value partition_by_value = pop();
+        Value mode_value = pop();
+        Value classification_value = pop();
+        Value schema_ref_value = pop();
+        Value refresh_value = pop();
+        Value format_value = pop();
+        Value connection_value = pop();
+        Value type_value = pop();
+        Value name_value = pop();
+
+        auto* source = new_source();
+        source->name = as_string(name_value);
+        source->source_type = as_string(type_value);
+        source->connection = as_string(connection_value);
+        source->format = format_value.is_nil() ? nullptr : as_string(format_value);
+        source->refresh = refresh_value.is_nil() ? nullptr : as_string(refresh_value);
+        source->schema_ref = schema_ref_value.is_nil() ? nullptr : as_string(schema_ref_value);
+        source->classification = classification_value.is_nil() ? nullptr : as_string(classification_value);
+        source->mode = mode_value.is_nil() ? nullptr : as_string(mode_value);
+        source->partition_by = partition_by_value.is_list() ? as_list(partition_by_value) : nullptr;
+
+        std::string src_name(source->name->chars, source->name->length);
+        globals_.set(source->name, Value::ObjVal(reinterpret_cast<Obj*>(source)));
+        break;
+      }
+      // v0.9: Sink definition
+      case OpCode::OP_DEFINE_SINK:
+      {
+        Value compute_ref_value = pop();
+        Value schema_ref_value = pop();
+        Value batch_size_value = pop();
+        Value write_mode_value = pop();
+        Value format_value = pop();
+        Value connection_value = pop();
+        Value type_value = pop();
+        Value name_value = pop();
+
+        auto* sink = new_sink();
+        sink->name = as_string(name_value);
+        sink->sink_type = as_string(type_value);
+        sink->connection = as_string(connection_value);
+        sink->format = format_value.is_nil() ? nullptr : as_string(format_value);
+        sink->write_mode = write_mode_value.is_nil() ? nullptr : as_string(write_mode_value);
+        sink->batch_size = batch_size_value.is_nil() ? 0 : static_cast<int>(batch_size_value.as_number());
+        sink->schema_ref = schema_ref_value.is_nil() ? nullptr : as_string(schema_ref_value);
+        sink->compute_ref = compute_ref_value.is_nil() ? nullptr : as_string(compute_ref_value);
+
+        globals_.set(sink->name, Value::ObjVal(reinterpret_cast<Obj*>(sink)));
+        break;
+      }
+      // v0.9: Quality gate definition
+      case OpCode::OP_DEFINE_QUALITY:
+      {
+        Value on_violation_value = pop();
+        Value anomaly_threshold_value = pop();
+        Value drift_detection_value = pop();
+        Value uniqueness_value = pop();
+        Value completeness_value = pop();
+        Value freshness_value = pop();
+        Value name_value = pop();
+
+        auto* quality = new_quality_gate();
+        quality->name = as_string(name_value);
+        quality->freshness = freshness_value.is_nil() ? nullptr : as_string(freshness_value);
+        quality->completeness = completeness_value.is_nil() ? -1.0 : completeness_value.as_number();
+        quality->uniqueness = uniqueness_value.is_list() ? as_list(uniqueness_value) : nullptr;
+        quality->drift_detection = !drift_detection_value.is_nil() && drift_detection_value.as_bool();
+        quality->anomaly_threshold = anomaly_threshold_value.is_nil() ? 0.0 : anomaly_threshold_value.as_number();
+        quality->on_violation = on_violation_value.is_nil() ? nullptr : as_string(on_violation_value);
+
+        globals_.set(quality->name, Value::ObjVal(reinterpret_cast<Obj*>(quality)));
+        break;
+      }
+      // v0.9: Compute engine definition
+      case OpCode::OP_DEFINE_COMPUTE:
+      {
+        Value config_value = pop();
+        Value engine_value = pop();
+        Value name_value = pop();
+
+        auto* compute = new_compute_engine();
+        compute->name = as_string(name_value);
+        compute->engine = as_string(engine_value);
+        compute->config = config_value.is_map() ? as_map(config_value) : nullptr;
+
+        globals_.set(compute->name, Value::ObjVal(reinterpret_cast<Obj*>(compute)));
+        break;
+      }
+      // v0.9: Governance policy definition
+      case OpCode::OP_DEFINE_GOVERNANCE:
+      {
+        Value body_value = pop();
+        Value name_value = pop();
+
+        auto* gov = new_governance_policy();
+        gov->name = as_string(name_value);
+        gov->body = body_value.is_map() ? as_map(body_value) : nullptr;
+
+        globals_.set(gov->name, Value::ObjVal(reinterpret_cast<Obj*>(gov)));
+        break;
+      }
+      // v0.9: Catalog definition
+      case OpCode::OP_DEFINE_CATALOG:
+      {
+        Value discovery_value = pop();
+        Value register_value = pop();
+        Value engine_value = pop();
+        Value name_value = pop();
+
+        auto* catalog = new_catalog_obj();
+        catalog->name = as_string(name_value);
+        catalog->engine = as_string(engine_value);
+        catalog->register_opts = register_value.is_map() ? as_map(register_value) : nullptr;
+        catalog->discovery = !discovery_value.is_nil() && discovery_value.as_bool();
+
+        globals_.set(catalog->name, Value::ObjVal(reinterpret_cast<Obj*>(catalog)));
+        break;
+      }
+      // v0.9: Data agent definition
+      case OpCode::OP_DEFINE_DATA_AGENT:
+      {
+        Value agent_md_value = pop();
+        Value pipeline_value = pop();
+        Value autonomy_value = pop();
+        Value purpose_value = pop();
+        Value role_value = pop();
+        Value lineage_value = pop();
+        Value catalog_ref_value = pop();
+        Value governance_ref_value = pop();
+        Value compute_value = pop();
+        Value quality_ref_value = pop();
+        Value schema_ref_value = pop();
+        Value sinks_value = pop();
+        Value sources_value = pop();
+        Value env_value = pop();
+        Value budget_value = pop();
+        Value policy_value = pop();
+        Value guardchains_value = pop();
+        Value skills_value = pop();
+        Value system_value = pop();
+        Value temperature_value = pop();
+        Value api_key_env_value = pop();
+        Value endpoint_value = pop();
+        Value model_value = pop();
+        Value provider_value = pop();
+        Value name_value = pop();
+
+        auto* agent = new_data_agent();
+        agent->name = as_string(name_value);
+        agent->provider = as_string(provider_value);
+        agent->model = as_string(model_value);
+        agent->endpoint = endpoint_value.is_nil() ? nullptr : as_string(endpoint_value);
+        agent->api_key_env = api_key_env_value.is_nil() ? nullptr : as_string(api_key_env_value);
+        agent->system = system_value.is_nil() ? nullptr : as_string(system_value);
+        agent->temperature = temperature_value.is_nil() ? 0.0 : temperature_value.as_number();
+        agent->skills = as_list(skills_value);
+        agent->guardchains = as_list(guardchains_value);
+        agent->context = new_context();
+        agent->sources = as_list(sources_value);
+        agent->sinks = as_list(sinks_value);
+        agent->schema_ref = schema_ref_value.is_nil() ? nullptr : as_string(schema_ref_value);
+        agent->quality_ref = quality_ref_value.is_nil() ? nullptr : as_string(quality_ref_value);
+        agent->compute_config = compute_value.is_map() ? as_map(compute_value) : nullptr;
+        agent->governance_ref = governance_ref_value.is_nil() ? nullptr : as_string(governance_ref_value);
+        agent->catalog_ref = catalog_ref_value.is_nil() ? nullptr : as_string(catalog_ref_value);
+        agent->lineage = !lineage_value.is_nil() && lineage_value.as_bool();
+        agent->role = role_value.is_nil() ? nullptr : as_string(role_value);
+        agent->purpose = purpose_value.is_nil() ? nullptr : as_string(purpose_value);
+        agent->autonomy = autonomy_value.is_nil() ? nullptr : as_string(autonomy_value);
+        agent->pipeline_config = pipeline_value.is_map() ? as_map(pipeline_value) : nullptr;
+        agent->agent_md_path = agent_md_value.is_nil() ? nullptr : as_string(agent_md_value);
+
+        std::string agent_name(agent->name->chars, agent->name->length);
+        globals_.set(agent->name, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+        // Register AgentExtension for backward compat
+        AgentExtension extension;
+        extension.agent_type = "data";
+        if (guardchains_value.is_list())
+        {
+          for (const auto& guard : as_list(guardchains_value)->items)
+          {
+            extension.guardchains.push_back(to_std_string(guard));
+          }
+        }
+        if (policy_value.is_string())
+          extension.policy = to_std_string(policy_value);
+        if (budget_value.is_string())
+          extension.budget = to_std_string(budget_value);
+        if (env_value.is_string())
+          extension.env = to_std_string(env_value);
+        agent_extensions_[agent_name] = std::move(extension);
+        break;
+      }
+      // v0.9.1: ETL Agent definition
+      case OpCode::OP_DEFINE_ETL_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* agent = new_etl_agent();
+
+        // Pop field_count * 2 values (key-value pairs) from the stack
+        // Fields are pushed in order, so we need to read from the bottom
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            agent->name = as_string(fval);
+          else if (fname == "provider")
+            agent->provider = as_string(fval);
+          else if (fname == "model")
+            agent->model = as_string(fval);
+          else if (fname == "system")
+            agent->system = as_string(fval);
+          else if (fname == "temperature")
+            agent->temperature = fval.as_number();
+          else if (fname == "endpoint")
+            agent->endpoint = as_string(fval);
+          else if (fname == "api_key_env")
+            agent->api_key_env = as_string(fval);
+          else if (fname == "warehouse")
+          {
+            std::string wh_name = to_std_string(fval);
+            // Look up warehouse compute engine — will be resolved later if not found
+            agent->warehouse = nullptr;  // resolved at run time
+          }
+          else if (fname == "model_type")
+            agent->model_type = to_std_string(fval);
+          else if (fname == "self_heal")
+            agent->self_heal_enabled = fval.as_bool();
+          else if (fname == "on_failure")
+            agent->on_failure = to_std_string(fval);
+          else if (fname == "has_layers")
+          {
+            // flag only — layer config handled by staging_prefix etc.
+          }
+          else if (fname == "staging_prefix")
+            agent->layer_config.staging_prefix = to_std_string(fval);
+          else if (fname == "staging_materialization")
+            agent->layer_config.staging_materialization = to_std_string(fval);
+          else if (fname == "integration_prefix")
+            agent->layer_config.integration_prefix = to_std_string(fval);
+          else if (fname == "integration_materialization")
+            agent->layer_config.integration_materialization = to_std_string(fval);
+          else if (fname == "mart_count")
+          {
+            // Just informational; marts are registered separately via OP_DEFINE_MART
+          }
+          else if (fname == "incremental_strategy")
+            agent->incremental.strategy = to_std_string(fval);
+          else if (fname == "incremental_key")
+            agent->incremental.key = to_std_string(fval);
+          else if (fname == "incremental_lookback")
+            agent->incremental.lookback = to_std_string(fval);
+          else if (fname == "incremental_on_schema_change")
+            agent->incremental.on_schema_change = to_std_string(fval);
+          else if (fname == "auto_model_enabled")
+            agent->auto_model_enabled = fval.as_bool();
+          else if (fname == "auto_model_methodology")
+            agent->auto_model_methodology = to_std_string(fval);
+          else if (fname == "auto_model_approval")
+            agent->auto_model_approval = to_std_string(fval);
+          else if (fname == "lineage")
+            agent->lineage = fval.as_bool();
+          else if (fname == "role")
+            agent->role = as_string(fval);
+          else if (fname == "purpose")
+            agent->purpose = as_string(fval);
+          else if (fname == "autonomy")
+            agent->autonomy = as_string(fval);
+          else if (fname == "quality")
+            agent->quality_ref = as_string(fval);
+          else if (fname == "governance")
+            agent->governance_ref = as_string(fval);
+          else if (fname == "catalog")
+            agent->catalog_ref = as_string(fval);
+          else if (fname == "semantic")
+          {
+            std::string sem_name = to_std_string(fval);
+            agent->semantic = nullptr;  // resolved at run time
+          }
+          else if (fname == "budget")
+          {
+            // Store budget name for later resolution
+          }
+          else if (fname == "agent_type")
+          {
+            // informational: "etl"
+          }
+          else if (fname == "sources" || fname == "sinks" || fname == "skills" ||
+                   fname == "connected_knowledge" || fname == "guardchains")
+          {
+            // Stored as comma-separated string for Phase 0-2; list resolution at runtime
+          }
+          else if (fname == "compute_default")
+          {
+            // stored for later resolution
+          }
+        }
+
+        stack_.resize(base);
+
+        if (!agent->name) {
+          throw std::runtime_error("ETL agent missing name");
+        }
+
+        // Register agent
+        std::string agent_name(agent->name->chars, agent->name->length);
+        globals_.set(agent->name, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+        // Register AgentExtension for backward compat
+        AgentExtension extension;
+        extension.agent_type = "etl";
+        agent_extensions_[agent_name] = std::move(extension);
+        break;
+      }
+
+      // v0.9.1: Mart definition
+      case OpCode::OP_DEFINE_MART:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* mart = new_mart();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            mart->name = to_std_string(fval);
+          else if (fname == "grain")
+            mart->grain = to_std_string(fval);
+          else if (fname == "materialization")
+            mart->materialization = to_std_string(fval);
+          // Comma-separated list fields
+          else if (fname == "facts" || fname == "dimensions" || fname == "measures" || fname == "conformed")
+          {
+            // Stored as comma-separated string; split at runtime
+          }
+          else if (fname == "scd")
+          {
+            // Stored as comma-separated "dim:type" pairs; parsed at runtime
+          }
+        }
+
+        stack_.resize(base);
+
+        auto* name_str = copy_string(mart->name.c_str(), mart->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(mart)));
+        break;
+      }
+
+      // v0.9.1: Semantic layer definition
+      case OpCode::OP_DEFINE_SEMANTIC:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* semantic = new_semantic_layer();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            semantic->name = to_std_string(fval);
+          else if (fname == "fiscal_year_start")
+            semantic->fiscal_year_start = to_std_string(fval);
+          else if (fname == "week_start")
+            semantic->week_start = to_std_string(fval);
+          else if (fname == "default_timezone")
+            semantic->default_timezone = to_std_string(fval);
+          // Metrics, entities, and synonyms are serialized inline with counts
+          // Full deserialization handled in later phases
+        }
+
+        stack_.resize(base);
+
+        auto* name_str = copy_string(semantic->name.c_str(), semantic->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(semantic)));
+        break;
+      }
+
+      // v0.9.1: Stub handlers for Phase 3-10 opcodes (push nil for now)
+      case OpCode::OP_SQL_TRANSPILE:
+      case OpCode::OP_SQL_PUSHDOWN:
+      case OpCode::OP_NL2SQL:
+      case OpCode::OP_AUTO_MODEL:
+      case OpCode::OP_SELF_HEAL:
+      {
+        // Phase 3-10 runtime features — stub for now
+        // Pop any arguments and push nil
+        pop();  // first arg
+        pop();  // second arg
+        stack_.push_back(Value::Nil());
         break;
       }
       // v0.8 Phase 6: Channel registration

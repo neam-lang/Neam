@@ -988,6 +988,396 @@ struct ChannelDecl
   SourceSpan span;
 };
 
+// v0.9: Schema constraint (e.g. @primary_key, @range(0, 150), @enum(["a","b"]))
+struct SchemaConstraint
+{
+  std::string type;  // "primary_key", "not_null", "unique", "pattern", "length", "range", "positive", "enum", "default", "foreign_key"
+  std::vector<std::string> string_args;
+  std::vector<double> number_args;
+  std::optional<std::string> ref;  // for foreign_key(SchemaName)
+};
+
+// v0.9: Schema field declaration (e.g. id: string @primary_key)
+struct SchemaFieldDecl
+{
+  std::string name;
+  std::string type_name;  // "string", "int", "float", "bool", "datetime"
+  std::vector<SchemaConstraint> constraints;
+};
+
+// v0.9: Schema declaration
+struct SchemaDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::optional<int> version;
+  std::vector<SchemaFieldDecl> fields;
+};
+
+// v0.9: Source declaration
+struct SourceDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string type;       // "postgres", "s3", "http", "kafka"
+  std::string connection;
+  std::optional<std::string> format;
+  std::optional<std::string> refresh;
+  std::optional<std::string> schema_ref;
+  std::vector<std::string> partition_by;
+  std::optional<std::string> classification;
+  std::optional<std::string> mode;
+};
+
+// v0.9: Sink declaration
+struct SinkDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string type;
+  std::string connection;
+  std::optional<std::string> format;
+  std::optional<std::string> write_mode;
+  std::optional<int> batch_size;
+  std::optional<std::string> schema_ref;
+  std::optional<std::string> compute_ref;
+};
+
+// v0.9: Quality declaration
+struct QualityDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::optional<std::string> freshness;
+  std::optional<double> completeness;
+  std::vector<std::string> uniqueness;
+  std::optional<bool> drift_detection;
+  std::optional<double> anomaly_threshold;
+  std::optional<std::string> on_violation;
+};
+
+// v0.9: Compute declaration
+struct ComputeDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string engine;  // "spark", "snowflake", "databricks", "bigquery", "local"
+  ExprPtr config;      // optional: map expression
+};
+
+// v0.9: Governance declaration (complex nested config stored as expression)
+struct GovernanceDecl
+{
+  Visibility visibility;
+  std::string name;
+  ExprPtr body;  // parsed as config map expression
+};
+
+// v0.9: Catalog declaration
+struct CatalogDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string engine;  // "unity_catalog", "datahub"
+  ExprPtr register_opts;  // optional: map expression
+  std::optional<bool> discovery;
+};
+
+// v0.9: Pipeline transform operation (e.g. filter(column: "x", op: ">", value: 0))
+struct PipelineTransformOp
+{
+  std::string name;
+  std::vector<std::pair<std::string, ExprPtr>> args;  // named args
+};
+
+// v0.9: Pipeline block (extract -> transform -> load)
+struct PipelineBlock
+{
+  std::vector<IdentifierRef> extract;
+  std::vector<PipelineTransformOp> transforms;
+  std::vector<IdentifierRef> load;
+};
+
+// v0.9: Compute routing block inside data agent
+struct DataAgentComputeBlock
+{
+  std::optional<IdentifierRef> default_engine;
+  std::vector<IdentifierRef> available;
+  std::vector<std::pair<std::string, IdentifierRef>> routing;  // stage -> engine
+};
+
+// v0.9: Data agent declaration
+struct DataAgentDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+  // Data agent specific
+  std::vector<IdentifierRef> sources;
+  std::vector<IdentifierRef> sinks;
+  std::optional<IdentifierRef> schema_ref;
+  std::optional<IdentifierRef> quality_ref;
+  std::optional<DataAgentComputeBlock> compute;
+  std::optional<IdentifierRef> governance_ref;
+  std::optional<IdentifierRef> catalog_ref;
+  std::optional<bool> lineage;
+  std::optional<std::string> role;
+  std::optional<std::string> purpose;
+  std::optional<std::string> autonomy;
+  std::optional<PipelineBlock> pipeline;
+  std::optional<std::string> agent_md;  // v0.9: Agent.MD file path reference
+};
+
+// ============================================================
+// v0.9.1: NeamETL AST nodes
+// ============================================================
+
+// SCD configuration per dimension
+struct MartSCDConfig
+{
+  std::string dimension_name;
+  std::string scd_type;                              // "type0"–"type6"
+};
+
+// Aggregate table definition within a mart
+struct MartAggregateTableDef
+{
+  std::string name;
+  std::string grain;
+  std::vector<std::string> group_by;
+  std::vector<std::string> measures;
+};
+
+// Mart declaration (nested within layers or standalone)
+struct MartDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> facts;
+  std::vector<std::string> dimensions;
+  std::string grain;
+  std::vector<std::string> measures;
+  std::vector<MartSCDConfig> scd;
+  std::vector<std::string> conformed;
+  std::vector<MartAggregateTableDef> aggregate_tables;
+  std::optional<std::string> materialization;
+};
+
+// Semantic metric declaration
+struct SemanticMetricDecl
+{
+  std::string name;
+  std::string sql;
+  std::string description;
+  std::string type;  // "measure"|"ratio"|"cumulative"|"derived"
+  std::vector<std::string> time_grains;
+  std::vector<std::string> dimensions;
+  std::vector<std::string> filters;
+  std::optional<std::string> owner;
+};
+
+// Semantic entity declaration
+struct SemanticEntityDecl
+{
+  std::string name;
+  std::string table;
+  std::string key;
+  std::optional<std::string> description;
+};
+
+// Semantic relationship declaration
+struct SemanticRelationshipDecl
+{
+  std::string from_entity;
+  std::string to_entity;
+  std::string type;  // "one_to_many"|"many_to_many"
+  std::string join_condition;
+};
+
+// Semantic time intelligence config
+struct SemanticTimeIntelligence
+{
+  std::optional<std::string> fiscal_year_start;
+  std::optional<std::string> week_start;
+  std::optional<std::string> default_timezone;
+};
+
+// Semantic layer declaration (top-level)
+struct SemanticDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<SemanticMetricDecl> metrics;
+  std::vector<SemanticEntityDecl> entities;
+  std::vector<SemanticRelationshipDecl> relationships;
+  std::unordered_map<std::string, std::string> synonyms;
+  std::optional<SemanticTimeIntelligence> time_intelligence;
+};
+
+// Incremental strategy block
+struct IncrementalBlock
+{
+  std::string strategy;  // "timestamp"|"id"|"cdc"|"full_refresh"
+  std::optional<std::string> key;
+  std::optional<std::string> lookback;
+  std::optional<std::string> unique_key;
+  std::optional<std::string> on_schema_change;
+  std::optional<std::string> full_refresh_schedule;
+};
+
+// Self-heal capabilities block
+struct SelfHealCapabilities
+{
+  std::optional<int> auto_retry_max;
+  std::optional<std::string> auto_retry_backoff;
+  std::optional<double> auto_scale_factor;
+  std::optional<std::string> schema_migration_approval;
+  std::optional<std::string> data_patching_strategy;
+  std::optional<IdentifierRef> fallback_source;
+  std::optional<int> circuit_breaker_threshold;
+};
+
+// Self-heal learning config
+struct SelfHealLearning
+{
+  bool record_incidents{false};
+  std::optional<std::string> incident_store;
+  bool improve_from_history{false};
+};
+
+// Self-heal notification config
+struct SelfHealNotification
+{
+  std::optional<std::string> channel;
+  ExprPtr webhook;  // nullptr if absent
+  std::vector<std::string> escalation;
+};
+
+// Self-heal block
+struct SelfHealBlock
+{
+  bool enabled{false};
+  std::optional<SelfHealCapabilities> capabilities;
+  std::optional<SelfHealLearning> learning;
+  std::optional<SelfHealNotification> notification;
+};
+
+// Auto-model discover config
+struct AutoModelDiscover
+{
+  bool facts{false};
+  bool dimensions{false};
+  bool relationships{false};
+  bool scd_types{false};
+  bool conformed_dimensions{false};
+  bool degenerate_dimensions{false};
+  bool junk_dimensions{false};
+  bool bridge_tables{false};
+  bool hubs{false};
+  bool links{false};
+  bool satellites{false};
+  bool effectivity{false};
+};
+
+// Auto-model generate config
+struct AutoModelGenerate
+{
+  std::optional<std::string> surrogate_keys;
+  bool date_dimension{false};
+  bool audit_columns{false};
+  bool hash_diff{false};
+  std::optional<std::string> hash_keys;
+  bool load_date_column{false};
+  bool record_source_column{false};
+  bool hash_diff_for_satellites{false};
+};
+
+// Auto-model block
+struct AutoModelBlock
+{
+  bool enabled{false};
+  std::optional<std::string> methodology;
+  std::optional<AutoModelDiscover> discover;
+  std::optional<AutoModelGenerate> generate;
+  std::optional<std::string> approval;
+};
+
+// Layer staging/integration config
+struct LayerConfig
+{
+  std::optional<std::string> prefix;
+  std::vector<std::string> operations;
+  std::optional<std::string> materialization;
+  std::optional<std::string> naming;
+};
+
+// Layers block
+struct LayersBlock
+{
+  std::optional<LayerConfig> staging;
+  std::optional<LayerConfig> integration;
+  std::vector<MartDecl> marts;
+};
+
+// ETL Agent declaration (v0.9.1)
+struct ETLAgentDecl
+{
+  Visibility visibility;
+  std::string name;
+
+  // Shared agent fields
+  std::string provider;
+  std::string model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> connected_knowledge;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+
+  // Data agent fields (inherited)
+  std::vector<IdentifierRef> sources;
+  std::vector<IdentifierRef> sinks;
+  std::vector<IdentifierRef> schemas;
+  std::optional<PipelineBlock> pipeline;
+  std::optional<IdentifierRef> quality;
+  std::optional<DataAgentComputeBlock> compute;
+  std::optional<IdentifierRef> governance;
+  std::optional<std::string> role;
+  std::optional<std::string> purpose;
+  std::optional<std::string> jurisdiction;
+  std::optional<IdentifierRef> catalog;
+  std::optional<bool> lineage;
+  std::optional<std::string> autonomy;
+  std::vector<std::string> approval_required;
+  std::vector<IdentifierRef> handoffs;
+
+  // ETL agent-specific fields
+  IdentifierRef warehouse;
+  std::optional<std::string> model_type;
+  std::optional<LayersBlock> layers;
+  std::optional<IdentifierRef> semantic;
+  std::optional<IncrementalBlock> incremental;
+  std::optional<bool> self_heal_flag;
+  std::optional<std::string> on_failure;
+  std::optional<SelfHealBlock> self_heal_block;
+  std::optional<AutoModelBlock> auto_model;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -1024,7 +1414,10 @@ struct Statement
                    StructDecl, ImplBlock,
                    TraitDecl, SealedDecl, ExtendBlock,
                    PipelineDecl, DispatchDecl, ParallelDecl, LoopPatternDecl,
-                   ClawAgentDecl, ForgeAgentDecl, ChannelDecl>;
+                   ClawAgentDecl, ForgeAgentDecl, ChannelDecl,
+                   SchemaDecl, SourceDecl, SinkDecl, QualityDecl,
+                   ComputeDecl, GovernanceDecl, CatalogDecl, DataAgentDecl,
+                   ETLAgentDecl, MartDecl, SemanticDecl>;
   SourceSpan span;
   Variant node;
 };

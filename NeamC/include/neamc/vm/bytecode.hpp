@@ -117,6 +117,26 @@ enum class OpCode : uint8_t
   OP_FLUSH,             // Flush claw memory to workspace -> []
   OP_SESSION_HISTORY,   // Stack: [key, limit] -> [history_list]
   OP_FORGE_RUN,         // Stack: [agent_name, config_map] -> [LoopOutcome]
+
+  // v0.9: Data agent opcodes
+  OP_DEFINE_DATA_AGENT,   // Stack: [field_count × (key, value)] -> register in globals
+  OP_DEFINE_SOURCE,       // Stack: [field_count × (key, value)] -> register in globals
+  OP_DEFINE_SINK,         // Stack: [field_count × (key, value)] -> register in globals
+  OP_DEFINE_SCHEMA,       // Stack: [field_count × (key, value)] -> register in globals
+  OP_DEFINE_COMPUTE,      // Stack: [field_count × (key, value)] -> register in globals
+  OP_DEFINE_QUALITY,      // Stack: [field_count × (key, value)] -> register in globals
+  OP_DEFINE_GOVERNANCE,   // Stack: [field_count × (key, value)] -> register in globals
+  OP_DEFINE_CATALOG,      // Stack: [field_count × (key, value)] -> register in globals
+
+  // v0.9.1: NeamETL
+  OP_DEFINE_ETL_AGENT,
+  OP_DEFINE_MART,
+  OP_DEFINE_SEMANTIC,
+  OP_SQL_TRANSPILE,
+  OP_SQL_PUSHDOWN,
+  OP_NL2SQL,
+  OP_AUTO_MODEL,
+  OP_SELF_HEAL,
 };
 
 class Bytecode

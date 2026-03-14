@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "neamc/vm/object.hpp"
 namespace neamc
@@ -710,7 +711,10 @@ void Parser::tokenize()
       {"claw", TokenType::Claw},
       {"forge", TokenType::Forge},
       {"channel", TokenType::Channel},
-      {"spawn", TokenType::Spawn}};
+      {"mart", TokenType::Mart},
+      {"semantic", TokenType::Semantic},
+      {"spawn", TokenType::Spawn},
+      {"warehouse", TokenType::Warehouse}};
 
   tokens_.clear();
   for (std::size_t i = 0; i < source_.size();)
@@ -772,6 +776,9 @@ void Parser::tokenize()
         continue;
       case '$':
         add(TokenType::Dollar);
+        continue;
+      case '@':
+        ++i;  // v0.9: skip @ prefix for schema constraints
         continue;
       case '|':
         if (i + 1 < source_.size() && source_[i + 1] == '>')
@@ -1107,6 +1114,62 @@ StmtPtr Parser::parse_declaration()
   if (match(TokenType::Channel))
   {
     return parse_channel_decl();
+  }
+  // v0.9.1: ETL agent declaration (contextual "etl agent" two-keyword prefix)
+  if (check(TokenType::Identifier) && peek().lexeme == "etl")
+  {
+    auto saved = current_;
+    advance(); // consume "etl"
+    if (match(TokenType::Agent))
+    {
+      return parse_etl_agent(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;  // not "etl agent", retreat
+  }
+  // v0.9: data agent — contextual two-keyword prefix
+  if (check(TokenType::Identifier) && peek().lexeme == "data")
+  {
+    auto saved = current_;
+    advance(); // consume "data"
+    if (match(TokenType::Agent))
+    {
+      return parse_data_agent(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;  // not "data agent", retreat
+  }
+  // v0.9.1: Semantic declaration (top-level)
+  if (match(TokenType::Semantic))
+  {
+    return parse_semantic(has_visibility ? visibility : Visibility{});
+  }
+  // v0.9: standalone declarations
+  if (match_identifier("schema"))
+  {
+    return parse_schema(has_visibility ? visibility : Visibility{});
+  }
+  if (match_identifier("source"))
+  {
+    return parse_source(has_visibility ? visibility : Visibility{});
+  }
+  if (match_identifier("sink"))
+  {
+    return parse_sink(has_visibility ? visibility : Visibility{});
+  }
+  if (match_identifier("quality"))
+  {
+    return parse_quality(has_visibility ? visibility : Visibility{});
+  }
+  if (match_identifier("compute"))
+  {
+    return parse_compute(has_visibility ? visibility : Visibility{});
+  }
+  if (match_identifier("governance"))
+  {
+    return parse_governance(has_visibility ? visibility : Visibility{});
+  }
+  if (match_identifier("catalog"))
+  {
+    return parse_catalog(has_visibility ? visibility : Visibility{});
   }
   if (match(TokenType::Agent))
   {
@@ -2088,6 +2151,7 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
+    match(TokenType::Comma);  // consume optional comma between fields
     if (match(TokenType::Provider))
     {
       if (!match(TokenType::Colon))
@@ -2293,6 +2357,19 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
       connector = IdentifierRef{previous().lexeme, span_from_token(previous())};
       continue;
     }
+    // Field rejection: data-agent-only fields
+    if (match(TokenType::Sources) || match_identifier("sources"))
+    {
+      error("'sources' is not valid on a plain agent. Use 'data agent' for data pipeline agents.");
+    }
+    if (match_identifier("sinks"))
+    {
+      error("'sinks' is not valid on a plain agent. Use 'data agent' for data pipeline agents.");
+    }
+    if (match(TokenType::Pipeline))
+    {
+      error("'pipeline' is not valid on a plain agent. Use 'data agent' for data pipeline agents.");
+    }
     error("Unexpected token in agent block");
   }
 
@@ -2320,6 +2397,25 @@ StmtPtr Parser::parse_agent(const Visibility& visibility)
 bool Parser::match_identifier(const std::string& name)
 {
   if (check(TokenType::Identifier) && peek().lexeme == name)
+  {
+    advance();
+    return true;
+  }
+  return false;
+}
+
+// v0.9.1: Match certain keywords as if they were identifiers
+bool Parser::match_keyword_as_identifier()
+{
+  const auto& current = peek();
+  if (current.type == TokenType::Provider || current.type == TokenType::Model ||
+      current.type == TokenType::System || current.type == TokenType::Skills ||
+      current.type == TokenType::Budget || current.type == TokenType::Env ||
+      current.type == TokenType::Mart || current.type == TokenType::Semantic ||
+      current.type == TokenType::Warehouse || current.type == TokenType::Sources ||
+      current.type == TokenType::Policy || current.type == TokenType::Channel ||
+      current.type == TokenType::Guards ||
+      current.type == TokenType::Endpoint || current.type == TokenType::Temperature)
   {
     advance();
     return true;
@@ -2590,6 +2686,7 @@ StmtPtr Parser::parse_claw_agent(const Visibility& visibility)
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
+    match(TokenType::Comma);  // consume optional comma between fields
     if (match(TokenType::Provider))
     {
       if (!match(TokenType::Colon)) { error("Expected ':' after provider"); }
@@ -2728,6 +2825,19 @@ StmtPtr Parser::parse_claw_agent(const Visibility& visibility)
       if (!match(TokenType::String)) { error("Expected string for mode"); }
       continue;
     }
+    // Field rejection: data-agent-only fields
+    if (match(TokenType::Sources) || match_identifier("sources"))
+    {
+      error("'sources' is not valid on a claw agent. Use 'data agent' for data pipeline agents.");
+    }
+    if (match_identifier("sinks"))
+    {
+      error("'sinks' is not valid on a claw agent. Use 'data agent' for data pipeline agents.");
+    }
+    if (match(TokenType::Pipeline))
+    {
+      error("'pipeline' is not valid on a claw agent. Use 'data agent' for data pipeline agents.");
+    }
     error("Unexpected token in claw agent block");
   }
 
@@ -2793,6 +2903,7 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
+    match(TokenType::Comma);  // consume optional comma between fields
     if (match(TokenType::Provider))
     {
       if (!match(TokenType::Colon)) { error("Expected ':' after provider"); }
@@ -2919,6 +3030,19 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
       if (!match(TokenType::String)) { error("Expected string for mode"); }
       continue;
     }
+    // Field rejection: data-agent-only fields
+    if (match(TokenType::Sources) || match_identifier("sources"))
+    {
+      error("'sources' is not valid on a forge agent. Use 'data agent' for data pipeline agents.");
+    }
+    if (match_identifier("sinks"))
+    {
+      error("'sinks' is not valid on a forge agent. Use 'data agent' for data pipeline agents.");
+    }
+    if (match(TokenType::Pipeline))
+    {
+      error("'pipeline' is not valid on a forge agent. Use 'data agent' for data pipeline agents.");
+    }
     error("Unexpected token in forge agent block");
   }
 
@@ -3022,6 +3146,7 @@ StmtPtr Parser::parse_budget(const Visibility& visibility)
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
     dimensions.push_back(parse_budget_dimension());
+    match(TokenType::Comma);  // consume optional comma between dimensions
   }
 
   if (!match(TokenType::RightBrace))
@@ -4522,7 +4647,9 @@ SkillParam Parser::parse_skill_param()
       !match(TokenType::Pipeline) && !match(TokenType::Dispatch) &&
       !match(TokenType::Parallel) && !match(TokenType::LoopPattern) &&
       !match(TokenType::Claw) && !match(TokenType::Forge) &&
-      !match(TokenType::Channel) && !match(TokenType::Spawn))
+      !match(TokenType::Channel) && !match(TokenType::Spawn) &&
+      !match(TokenType::Mart) && !match(TokenType::Semantic) &&
+      !match(TokenType::Warehouse))
   {
     error("Expected param name");
   }
@@ -5053,7 +5180,7 @@ StmtPtr Parser::parse_let()
     return stmt;
   }
 
-  if (!match(TokenType::Identifier))
+  if (!match(TokenType::Identifier) && !match(TokenType::Claw) && !match(TokenType::Forge))
   {
     error("Expected identifier after 'let'");
   }
@@ -5971,6 +6098,20 @@ ExprPtr Parser::parse_primary()
       error("Expected ')' after expression");
     }
     return first;
+  }
+  // v0.9: Allow keyword tokens as identifiers in expression context (e.g., map keys)
+  if (match(TokenType::Agent))
+  {
+    return make_identifier("agent", span_from_token(previous()));
+  }
+  // v0.8: Allow claw/forge as contextual keywords in expressions
+  if (match(TokenType::Claw))
+  {
+    return make_identifier("claw", span_from_token(previous()));
+  }
+  if (match(TokenType::Forge))
+  {
+    return make_identifier("forge", span_from_token(previous()));
   }
   error("Unexpected token");
 }
@@ -7014,6 +7155,2454 @@ StmtPtr Parser::parse_loop_pattern_decl()
   stmt->span = start_span;
   stmt->node = LoopPatternDecl{std::move(name), std::move(generator_agent),
                                  std::move(critic_agent), max_iterations, nullptr};
+  return stmt;
+}
+
+// ============================================================================
+// v0.9: Data Agent Parse Functions
+// ============================================================================
+
+void Parser::consume_optional_comma()
+{
+  match(TokenType::Comma);
+}
+
+std::vector<std::string> Parser::parse_string_list()
+{
+  std::vector<std::string> result;
+  if (!match(TokenType::LeftBracket))
+  {
+    error("Expected '[' for string list");
+  }
+  while (!check(TokenType::RightBracket) && !is_at_end())
+  {
+    if (!match(TokenType::String))
+    {
+      error("Expected string in string list");
+    }
+    result.push_back(previous().lexeme);
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBracket))
+  {
+    error("Expected ']' after string list");
+  }
+  return result;
+}
+
+ExprPtr Parser::parse_config_block()
+{
+  // Parse { key: value, ... } where keys can be identifiers or strings
+  // Returns a MapExpr
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' for config block");
+  }
+  std::vector<MapEntry> entries;
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    // Key: identifier or string
+    std::string key;
+    if (match(TokenType::String))
+    {
+      key = previous().lexeme;
+    }
+    else if (match(TokenType::Identifier) || match(TokenType::Model) ||
+             match(TokenType::Type) || match(TokenType::Env) ||
+             match(TokenType::System) || match(TokenType::Provider) ||
+             match(TokenType::Budget) || match(TokenType::Guards) ||
+             match(TokenType::Skills) || match(TokenType::Pipeline) ||
+             match(TokenType::Sources) || match(TokenType::Memory))
+    {
+      key = previous().lexeme;
+    }
+    else
+    {
+      error("Expected key (identifier or string) in config block");
+    }
+
+    if (!match(TokenType::Colon))
+    {
+      error("Expected ':' after key in config block");
+    }
+
+    // Value: expression (handles strings, numbers, bools, lists, nested maps, identifiers)
+    ExprPtr value;
+    if (check(TokenType::LeftBrace))
+    {
+      value = parse_config_block();
+    }
+    else if (check(TokenType::LeftBracket))
+    {
+      // Parse array — could be list of maps, strings, or identifiers
+      value = parse_expression();
+    }
+    else
+    {
+      value = parse_expression();
+    }
+
+    auto key_expr = std::make_unique<Expression>();
+    key_expr->span = value->span;
+    key_expr->node = LiteralExpr{vm::Value::String(key.c_str(), key.size())};
+    entries.push_back(MapEntry{std::move(key_expr), std::move(value)});
+
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Expected '}' in config block");
+  }
+  auto expr = std::make_unique<Expression>();
+  expr->span = span_from_token(previous());
+  expr->node = MapExpr{std::move(entries)};
+  return expr;
+}
+
+StmtPtr Parser::parse_schema(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected schema name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after schema name");
+  }
+
+  std::optional<int> version;
+  std::vector<SchemaFieldDecl> fields;
+
+  // Valid field types
+  static const std::unordered_set<std::string> valid_types = {
+      "string", "int", "float", "bool", "datetime"};
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    // Check for version field
+    if (match_identifier("version"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after version"); }
+      if (!match(TokenType::Number)) { error("Expected number for version"); }
+      version = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      match(TokenType::Comma);
+      continue;
+    }
+
+    // Field: name: type @constraint ...
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected field name in schema");
+    }
+    SchemaFieldDecl field;
+    field.name = previous().lexeme;
+
+    if (!match(TokenType::Colon)) { error("Expected ':' after field name"); }
+
+    if (!match(TokenType::Identifier))
+    {
+      error("Expected type name after ':'");
+    }
+    field.type_name = previous().lexeme;
+
+    // Validate field type (DATA-010)
+    if (valid_types.find(field.type_name) == valid_types.end())
+    {
+      error("Invalid field type '" + field.type_name + "'. Valid types: string, int, float, bool, datetime");
+    }
+
+    // Parse @constraint annotations
+    // The '@' character is skipped by the tokenizer, so @primary_key becomes just "primary_key" as an Identifier
+    static const std::unordered_set<std::string> constraint_names = {
+        "primary_key", "not_null", "unique", "pattern", "length",
+        "range", "positive", "enum", "default", "foreign_key"};
+
+    while (check(TokenType::Identifier) &&
+           constraint_names.count(peek().lexeme) > 0)
+    {
+      advance();
+      SchemaConstraint constraint;
+      constraint.type = previous().lexeme;
+
+      if (constraint.type == "range" || constraint.type == "length")
+      {
+        if (!match(TokenType::LeftParen)) { error("Expected '(' after @" + constraint.type); }
+        if (!match(TokenType::Number)) { error("Expected number"); }
+        double min_val = std::strtod(previous().lexeme.c_str(), nullptr);
+        if (!match(TokenType::Comma)) { error("Expected ','"); }
+        if (!match(TokenType::Number)) { error("Expected number"); }
+        double max_val = std::strtod(previous().lexeme.c_str(), nullptr);
+        // DATA-012: range min > max
+        if (constraint.type == "range" && min_val > max_val)
+        {
+          error("@range min (" + std::to_string(min_val) + ") must be <= max (" +
+                std::to_string(max_val) + ")");
+        }
+        constraint.number_args = {min_val, max_val};
+        if (!match(TokenType::RightParen)) { error("Expected ')'"); }
+      }
+      else if (constraint.type == "pattern")
+      {
+        if (!match(TokenType::LeftParen)) { error("Expected '(' after @pattern"); }
+        if (!match(TokenType::String)) { error("Expected regex string"); }
+        constraint.string_args.push_back(previous().lexeme);
+        if (!match(TokenType::RightParen)) { error("Expected ')'"); }
+      }
+      else if (constraint.type == "enum")
+      {
+        if (!match(TokenType::LeftParen)) { error("Expected '(' after @enum"); }
+        auto values = parse_string_list();
+        // DATA-013: empty enum
+        if (values.empty())
+        {
+          error("@enum must have at least one value");
+        }
+        constraint.string_args = std::move(values);
+        if (!match(TokenType::RightParen)) { error("Expected ')'"); }
+      }
+      else if (constraint.type == "default")
+      {
+        if (!match(TokenType::LeftParen)) { error("Expected '(' after @default"); }
+        // Accept any expression as default
+        if (match(TokenType::Identifier))
+        {
+          constraint.string_args.push_back(previous().lexeme);
+          if (match(TokenType::LeftParen)) // function call like now()
+          {
+            match(TokenType::RightParen);
+          }
+        }
+        else if (match(TokenType::String))
+        {
+          constraint.string_args.push_back(previous().lexeme);
+        }
+        else if (match(TokenType::Number))
+        {
+          constraint.number_args.push_back(std::strtod(previous().lexeme.c_str(), nullptr));
+        }
+        if (!match(TokenType::RightParen)) { error("Expected ')'"); }
+      }
+      else if (constraint.type == "foreign_key")
+      {
+        if (!match(TokenType::LeftParen)) { error("Expected '(' after @foreign_key"); }
+        if (!match(TokenType::Identifier)) { error("Expected schema reference"); }
+        constraint.ref = previous().lexeme;
+        if (!match(TokenType::RightParen)) { error("Expected ')'"); }
+      }
+      // primary_key, not_null, unique, positive: no args
+
+      field.constraints.push_back(std::move(constraint));
+    }
+
+    fields.push_back(std::move(field));
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated schema block");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = SchemaDecl{
+      std::move(visibility), std::move(name), std::move(version), std::move(fields)};
+  return stmt;
+}
+
+StmtPtr Parser::parse_source(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected source name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after source name");
+  }
+
+  static const std::unordered_set<std::string> valid_source_types = {
+      "postgres", "s3", "http", "kafka"};
+
+  std::optional<std::string> type;
+  std::optional<std::string> connection;
+  std::optional<std::string> format;
+  std::optional<std::string> refresh;
+  std::optional<std::string> schema_ref;
+  std::vector<std::string> partition_by;
+  std::optional<std::string> classification;
+  std::optional<std::string> mode;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Type))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after type"); }
+      if (!match(TokenType::String)) { error("Expected string for source type"); }
+      std::string t = previous().lexeme;
+      // DATA-006: validate source type
+      if (valid_source_types.find(t) == valid_source_types.end())
+      {
+        error("Unknown source type '" + t + "'. Valid types: postgres, s3, http, kafka");
+      }
+      type = std::move(t);
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("connection"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after connection"); }
+      // connection can be a string or a function call like env("...")
+      if (match(TokenType::String))
+      {
+        connection = previous().lexeme;
+      }
+      else if (match_identifier("env") || match(TokenType::Env))
+      {
+        // env("VAR_NAME") — store as-is
+        if (!match(TokenType::LeftParen)) { error("Expected '(' after env"); }
+        if (!match(TokenType::String)) { error("Expected string in env()"); }
+        connection = "env(" + previous().lexeme + ")";
+        if (!match(TokenType::RightParen)) { error("Expected ')'"); }
+      }
+      else
+      {
+        error("Expected string or env() for connection");
+      }
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("format"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after format"); }
+      if (!match(TokenType::String)) { error("Expected string for format"); }
+      format = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("refresh"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after refresh"); }
+      if (!match(TokenType::String)) { error("Expected string for refresh"); }
+      refresh = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("schema"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after schema"); }
+      if (!match(TokenType::Identifier)) { error("Expected schema identifier"); }
+      schema_ref = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("partition_by"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after partition_by"); }
+      partition_by = parse_string_list();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("classification"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after classification"); }
+      if (!match(TokenType::String)) { error("Expected string for classification"); }
+      classification = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("mode"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after mode"); }
+      if (!match(TokenType::String)) { error("Expected string for mode"); }
+      mode = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    error("Unexpected token in source block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated source block");
+  }
+  if (!type.has_value())
+  {
+    error("Source missing required field: type");
+  }
+  if (!connection.has_value())
+  {
+    error("Source missing required field: connection");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = SourceDecl{
+      std::move(visibility), std::move(name), std::move(*type), std::move(*connection),
+      std::move(format), std::move(refresh), std::move(schema_ref), std::move(partition_by),
+      std::move(classification), std::move(mode)};
+  return stmt;
+}
+
+StmtPtr Parser::parse_sink(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected sink name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after sink name");
+  }
+
+  static const std::unordered_set<std::string> valid_write_modes = {
+      "append", "upsert", "replace", "merge"};
+
+  std::optional<std::string> type;
+  std::optional<std::string> connection;
+  std::optional<std::string> format;
+  std::optional<std::string> write_mode;
+  std::optional<int> batch_size;
+  std::optional<std::string> schema_ref;
+  std::optional<std::string> compute_ref;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Type))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after type"); }
+      if (!match(TokenType::String)) { error("Expected string for sink type"); }
+      type = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("connection"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after connection"); }
+      if (match(TokenType::String))
+      {
+        connection = previous().lexeme;
+      }
+      else if (match_identifier("env") || match(TokenType::Env))
+      {
+        if (!match(TokenType::LeftParen)) { error("Expected '(' after env"); }
+        if (!match(TokenType::String)) { error("Expected string in env()"); }
+        connection = "env(" + previous().lexeme + ")";
+        if (!match(TokenType::RightParen)) { error("Expected ')'"); }
+      }
+      else
+      {
+        error("Expected string or env() for connection");
+      }
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("format"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after format"); }
+      if (!match(TokenType::String)) { error("Expected string for format"); }
+      format = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("write_mode"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after write_mode"); }
+      if (!match(TokenType::String)) { error("Expected string for write_mode"); }
+      std::string wm = previous().lexeme;
+      // DATA-008: validate write mode
+      if (valid_write_modes.find(wm) == valid_write_modes.end())
+      {
+        error("Invalid write_mode '" + wm + "'. Valid modes: append, upsert, replace, merge");
+      }
+      write_mode = std::move(wm);
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("batch_size"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after batch_size"); }
+      if (!match(TokenType::Number)) { error("Expected number for batch_size"); }
+      batch_size = static_cast<int>(std::strtod(previous().lexeme.c_str(), nullptr));
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("schema"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after schema"); }
+      if (!match(TokenType::Identifier)) { error("Expected schema identifier"); }
+      schema_ref = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("compute"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after compute"); }
+      if (!match(TokenType::Identifier)) { error("Expected compute identifier"); }
+      compute_ref = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    error("Unexpected token in sink block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated sink block");
+  }
+  if (!type.has_value())
+  {
+    error("Sink missing required field: type");
+  }
+  if (!connection.has_value())
+  {
+    error("Sink missing required field: connection");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = SinkDecl{
+      std::move(visibility), std::move(name), std::move(*type), std::move(*connection),
+      std::move(format), std::move(write_mode), std::move(batch_size),
+      std::move(schema_ref), std::move(compute_ref)};
+  return stmt;
+}
+
+StmtPtr Parser::parse_quality(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected quality name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after quality name");
+  }
+
+  static const std::unordered_set<std::string> valid_violations = {
+      "warn", "gate", "gate_and_alert", "gate_and_escalate", "quarantine_and_alert"};
+
+  std::optional<std::string> freshness;
+  std::optional<double> completeness;
+  std::vector<std::string> uniqueness;
+  std::optional<bool> drift_detection;
+  std::optional<double> anomaly_threshold;
+  std::optional<std::string> on_violation;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("freshness"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for freshness"); }
+      freshness = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("completeness"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Number)) { error("Expected number for completeness"); }
+      double val = std::strtod(previous().lexeme.c_str(), nullptr);
+      // DATA-022: completeness range
+      if (val < 0.0 || val > 1.0)
+      {
+        error("completeness must be between 0.0 and 1.0, got " + std::to_string(val));
+      }
+      completeness = val;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("uniqueness"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      uniqueness = parse_string_list();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("drift_detection"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (match(TokenType::True))
+        drift_detection = true;
+      else if (match(TokenType::False))
+        drift_detection = false;
+      else
+        error("Expected boolean for drift_detection");
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("anomaly_threshold"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Number)) { error("Expected number for anomaly_threshold"); }
+      anomaly_threshold = std::strtod(previous().lexeme.c_str(), nullptr);
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("on_violation"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for on_violation"); }
+      std::string ov = previous().lexeme;
+      // DATA-021: validate on_violation
+      if (valid_violations.find(ov) == valid_violations.end())
+      {
+        error("Invalid on_violation '" + ov + "'. Valid: warn, gate, gate_and_alert, gate_and_escalate, quarantine_and_alert");
+      }
+      on_violation = std::move(ov);
+      consume_optional_comma();
+      continue;
+    }
+    error("Unexpected token in quality block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated quality block");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = QualityDecl{
+      std::move(visibility), std::move(name), std::move(freshness), std::move(completeness),
+      std::move(uniqueness), std::move(drift_detection), std::move(anomaly_threshold),
+      std::move(on_violation)};
+  return stmt;
+}
+
+StmtPtr Parser::parse_compute(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected compute name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after compute name");
+  }
+
+  static const std::unordered_set<std::string> valid_engines = {
+      "spark", "snowflake", "databricks", "bigquery", "local"};
+
+  std::optional<std::string> engine;
+  ExprPtr config;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("engine"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for engine"); }
+      std::string e = previous().lexeme;
+      // DATA-016: validate engine
+      if (valid_engines.find(e) == valid_engines.end())
+      {
+        error("Unknown compute engine '" + e + "'. Valid: spark, snowflake, databricks, bigquery, local");
+      }
+      engine = std::move(e);
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("config"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      config = parse_config_block();
+      consume_optional_comma();
+      continue;
+    }
+    error("Unexpected token in compute block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated compute block");
+  }
+  if (!engine.has_value())
+  {
+    error("Compute missing required field: engine");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = ComputeDecl{
+      std::move(visibility), std::move(name), std::move(*engine), std::move(config)};
+  return stmt;
+}
+
+StmtPtr Parser::parse_governance(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected governance name");
+  }
+  const auto name = previous().lexeme;
+
+  // Parse entire body as a config block
+  auto body = parse_config_block();
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = GovernanceDecl{
+      std::move(visibility), std::move(name), std::move(body)};
+  return stmt;
+}
+
+StmtPtr Parser::parse_catalog(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected catalog name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after catalog name");
+  }
+
+  static const std::unordered_set<std::string> valid_engines = {
+      "unity_catalog", "datahub"};
+
+  std::optional<std::string> engine;
+  ExprPtr register_opts;
+  std::optional<bool> discovery;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("engine"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for engine"); }
+      std::string e = previous().lexeme;
+      // DATA-024: validate catalog engine
+      if (valid_engines.find(e) == valid_engines.end())
+      {
+        error("Unknown catalog engine '" + e + "'. Valid: unity_catalog, datahub");
+      }
+      engine = std::move(e);
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("register"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      register_opts = parse_config_block();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("discovery"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (match(TokenType::True))
+        discovery = true;
+      else if (match(TokenType::False))
+        discovery = false;
+      else
+        error("Expected boolean for discovery");
+      consume_optional_comma();
+      continue;
+    }
+    error("Unexpected token in catalog block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated catalog block");
+  }
+  if (!engine.has_value())
+  {
+    error("Catalog missing required field: engine");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = CatalogDecl{
+      std::move(visibility), std::move(name), std::move(*engine),
+      std::move(register_opts), std::move(discovery)};
+  return stmt;
+}
+
+PipelineBlock Parser::parse_pipeline_block()
+{
+  PipelineBlock block;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' for pipeline block");
+  }
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("extract"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      block.extract = parse_identifier_list();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("transform"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::LeftBracket)) { error("Expected '['"); }
+
+      while (!check(TokenType::RightBracket) && !is_at_end())
+      {
+        PipelineTransformOp op;
+        // Accept identifier or keyword token as transform name
+        if (match(TokenType::Identifier) || match(TokenType::Type))
+        {
+          op.name = previous().lexeme;
+        }
+        else
+        {
+          error("Expected transform operator name");
+        }
+
+        // Parse named arguments: (key: value, ...)
+        if (match(TokenType::LeftParen))
+        {
+          while (!check(TokenType::RightParen) && !is_at_end())
+          {
+            // Key — accept identifiers and keyword tokens
+            std::string key;
+            if (match(TokenType::Identifier) || match(TokenType::Type) ||
+                match(TokenType::Sources))
+            {
+              key = previous().lexeme;
+            }
+            else if (match_identifier("source") || match_identifier("column") ||
+                     match_identifier("op") || match_identifier("value") ||
+                     match_identifier("keys") || match_identifier("rules") ||
+                     match_identifier("group_by") || match_identifier("metrics") ||
+                     match_identifier("expr") || match_identifier("ascending") ||
+                     match_identifier("n") || match_identifier("agent") ||
+                     match_identifier("on") || match_identifier("stage") ||
+                     match_identifier("engine"))
+            {
+              key = previous().lexeme;
+            }
+            else
+            {
+              // Try consuming any token as key
+              advance();
+              key = previous().lexeme;
+            }
+
+            if (!match(TokenType::Colon)) { error("Expected ':' in transform args"); }
+
+            ExprPtr value = parse_expression();
+            op.args.push_back({std::move(key), std::move(value)});
+            match(TokenType::Comma);
+          }
+          if (!match(TokenType::RightParen)) { error("Expected ')'"); }
+        }
+
+        block.transforms.push_back(std::move(op));
+        match(TokenType::Comma);
+      }
+      if (!match(TokenType::RightBracket)) { error("Expected ']'"); }
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("load"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      block.load = parse_identifier_list();
+      consume_optional_comma();
+      continue;
+    }
+    error("Unexpected token in pipeline block. Expected: extract, transform, load");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated pipeline block");
+  }
+  return block;
+}
+
+DataAgentComputeBlock Parser::parse_data_agent_compute_block()
+{
+  DataAgentComputeBlock block;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' for compute block");
+  }
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("default"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Identifier)) { error("Expected compute identifier"); }
+      block.default_engine = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("available"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      block.available = parse_identifier_list();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("routing"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::LeftBracket)) { error("Expected '['"); }
+      while (!check(TokenType::RightBracket) && !is_at_end())
+      {
+        if (!match(TokenType::LeftBrace)) { error("Expected '{'"); }
+        std::string stage;
+        std::string engine_name;
+        while (!check(TokenType::RightBrace) && !is_at_end())
+        {
+          if (match_identifier("stage"))
+          {
+            if (!match(TokenType::Colon)) { error("Expected ':'"); }
+            if (!match(TokenType::String)) { error("Expected string for stage"); }
+            stage = previous().lexeme;
+            consume_optional_comma();
+            continue;
+          }
+          if (match_identifier("engine"))
+          {
+            if (!match(TokenType::Colon)) { error("Expected ':'"); }
+            if (!match(TokenType::Identifier)) { error("Expected engine identifier"); }
+            engine_name = previous().lexeme;
+            consume_optional_comma();
+            continue;
+          }
+          // Skip unknown fields in routing rules (e.g., condition)
+          if (match(TokenType::Identifier) || match(TokenType::String))
+          {
+            if (match(TokenType::Colon)) { parse_expression(); }
+            consume_optional_comma();
+            continue;
+          }
+          error("Expected 'stage' or 'engine' in routing rule");
+        }
+        if (!match(TokenType::RightBrace)) { error("Expected '}'"); }
+        block.routing.push_back({std::move(stage), IdentifierRef{std::move(engine_name), {}}});
+        match(TokenType::Comma);
+      }
+      if (!match(TokenType::RightBracket)) { error("Expected ']'"); }
+      consume_optional_comma();
+      continue;
+    }
+    error("Expected 'default', 'available', or 'routing' in compute block");
+  }
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated compute block");
+  }
+  return block;
+}
+
+StmtPtr Parser::parse_data_agent(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+  {
+    error("Expected data agent name");
+  }
+  const auto name = previous().lexeme;
+  if (!match(TokenType::LeftBrace))
+  {
+    error("Expected '{' after data agent name");
+  }
+
+  // Common fields
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system;
+  std::vector<IdentifierRef> skills;
+  std::vector<IdentifierRef> guardchains;
+  std::optional<IdentifierRef> policy;
+  std::optional<IdentifierRef> budget;
+  std::optional<IdentifierRef> env;
+  // Data agent specific
+  std::vector<IdentifierRef> sources;
+  std::vector<IdentifierRef> sinks;
+  std::optional<IdentifierRef> schema_ref;
+  std::optional<IdentifierRef> quality_ref;
+  std::optional<DataAgentComputeBlock> compute;
+  std::optional<IdentifierRef> governance_ref;
+  std::optional<IdentifierRef> catalog_ref;
+  std::optional<bool> lineage;
+  std::optional<std::string> role;
+  std::optional<std::string> purpose;
+  std::optional<std::string> autonomy;
+  std::optional<PipelineBlock> pipeline;
+  std::optional<std::string> agent_md;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match(TokenType::Provider))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for provider"); }
+      provider = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Model))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for model"); }
+      model = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Endpoint))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for endpoint"); }
+      endpoint = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::ApiKeyEnv))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for api_key_env"); }
+      api_key_env = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Temperature))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Number)) { error("Expected number for temperature"); }
+      temperature = std::strtod(previous().lexeme.c_str(), nullptr);
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::System))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for system"); }
+      system = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Skills))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      skills = parse_identifier_list();
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Guards) || match_identifier("guardchains"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      guardchains = parse_identifier_list();
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Policy))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Identifier)) { error("Expected policy identifier"); }
+      policy = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Budget))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Identifier)) { error("Expected budget identifier"); }
+      budget = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Env))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Identifier)) { error("Expected env identifier"); }
+      env = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma();
+      continue;
+    }
+    // Data agent specific fields
+    if (match(TokenType::Sources) || match_identifier("sources"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      sources = parse_identifier_list();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("sinks"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      sinks = parse_identifier_list();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("schema"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Identifier)) { error("Expected schema identifier"); }
+      schema_ref = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("quality"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Identifier)) { error("Expected quality identifier"); }
+      quality_ref = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("compute"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      compute = parse_data_agent_compute_block();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("governance"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Identifier)) { error("Expected governance identifier"); }
+      governance_ref = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("catalog"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::Identifier)) { error("Expected catalog identifier"); }
+      catalog_ref = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("lineage"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (match(TokenType::True))
+        lineage = true;
+      else if (match(TokenType::False))
+        lineage = false;
+      else
+        error("Expected boolean for lineage");
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("role"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for role"); }
+      role = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("purpose"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for purpose"); }
+      purpose = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("autonomy"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string for autonomy"); }
+      autonomy = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    if (match(TokenType::Pipeline))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      pipeline = parse_pipeline_block();
+      consume_optional_comma();
+      continue;
+    }
+    if (match_identifier("agent_md"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      if (!match(TokenType::String)) { error("Expected string path for agent_md"); }
+      agent_md = previous().lexeme;
+      consume_optional_comma();
+      continue;
+    }
+    // Field rejection: claw/forge-only fields
+    if (match_identifier("verify"))
+    {
+      error("'verify' is not valid on a data agent. Use 'forge agent' for verification-driven loops.");
+    }
+    if (match_identifier("channels"))
+    {
+      error("'channels' is not valid on a data agent. Use 'claw agent' for channel-based agents.");
+    }
+    if (match(TokenType::Checkpoint))
+    {
+      error("'checkpoint' is not valid on a data agent. Use 'forge agent' for checkpointed loops.");
+    }
+    if (match(TokenType::LoopPattern))
+    {
+      error("'loop' is not valid on a data agent. Use 'forge agent' for iteration loops.");
+    }
+    if (match_identifier("session"))
+    {
+      error("'session' is not valid on a data agent. Use 'claw agent' for session management.");
+    }
+    if (match_identifier("semantic_memory"))
+    {
+      error("'semantic_memory' is not valid on a data agent. Use 'claw agent' for semantic memory.");
+    }
+    if (match(TokenType::ConnectedKnowledge))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':'"); }
+      // Accept connected_knowledge for data agents but store as-is
+      auto ck = parse_identifier_list();
+      // Data agents don't use connected_knowledge, just skip it for now
+      consume_optional_comma();
+      continue;
+    }
+    error("Unexpected token in data agent block");
+  }
+
+  if (!match(TokenType::RightBrace))
+  {
+    error("Unterminated data agent block");
+  }
+  if (!provider.has_value())
+  {
+    error("Data agent missing required field: provider");
+  }
+  if (!model.has_value())
+  {
+    error("Data agent missing required field: model");
+  }
+  // DATA-001: data agent must have at least one source
+  if (sources.empty())
+  {
+    error("Data agent must have at least one source");
+  }
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = DataAgentDecl{
+      std::move(visibility), std::move(name), std::move(*provider), std::move(*model),
+      std::move(endpoint), std::move(api_key_env), std::move(temperature), std::move(system),
+      std::move(skills), std::move(guardchains), std::move(policy), std::move(budget),
+      std::move(env), std::move(sources), std::move(sinks), std::move(schema_ref),
+      std::move(quality_ref), std::move(compute), std::move(governance_ref),
+      std::move(catalog_ref), std::move(lineage), std::move(role), std::move(purpose),
+      std::move(autonomy), std::move(pipeline), std::move(agent_md)};
+  return stmt;
+}
+
+// ---------------------------------------------------------------------------
+// v0.9.1  ETL Agent parse functions
+// ---------------------------------------------------------------------------
+
+StmtPtr Parser::parse_semantic(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier))
+    error("Expected semantic layer name");
+  const auto name = previous().lexeme;
+
+  if (!match(TokenType::LeftBrace))
+    error("Expected '{' after semantic name");
+
+  SemanticDecl decl;
+  decl.visibility = visibility;
+  decl.name = name;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("metrics"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        SemanticMetricDecl metric;
+        if (!match(TokenType::Identifier) && !match_keyword_as_identifier())
+          error("Expected metric name");
+        metric.name = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+        if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+        while (!check(TokenType::RightBrace) && !is_at_end())
+        {
+          if (match_identifier("sql"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected SQL string");
+            metric.sql = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("description") || match(TokenType::Description))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected description string");
+            metric.description = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("type") || match(TokenType::Type))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected type string");
+            std::string t = previous().lexeme;
+            if (t != "measure" && t != "ratio" && t != "cumulative" && t != "derived")
+              error("Invalid metric type '" + t + "'. Expected: measure, ratio, cumulative, derived");
+            metric.type = t;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("time_grains"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            metric.time_grains = parse_string_list();
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("dimensions"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            metric.dimensions = parse_string_list();
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("filters"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            metric.filters = parse_string_list();
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("owner"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected owner string");
+            metric.owner = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          error("Unexpected field in metric: " + peek().lexeme);
+        }
+        if (!match(TokenType::RightBrace)) error("Expected '}' after metric body");
+        consume_optional_comma();
+
+        if (metric.sql.empty()) error("Metric '" + metric.name + "' missing 'sql'");
+        decl.metrics.push_back(std::move(metric));
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}' after metrics");
+      consume_optional_comma(); continue;
+    }
+
+    if (match_identifier("entities"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        SemanticEntityDecl entity;
+        if (!match(TokenType::Identifier) && !match_keyword_as_identifier())
+          error("Expected entity name");
+        entity.name = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+        if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+        while (!check(TokenType::RightBrace) && !is_at_end())
+        {
+          if (match_identifier("table"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected table string");
+            entity.table = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("key"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected key string");
+            entity.key = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("description") || match(TokenType::Description))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected description string");
+            entity.description = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          error("Unexpected field in entity: " + peek().lexeme);
+        }
+        if (!match(TokenType::RightBrace)) error("Expected '}' after entity body");
+        consume_optional_comma();
+
+        if (entity.table.empty()) error("Entity '" + entity.name + "' missing 'table'");
+        if (entity.key.empty()) error("Entity '" + entity.name + "' missing 'key'");
+        decl.entities.push_back(std::move(entity));
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}' after entities");
+      consume_optional_comma(); continue;
+    }
+
+    if (match_identifier("relationships"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end())
+      {
+        SemanticRelationshipDecl rel;
+        if (!match(TokenType::LeftBrace)) error("Expected '{'");
+        while (!check(TokenType::RightBrace) && !is_at_end())
+        {
+          if (match_identifier("from"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected string");
+            rel.from_entity = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("to") || match(TokenType::To))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected string");
+            rel.to_entity = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("type") || match(TokenType::Type))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected string");
+            rel.type = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("join"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected string");
+            rel.join_condition = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          error("Unexpected field in relationship");
+        }
+        if (!match(TokenType::RightBrace)) error("Expected '}'");
+        decl.relationships.push_back(std::move(rel));
+        consume_optional_comma();
+      }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+      consume_optional_comma(); continue;
+    }
+
+    if (match_identifier("synonyms"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        if (!match(TokenType::String)) error("Expected synonym key string");
+        std::string key = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+        if (!match(TokenType::String)) error("Expected synonym value string");
+        decl.synonyms[key] = previous().lexeme;
+        consume_optional_comma();
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}'");
+      consume_optional_comma(); continue;
+    }
+
+    if (match_identifier("time_intelligence"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      SemanticTimeIntelligence ti;
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        if (match_identifier("fiscal_year_start"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::String)) error("Expected string");
+          ti.fiscal_year_start = previous().lexeme;
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("week_start"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::String)) error("Expected string");
+          ti.week_start = previous().lexeme;
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("default_timezone"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::String)) error("Expected string");
+          ti.default_timezone = previous().lexeme;
+          consume_optional_comma(); continue;
+        }
+        error("Unexpected field in time_intelligence");
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}'");
+      decl.time_intelligence = ti;
+      consume_optional_comma(); continue;
+    }
+
+    error("Unexpected field in semantic declaration: " + peek().lexeme);
+  }
+
+  if (!match(TokenType::RightBrace))
+    error("Expected '}' after semantic body");
+
+  if (decl.metrics.empty())
+    error("semantic '" + name + "' must have at least one metric");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+MartDecl Parser::parse_mart()
+{
+  // At entry: 'mart' keyword already consumed
+  if (!match(TokenType::String) && !match(TokenType::Identifier))
+    error("Expected mart name");
+  const auto name = previous().lexeme;
+
+  if (!match(TokenType::LeftBrace))
+    error("Expected '{' after mart name '" + name + "'");
+
+  MartDecl decl;
+  decl.name = name;
+
+  bool has_facts = false, has_dimensions = false;
+  bool has_grain = false, has_measures = false;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("facts"))
+    {
+      if (has_facts) error("Duplicate 'facts' in mart '" + name + "'");
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.facts = parse_string_list();
+      has_facts = true; consume_optional_comma(); continue;
+    }
+    if (match_identifier("dimensions"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.dimensions = parse_string_list();
+      has_dimensions = true; consume_optional_comma(); continue;
+    }
+    if (match_identifier("grain"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected grain description string");
+      decl.grain = previous().lexeme;
+      has_grain = true; consume_optional_comma(); continue;
+    }
+    if (match_identifier("measures"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.measures = parse_string_list();
+      has_measures = true; consume_optional_comma(); continue;
+    }
+    if (match_identifier("scd"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        if (!match(TokenType::Identifier) && !match_keyword_as_identifier())
+          error("Expected dimension name for SCD config");
+        std::string dim_name = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+        if (!match(TokenType::String)) error("Expected SCD type string");
+        std::string scd_type = previous().lexeme;
+        if (scd_type != "type0" && scd_type != "type1" && scd_type != "type2" &&
+            scd_type != "type3" && scd_type != "type4" && scd_type != "type6")
+          error("Invalid SCD type '" + scd_type + "'. Expected: type0-type6");
+        decl.scd.push_back({dim_name, scd_type});
+        consume_optional_comma();
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}'");
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("conformed"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.conformed = parse_string_list();
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("aggregate_tables"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end())
+      {
+        MartAggregateTableDef agg;
+        if (!match(TokenType::LeftBrace)) error("Expected '{'");
+        while (!check(TokenType::RightBrace) && !is_at_end())
+        {
+          if (match_identifier("name"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected string");
+            agg.name = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("grain"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::String)) error("Expected string");
+            agg.grain = previous().lexeme;
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("group_by"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            agg.group_by = parse_string_list();
+            consume_optional_comma(); continue;
+          }
+          if (match_identifier("measures"))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            agg.measures = parse_string_list();
+            consume_optional_comma(); continue;
+          }
+          error("Unexpected field in aggregate_table");
+        }
+        if (!match(TokenType::RightBrace)) error("Expected '}'");
+        decl.aggregate_tables.push_back(std::move(agg));
+        consume_optional_comma();
+      }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("materialization"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected materialization string");
+      std::string m = previous().lexeme;
+      if (m != "table" && m != "incremental" && m != "view")
+        error("Invalid materialization '" + m + "'");
+      decl.materialization = m;
+      consume_optional_comma(); continue;
+    }
+    error("Unexpected field in mart '" + name + "': " + peek().lexeme);
+  }
+
+  if (!match(TokenType::RightBrace))
+    error("Expected '}' after mart body");
+
+  if (!has_facts) error("mart '" + name + "' missing required field 'facts'");
+  if (!has_dimensions) error("mart '" + name + "' missing required field 'dimensions'");
+  if (!has_grain) error("mart '" + name + "' missing required field 'grain'");
+  if (!has_measures) error("mart '" + name + "' missing required field 'measures'");
+
+  return decl;
+}
+
+LayersBlock Parser::parse_layers_block()
+{
+  LayersBlock block;
+  if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("staging"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      block.staging = parse_layer_config();
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("integration"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      block.integration = parse_layer_config();
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("marts"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end())
+      {
+        if (match(TokenType::Mart) || match_identifier("mart"))
+        {
+          block.marts.push_back(parse_mart());
+        }
+        else
+        {
+          error("Expected 'mart' keyword in marts list");
+        }
+        consume_optional_comma();
+      }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+      consume_optional_comma(); continue;
+    }
+    error("Unexpected field in layers: " + peek().lexeme);
+  }
+
+  if (!match(TokenType::RightBrace)) error("Expected '}'");
+  return block;
+}
+
+LayerConfig Parser::parse_layer_config()
+{
+  LayerConfig config;
+  if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("prefix"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected prefix string");
+      config.prefix = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("operations"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      config.operations = parse_string_list();
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("materialization"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected materialization string");
+      config.materialization = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("naming"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected naming pattern string");
+      config.naming = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    error("Unexpected field in layer config");
+  }
+
+  if (!match(TokenType::RightBrace)) error("Expected '}'");
+  return config;
+}
+
+IncrementalBlock Parser::parse_incremental_block()
+{
+  IncrementalBlock block;
+  if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+  bool has_strategy = false;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("strategy"))
+    {
+      if (has_strategy) error("Duplicate 'strategy'");
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected strategy string");
+      std::string s = previous().lexeme;
+      if (s != "timestamp" && s != "id" && s != "cdc" && s != "full_refresh")
+        error("Invalid incremental strategy '" + s + "'. Expected: timestamp, id, cdc, full_refresh");
+      block.strategy = s;
+      has_strategy = true; consume_optional_comma(); continue;
+    }
+    if (match_identifier("key"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected key column string");
+      block.key = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("lookback"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected lookback interval string");
+      block.lookback = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("unique_key"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected unique_key string");
+      block.unique_key = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("on_schema_change"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected string");
+      std::string v = previous().lexeme;
+      if (v != "append" && v != "sync" && v != "fail")
+        error("Invalid on_schema_change '" + v + "'");
+      block.on_schema_change = v;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("full_refresh_schedule"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected interval string");
+      block.full_refresh_schedule = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    error("Unexpected field in incremental block");
+  }
+
+  if (!match(TokenType::RightBrace)) error("Expected '}'");
+  if (!has_strategy) error("incremental block requires 'strategy'");
+  return block;
+}
+
+AutoModelBlock Parser::parse_auto_model_block()
+{
+  AutoModelBlock block;
+  if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("enabled"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::True) && !match(TokenType::False))
+        error("Expected true or false");
+      block.enabled = (previous().type == TokenType::True);
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("methodology"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected methodology string");
+      std::string m = previous().lexeme;
+      if (m != "kimball" && m != "inmon" && m != "data_vault")
+        error("Invalid methodology '" + m + "'. Expected: kimball, inmon, data_vault");
+      block.methodology = m;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("discover"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      AutoModelDiscover discover;
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        auto parse_bool_field = [&](const std::string& field, bool& target) {
+          if (match_identifier(field))
+          {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::True) && !match(TokenType::False))
+              error("Expected bool for " + field);
+            target = (previous().type == TokenType::True);
+            consume_optional_comma();
+            return true;
+          }
+          return false;
+        };
+        if (parse_bool_field("facts", discover.facts)) continue;
+        if (parse_bool_field("dimensions", discover.dimensions)) continue;
+        if (parse_bool_field("relationships", discover.relationships)) continue;
+        if (parse_bool_field("scd_types", discover.scd_types)) continue;
+        if (parse_bool_field("conformed_dimensions", discover.conformed_dimensions)) continue;
+        if (parse_bool_field("degenerate_dimensions", discover.degenerate_dimensions)) continue;
+        if (parse_bool_field("junk_dimensions", discover.junk_dimensions)) continue;
+        if (parse_bool_field("bridge_tables", discover.bridge_tables)) continue;
+        if (parse_bool_field("hubs", discover.hubs)) continue;
+        if (parse_bool_field("links", discover.links)) continue;
+        if (parse_bool_field("satellites", discover.satellites)) continue;
+        if (parse_bool_field("effectivity", discover.effectivity)) continue;
+        error("Unexpected field in auto_model.discover: " + peek().lexeme);
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}'");
+      block.discover = discover;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("generate"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      AutoModelGenerate gen;
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        if (match_identifier("surrogate_keys"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::String)) error("Expected string");
+          gen.surrogate_keys = previous().lexeme;
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("hash_keys"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::String)) error("Expected string");
+          gen.hash_keys = previous().lexeme;
+          consume_optional_comma(); continue;
+        }
+        auto parse_bool = [&](const std::string& f, bool& t) {
+          if (match_identifier(f)) {
+            if (!match(TokenType::Colon)) error("Expected ':'");
+            if (!match(TokenType::True) && !match(TokenType::False)) error("Expected bool");
+            t = (previous().type == TokenType::True);
+            consume_optional_comma();
+            return true;
+          }
+          return false;
+        };
+        if (parse_bool("date_dimension", gen.date_dimension)) continue;
+        if (parse_bool("audit_columns", gen.audit_columns)) continue;
+        if (parse_bool("hash_diff", gen.hash_diff)) continue;
+        if (parse_bool("load_date_column", gen.load_date_column)) continue;
+        if (parse_bool("record_source_column", gen.record_source_column)) continue;
+        if (parse_bool("hash_diff_for_satellites", gen.hash_diff_for_satellites)) continue;
+        error("Unexpected field in auto_model.generate");
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}'");
+      block.generate = gen;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("approval"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected string");
+      std::string a = previous().lexeme;
+      if (a != "manual" && a != "auto")
+        error("Invalid approval '" + a + "'. Expected: manual, auto");
+      block.approval = a;
+      consume_optional_comma(); continue;
+    }
+    error("Unexpected field in auto_model: " + peek().lexeme);
+  }
+
+  if (!match(TokenType::RightBrace)) error("Expected '}'");
+  return block;
+}
+
+SelfHealBlock Parser::parse_self_heal_block()
+{
+  SelfHealBlock block;
+  if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (match_identifier("enabled"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::True) && !match(TokenType::False)) error("Expected bool");
+      block.enabled = (previous().type == TokenType::True);
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("capabilities") || match(TokenType::Capabilities))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      SelfHealCapabilities caps;
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        if (match_identifier("auto_retry"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::LeftBrace)) error("Expected '{'");
+          while (!check(TokenType::RightBrace) && !is_at_end())
+          {
+            if (match_identifier("max_attempts"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::Number)) error("Expected number");
+              caps.auto_retry_max = static_cast<int>(
+                std::strtod(previous().lexeme.c_str(), nullptr));
+              consume_optional_comma(); continue;
+            }
+            if (match_identifier("backoff"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::String)) error("Expected string");
+              caps.auto_retry_backoff = previous().lexeme;
+              consume_optional_comma(); continue;
+            }
+            error("Unexpected field in auto_retry");
+          }
+          if (!match(TokenType::RightBrace)) error("Expected '}'");
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("auto_scale"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::LeftBrace)) error("Expected '{'");
+          while (!check(TokenType::RightBrace) && !is_at_end())
+          {
+            if (match_identifier("scale_factor"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::Number)) error("Expected number");
+              caps.auto_scale_factor = std::strtod(previous().lexeme.c_str(), nullptr);
+              consume_optional_comma(); continue;
+            }
+            if (match_identifier("on"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::String)) error("Expected string");
+              consume_optional_comma(); continue;
+            }
+            error("Unexpected field in auto_scale");
+          }
+          if (!match(TokenType::RightBrace)) error("Expected '}'");
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("schema_migration"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::LeftBrace)) error("Expected '{'");
+          while (!check(TokenType::RightBrace) && !is_at_end())
+          {
+            if (match_identifier("approval"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::String)) error("Expected string");
+              caps.schema_migration_approval = previous().lexeme;
+              consume_optional_comma(); continue;
+            }
+            if (match_identifier("on"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::String)) error("Expected string");
+              consume_optional_comma(); continue;
+            }
+            error("Unexpected field in schema_migration");
+          }
+          if (!match(TokenType::RightBrace)) error("Expected '}'");
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("data_patching"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::LeftBrace)) error("Expected '{'");
+          while (!check(TokenType::RightBrace) && !is_at_end())
+          {
+            if (match_identifier("strategy"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::String)) error("Expected string");
+              caps.data_patching_strategy = previous().lexeme;
+              consume_optional_comma(); continue;
+            }
+            if (match_identifier("on"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::String)) error("Expected string");
+              consume_optional_comma(); continue;
+            }
+            error("Unexpected field in data_patching");
+          }
+          if (!match(TokenType::RightBrace)) error("Expected '}'");
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("fallback_source"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::LeftBrace)) error("Expected '{'");
+          while (!check(TokenType::RightBrace) && !is_at_end())
+          {
+            if (match_identifier("use"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::Identifier)) error("Expected source name");
+              caps.fallback_source = IdentifierRef{previous().lexeme, span_from_token(previous())};
+              consume_optional_comma(); continue;
+            }
+            if (match_identifier("on"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::String)) error("Expected string");
+              consume_optional_comma(); continue;
+            }
+            error("Unexpected field in fallback_source");
+          }
+          if (!match(TokenType::RightBrace)) error("Expected '}'");
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("circuit_breaker"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::LeftBrace)) error("Expected '{'");
+          while (!check(TokenType::RightBrace) && !is_at_end())
+          {
+            if (match_identifier("threshold"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::Number)) error("Expected number");
+              caps.circuit_breaker_threshold = static_cast<int>(
+                std::strtod(previous().lexeme.c_str(), nullptr));
+              consume_optional_comma(); continue;
+            }
+            if (match_identifier("on"))
+            {
+              if (!match(TokenType::Colon)) error("Expected ':'");
+              if (!match(TokenType::String)) error("Expected string");
+              consume_optional_comma(); continue;
+            }
+            error("Unexpected field in circuit_breaker");
+          }
+          if (!match(TokenType::RightBrace)) error("Expected '}'");
+          consume_optional_comma(); continue;
+        }
+        error("Unexpected capability in self_heal");
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}'");
+      block.capabilities = caps;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("learning"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      SelfHealLearning learning;
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        if (match_identifier("record_incidents"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::True) && !match(TokenType::False)) error("Expected bool");
+          learning.record_incidents = (previous().type == TokenType::True);
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("incident_store"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::String)) error("Expected string");
+          learning.incident_store = previous().lexeme;
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("improve_from_history"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::True) && !match(TokenType::False)) error("Expected bool");
+          learning.improve_from_history = (previous().type == TokenType::True);
+          consume_optional_comma(); continue;
+        }
+        error("Unexpected field in learning");
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}'");
+      block.learning = learning;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("notification"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::LeftBrace)) error("Expected '{'");
+      SelfHealNotification notif;
+      while (!check(TokenType::RightBrace) && !is_at_end())
+      {
+        if (match_identifier("channel"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          if (!match(TokenType::String)) error("Expected string");
+          notif.channel = previous().lexeme;
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("webhook"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          notif.webhook = parse_expression();
+          consume_optional_comma(); continue;
+        }
+        if (match_identifier("escalation"))
+        {
+          if (!match(TokenType::Colon)) error("Expected ':'");
+          notif.escalation = parse_string_list();
+          consume_optional_comma(); continue;
+        }
+        error("Unexpected field in notification");
+      }
+      if (!match(TokenType::RightBrace)) error("Expected '}'");
+      block.notification = std::move(notif);
+      consume_optional_comma(); continue;
+    }
+    error("Unexpected field in self_heal block");
+  }
+
+  if (!match(TokenType::RightBrace)) error("Expected '}'");
+  return block;
+}
+
+StmtPtr Parser::parse_etl_agent(const Visibility& visibility)
+{
+  SourceSpan span = span_from_token(previous());
+  if (!match(TokenType::Identifier)) error("Expected etl agent name");
+  const auto name = previous().lexeme;
+
+  if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+  ETLAgentDecl decl;
+  decl.visibility = visibility;
+  decl.name = name;
+
+  bool has_provider = false, has_model = false;
+  bool has_sources = false, has_warehouse = false;
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    match(TokenType::Comma);  // optional comma between fields
+
+    // --- Shared agent fields ---
+    if (match(TokenType::Provider) || match_identifier("provider"))
+    {
+      if (has_provider) error("Duplicate 'provider'");
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected provider string");
+      decl.provider = previous().lexeme;
+      has_provider = true; consume_optional_comma(); continue;
+    }
+    if (match(TokenType::Model) || match_identifier("model"))
+    {
+      if (has_model) error("Duplicate 'model'");
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected model string");
+      decl.model = previous().lexeme;
+      has_model = true; consume_optional_comma(); continue;
+    }
+    if (match(TokenType::System) || match_identifier("system"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected system prompt string");
+      decl.system = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match(TokenType::Temperature) || match_identifier("temperature"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Number)) error("Expected number for temperature");
+      decl.temperature = std::strtod(previous().lexeme.c_str(), nullptr);
+      consume_optional_comma(); continue;
+    }
+    if (match(TokenType::Endpoint) || match_identifier("endpoint"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected endpoint string");
+      decl.endpoint = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match(TokenType::ApiKeyEnv) || match_identifier("api_key_env"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected api_key_env string");
+      decl.api_key_env = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match(TokenType::Skills) || match_identifier("skills"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.skills = parse_identifier_list();
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("connected_knowledge"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.connected_knowledge = parse_identifier_list();
+      consume_optional_comma(); continue;
+    }
+    if (match(TokenType::Guards) || match_identifier("guardchains"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.guardchains = parse_identifier_list();
+      consume_optional_comma(); continue;
+    }
+    if (match(TokenType::Policy) || match_identifier("policy"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Identifier)) error("Expected policy identifier");
+      decl.policy = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma(); continue;
+    }
+    if (match(TokenType::Budget) || match_identifier("budget"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Identifier)) error("Expected budget name");
+      decl.budget = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("env") || match(TokenType::Env))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Identifier)) error("Expected env identifier");
+      decl.env = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma(); continue;
+    }
+
+    // --- Inherited DataAgent fields ---
+    if (match(TokenType::Sources) || match_identifier("sources"))
+    {
+      if (has_sources) error("Duplicate 'sources'");
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.sources = parse_identifier_list();
+      has_sources = true; consume_optional_comma(); continue;
+    }
+    if (match_identifier("sinks"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.sinks = parse_identifier_list();
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("quality"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Identifier)) error("Expected quality name");
+      decl.quality = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("governance"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Identifier)) error("Expected governance name");
+      decl.governance = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("lineage"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::True) && !match(TokenType::False))
+        error("Expected bool");
+      decl.lineage = (previous().type == TokenType::True);
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("catalog"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Identifier)) error("Expected catalog name");
+      decl.catalog = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("compute"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.compute = parse_data_agent_compute_block();
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("role"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected role string");
+      decl.role = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("purpose"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected purpose string");
+      decl.purpose = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("autonomy"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected autonomy string");
+      decl.autonomy = previous().lexeme;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("pipeline"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.pipeline = parse_pipeline_block();
+      consume_optional_comma(); continue;
+    }
+
+    // --- ETL agent-specific fields ---
+    if (match(TokenType::Warehouse) || match_identifier("warehouse"))
+    {
+      if (has_warehouse) error("Duplicate 'warehouse'");
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Identifier)) error("Expected warehouse compute name");
+      decl.warehouse = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      has_warehouse = true; consume_optional_comma(); continue;
+    }
+    if (match_identifier("model_type"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected model_type string");
+      std::string mt = previous().lexeme;
+      if (mt != "star" && mt != "snowflake" && mt != "data_vault" && mt != "wide" && mt != "custom")
+        error("Invalid model_type '" + mt + "'. Expected: star, snowflake, data_vault, wide, custom");
+      decl.model_type = mt;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("layers"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.layers = parse_layers_block();
+      consume_optional_comma(); continue;
+    }
+    if (match(TokenType::Semantic) || match_identifier("semantic"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::Identifier)) error("Expected semantic layer name");
+      decl.semantic = IdentifierRef{previous().lexeme, span_from_token(previous())};
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("incremental"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.incremental = parse_incremental_block();
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("self_heal"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      // Two forms: self_heal: true/false OR self_heal: { ... }
+      if (match(TokenType::True) || match(TokenType::False))
+      {
+        decl.self_heal_flag = (previous().type == TokenType::True);
+      }
+      else if (check(TokenType::LeftBrace))
+      {
+        decl.self_heal_block = parse_self_heal_block();
+      }
+      else
+      {
+        error("Expected true/false or block for self_heal");
+      }
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("on_failure"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      if (!match(TokenType::String)) error("Expected on_failure string");
+      std::string of = previous().lexeme;
+      if (of != "retry" && of != "fallback" && of != "alert" && of != "auto_fix")
+        error("Invalid on_failure '" + of + "'. Expected: retry, fallback, alert, auto_fix");
+      decl.on_failure = of;
+      consume_optional_comma(); continue;
+    }
+    if (match_identifier("auto_model"))
+    {
+      if (!match(TokenType::Colon)) error("Expected ':'");
+      decl.auto_model = parse_auto_model_block();
+      consume_optional_comma(); continue;
+    }
+
+    // FIELD REJECTION: claw-agent-only
+    if (match_identifier("idle_reset_minutes") || match_identifier("compaction") ||
+        match_identifier("channels") || match_identifier("lanes") ||
+        match_identifier("semantic_memory"))
+      error("'" + previous().lexeme + "' is not valid in an etl agent (claw agent only)");
+
+    // FIELD REJECTION: forge-agent-only
+    if (match_identifier("verify") || match_identifier("checkpoint") ||
+        match_identifier("loop"))
+      error("'" + previous().lexeme + "' is not valid in an etl agent (forge agent only)");
+
+    error("Unexpected field in etl agent: " + peek().lexeme);
+  }
+
+  if (!match(TokenType::RightBrace)) error("Expected '}'");
+
+  if (!has_provider) error("etl agent '" + name + "' missing 'provider'");
+  if (!has_model) error("etl agent '" + name + "' missing 'model'");
+  if (!has_sources) error("etl agent '" + name + "' requires at least one source");
+  if (!has_warehouse) error("etl agent '" + name + "' requires a 'warehouse' compute reference");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = span;
+  stmt->node = std::move(decl);
   return stmt;
 }
 

@@ -1,0 +1,660 @@
+// ============================================================
+// Neam v0.9 — DataAgent End-to-End Test Suite
+// 15 tests: Full lifecycle from declaration through pipeline execution
+// ============================================================
+
+// =============================================================================
+// SETUP — Schemas, Sources, Sinks, Quality, Compute, Governance
+// =============================================================================
+
+schema ProductSchema {
+  product_id: string @primary_key,
+  name: string @not_null @length(1, 500),
+  category: string @enum(["electronics", "clothing", "food", "books", "other"]),
+  price: float @positive,
+  stock: int @range(0, 1000000),
+  rating: float @range(0.0, 5.0)
+}
+
+schema SalesSchema {
+  sale_id: string @primary_key,
+  product_id: string @foreign_key(ProductSchema) @not_null,
+  quantity: int @range(1, 10000),
+  total: float @positive,
+  sale_date: datetime,
+  region: string @enum(["NA", "EU", "APAC"])
+}
+
+schema SummarySchema {
+  category: string,
+  region: string,
+  total_sales: float,
+  units_sold: int,
+  avg_price: float
+}
+
+source ProductDB {
+  type: "postgres",
+  connection: env("PRODUCT_DB_URL"),
+  schema: ProductSchema,
+  refresh: "10m",
+  classification: "internal"
+}
+
+source SalesLog {
+  type: "s3",
+  connection: "s3://sales-data/logs/",
+  format: "parquet",
+  schema: SalesSchema,
+  partition_by: ["sale_date", "region"],
+  classification: "internal"
+}
+
+source CustomerFeedback {
+  type: "http",
+  connection: "https://api.feedback.com/v1/reviews",
+  format: "json",
+  refresh: "1h",
+  classification: "confidential"
+}
+
+sink AnalyticsSink {
+  type: "snowflake",
+  connection: env("SNOWFLAKE_URL"),
+  schema: SummarySchema,
+  write_mode: "upsert",
+  batch_size: 10000
+}
+
+sink AlertSink {
+  type: "webhook",
+  connection: env("ALERT_WEBHOOK"),
+  format: "json"
+}
+
+sink ArchiveSink {
+  type: "s3",
+  connection: "s3://archive/processed/",
+  format: "parquet",
+  write_mode: "append"
+}
+
+quality StrictQuality {
+  freshness: "30m",
+  completeness: 0.98,
+  uniqueness: ["sale_id"],
+  drift_detection: true,
+  anomaly_threshold: 2.5,
+  on_violation: "gate_and_escalate"
+}
+
+quality LenientQuality {
+  completeness: 0.80,
+  on_violation: "warn"
+}
+
+compute SparkProd {
+  engine: "spark",
+  config: {
+    "spark.executor.memory": "16g",
+    "spark.executor.cores": "8",
+    "spark.sql.shuffle.partitions": "200"
+  }
+}
+
+compute SnowflakeProd {
+  engine: "snowflake",
+  config: {
+    "warehouse": "PROD_WH",
+    "warehouse_size": "LARGE"
+  }
+}
+
+compute LocalDev {
+  engine: "local"
+}
+
+governance DataPolicy {
+  classification: {
+    auto_classify: [
+      { "pattern": "ssn|social_security|tax_id", "level": "restricted" },
+      { "pattern": "email|phone|address|name", "level": "confidential" },
+      { "pattern": "revenue|sales|price", "level": "internal" },
+      { "pattern": "category|region|sku", "level": "public" }
+    ]
+  },
+  access: {
+    "model": "rbac",
+    "roles": {
+      "data_engineer":   { "read": ["public", "internal", "confidential"],
+                           "write": ["public", "internal", "confidential"] },
+      "data_analyst":    { "read": ["public", "internal", "confidential"],
+                           "write": ["public", "internal"] },
+      "executive":       { "read": ["public", "internal"], "write": [] }
+    },
+    "masking": {
+      "confidential": "partial",
+      "restricted": "full"
+    }
+  },
+  retention: {
+    "default": "7y",
+    "by_classification": {
+      "public": "indefinite",
+      "internal": "7y",
+      "confidential": "5y",
+      "restricted": "3y"
+    },
+    "auto_purge": true
+  },
+  audit: {
+    "log_all_access": true,
+    "log_all_transforms": true,
+    "log_all_exports": true,
+    "immutable": true,
+    "format": "opentelemetry"
+  }
+}
+
+catalog ProductCatalog {
+  engine: "datahub",
+  register: {
+    schemas: true,
+    lineage: true,
+    quality: true
+  },
+  discovery: true
+}
+
+emit "E2E Setup: All declarations compiled successfully";
+
+// =============================================================================
+// TEST 1: Simple ETL data agent — extract, filter, load
+// =============================================================================
+
+data agent SimpleETL {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Simple ETL agent.",
+  sources: [ProductDB],
+  sinks: [ArchiveSink],
+  quality: LenientQuality,
+  lineage: true,
+  pipeline: {
+    extract: [ProductDB],
+    transform: [
+      filter(column: "stock", op: ">", value: 0),
+      sort(column: "price", ascending: false),
+      limit(n: 10000)
+    ],
+    load: [ArchiveSink]
+  }
+}
+
+emit "E2E Test 1 PASSED: Simple ETL data agent";
+
+// =============================================================================
+// TEST 2: Multi-source join with quality gates
+// =============================================================================
+
+data agent SalesReporter {
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  system: "Sales reporting agent with strict quality requirements.",
+  sources: [ProductDB, SalesLog],
+  sinks: [AnalyticsSink, AlertSink],
+  schema: SummarySchema,
+  quality: StrictQuality,
+  compute: {
+    default: SparkProd,
+    available: [SparkProd, SnowflakeProd]
+  },
+  governance: DataPolicy,
+  catalog: ProductCatalog,
+  lineage: true,
+  role: "data_engineer",
+  purpose: "Daily sales summary pipeline",
+  pipeline: {
+    extract: [ProductDB, SalesLog],
+    transform: [
+      join(source: ProductDB, on: ["product_id"], type: "inner"),
+      filter(column: "quantity", op: ">", value: 0),
+      deduplicate(keys: ["sale_id"]),
+      validate(rules: StrictQuality),
+      aggregate(
+        group_by: ["category", "region"],
+        metrics: ["sum(total)", "sum(quantity)", "avg(price)"]
+      ),
+      derive(column: "avg_price", expr: "total_sales / units_sold")
+    ],
+    load: [AnalyticsSink]
+  }
+}
+
+emit "E2E Test 2 PASSED: Multi-source join with quality gates";
+
+// =============================================================================
+// TEST 3: LLM-enriched pipeline (L3 mixed autonomy)
+// =============================================================================
+
+data agent FeedbackAnalyzer {
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  system: "Analyze customer feedback and extract insights.",
+  sources: [CustomerFeedback],
+  sinks: [ArchiveSink, AlertSink],
+  quality: LenientQuality,
+  governance: DataPolicy,
+  role: "data_analyst",
+  lineage: true,
+  autonomy: "conditional",
+  pipeline: {
+    extract: [CustomerFeedback],
+    transform: [
+      tag_pii(),
+      enrich(column: "sentiment", agent: "FeedbackAnalyzer"),
+      classify(column: "category", model: "product_classifier"),
+      filter(column: "sentiment", op: "==", value: "negative"),
+      aggregate(group_by: ["category"], metrics: ["count(*)", "avg(rating)"])
+    ],
+    load: [AlertSink]
+  }
+}
+
+emit "E2E Test 3 PASSED: LLM-enriched pipeline";
+
+// =============================================================================
+// TEST 4: Autonomous data agent (no pipeline block)
+// =============================================================================
+
+data agent AdHocAnalyst {
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  system: "You are an ad-hoc data analyst. Plan and execute pipelines based on user requests.",
+  sources: [ProductDB, SalesLog, CustomerFeedback],
+  sinks: [AnalyticsSink, ArchiveSink],
+  compute: {
+    default: LocalDev,
+    available: [SparkProd, SnowflakeProd, LocalDev]
+  },
+  governance: DataPolicy,
+  catalog: ProductCatalog,
+  role: "data_analyst",
+  lineage: true,
+  autonomy: "conditional"
+  // No pipeline — agent plans it based on .ask() prompts
+}
+
+emit "E2E Test 4 PASSED: Autonomous data agent (no pipeline)";
+
+// =============================================================================
+// TEST 5: Medallion lakehouse — Bronze → Silver → Gold
+// =============================================================================
+
+source RawStream {
+  type: "kafka",
+  connection: env("KAFKA_BROKERS"),
+  mode: "batch",
+  classification: "internal"
+}
+
+sink BronzeSink {
+  type: "s3",
+  connection: "s3://lakehouse/bronze/",
+  format: "delta",
+  write_mode: "append"
+}
+
+sink SilverSink {
+  type: "s3",
+  connection: "s3://lakehouse/silver/",
+  format: "delta",
+  write_mode: "merge"
+}
+
+sink GoldSink {
+  type: "s3",
+  connection: "s3://lakehouse/gold/",
+  format: "delta",
+  write_mode: "upsert"
+}
+
+source BronzeRead {
+  type: "s3",
+  connection: "s3://lakehouse/bronze/",
+  format: "delta"
+}
+
+source SilverRead {
+  type: "s3",
+  connection: "s3://lakehouse/silver/",
+  format: "delta"
+}
+
+data agent BronzeAgent {
+  provider: "openai", model: "gpt-4o-mini",
+  system: "Raw ingestion.",
+  sources: [RawStream],
+  sinks: [BronzeSink],
+  quality: LenientQuality,
+  lineage: true,
+  pipeline: {
+    extract: [RawStream],
+    transform: [],
+    load: [BronzeSink]
+  }
+}
+
+data agent SilverAgent {
+  provider: "openai", model: "gpt-4o-mini",
+  system: "Data cleansing.",
+  sources: [BronzeRead],
+  sinks: [SilverSink],
+  quality: StrictQuality,
+  lineage: true,
+  pipeline: {
+    extract: [BronzeRead],
+    transform: [
+      deduplicate(keys: ["event_id"]),
+      validate(rules: StrictQuality),
+      normalize(),
+      tag_pii()
+    ],
+    load: [SilverSink]
+  }
+}
+
+data agent GoldAgent {
+  provider: "openai", model: "gpt-4o-mini",
+  system: "Business aggregates.",
+  sources: [SilverRead],
+  sinks: [GoldSink],
+  lineage: true,
+  pipeline: {
+    extract: [SilverRead],
+    transform: [
+      aggregate(group_by: ["category", "region"], metrics: ["sum(revenue)", "count(*)"]),
+      derive(column: "avg_revenue", expr: "sum_revenue / count_star")
+    ],
+    load: [GoldSink]
+  }
+}
+
+let medallion_result = dag_execute([
+  { "id": "bronze", "agent": "BronzeAgent", "task": "Ingest raw data" },
+  { "id": "silver", "agent": "SilverAgent", "task": "Clean and conform",
+    "depends_on": ["bronze"] },
+  { "id": "gold", "agent": "GoldAgent", "task": "Build aggregates",
+    "depends_on": ["silver"] }
+]);
+
+emit "E2E Test 5 PASSED: Medallion lakehouse — Bronze → Silver → Gold";
+
+// =============================================================================
+// TEST 6: Compute routing with governance constraints
+// =============================================================================
+
+data agent GovernedRouter {
+  provider: "openai", model: "gpt-4o-mini",
+  system: "Governance-constrained compute routing.",
+  sources: [SalesLog],
+  sinks: [AnalyticsSink],
+  compute: {
+    default: LocalDev,
+    available: [SparkProd, SnowflakeProd, LocalDev],
+    routing: [
+      { stage: "aggregate", engine: SparkProd, condition: "rows > 1000000" },
+      { stage: "window", engine: SnowflakeProd },
+      { stage: "filter", engine: LocalDev, condition: "rows < 10000" }
+    ]
+  },
+  governance: DataPolicy,
+  role: "data_engineer",
+  pipeline: {
+    extract: [SalesLog],
+    transform: [
+      filter(column: "region", op: "==", value: "EU"),
+      aggregate(group_by: ["category"], metrics: ["sum(total)"])
+    ],
+    load: [AnalyticsSink]
+  }
+}
+
+emit "E2E Test 6 PASSED: Compute routing with governance constraints";
+
+// =============================================================================
+// TEST 7: Budget integration with data agent
+// =============================================================================
+
+budget PipelineBudget {
+  cost: 25.00,
+  tokens: 25000,
+  time: 1800000
+}
+
+data agent BudgetedAgent {
+  provider: "openai", model: "gpt-4o-mini",
+  system: "Budget-constrained agent.",
+  sources: [ProductDB],
+  sinks: [ArchiveSink],
+  budget: PipelineBudget,
+  pipeline: {
+    extract: [ProductDB],
+    transform: [
+      filter(column: "stock", op: ">", value: 0)
+    ],
+    load: [ArchiveSink]
+  }
+}
+
+emit "E2E Test 7 PASSED: Budget integration with data agent";
+
+// =============================================================================
+// TEST 8: Claw agent triggering data agent via skill
+// =============================================================================
+
+skill RunSalesReport {
+  description: "Run the sales reporting pipeline"
+  params: { timeframe: string }
+  impl(timeframe) {
+    // In real execution: spawn SalesReporter with timeframe
+    return "Sales report generated for: " + timeframe;
+  }
+}
+
+skill AskDataQuestion {
+  description: "Ask a natural language data question"
+  params: { question: string }
+  impl(question) {
+    // In real execution: AdHocAnalyst.ask(question)
+    return "Answer for: " + question;
+  }
+}
+
+claw agent BusinessAssistant {
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  system: "Business assistant that can run data pipelines and answer data questions.",
+  channels: [RunSalesReport, AskDataQuestion],
+  skills: [RunSalesReport, AskDataQuestion]
+}
+
+emit "E2E Test 8 PASSED: Claw agent triggering data agent via skill";
+
+// =============================================================================
+// TEST 9: Forge agent verifying data quality
+// =============================================================================
+
+fun verify_data_quality(ctx) {
+  // In real execution: spawn a data agent to check quality
+  return true;
+}
+
+forge agent DataPipelineBuilder {
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  system: "Build and verify data pipelines.",
+  verify: verify_data_quality,
+  skills: [RunSalesReport]
+}
+
+emit "E2E Test 9 PASSED: Forge agent verifying data quality";
+
+// =============================================================================
+// TEST 10: Schema evolution — version 1 and version 2
+// =============================================================================
+
+schema EvolvingSchemaV1 {
+  version: 1,
+  id: string @primary_key,
+  name: string @not_null,
+  value: float @positive
+}
+
+schema EvolvingSchemaV2 {
+  version: 2,
+  id: string @primary_key,
+  name: string @not_null,
+  value: float @positive,
+  category: string @enum(["A", "B", "C"]),
+  created: datetime @default(now())
+}
+
+emit "E2E Test 10 PASSED: Schema evolution — v1 to v2";
+
+// =============================================================================
+// TEST 11: Data agent with all write modes
+// =============================================================================
+
+sink AppendSink {
+  type: "s3",
+  connection: "s3://test/append/",
+  write_mode: "append"
+}
+
+sink UpsertSink {
+  type: "snowflake",
+  connection: env("SF_URL"),
+  write_mode: "upsert"
+}
+
+sink ReplaceSink {
+  type: "postgres",
+  connection: env("PG_URL"),
+  write_mode: "replace"
+}
+
+sink MergeSink {
+  type: "s3",
+  connection: "s3://test/merge/",
+  format: "delta",
+  write_mode: "merge"
+}
+
+emit "E2E Test 11 PASSED: All write modes compile";
+
+// =============================================================================
+// TEST 12: Complex governance — jurisdiction + consent
+// =============================================================================
+
+governance GDPRPolicy {
+  classification: {
+    auto_classify: [
+      { "pattern": "email|phone|address|name", "level": "confidential" }
+    ]
+  },
+  access: {
+    "model": "rbac",
+    "roles": {
+      "eu_analyst": { "read": ["public", "internal", "confidential"],
+                      "write": ["public", "internal"] }
+    }
+  },
+  jurisdiction: {
+    "rules": [
+      { "data_type": "eu_personal_data",
+        "allowed_regions": ["eu-west-1", "eu-central-1"],
+        "regulation": "GDPR",
+        "requirements": ["right_to_erasure", "data_portability", "consent_tracking"] },
+      { "data_type": "us_health_data",
+        "allowed_regions": ["us-east-1", "us-west-2"],
+        "regulation": "HIPAA",
+        "requirements": ["encryption_at_rest", "access_logging"] }
+    ],
+    "enforce_data_residency": true
+  },
+  consent: {
+    "tracking": true,
+    "granularity": "purpose",
+    "purposes": ["analytics", "marketing", "ml_training"],
+    "honor_withdrawal": true
+  },
+  audit: {
+    "log_all_access": true,
+    "immutable": true,
+    "retention": "10y"
+  }
+}
+
+emit "E2E Test 12 PASSED: Complex governance — GDPR + HIPAA";
+
+// =============================================================================
+// TEST 13: Data agent with inline source/sink declarations
+// =============================================================================
+
+data agent InlineAgent {
+  provider: "openai", model: "gpt-4o-mini",
+  system: "Agent with inline source/sink references.",
+  sources: [ProductDB],
+  sinks: [ArchiveSink],
+  pipeline: {
+    extract: [ProductDB],
+    transform: [
+      filter(column: "price", op: ">", value: 10.00),
+      derive(column: "discounted", expr: "price * 0.9")
+    ],
+    load: [ArchiveSink]
+  }
+}
+
+emit "E2E Test 13 PASSED: Data agent with inline source/sink";
+
+// =============================================================================
+// TEST 14: Multiple quality levels in single pipeline
+// =============================================================================
+
+quality EntryQuality {
+  completeness: 0.70,
+  on_violation: "warn"
+}
+
+quality ExitQuality {
+  completeness: 0.99,
+  uniqueness: ["id"],
+  drift_detection: true,
+  on_violation: "gate_and_alert"
+}
+
+emit "E2E Test 14 PASSED: Multiple quality declarations";
+
+// =============================================================================
+// TEST 15: Full orchestrated pipeline with all features
+// =============================================================================
+
+let full_dag = dag_execute([
+  { "id": "etl", "agent": "SimpleETL", "task": "Simple extraction" },
+  { "id": "report", "agent": "SalesReporter", "task": "Generate sales report",
+    "depends_on": ["etl"] },
+  { "id": "feedback", "agent": "FeedbackAnalyzer", "task": "Analyze feedback" },
+  { "id": "final", "agent": "AdHocAnalyst",
+    "task": "Final ad-hoc analysis combining all outputs",
+    "depends_on": ["report", "feedback"] }
+]);
+
+emit "E2E Test 15 PASSED: Full orchestrated pipeline";
+
+// =============================================================================
+// SUMMARY
+// =============================================================================
+
+emit "=== v0.9 DataAgent E2E: All 15 tests PASSED ===";

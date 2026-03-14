@@ -1541,6 +1541,750 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_op(OpCode::OP_DEFINE_FORGE_AGENT);
           agent_types_[node.name] = AgentKind::Forge;
         }
+        // v0.9: Schema declaration
+        else if constexpr (std::is_same_v<T, SchemaDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // fields as a map: { field_name: { type: "...", constraints: [...] } }
+          std::size_t field_count = 0;
+          for (const auto& field : node.fields)
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, field.name)));
+            // Build field info map
+            std::size_t info_count = 1;  // type always present
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "type")));
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, field.type_name)));
+            if (!field.constraints.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, "constraints")));
+              for (const auto& c : field.constraints)
+              {
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, c.type)));
+              }
+              emit_build_list(chunk_, field.constraints.size());
+              ++info_count;
+            }
+            emit_build_map(chunk_, info_count);
+            ++field_count;
+          }
+          emit_build_map(chunk_, field_count);
+          // version
+          if (node.version.has_value())
+          {
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(*node.version)));
+          }
+          else
+          {
+            chunk_.write_op(OpCode::OP_NIL);
+          }
+          chunk_.write_op(OpCode::OP_DEFINE_SCHEMA);
+          schema_defs_[node.name] = true;
+        }
+        // v0.9: Source declaration
+        else if constexpr (std::is_same_v<T, SourceDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // type
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.type)));
+          // connection
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.connection)));
+          // format
+          if (node.format.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.format)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // refresh
+          if (node.refresh.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.refresh)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // schema_ref
+          if (node.schema_ref.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.schema_ref)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // classification
+          if (node.classification.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.classification)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // mode
+          if (node.mode.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.mode)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // partition_by
+          emit_string_list(chunk_, node.partition_by);
+          chunk_.write_op(OpCode::OP_DEFINE_SOURCE);
+          source_defs_[node.name] = true;
+        }
+        // v0.9: Sink declaration
+        else if constexpr (std::is_same_v<T, SinkDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // type
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.type)));
+          // connection
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.connection)));
+          // format
+          if (node.format.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.format)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // write_mode
+          if (node.write_mode.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.write_mode)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // batch_size
+          if (node.batch_size.has_value())
+          {
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(*node.batch_size)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // schema_ref
+          if (node.schema_ref.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.schema_ref)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // compute_ref
+          if (node.compute_ref.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.compute_ref)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          chunk_.write_op(OpCode::OP_DEFINE_SINK);
+        }
+        // v0.9: Quality declaration
+        else if constexpr (std::is_same_v<T, QualityDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // freshness
+          if (node.freshness.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.freshness)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // completeness
+          if (node.completeness.has_value())
+          {
+            chunk_.emit_constant(vm::Value::Number(*node.completeness));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // uniqueness
+          emit_string_list(chunk_, node.uniqueness);
+          // drift_detection
+          if (node.drift_detection.has_value())
+          {
+            chunk_.write_op(*node.drift_detection ? OpCode::OP_TRUE : OpCode::OP_FALSE);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // anomaly_threshold
+          if (node.anomaly_threshold.has_value())
+          {
+            chunk_.emit_constant(vm::Value::Number(*node.anomaly_threshold));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // on_violation
+          if (node.on_violation.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, *node.on_violation)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          chunk_.write_op(OpCode::OP_DEFINE_QUALITY);
+        }
+        // v0.9: Compute declaration
+        else if constexpr (std::is_same_v<T, ComputeDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // engine
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.engine)));
+          // config (optional expression)
+          if (node.config)
+          {
+            emit_expression(*node.config);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          chunk_.write_op(OpCode::OP_DEFINE_COMPUTE);
+        }
+        // v0.9: Governance declaration
+        else if constexpr (std::is_same_v<T, GovernanceDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // body (expression, typically a map)
+          if (node.body)
+          {
+            emit_expression(*node.body);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          chunk_.write_op(OpCode::OP_DEFINE_GOVERNANCE);
+        }
+        // v0.9: Catalog declaration
+        else if constexpr (std::is_same_v<T, CatalogDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // engine
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.engine)));
+          // register_opts (optional expression)
+          if (node.register_opts)
+          {
+            emit_expression(*node.register_opts);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // discovery
+          if (node.discovery.has_value())
+          {
+            chunk_.write_op(*node.discovery ? OpCode::OP_TRUE : OpCode::OP_FALSE);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          chunk_.write_op(OpCode::OP_DEFINE_CATALOG);
+        }
+        // v0.9: Data agent declaration
+        else if constexpr (std::is_same_v<T, DataAgentDecl>)
+        {
+          // name
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.name)));
+          // provider
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.provider)));
+          // model
+          chunk_.write_op(OpCode::OP_CONST);
+          chunk_.write_short(static_cast<uint16_t>(emit_string_constant(chunk_, node.model)));
+          // endpoint
+          if (node.endpoint.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.endpoint.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // api_key_env
+          if (node.api_key_env.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.api_key_env.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // temperature
+          if (node.temperature.has_value())
+          {
+            chunk_.emit_constant(vm::Value::Number(node.temperature.value()));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // system
+          if (node.system.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.system.value())));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // skills list
+          emit_identifier_list(chunk_, node.skills);
+          // guardchains list
+          emit_identifier_list(chunk_, node.guardchains);
+          // policy
+          if (node.policy.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.policy->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // budget
+          if (node.budget.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.budget->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // env
+          if (node.env.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.env->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // sources list
+          emit_identifier_list(chunk_, node.sources);
+          // sinks list
+          emit_identifier_list(chunk_, node.sinks);
+          // schema_ref
+          if (node.schema_ref.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.schema_ref->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // quality_ref
+          if (node.quality_ref.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.quality_ref->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // compute block as map: { default: "...", available: [...], routing: { stage: engine } }
+          if (node.compute.has_value())
+          {
+            std::size_t ccount = 0;
+            const auto& cb = *node.compute;
+            if (cb.default_engine.has_value())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "default")));
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, cb.default_engine->name)));
+              ++ccount;
+            }
+            if (!cb.available.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "available")));
+              emit_identifier_list(chunk_, cb.available);
+              ++ccount;
+            }
+            if (!cb.routing.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "routing")));
+              std::size_t rcount = 0;
+              for (const auto& [stage, engine] : cb.routing)
+              {
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, stage)));
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, engine.name)));
+                ++rcount;
+              }
+              emit_build_map(chunk_, rcount);
+              ++ccount;
+            }
+            emit_build_map(chunk_, ccount);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // governance_ref
+          if (node.governance_ref.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.governance_ref->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // catalog_ref
+          if (node.catalog_ref.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, node.catalog_ref->name)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // lineage
+          if (node.lineage.has_value())
+          {
+            chunk_.write_op(*node.lineage ? OpCode::OP_TRUE : OpCode::OP_FALSE);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // role
+          if (node.role.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, *node.role)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // purpose
+          if (node.purpose.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, *node.purpose)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // autonomy
+          if (node.autonomy.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, *node.autonomy)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // pipeline as map: { extract: [...], transform: [...], load: [...] }
+          if (node.pipeline.has_value())
+          {
+            std::size_t pcount = 0;
+            const auto& pl = *node.pipeline;
+            // extract
+            if (!pl.extract.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "extract")));
+              emit_identifier_list(chunk_, pl.extract);
+              ++pcount;
+            }
+            // transform (list of maps: each op has name + args)
+            if (!pl.transforms.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "transform")));
+              for (const auto& op : pl.transforms)
+              {
+                std::size_t ocount = 1;  // name always present
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, "name")));
+                chunk_.write_op(OpCode::OP_CONST);
+                chunk_.write_short(static_cast<uint16_t>(
+                    emit_string_constant(chunk_, op.name)));
+                for (const auto& [key, val] : op.args)
+                {
+                  chunk_.write_op(OpCode::OP_CONST);
+                  chunk_.write_short(static_cast<uint16_t>(
+                      emit_string_constant(chunk_, key)));
+                  emit_expression(*val);
+                  ++ocount;
+                }
+                emit_build_map(chunk_, ocount);
+              }
+              emit_build_list(chunk_, pl.transforms.size());
+              ++pcount;
+            }
+            // load
+            if (!pl.load.empty())
+            {
+              chunk_.write_op(OpCode::OP_CONST);
+              chunk_.write_short(static_cast<uint16_t>(
+                  emit_string_constant(chunk_, "load")));
+              emit_identifier_list(chunk_, pl.load);
+              ++pcount;
+            }
+            emit_build_map(chunk_, pcount);
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          // agent_md
+          if (node.agent_md.has_value())
+          {
+            chunk_.write_op(OpCode::OP_CONST);
+            chunk_.write_short(static_cast<uint16_t>(
+                emit_string_constant(chunk_, *node.agent_md)));
+          }
+          else { chunk_.write_op(OpCode::OP_NIL); }
+          chunk_.write_op(OpCode::OP_DEFINE_DATA_AGENT);
+          agent_types_[node.name] = AgentKind::Data;
+        }
+        // v0.9.1: ETL agent declaration
+        else if constexpr (std::is_same_v<T, ETLAgentDecl>)
+        {
+          uint8_t field_count = 0;
+
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+
+          auto push_bool = [&](const std::string& n, bool v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::Bool(v));
+            field_count++;
+          };
+
+          auto push_refs = [&](const std::string& n, const std::vector<IdentifierRef>& refs) {
+            // Serialize ref list as comma-separated string to keep 2-slot-per-field invariant
+            std::string joined;
+            for (size_t i = 0; i < refs.size(); ++i) {
+              if (i > 0) joined += ",";
+              joined += refs[i].name;
+            }
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(joined.c_str(), joined.size()));
+            field_count++;
+          };
+
+          // Shared agent fields
+          push_str("name", node.name);
+          push_str("agent_type", "etl");
+          push_str("provider", node.provider);
+          push_str("model", node.model);
+          if (node.system) push_str("system", *node.system);
+          if (node.temperature)
+          {
+            chunk_.emit_constant(vm::Value::String("temperature", 11));
+            chunk_.emit_constant(vm::Value::Number(*node.temperature));
+            field_count++;
+          }
+          if (node.endpoint) push_str("endpoint", *node.endpoint);
+          if (node.api_key_env) push_str("api_key_env", *node.api_key_env);
+          if (node.budget) push_str("budget", node.budget->name);
+
+          // Inherited DataAgent fields
+          push_refs("sources", node.sources);
+          if (!node.sinks.empty()) push_refs("sinks", node.sinks);
+          if (!node.skills.empty()) push_refs("skills", node.skills);
+          if (!node.connected_knowledge.empty())
+            push_refs("connected_knowledge", node.connected_knowledge);
+          if (!node.guardchains.empty()) push_refs("guardchains", node.guardchains);
+
+          if (node.quality) push_str("quality", node.quality->name);
+          if (node.governance) push_str("governance", node.governance->name);
+          if (node.catalog) push_str("catalog", node.catalog->name);
+          if (node.lineage) push_bool("lineage", *node.lineage);
+
+          if (node.compute && node.compute->default_engine)
+            push_str("compute_default", node.compute->default_engine->name);
+
+          if (node.role) push_str("role", *node.role);
+          if (node.purpose) push_str("purpose", *node.purpose);
+          if (node.autonomy) push_str("autonomy", *node.autonomy);
+
+          // ETL agent-specific fields
+          push_str("warehouse", node.warehouse.name);
+
+          if (node.model_type) push_str("model_type", *node.model_type);
+          if (node.semantic) push_str("semantic", node.semantic->name);
+          if (node.self_heal_flag) push_bool("self_heal", *node.self_heal_flag);
+          if (node.on_failure) push_str("on_failure", *node.on_failure);
+
+          // Layers
+          if (node.layers)
+          {
+            const auto& layers = *node.layers;
+            push_bool("has_layers", true);
+
+            if (layers.staging)
+            {
+              if (layers.staging->prefix)
+                push_str("staging_prefix", *layers.staging->prefix);
+              if (layers.staging->materialization)
+                push_str("staging_materialization", *layers.staging->materialization);
+            }
+            if (layers.integration)
+            {
+              if (layers.integration->prefix)
+                push_str("integration_prefix", *layers.integration->prefix);
+              if (layers.integration->materialization)
+                push_str("integration_materialization", *layers.integration->materialization);
+            }
+
+            // Mart count
+            chunk_.emit_constant(vm::Value::String("mart_count", 10));
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(layers.marts.size())));
+            field_count++;
+          }
+
+          // Incremental config
+          if (node.incremental)
+          {
+            const auto& inc = *node.incremental;
+            push_str("incremental_strategy", inc.strategy);
+            if (inc.key) push_str("incremental_key", *inc.key);
+            if (inc.lookback) push_str("incremental_lookback", *inc.lookback);
+            if (inc.on_schema_change) push_str("incremental_on_schema_change", *inc.on_schema_change);
+          }
+
+          // Auto-model config
+          if (node.auto_model)
+          {
+            const auto& am = *node.auto_model;
+            push_bool("auto_model_enabled", am.enabled);
+            if (am.methodology) push_str("auto_model_methodology", *am.methodology);
+            if (am.approval) push_str("auto_model_approval", *am.approval);
+          }
+
+          // Compiler tracking
+          agent_types_[node.name] = AgentKind::ETL;
+          etl_agent_defs_[node.name] = {
+            static_cast<int>(node.sources.size()),
+            true,
+            node.layers ? static_cast<int>(node.layers->marts.size()) : 0,
+          };
+
+          chunk_.write_op(vm::OpCode::OP_DEFINE_ETL_AGENT);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.1: Mart declaration
+        else if constexpr (std::is_same_v<T, MartDecl>)
+        {
+          uint8_t field_count = 0;
+
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+
+          // Serialize string lists as comma-separated values to maintain 2-slot-per-field invariant
+          auto push_str_list = [&](const std::string& n, const std::vector<std::string>& list) {
+            std::string joined;
+            for (size_t i = 0; i < list.size(); ++i) {
+              if (i > 0) joined += ",";
+              joined += list[i];
+            }
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(joined.c_str(), joined.size()));
+            field_count++;
+          };
+
+          push_str("name", node.name);
+          push_str_list("facts", node.facts);
+          push_str_list("dimensions", node.dimensions);
+          push_str("grain", node.grain);
+          push_str_list("measures", node.measures);
+
+          if (!node.scd.empty())
+          {
+            // Serialize SCD as comma-separated "dim:type" pairs to maintain 2-slot-per-field invariant
+            std::string scd_joined;
+            for (size_t i = 0; i < node.scd.size(); ++i) {
+              if (i > 0) scd_joined += ",";
+              scd_joined += node.scd[i].dimension_name + ":" + node.scd[i].scd_type;
+            }
+            chunk_.emit_constant(vm::Value::String("scd", 3));
+            chunk_.emit_constant(vm::Value::String(scd_joined.c_str(), scd_joined.size()));
+            field_count++;
+          }
+
+          if (!node.conformed.empty())
+            push_str_list("conformed", node.conformed);
+
+          if (node.materialization)
+            push_str("materialization", *node.materialization);
+
+          mart_defs_.insert(node.name);
+
+          chunk_.write_op(vm::OpCode::OP_DEFINE_MART);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.1: Semantic declaration
+        else if constexpr (std::is_same_v<T, SemanticDecl>)
+        {
+          uint8_t field_count = 0;
+
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+
+          push_str("name", node.name);
+
+          // Metrics: serialize as comma-separated "name|sql|description|type" to maintain 2-slot invariant
+          {
+            std::string metrics_joined;
+            for (size_t i = 0; i < node.metrics.size(); ++i) {
+              if (i > 0) metrics_joined += ";";
+              metrics_joined += node.metrics[i].name + "|" + node.metrics[i].sql + "|"
+                + node.metrics[i].description + "|" + node.metrics[i].type;
+            }
+            chunk_.emit_constant(vm::Value::String("metrics", 7));
+            chunk_.emit_constant(vm::Value::String(metrics_joined.c_str(), metrics_joined.size()));
+            field_count++;
+          }
+
+          // Entities: serialize as comma-separated "name|table|key"
+          if (!node.entities.empty())
+          {
+            std::string entities_joined;
+            for (size_t i = 0; i < node.entities.size(); ++i) {
+              if (i > 0) entities_joined += ";";
+              entities_joined += node.entities[i].name + "|" + node.entities[i].table + "|"
+                + node.entities[i].key;
+            }
+            chunk_.emit_constant(vm::Value::String("entities", 8));
+            chunk_.emit_constant(vm::Value::String(entities_joined.c_str(), entities_joined.size()));
+            field_count++;
+          }
+
+          // Synonyms: serialize as comma-separated "alias:target"
+          if (!node.synonyms.empty())
+          {
+            std::string synonyms_joined;
+            bool first = true;
+            for (const auto& [k, v] : node.synonyms)
+            {
+              if (!first) synonyms_joined += ",";
+              synonyms_joined += k + ":" + v;
+              first = false;
+            }
+            chunk_.emit_constant(vm::Value::String("synonyms", 8));
+            chunk_.emit_constant(vm::Value::String(synonyms_joined.c_str(), synonyms_joined.size()));
+            field_count++;
+          }
+
+          // Time intelligence
+          if (node.time_intelligence)
+          {
+            const auto& ti = *node.time_intelligence;
+            if (ti.fiscal_year_start)
+              push_str("fiscal_year_start", *ti.fiscal_year_start);
+            if (ti.week_start)
+              push_str("week_start", *ti.week_start);
+            if (ti.default_timezone)
+              push_str("default_timezone", *ti.default_timezone);
+          }
+
+          semantic_defs_.insert(node.name);
+
+          chunk_.write_op(vm::OpCode::OP_DEFINE_SEMANTIC);
+          chunk_.write_byte(field_count);
+        }
         // v0.8 Phase 6: Channel declaration
         else if constexpr (std::is_same_v<T, ChannelDecl>)
         {

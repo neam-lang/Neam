@@ -209,6 +209,15 @@ enum class TokenType
   Channel,      // "channel" — channel declaration
   Spawn,        // "spawn" — spawn sub-agent
 
+  // v0.9.1: NeamETL keywords
+  Mart,           // "mart" — dimensional model declaration
+  Semantic,       // "semantic" — semantic layer declaration
+  Warehouse,      // "warehouse" — warehouse reference
+
+  // v0.9: Data agent keywords (contextual — NOT reserved in keyword map)
+  // "data", "schema", "source", "sink", "quality", "compute", "governance", "catalog"
+  // are handled via match_identifier() to remain usable as variable names
+
   Eof
 };
 
@@ -254,6 +263,30 @@ private:
   StmtPtr parse_claw_agent(const Visibility& visibility);
   StmtPtr parse_forge_agent(const Visibility& visibility);
   StmtPtr parse_channel_decl();
+  // v0.9: Data agent declarations
+  StmtPtr parse_data_agent(const Visibility& visibility);
+  StmtPtr parse_schema(const Visibility& visibility);
+  StmtPtr parse_source(const Visibility& visibility);
+  StmtPtr parse_sink(const Visibility& visibility);
+  StmtPtr parse_quality(const Visibility& visibility);
+  StmtPtr parse_compute(const Visibility& visibility);
+  StmtPtr parse_governance(const Visibility& visibility);
+  StmtPtr parse_catalog(const Visibility& visibility);
+  // v0.9.1: ETL agent declarations
+  StmtPtr parse_etl_agent(const Visibility& visibility);
+  StmtPtr parse_semantic(const Visibility& visibility);
+  MartDecl parse_mart();
+  LayersBlock parse_layers_block();
+  LayerConfig parse_layer_config();
+  IncrementalBlock parse_incremental_block();
+  SelfHealBlock parse_self_heal_block();
+  AutoModelBlock parse_auto_model_block();
+  bool match_keyword_as_identifier();
+  PipelineBlock parse_pipeline_block();
+  DataAgentComputeBlock parse_data_agent_compute_block();
+  ExprPtr parse_config_block();
+  std::vector<std::string> parse_string_list();
+  void consume_optional_comma();
   // v0.8 config helpers
   SessionConfig parse_session_config();
   LoopConfig parse_loop_config();

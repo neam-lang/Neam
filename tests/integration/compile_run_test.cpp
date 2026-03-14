@@ -410,4 +410,282 @@ TEST(CompileRunTest, AgentWithSkillCompiles)
   EXPECT_TRUE(result.is_nil());
 }
 
+// ============================================================================
+// DataAgent Compile Tests (v0.9)
+// ============================================================================
+
+TEST(CompileRunTest, SchemaDeclarationCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    schema UserRecord {
+      user_id: int @primary_key
+      name: string @not_null
+      email: string @unique
+      score: float @range(0.0, 100.0)
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, SourceDeclarationCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    source UserDB {
+      type: "postgres"
+      connection: "pg://localhost/users"
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, SinkDeclarationCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    sink OutputWarehouse {
+      type: "s3"
+      connection: "s3://analytics-output/processed/"
+      format: "parquet"
+      write_mode: "append"
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, QualityBlockCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    quality StrictQuality {
+      completeness: 0.99
+      on_violation: "warn"
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, ComputeDeclarationCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    compute LocalEngine {
+      engine: "local"
+      config: { parallelism: 4 }
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, GovernanceDeclarationCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    governance BasicPolicy {
+      access: [
+        { "role": "analyst", "permissions": ["read"] }
+      ]
+      retention: [
+        { "classification": "pii", "max_days": 90, "action": "delete" }
+      ]
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, CatalogDeclarationCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    catalog DataCatalog {
+      engine: "unity_catalog"
+      discovery: true
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, MinimalDataAgentCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    source Input {
+      type: "s3"
+      connection: "./data.csv"
+      format: "csv"
+    }
+
+    sink Output {
+      type: "s3"
+      connection: "./output.parquet"
+      format: "parquet"
+    }
+
+    data agent Processor {
+      provider: "openai", model: "gpt-4o-mini",
+      sources: [Input],
+      sinks: [Output]
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, DataAgentWithTransformCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    source SalesDB {
+      type: "postgres"
+      connection: "pg://localhost/sales"
+    }
+
+    sink AnalyticsOut {
+      type: "s3"
+      connection: "./analytics.parquet"
+      format: "parquet"
+      write_mode: "replace"
+    }
+
+    quality SalesQuality {
+      completeness: 0.95
+      on_violation: "warn"
+    }
+
+    data agent SalesProcessor {
+      provider: "openai", model: "gpt-4o-mini",
+      sources: [SalesDB],
+      sinks: [AnalyticsOut],
+      quality: SalesQuality,
+      pipeline: {
+        extract: [SalesDB],
+        transform: [
+          filter(column: "amount", op: ">", value: 0)
+        ],
+        load: [AnalyticsOut]
+      }
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, DataAgentWithGovernanceCompiles)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    source UserSource {
+      type: "s3"
+      connection: "./users.csv"
+      format: "csv"
+    }
+
+    sink UserSink {
+      type: "s3"
+      connection: "./users_out.parquet"
+      format: "parquet"
+    }
+
+    governance GDPR {
+      access: [
+        { "role": "admin", "permissions": ["read", "write", "delete"] },
+        { "role": "analyst", "permissions": ["read"] }
+      ]
+      retention: [
+        { "classification": "pii", "max_days": 365, "action": "anonymize" }
+      ]
+    }
+
+    data agent PrivacyAwareETL {
+      provider: "openai", model: "gpt-4o-mini",
+      sources: [UserSource],
+      sinks: [UserSink],
+      governance: GDPR
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
+TEST(CompileRunTest, ContextualDataKeywordNoConflict)
+{
+  // 'data' is contextual — only a keyword before 'agent'
+  auto result = compile_and_run(R"(
+    let data = "some_value";
+    return data;
+  )");
+  ASSERT_TRUE(result.is_string());
+  auto* str = as_string(result);
+  EXPECT_EQ(std::string(str->chars, str->length), "some_value");
+}
+
+TEST(CompileRunTest, DataAgentCoexistsWithPlainAgent)
+{
+  Pipeline pipeline;
+  auto unit = pipeline.compile(R"(
+    skill Echo {
+      description: "Echo."
+      params: { text: String }
+      impl(text) { return text; }
+    }
+
+    agent Bot {
+      provider: "openai"
+      model: "gpt-4"
+      system: "You are helpful."
+      skills: [Echo]
+    }
+
+    source FileIn {
+      type: "s3"
+      connection: "./in.csv"
+      format: "csv"
+    }
+
+    sink FileOut {
+      type: "s3"
+      connection: "./out.parquet"
+      format: "parquet"
+    }
+
+    data agent Ingestor {
+      provider: "openai", model: "gpt-4o-mini",
+      sources: [FileIn],
+      sinks: [FileOut]
+    }
+    return nil;
+  )", {});
+  VirtualMachine vm;
+  auto result = vm.run(unit.chunk);
+  EXPECT_TRUE(result.is_nil());
+}
+
 }  // namespace

@@ -1,0 +1,623 @@
+// v0.9 DataAgents: End-to-end parser/compiler/VM test
+// Tests: schema, source, sink, quality, compute, governance, catalog, data agent,
+//        pipeline blocks, field rejection, contextual keyword, method dispatch
+
+// ============================================================================
+// 1. Schema declarations with all constraint types
+// ============================================================================
+
+schema CustomerSchema {
+  customer_id: string @primary_key,
+  email: string @pattern("^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$") @unique,
+  name: string @length(1, 200) @not_null,
+  age: int @range(0, 150),
+  balance: float @positive,
+  status: string @enum(["active", "inactive", "suspended"]),
+  created_at: datetime @default(now())
+}
+
+schema OrderSchema {
+  order_id: string @primary_key,
+  customer_id: string @foreign_key(CustomerSchema) @not_null,
+  product_id: string @not_null,
+  quantity: int @range(1, 10000),
+  unit_price: float @positive,
+  order_date: datetime,
+  region: string @enum(["NA", "EU", "APAC", "LATAM"]),
+  shipped: bool
+}
+
+schema SalesSummarySchema {
+  region: string,
+  total_revenue: float,
+  order_count: int,
+  avg_order_value: float,
+  period: string
+}
+
+emit "Test 1 PASSED: Schema declarations with all constraint types";
+
+// ============================================================================
+// 2. Source declarations — all connector types
+// ============================================================================
+
+source SalesDB {
+  type: "postgres",
+  connection: env("SALES_DB_URL"),
+  schema: CustomerSchema,
+  refresh: "5m",
+  classification: "confidential"
+}
+
+source InventoryDB {
+  type: "postgres",
+  connection: env("INVENTORY_DB_URL")
+}
+
+source RawEventFiles {
+  type: "s3",
+  connection: "s3://data-lake/raw-events/",
+  format: "parquet",
+  partition_by: ["date", "region"]
+}
+
+source CustomerAPI {
+  type: "http",
+  connection: "https://api.example.com/customers",
+  format: "json",
+  refresh: "1h"
+}
+
+source EventStream {
+  type: "kafka",
+  connection: env("KAFKA_BROKERS"),
+  mode: "batch"
+}
+
+emit "Test 2 PASSED: Source declarations — all connector types";
+
+// ============================================================================
+// 3. Sink declarations
+// ============================================================================
+
+sink AnalyticsWarehouse {
+  type: "postgres",
+  connection: env("SNOWFLAKE_URL"),
+  schema: SalesSummarySchema,
+  write_mode: "upsert",
+  batch_size: 5000
+}
+
+sink ExecutiveDashboard {
+  type: "http",
+  connection: env("DASHBOARD_WEBHOOK"),
+  format: "json"
+}
+
+sink DataLakeOutput {
+  type: "s3",
+  connection: "s3://data-lake/processed/",
+  format: "parquet",
+  write_mode: "append"
+}
+
+emit "Test 3 PASSED: Sink declarations";
+
+// ============================================================================
+// 4. Quality declarations
+// ============================================================================
+
+quality SalesQuality {
+  freshness: "1h",
+  completeness: 0.95,
+  uniqueness: ["order_id"],
+  drift_detection: true,
+  anomaly_threshold: 3.0,
+  on_violation: "gate_and_alert"
+}
+
+quality BasicQuality {
+  completeness: 0.80,
+  on_violation: "warn"
+}
+
+emit "Test 4 PASSED: Quality declarations";
+
+// ============================================================================
+// 5. Compute declarations
+// ============================================================================
+
+compute SparkCluster {
+  engine: "spark",
+  config: {
+    "spark.executor.memory": "8g",
+    "spark.executor.cores": "4",
+    "spark.dynamicAllocation.enabled": "true"
+  }
+}
+
+compute SnowflakeWH {
+  engine: "snowflake",
+  config: {
+    "warehouse": "ANALYTICS_WH",
+    "warehouse_size": "MEDIUM"
+  }
+}
+
+compute LocalEngine {
+  engine: "local"
+}
+
+emit "Test 5 PASSED: Compute declarations";
+
+// ============================================================================
+// 6. Governance declaration — full
+// ============================================================================
+
+governance OrgPolicy {
+  classification: {
+    "auto_classify": [
+      { "pattern": "ssn|social_security", "level": "restricted" },
+      { "pattern": "email|phone|address", "level": "confidential" },
+      { "pattern": "revenue|sales", "level": "internal" },
+      { "pattern": "product_name|sku", "level": "public" }
+    ]
+  },
+  access: {
+    "model": "rbac",
+    "roles": {
+      "data_engineer":   { "read": ["public", "internal", "confidential"],
+                           "write": ["public", "internal", "confidential"] },
+      "data_analyst":    { "read": ["public", "internal", "confidential"],
+                           "write": ["public", "internal"] },
+      "executive":       { "read": ["public", "internal"], "write": [] },
+      "external_agent":  { "read": ["public"], "write": [] }
+    },
+    "masking": {
+      "confidential": "partial",
+      "restricted": "full"
+    }
+  },
+  retention: {
+    "default": "7y",
+    "by_classification": {
+      "public": "indefinite",
+      "internal": "7y",
+      "confidential": "5y",
+      "restricted": "3y"
+    },
+    "auto_purge": true,
+    "purge_schedule": "monthly"
+  },
+  jurisdiction: {
+    "rules": [
+      { "data_type": "eu_personal_data",
+        "allowed_regions": ["eu-west-1", "eu-central-1"],
+        "regulation": "GDPR",
+        "requirements": ["right_to_erasure", "data_portability"] }
+    ],
+    "enforce_data_residency": true
+  },
+  audit: {
+    "log_all_access": true,
+    "log_all_transforms": true,
+    "immutable": true,
+    "format": "opentelemetry"
+  }
+}
+
+emit "Test 6 PASSED: Governance declaration — full";
+
+// ============================================================================
+// 7. Catalog declaration
+// ============================================================================
+
+catalog OrgCatalog {
+  engine: "unity_catalog",
+  register: {
+    schemas: true,
+    lineage: true,
+    quality: true
+  },
+  discovery: true
+}
+
+emit "Test 7 PASSED: Catalog declaration";
+
+// ============================================================================
+// 8. Data agent — full pipeline with all fields
+// ============================================================================
+
+data agent SalesAnalyst {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "You are a sales data analyst. Analyze sales data and provide insights.",
+  temperature: 0.3,
+  sources: [SalesDB, InventoryDB],
+  sinks: [AnalyticsWarehouse, ExecutiveDashboard],
+  schema: OrderSchema,
+  quality: SalesQuality,
+  compute: {
+    default: SparkCluster,
+    available: [SparkCluster, SnowflakeWH, LocalEngine]
+  },
+  governance: OrgPolicy,
+  catalog: OrgCatalog,
+  lineage: true,
+  role: "data_analyst",
+  purpose: "Quarterly sales pipeline",
+  autonomy: "conditional",
+  pipeline: {
+    extract: [SalesDB, InventoryDB],
+    transform: [
+      filter(column: "status", op: "!=", value: "cancelled"),
+      deduplicate(keys: ["order_id"]),
+      validate(rules: SalesQuality),
+      aggregate(group_by: ["region"], metrics: ["sum(revenue)", "count(*)"]),
+      derive(column: "avg_order_value", expr: "total_revenue / order_count")
+    ],
+    load: [AnalyticsWarehouse, ExecutiveDashboard]
+  }
+}
+
+emit "Test 8 PASSED: Data agent — full pipeline with all fields";
+
+// ============================================================================
+// 9. Data agent — minimal (no pipeline, L3 autonomy)
+// ============================================================================
+
+data agent FlexibleAnalyst {
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  system: "You are a flexible data analyst.",
+  sources: [SalesDB],
+  sinks: [DataLakeOutput],
+  autonomy: "conditional"
+  // No pipeline — agent plans it using LLM
+}
+
+emit "Test 9 PASSED: Data agent — minimal with LLM-planned pipeline";
+
+// ============================================================================
+// 10. Contextual 'data' keyword — 'data' as variable should still work
+// ============================================================================
+
+let data = "test_value";
+let data_count = 42;
+let my_data = [1, 2, 3];
+
+emit f"Test 10 PASSED: 'data' as variable = {data}, count = {data_count}";
+
+// ============================================================================
+// 11. Multiple data agents (Medallion Architecture pattern)
+// ============================================================================
+
+source RawEvents {
+  type: "kafka",
+  connection: env("KAFKA_BROKERS"),
+  mode: "batch"
+}
+
+sink BronzeLayer {
+  type: "s3",
+  connection: "s3://lake/bronze/",
+  format: "parquet",
+  write_mode: "append"
+}
+
+sink SilverLayer {
+  type: "s3",
+  connection: "s3://lake/silver/",
+  format: "parquet",
+  write_mode: "merge"
+}
+
+sink GoldLayer {
+  type: "s3",
+  connection: "s3://lake/gold/",
+  format: "parquet",
+  write_mode: "upsert"
+}
+
+data agent BronzeIngester {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Raw data ingestion agent.",
+  sources: [RawEvents, RawEventFiles],
+  sinks: [BronzeLayer],
+  quality: BasicQuality,
+  lineage: true,
+  pipeline: {
+    extract: [RawEvents],
+    transform: [],
+    load: [BronzeLayer]
+  }
+}
+
+source BronzeSource {
+  type: "s3",
+  connection: "s3://lake/bronze/",
+  format: "parquet"
+}
+
+data agent SilverRefiner {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Data cleansing agent.",
+  sources: [BronzeSource],
+  sinks: [SilverLayer],
+  quality: SalesQuality,
+  lineage: true,
+  pipeline: {
+    extract: [BronzeSource],
+    transform: [
+      deduplicate(keys: ["event_id"]),
+      validate(rules: SalesQuality),
+      normalize(),
+      tag_pii()
+    ],
+    load: [SilverLayer]
+  }
+}
+
+source SilverSource {
+  type: "s3",
+  connection: "s3://lake/silver/",
+  format: "parquet"
+}
+
+data agent GoldBuilder {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Business aggregate builder.",
+  sources: [SilverSource],
+  sinks: [GoldLayer],
+  lineage: true,
+  pipeline: {
+    extract: [SilverSource],
+    transform: [
+      aggregate(group_by: ["region", "product"], metrics: ["sum(revenue)", "count(*)"]),
+      derive(column: "churn_prob", expr: "ml_predict(churn_model)")
+    ],
+    load: [GoldLayer]
+  }
+}
+
+emit "Test 11 PASSED: Multiple data agents — Medallion Architecture";
+
+// ============================================================================
+// 12. Data agent with existing Neam constructs (budget, guard, skill)
+// ============================================================================
+
+budget DataBudget {
+  cost: 50.00,
+  tokens: 50000,
+  time: 3600000
+}
+
+skill DataQuery {
+  description: "Query data using natural language"
+  params: { question: string }
+  impl(question) {
+    return "Query result for: " + question;
+  }
+}
+
+guard DataAccessGuard {
+  description: "Validates data access"
+  on_observation(text) { return text; }
+}
+
+guardchain DataGuardChain = [DataAccessGuard];
+
+data agent GuardedAnalyst {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Guarded data analyst.",
+  sources: [SalesDB],
+  sinks: [DataLakeOutput],
+  budget: DataBudget,
+  skills: [DataQuery],
+  guardchains: [DataGuardChain],
+  lineage: true
+}
+
+emit "Test 12 PASSED: Data agent with budget, guard, skill integration";
+
+// ============================================================================
+// 13. Backward compatibility — plain/claw/forge agents still work
+// ============================================================================
+
+agent LegacyBot {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "A simple agent.",
+  skills: [DataQuery]
+}
+
+claw agent SupportBot {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Support bot.",
+  channels: [DataQuery]
+}
+
+fun verify_fn(ctx) { return true; }
+
+forge agent CodeBuilder {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Code builder.",
+  verify: verify_fn
+}
+
+emit "Test 13 PASSED: Backward compatibility — agent/claw/forge still compile";
+
+// ============================================================================
+// 14. Data agent with compute routing rules
+// ============================================================================
+
+data agent RoutedAnalyst {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Analyst with compute routing.",
+  sources: [SalesDB],
+  sinks: [AnalyticsWarehouse],
+  compute: {
+    default: LocalEngine,
+    available: [SparkCluster, SnowflakeWH, LocalEngine],
+    routing: [
+      { stage: "aggregate", engine: SparkCluster, condition: "rows > 100000" },
+      { stage: "window", engine: SnowflakeWH }
+    ]
+  },
+  pipeline: {
+    extract: [SalesDB],
+    transform: [
+      filter(column: "region", op: "==", value: "NA"),
+      aggregate(group_by: ["product_id"], metrics: ["sum(revenue)"])
+    ],
+    load: [AnalyticsWarehouse]
+  }
+}
+
+emit "Test 14 PASSED: Data agent with compute routing rules";
+
+// ============================================================================
+// 15. Schema versioning
+// ============================================================================
+
+schema CustomerSchemaV2 {
+  version: 2,
+  customer_id: string @primary_key,
+  email: string @pattern("^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$") @unique,
+  name: string @length(1, 200) @not_null,
+  age: int @range(0, 150),
+  balance: float @positive,
+  status: string @enum(["active", "inactive", "suspended", "archived"]),
+  created_at: datetime @default(now()),
+  loyalty_tier: string @enum(["bronze", "silver", "gold", "platinum"])
+}
+
+emit "Test 15 PASSED: Schema versioning";
+
+// ============================================================================
+// 16. Pipeline with all transform operators
+// ============================================================================
+
+data agent FullTransformAgent {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Tests all transform operators.",
+  sources: [SalesDB],
+  sinks: [DataLakeOutput],
+  pipeline: {
+    extract: [SalesDB],
+    transform: [
+      filter(column: "status", op: "==", value: "active"),
+      deduplicate(keys: ["order_id"]),
+      validate(rules: BasicQuality),
+      aggregate(group_by: ["region"], metrics: ["sum(revenue)"]),
+      derive(column: "normalized", expr: "revenue / max_revenue"),
+      sort(column: "revenue", ascending: false),
+      limit(n: 1000),
+      enrich(column: "sentiment", agent: FlexibleAnalyst),
+      tag_pii(),
+      normalize(),
+      profile()
+    ],
+    load: [DataLakeOutput]
+  }
+}
+
+emit "Test 16 PASSED: Pipeline with all transform operators";
+
+// ============================================================================
+// 17. Cross-agent interaction — claw agent spawning data agent
+// ============================================================================
+
+skill RunAnalysis {
+  description: "Run a data analysis pipeline"
+  params: { question: string }
+  impl(question) {
+    // In real execution, this would: spawn FlexibleAnalyst(question)
+    return "Analysis result for: " + question;
+  }
+}
+
+claw agent DataAssistant {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Business data assistant that can run analysis pipelines.",
+  channels: [RunAnalysis],
+  skills: [RunAnalysis]
+}
+
+emit "Test 17 PASSED: Cross-agent interaction — claw spawns data agent skill";
+
+// ============================================================================
+// 18. Multi-source join pipeline
+// ============================================================================
+
+data agent JoinAnalyst {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Joins multiple data sources.",
+  sources: [SalesDB, InventoryDB, CustomerAPI],
+  sinks: [AnalyticsWarehouse],
+  pipeline: {
+    extract: [SalesDB, InventoryDB, CustomerAPI],
+    transform: [
+      join(source: CustomerAPI, on: ["customer_id"], type: "left"),
+      join(source: InventoryDB, on: ["product_id"], type: "inner"),
+      aggregate(group_by: ["region"], metrics: ["sum(revenue)", "avg(quantity)"])
+    ],
+    load: [AnalyticsWarehouse]
+  }
+}
+
+emit "Test 18 PASSED: Multi-source join pipeline";
+
+// ============================================================================
+// 19. Governance-aware data agent with role-based access
+// ============================================================================
+
+data agent RestrictedAnalyst {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  system: "Restricted access analyst.",
+  sources: [SalesDB],
+  sinks: [ExecutiveDashboard],
+  governance: OrgPolicy,
+  role: "executive",
+  purpose: "Executive summary dashboard",
+  pipeline: {
+    extract: [SalesDB],
+    transform: [
+      aggregate(group_by: ["region"], metrics: ["sum(revenue)"])
+    ],
+    load: [ExecutiveDashboard]
+  }
+}
+
+emit "Test 19 PASSED: Governance-aware data agent";
+
+// ============================================================================
+// 20. DAG orchestration with data agents
+// ============================================================================
+
+let lakehouse_dag = dag_execute([
+  { "id": "bronze", "agent": "BronzeIngester", "task": "Ingest raw data" },
+  { "id": "silver", "agent": "SilverRefiner", "task": "Clean and conform",
+    "depends_on": ["bronze"] },
+  { "id": "gold", "agent": "GoldBuilder", "task": "Build aggregates",
+    "depends_on": ["silver"] }
+]);
+
+emit "Test 20 PASSED: DAG orchestration with data agents";
+
+// ============================================================================
+// Summary
+// ============================================================================
+
+emit "=== v0.9 DataAgents: All 20 tests PASSED ===";

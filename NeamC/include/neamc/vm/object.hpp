@@ -66,7 +66,22 @@ enum class ObjType
   OBJ_FORGE_AGENT,
   OBJ_CHANNEL,
   OBJ_WORKSPACE,
-  OBJ_LOOP_CONTEXT
+  OBJ_LOOP_CONTEXT,
+  // v0.9: Data agent type system
+  OBJ_DATA_AGENT,
+  OBJ_SOURCE,
+  OBJ_SINK,
+  OBJ_SCHEMA,
+  OBJ_QUALITY_GATE,
+  OBJ_COMPUTE_ENGINE,
+  OBJ_GOVERNANCE_POLICY,
+  OBJ_CATALOG,
+  // v0.9.1: ETLAgent object types
+  OBJ_ETL_AGENT,
+  OBJ_MART,
+  OBJ_SEMANTIC_LAYER,
+  OBJ_SQL_PLAN,
+  OBJ_MODEL_PROPOSAL,
 };
 
 struct ObjString : Obj
@@ -284,6 +299,36 @@ ObjClawAgent* new_claw_agent();
 ObjForgeAgent* new_forge_agent();
 ObjChannel* new_channel();
 ObjLoopContext* new_loop_context();
+
+// v0.9: Data agent type system — forward declares (definitions in data_agent_types.hpp)
+struct ObjDataAgent;
+struct ObjSource;
+struct ObjSink;
+struct ObjSchema;
+struct ObjQualityGate;
+struct ObjComputeEngine;
+struct ObjGovernancePolicy;
+struct ObjCatalog;
+ObjDataAgent* new_data_agent();
+ObjSource* new_source();
+ObjSink* new_sink();
+ObjSchema* new_schema_obj();
+ObjQualityGate* new_quality_gate();
+ObjComputeEngine* new_compute_engine();
+ObjGovernancePolicy* new_governance_policy();
+ObjCatalog* new_catalog_obj();
+
+// v0.9.1: ETL agent type system — forward declares (definitions in etl_agent_types.hpp)
+struct ObjETLAgent;
+struct ObjMart;
+struct ObjSemanticLayer;
+struct ObjSQLPlan;
+struct ObjModelProposal;
+ObjETLAgent* new_etl_agent();
+ObjMart* new_mart();
+ObjSemanticLayer* new_semantic_layer();
+ObjSQLPlan* new_sql_plan();
+ObjModelProposal* new_model_proposal();
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

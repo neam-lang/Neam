@@ -227,6 +227,8 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/channels/cli_channel.cpp
     NeamC/src/vm/channels/http_channel.cpp
     NeamC/src/vm/schedulable_runtime.cpp
+    NeamC/src/vm/data_agent_types.cpp
+    NeamC/src/vm/etl_agent_types.cpp
     NeamC/src/vm/trace.cpp
     NeamC/src/runtime/executor.cpp
     NeamC/src/types/type_repr.cpp
@@ -548,6 +550,36 @@ add_executable(v072_manifest_agents_test
 )
 target_link_libraries(v072_manifest_agents_test PRIVATE neamc_core gtest_main)
 add_test(NAME v072_manifest_agents_test COMMAND v072_manifest_agents_test)
+
+# ============================================================================
+# v0.9 Test Targets
+# ============================================================================
+
+add_executable(v090_data_agent_test
+    tests/unit/v090_data_agent_test.cpp
+)
+target_link_libraries(v090_data_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v090_data_agent_test COMMAND v090_data_agent_test)
+
+# ============================================================================
+# v0.9.1 Test Targets
+# ============================================================================
+
+add_executable(v091_etl_agent_test
+    tests/unit/v091_etl_agent_test.cpp
+)
+target_link_libraries(v091_etl_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v091_etl_agent_test COMMAND v091_etl_agent_test)
+
+# ============================================================================
+# Full Suite Integration Test (v0.8.0 – v0.9.1)
+# ============================================================================
+
+add_executable(neam_full_suite_test
+    tests/integration/neam_full_suite_test.cpp
+)
+target_link_libraries(neam_full_suite_test PRIVATE neamc_core gtest_main)
+add_test(NAME neam_full_suite_test COMMAND neam_full_suite_test)
 
 # ============================================================================
 # Install targets (v0.6.5)
