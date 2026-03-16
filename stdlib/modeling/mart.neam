@@ -1,0 +1,20 @@
+//
+// Neam v0.9.5 — DataMart generation standard library
+//
+
+module std.modeling.mart
+
+/// Generate a DataMart from dimensional model
+pub fun generate(agent, config) {
+  return modeling_generate_datamart(agent, config);
+}
+
+/// Generate aggregate tables for a mart
+pub fun aggregate(agent, mart) {
+  return modeling_generate_datamart(agent, mart);
+}
+
+/// Materialize a mart
+pub fun materialize(agent, mart) {
+  return modeling_generate_ddl(agent, mart);
+}

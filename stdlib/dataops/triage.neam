@@ -1,0 +1,50 @@
+//
+// Neam v0.9.3 — DataOps incident triage standard library
+//
+
+module std.dataops.triage
+
+/// Create a new incident
+pub fun create_incident(agent, severity, summary) {
+  return dataops_create_incident(agent, severity, summary);
+}
+
+/// Close an incident by ID
+pub fun close_incident(agent, incident_id) {
+  return dataops_close_incident(agent, incident_id);
+}
+
+/// Begin triage phase
+pub fun triage(agent) {
+  return dataops_triage(agent);
+}
+
+/// Begin investigation phase
+pub fun investigate(agent) {
+  return dataops_investigate(agent);
+}
+
+/// Begin remediation phase
+pub fun remediate(agent) {
+  return dataops_remediate(agent);
+}
+
+/// Escalate incident
+pub fun escalate(agent) {
+  return dataops_escalate(agent);
+}
+
+/// Resolve incident
+pub fun resolve(agent) {
+  return dataops_resolve(agent);
+}
+
+/// Get count of open incidents
+pub fun incidents_open(agent) {
+  return dataops_incidents_open(agent);
+}
+
+/// Get count of incidents created today
+pub fun incidents_today(agent) {
+  return dataops_incidents_today(agent);
+}

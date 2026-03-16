@@ -229,6 +229,19 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/schedulable_runtime.cpp
     NeamC/src/vm/data_agent_types.cpp
     NeamC/src/vm/etl_agent_types.cpp
+    NeamC/src/vm/migration_types.cpp
+    NeamC/src/vm/dataops_types.cpp
+    NeamC/src/vm/governance_types.cpp
+    NeamC/src/vm/modeling_types.cpp
+    NeamC/src/vm/migration/audit_trail.cpp
+    NeamC/src/vm/migration/schema_translator.cpp
+    NeamC/src/vm/migration/data_movement.cpp
+    NeamC/src/vm/migration/reconciliation.cpp
+    NeamC/src/vm/migration/self_healing.cpp
+    NeamC/src/vm/migration/cdc_manager.cpp
+    NeamC/src/vm/migration/cutover_manager.cpp
+    NeamC/src/vm/migration/security_migrator.cpp
+    NeamC/src/vm/migration/sp_translator.cpp
     NeamC/src/vm/trace.cpp
     NeamC/src/runtime/executor.cpp
     NeamC/src/types/type_repr.cpp
@@ -250,6 +263,8 @@ target_include_directories(neamc_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/include
         ${CMAKE_BINARY_DIR}/include
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/NeamC/src/vm/migration
 )
 
 target_link_libraries(neamc_core
@@ -570,6 +585,46 @@ add_executable(v091_etl_agent_test
 )
 target_link_libraries(v091_etl_agent_test PRIVATE neamc_core gtest_main)
 add_test(NAME v091_etl_agent_test COMMAND v091_etl_agent_test)
+
+# ============================================================================
+# v0.9.2 Test Targets
+# ============================================================================
+
+add_executable(v092_migration_agent_test
+    tests/unit/v092_migration_agent_test.cpp
+)
+target_link_libraries(v092_migration_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v092_migration_agent_test COMMAND v092_migration_agent_test)
+
+# ============================================================================
+# v0.9.3 Test Targets
+# ============================================================================
+
+add_executable(v093_dataops_agent_test
+    tests/unit/v093_dataops_agent_test.cpp
+)
+target_link_libraries(v093_dataops_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v093_dataops_agent_test COMMAND v093_dataops_agent_test)
+
+# ============================================================================
+# v0.9.4 Test Targets
+# ============================================================================
+
+add_executable(v094_governance_agent_test
+    tests/unit/v094_governance_agent_test.cpp
+)
+target_link_libraries(v094_governance_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v094_governance_agent_test COMMAND v094_governance_agent_test)
+
+# ============================================================================
+# v0.9.5 Modeling Agent Unit Tests
+# ============================================================================
+
+add_executable(v095_modeling_agent_test
+    tests/unit/v095_modeling_agent_test.cpp
+)
+target_link_libraries(v095_modeling_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v095_modeling_agent_test COMMAND v095_modeling_agent_test)
 
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)

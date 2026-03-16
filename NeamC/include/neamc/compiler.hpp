@@ -40,7 +40,7 @@ private:
   void emit_block(const BlockStmt& block);
 
   // v0.8 Phase 1: Agent type tracking for trait validation
-  enum class AgentKind { Stateless, Claw, Forge, Data, ETL };
+  enum class AgentKind { Stateless, Claw, Forge, Data, ETL, Migration, DataOps, Governance, Modeling };
   std::unordered_map<std::string, AgentKind> agent_types_;
 
   // v0.9: Data agent definition tracking
@@ -62,6 +62,75 @@ private:
     int mart_count;
   };
   std::unordered_map<std::string, ETLAgentDef> etl_agent_defs_;
+
+  // v0.9.2: Migration agent compile-time validation
+  void validate_migration_agent(const MigrationAgentDecl& decl);
+  bool validate_wave_dag(const std::unordered_map<std::string, std::vector<std::string>>& deps);
+  std::string serialize_wave_config(const WaveConfig& cfg);
+  std::string serialize_movement_config(const MovementConfig& cfg);
+  std::string serialize_schema_translation_config(const SchemaTranslationConfig& cfg);
+  std::string serialize_validation_config(const ValidationConfig& cfg);
+  std::string serialize_cutover_config(const CutoverConfig& cfg);
+  std::string serialize_self_heal_config(const SelfHealMigrationConfig& cfg);
+  std::string serialize_assessment_config(const AssessmentConfig& cfg);
+  std::string serialize_governance_migration_config(const GovernanceMigrationConfig& cfg);
+
+  // v0.9.3: DataOps agent tracking and validation
+  std::unordered_set<std::string> scheduler_defs_;
+  std::unordered_set<std::string> audit_table_defs_;
+  std::unordered_set<std::string> log_source_defs_;
+  std::unordered_set<std::string> platform_defs_;
+  std::unordered_set<std::string> incident_policy_defs_;
+  std::unordered_set<std::string> correlation_defs_;
+  void validate_dataops_agent(const DataOpsAgentDecl& decl);
+
+  // v0.9.4: Governance agent tracking and validation
+  std::unordered_set<std::string> catalog_source_defs_;
+  std::unordered_set<std::string> gov_catalog_defs_;
+  std::unordered_set<std::string> glossary_defs_;
+  std::unordered_set<std::string> classification_policy_defs_;
+  std::unordered_set<std::string> access_policy_defs_;
+  std::unordered_set<std::string> quality_policy_defs_;
+  std::unordered_set<std::string> lineage_policy_defs_;
+  std::unordered_set<std::string> compliance_policy_defs_;
+  std::unordered_set<std::string> lifecycle_policy_defs_;
+  std::unordered_set<std::string> data_product_defs_;
+  std::unordered_set<std::string> contract_policy_defs_;
+  std::unordered_set<std::string> master_data_defs_;
+  std::unordered_set<std::string> external_tool_defs_;
+  std::unordered_set<std::string> governance_agent_defs_;
+  void validate_governance_agent(const GovernanceAgentDecl& decl);
+
+  // v0.9.5: Modeling agent tracking and validation
+  std::unordered_set<std::string> schema_source_defs_;
+  std::unordered_set<std::string> er_model_defs_;
+  std::unordered_set<std::string> modeling_entity_defs_;
+  std::unordered_set<std::string> dimensional_model_defs_;
+  std::unordered_set<std::string> datamart_v095_defs_;
+  std::unordered_set<std::string> norm_analysis_defs_;
+  std::unordered_set<std::string> amendment_config_defs_;
+  std::unordered_set<std::string> amendment_defs_;
+  std::unordered_set<std::string> data_profile_defs_;
+  std::unordered_set<std::string> modeling_tool_defs_;
+  std::unordered_set<std::string> modeling_agent_defs_;
+  void validate_modeling_agent(const ModelingAgentDecl& decl);
+  void validate_classification_policy(const ClassificationPolicyDecl& decl);
+  void validate_access_policy(const AccessPolicyDecl& decl);
+  void validate_quality_policy(const QualityPolicyDecl& decl);
+  void validate_lifecycle_policy(const LifecyclePolicyDecl& decl);
+  void validate_compliance_policy(const CompliancePolicyDecl& decl);
+  void validate_master_data(const MasterDataDecl& decl);
+  void validate_data_product(const DataProductDecl& decl);
+  std::string serialize_auto_classify(const AutoClassifyConfig& cfg);
+  std::string serialize_audit_column_map(const AuditColumnMap& map);
+  std::string serialize_audit_anomalies(const AuditAnomalyConfig& cfg);
+  std::string serialize_log_alerts(const LogAlertConfig& cfg);
+  std::string serialize_health_checks(const PlatformHealthConfig& cfg);
+  std::string serialize_finops(const PlatformFinOpsConfig& cfg);
+  std::string serialize_severity_levels(const std::vector<SeverityLevel>& levels);
+  std::string serialize_auto_heal(const AutoHealConfig& cfg);
+  std::string serialize_correlation_scope(const CorrelationScope& scope);
+  std::string serialize_correlation_sla(const CorrelationSLAConfig& sla);
 
   bool is_neamclaw_trait(const std::string& name) const;
   void validate_neamclaw_trait_compat(const std::string& trait, const std::string& type);

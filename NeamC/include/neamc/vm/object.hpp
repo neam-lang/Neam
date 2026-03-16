@@ -82,6 +82,50 @@ enum class ObjType
   OBJ_SEMANTIC_LAYER,
   OBJ_SQL_PLAN,
   OBJ_MODEL_PROPOSAL,
+  // v0.9.2: Migration Agent runtime types
+  OBJ_MIGRATION_AGENT,
+  OBJ_GOVERNANCE,
+  OBJ_WAVE_PLAN,
+  OBJ_MIGRATION_OBJECT,
+  OBJ_RECONCILIATION_RESULT,
+  OBJ_SCHEMA_MAP,
+  OBJ_MIGRATION_CHECKPOINT,
+  // v0.9.3: DataOps Agent runtime types
+  OBJ_DATAOPS_AGENT,
+  OBJ_SCHEDULER,
+  OBJ_AUDIT_TABLE,
+  OBJ_LOG_SOURCE,
+  OBJ_PLATFORM_MONITOR,
+  OBJ_INCIDENT_POLICY,
+  OBJ_CORRELATION,
+  OBJ_INCIDENT,
+  // v0.9.4: Governance Agent runtime types
+  OBJ_GOVERNANCE_AGENT,
+  OBJ_GOV_CATALOG_SOURCE,
+  OBJ_GOV_CATALOG,
+  OBJ_GLOSSARY,
+  OBJ_CLASSIFICATION_POLICY,
+  OBJ_ACCESS_POLICY,
+  OBJ_QUALITY_POLICY,
+  OBJ_LINEAGE_POLICY,
+  OBJ_COMPLIANCE_POLICY,
+  OBJ_LIFECYCLE_POLICY,
+  OBJ_DATA_PRODUCT,
+  OBJ_CONTRACT_POLICY,
+  OBJ_MASTER_DATA,
+  OBJ_GOV_EXTERNAL_TOOL,
+  // v0.9.5: Modeling Agent runtime types
+  OBJ_SCHEMA_SOURCE,
+  OBJ_ER_MODEL,
+  OBJ_ENTITY,
+  OBJ_DIMENSIONAL_MODEL,
+  OBJ_DATAMART_V095,
+  OBJ_NORM_ANALYSIS,
+  OBJ_AMENDMENT_CONFIG,
+  OBJ_AMENDMENT,
+  OBJ_DATA_PROFILE,
+  OBJ_MODELING_TOOL,
+  OBJ_MODELING_AGENT,
 };
 
 struct ObjString : Obj
@@ -329,6 +373,94 @@ ObjMart* new_mart();
 ObjSemanticLayer* new_semantic_layer();
 ObjSQLPlan* new_sql_plan();
 ObjModelProposal* new_model_proposal();
+
+// v0.9.2: Migration Agent type system — forward declares (definitions in migration_types.hpp)
+struct ObjMigrationAgent;
+struct ObjGovernanceMig;
+struct ObjWavePlan;
+struct ObjMigrationObject;
+struct ObjReconciliationResult;
+struct ObjSchemaMap;
+struct ObjMigrationCheckpoint;
+ObjMigrationAgent* new_migration_agent();
+ObjGovernanceMig* new_governance_mig();
+ObjWavePlan* new_wave_plan();
+ObjMigrationObject* new_migration_object();
+ObjReconciliationResult* new_reconciliation_result();
+ObjSchemaMap* new_schema_map();
+ObjMigrationCheckpoint* new_migration_checkpoint();
+
+// v0.9.3: DataOps Agent type system — forward declares (definitions in dataops_types.hpp)
+struct ObjDataOpsAgent;
+struct ObjScheduler;
+struct ObjAuditTable;
+struct ObjLogSource;
+struct ObjPlatformMonitor;
+struct ObjIncidentPolicy;
+struct ObjCorrelation;
+struct ObjIncident;
+ObjDataOpsAgent* new_dataops_agent();
+ObjScheduler* new_scheduler_obj();
+ObjAuditTable* new_audit_table_obj();
+ObjLogSource* new_log_source_obj();
+ObjPlatformMonitor* new_platform_monitor();
+ObjIncidentPolicy* new_incident_policy();
+ObjCorrelation* new_correlation_obj();
+ObjIncident* new_incident_obj();
+
+// v0.9.4: Governance Agent type system — forward declares (definitions in governance_types.hpp)
+struct ObjGovernanceAgent;
+struct ObjGovCatalogSource;
+struct ObjGovCatalog;
+struct ObjGlossary;
+struct ObjClassificationPolicy;
+struct ObjAccessPolicy;
+struct ObjQualityPolicy;
+struct ObjLineagePolicy;
+struct ObjCompliancePolicy;
+struct ObjLifecyclePolicy;
+struct ObjDataProduct;
+struct ObjContractPolicy;
+struct ObjMasterData;
+struct ObjGovExternalTool;
+ObjGovernanceAgent* new_governance_agent();
+ObjGovCatalogSource* new_gov_catalog_source();
+ObjGovCatalog* new_gov_catalog();
+ObjGlossary* new_glossary_obj();
+ObjClassificationPolicy* new_classification_policy();
+ObjAccessPolicy* new_access_policy();
+ObjQualityPolicy* new_quality_policy();
+ObjLineagePolicy* new_lineage_policy();
+ObjCompliancePolicy* new_compliance_policy();
+ObjLifecyclePolicy* new_lifecycle_policy();
+ObjDataProduct* new_data_product();
+ObjContractPolicy* new_contract_policy();
+ObjMasterData* new_master_data_obj();
+ObjGovExternalTool* new_gov_external_tool();
+
+// v0.9.5: Modeling Agent type system — forward declares (definitions in modeling_types.hpp)
+struct ObjSchemaSource;
+struct ObjERModel;
+struct ObjEntity;
+struct ObjDimensionalModel;
+struct ObjDataMartV095;
+struct ObjNormAnalysis;
+struct ObjAmendmentConfig;
+struct ObjAmendment;
+struct ObjDataProfile;
+struct ObjModelingTool;
+struct ObjModelingAgent;
+ObjSchemaSource* new_schema_source();
+ObjERModel* new_er_model();
+ObjEntity* new_entity_obj();
+ObjDimensionalModel* new_dimensional_model();
+ObjDataMartV095* new_datamart_v095();
+ObjNormAnalysis* new_norm_analysis();
+ObjAmendmentConfig* new_amendment_config();
+ObjAmendment* new_amendment_obj();
+ObjDataProfile* new_data_profile();
+ObjModelingTool* new_modeling_tool();
+ObjModelingAgent* new_modeling_agent();
 
 uint32_t hash_string(const char* key, std::size_t length);
 }  // namespace neamc::vm

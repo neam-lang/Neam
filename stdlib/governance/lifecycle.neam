@@ -1,0 +1,30 @@
+//
+// Neam v0.9.4 — Governance lifecycle standard library
+//
+
+module std.governance.lifecycle
+
+/// Check retention policy compliance
+pub fun check_retention(agent) {
+  return governance_check_retention(agent);
+}
+
+/// Place a legal hold on an asset
+pub fun hold(agent, asset, reason) {
+  return governance_place_hold(agent, asset, reason);
+}
+
+/// Release a legal hold
+pub fun release(agent, asset) {
+  return governance_release_hold(agent, asset);
+}
+
+/// Detect cost savings from tiering/archival
+pub fun savings(agent) {
+  return governance_detect_savings(agent);
+}
+
+/// Get lifecycle report
+pub fun report(agent) {
+  return governance_lifecycle_report(agent);
+}

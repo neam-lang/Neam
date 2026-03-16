@@ -1,0 +1,30 @@
+//
+// Neam v0.9.3 — DataOps monitoring standard library
+//
+
+module std.dataops.monitor
+
+/// Start monitoring loop for a DataOps agent
+pub fun start(agent) {
+  return dataops_start_monitor(agent);
+}
+
+/// Stop monitoring loop
+pub fun stop(agent) {
+  return dataops_stop_monitor(agent);
+}
+
+/// Get current monitoring status
+pub fun status(agent) {
+  return dataops_status(agent);
+}
+
+/// Check if agent is actively monitoring
+pub fun is_active(agent) {
+  return dataops_is_monitoring(agent);
+}
+
+/// Get monitoring report as JSON string
+pub fun report(agent) {
+  return dataops_report(agent);
+}

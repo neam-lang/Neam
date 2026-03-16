@@ -1,0 +1,15 @@
+//
+// Neam v0.9.3 — DataOps FinOps standard library
+//
+
+module std.dataops.finops
+
+/// Get total cost incurred today
+pub fun cost_today(agent) {
+  return dataops_cost_today(agent);
+}
+
+/// Get count of auto-remediations today
+pub fun remediations_today(agent) {
+  return dataops_remediations_today(agent);
+}

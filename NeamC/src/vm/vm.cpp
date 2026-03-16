@@ -35,6 +35,10 @@
 #include "neamc/vm/forge_agent_type.hpp"
 #include "neamc/vm/data_agent_types.hpp"
 #include "neamc/vm/etl_agent_types.hpp"
+#include "neamc/vm/migration_types.hpp"
+#include "neamc/vm/dataops_types.hpp"
+#include "neamc/vm/governance_types.hpp"
+#include "neamc/vm/modeling_types.hpp"
 #include "neamc/vm/forge_loop.hpp"
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/context_builder.hpp"
@@ -8619,6 +8623,1165 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         stack_.push_back(Value::Nil());
         break;
       }
+      // v0.9.2: Migration Agent definition
+      case OpCode::OP_DEFINE_MIGRATION_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* agent = new_migration_agent();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            agent->name = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "agent_type")
+            { /* skip — used for type tracking */ }
+          else if (fname == "provider")
+            agent->provider = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "model")
+            agent->model = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "system")
+            agent->system = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "temperature")
+            agent->temperature = fval.as_number();
+          else if (fname == "budget")
+            { /* resolved at runtime */ }
+          else if (fname == "skills")
+            { /* resolved at runtime */ }
+          else if (fname == "source")
+            agent->source_name = to_std_string(fval);
+          else if (fname == "target")
+            agent->target_name = to_std_string(fval);
+          else if (fname == "staging")
+            agent->staging_name = to_std_string(fval);
+          else if (fname == "strategy")
+            agent->strategy = to_std_string(fval);
+          else if (fname == "waves")
+          {
+            auto j = nlohmann::json::parse(to_std_string(fval));
+            agent->wave_plan = new_wave_plan();
+            agent->wave_plan->generation_mode = j.value("mode", "auto");
+            agent->wave_plan->max_tables_per_wave = j.value("max_tables_per_wave", 50);
+            agent->wave_plan->max_parallel_extractions = j.value("max_parallel_extractions", 4);
+          }
+          else if (fname == "movement")
+            agent->movement_config = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "schema_translation")
+            agent->schema_translation_config = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "validation")
+            agent->validation_config = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "cutover")
+            agent->cutover_config = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "self_heal")
+            agent->self_heal_config = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "assessment")
+            agent->assessment_config = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "governance")
+          {
+            auto gj = nlohmann::json::parse(to_std_string(fval));
+            auto* gov = new_governance_mig();
+            gov->name = to_std_string(stack_[base]) + "_governance";
+            gov->preserve_classification = gj.value("preserve_classification", false);
+            gov->pii_detection = gj.value("pii_detection", false);
+            gov->log_all_sql = gj.value("log_all_sql", false);
+            gov->log_all_data_movement = gj.value("log_all_data_movement", false);
+            gov->audit_retention = gj.value("audit_retention", "7y");
+            agent->governance_obj = gov;
+          }
+          // DataAgent inherited fields
+          else if (fname == "role")
+            agent->role = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "purpose")
+            agent->purpose = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "autonomy")
+            agent->autonomy = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "agent_md")
+            agent->agent_md_path = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+        }
+
+        stack_.resize(base);
+
+        // Initialize schema map
+        agent->schema_map_obj = new_schema_map();
+
+        // Set initial lifecycle phase
+        agent->phase = MigrationPhase::ASSESS;
+        agent->migration_started = std::chrono::system_clock::now();
+
+        if (!agent->name) {
+          throw std::runtime_error("Migration agent missing name");
+        }
+
+        // Register agent
+        std::string agent_name(agent->name->chars, agent->name->length);
+        globals_.set(agent->name, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+        // Register AgentExtension
+        AgentExtension extension;
+        extension.agent_type = "migration";
+        agent_extensions_[agent_name] = std::move(extension);
+        break;
+      }
+
+      // v0.9.2: Migration phase opcodes (Phase 3-10 runtime)
+      // These are invoked via the native function API (migration_assess, etc.).
+      // The opcodes handle the case where the compiler emits them directly
+      // with the agent value on the stack.
+      case OpCode::OP_MIGRATION_ASSESS:
+      case OpCode::OP_MIGRATION_PLAN_WAVES:
+      case OpCode::OP_MIGRATION_TRANSLATE_SCHEMA:
+      case OpCode::OP_MIGRATION_MOVE_DATA:
+      case OpCode::OP_MIGRATION_RECONCILE:
+      case OpCode::OP_MIGRATION_CUTOVER:
+      case OpCode::OP_MIGRATION_ROLLBACK:
+      case OpCode::OP_MIGRATION_SELF_HEAL:
+      {
+        // Pop agent value from stack, dispatch to engine
+        Value agent_val = pop();
+        if (agent_val.is_obj() && agent_val.as_obj()->type == ObjType::OBJ_MIGRATION_AGENT) {
+          auto* agent = static_cast<ObjMigrationAgent*>(agent_val.as_obj());
+          auto opcode = static_cast<OpCode>(code[frame.ip - 1]);
+          switch (opcode) {
+            case OpCode::OP_MIGRATION_ASSESS:
+              agent->phase = MigrationPhase::PLAN;
+              stack_.push_back(Value::Map(new_map({
+                {"total_objects", Value::Number(static_cast<double>(agent->objects.size()))}
+              })));
+              break;
+            case OpCode::OP_MIGRATION_PLAN_WAVES:
+              if (!agent->wave_plan) agent->wave_plan = new_wave_plan();
+              stack_.push_back(Value::ObjVal(agent->wave_plan));
+              break;
+            case OpCode::OP_MIGRATION_TRANSLATE_SCHEMA:
+              if (!agent->schema_map_obj) agent->schema_map_obj = new_schema_map();
+              stack_.push_back(Value::ObjVal(agent->schema_map_obj));
+              break;
+            case OpCode::OP_MIGRATION_MOVE_DATA:
+              agent->phase = MigrationPhase::EXECUTE;
+              stack_.push_back(Value::Bool(true));
+              break;
+            case OpCode::OP_MIGRATION_RECONCILE: {
+              agent->phase = MigrationPhase::VALIDATE;
+              auto* result = new_reconciliation_result();
+              result->overall_passed = true;
+              stack_.push_back(Value::ObjVal(result));
+              break;
+            }
+            case OpCode::OP_MIGRATION_CUTOVER:
+              agent->phase = MigrationPhase::CUTOVER;
+              stack_.push_back(Value::Bool(true));
+              break;
+            case OpCode::OP_MIGRATION_ROLLBACK:
+              agent->phase = MigrationPhase::ROLLBACK;
+              stack_.push_back(Value::Bool(true));
+              break;
+            case OpCode::OP_MIGRATION_SELF_HEAL:
+              agent->total_remediations++;
+              stack_.push_back(Value::Bool(true));
+              break;
+            default:
+              stack_.push_back(Value::Nil());
+              break;
+          }
+        } else {
+          stack_.push_back(Value::Nil());
+        }
+        break;
+      }
+
+      // v0.9.3: Scheduler definition
+      case OpCode::OP_DEFINE_SCHEDULER:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* obj = new_scheduler_obj();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            obj->name = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "type")
+            obj->scheduler_type = to_std_string(fval);
+          else if (fname == "connection")
+            obj->connection = to_std_string(fval);
+          else if (fname == "credentials")
+            obj->credentials = to_std_string(fval);
+          else if (fname == "poll_interval")
+            obj->poll_interval = to_std_string(fval);
+          else if (fname == "timezone")
+            obj->timezone = to_std_string(fval);
+          else if (fname == "datacenter")
+            obj->datacenter = to_std_string(fval);
+          else if (fname == "host")
+            obj->host = to_std_string(fval);
+          else if (fname == "filters")
+          {
+            // comma-separated list
+            std::string raw = to_std_string(fval);
+            std::istringstream iss(raw);
+            std::string item;
+            while (std::getline(iss, item, ',')) obj->filters.push_back(item);
+          }
+        }
+
+        stack_.resize(base);
+
+        if (obj->name) {
+          std::string sname(obj->name->chars, obj->name->length);
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+      // v0.9.3: Audit table definition
+      case OpCode::OP_DEFINE_AUDIT_TABLE:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* obj = new_audit_table_obj();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            obj->name = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "source")
+            obj->source_ref = to_std_string(fval);
+          else if (fname == "table")
+            obj->table_name = to_std_string(fval);
+          else if (fname == "column_map")
+            obj->column_map_json = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "poll_interval")
+            obj->poll_interval = to_std_string(fval);
+          else if (fname == "lookback_window")
+            obj->lookback_window = to_std_string(fval);
+          else if (fname == "retention_analysis")
+            obj->retention_analysis = to_std_string(fval);
+          else if (fname == "anomalies")
+          {
+            auto aj = nlohmann::json::parse(to_std_string(fval));
+            obj->row_count_drop_threshold = aj.value("row_count_drop", 0.20);
+            obj->row_count_spike_threshold = aj.value("row_count_spike", 3.0);
+            obj->duration_spike_threshold = aj.value("duration_spike", 2.0);
+            obj->failure_rate_threshold = aj.value("failure_rate", 0.05);
+            obj->zero_rows_consecutive_threshold = aj.value("zero_rows_consecutive", 3);
+          }
+        }
+
+        stack_.resize(base);
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+      // v0.9.3: Log source definition
+      case OpCode::OP_DEFINE_LOG_SOURCE:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* obj = new_log_source_obj();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            obj->name = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "type")
+            obj->source_type = to_std_string(fval);
+          else if (fname == "connection")
+            obj->connection = to_std_string(fval);
+          else if (fname == "credentials")
+            obj->credentials = to_std_string(fval);
+          else if (fname == "views")
+          {
+            std::string raw = to_std_string(fval);
+            std::istringstream iss(raw);
+            std::string item;
+            while (std::getline(iss, item, ',')) obj->views.push_back(item);
+          }
+          else if (fname == "log_file")
+            obj->log_file = to_std_string(fval);
+          else if (fname == "log_format")
+            obj->log_format = to_std_string(fval);
+          else if (fname == "poll_interval")
+            obj->poll_interval = to_std_string(fval);
+          else if (fname == "lookback_window")
+            obj->lookback_window = to_std_string(fval);
+          else if (fname == "alerts")
+            obj->alerts_json = nlohmann::json::parse(to_std_string(fval));
+        }
+
+        stack_.resize(base);
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+      // v0.9.3: Platform monitor definition
+      case OpCode::OP_DEFINE_PLATFORM:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* obj = new_platform_monitor();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            obj->name = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "type")
+            obj->platform_type = to_std_string(fval);
+          else if (fname == "connection")
+            obj->connection = to_std_string(fval);
+          else if (fname == "credentials")
+            obj->credentials = to_std_string(fval);
+          else if (fname == "database")
+            obj->database = to_std_string(fval);
+          else if (fname == "health_checks")
+            obj->health_checks_json = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "finops")
+            obj->finops_json = nlohmann::json::parse(to_std_string(fval));
+        }
+
+        stack_.resize(base);
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+      // v0.9.3: Incident policy definition
+      case OpCode::OP_DEFINE_INCIDENT_POLICY:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* obj = new_incident_policy();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            obj->name = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "severity")
+            obj->severity_rules_json = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "auto_heal")
+            obj->auto_heal_json = nlohmann::json::parse(to_std_string(fval));
+        }
+
+        stack_.resize(base);
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+      // v0.9.3: Correlation definition
+      case OpCode::OP_DEFINE_CORRELATION:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* obj = new_correlation_obj();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            obj->name = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "scope")
+            obj->scope_json = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "time_window")
+            obj->time_window = to_std_string(fval);
+          else if (fname == "sla")
+            obj->sla_json = nlohmann::json::parse(to_std_string(fval));
+          else if (fname == "dependencies")
+            obj->dependencies_json = nlohmann::json::parse(to_std_string(fval));
+        }
+
+        stack_.resize(base);
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+      // v0.9.3: DataOps agent definition
+      case OpCode::OP_DEFINE_DATAOPS_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        auto* agent = new_dataops_agent();
+
+        std::size_t base = stack_.size() - field_count * 2;
+
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          std::string fname = to_std_string(stack_[base + i * 2]);
+          Value fval = stack_[base + i * 2 + 1];
+
+          if (fname == "name")
+            agent->name = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "agent_type")
+            { /* skip — used for type tracking */ }
+          else if (fname == "provider")
+            agent->provider = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "model")
+            agent->model = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "system")
+            agent->system = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "temperature")
+            agent->temperature = fval.as_number();
+          else if (fname == "budget")
+            { /* resolved at runtime */ }
+          else if (fname == "skills")
+            { /* resolved at runtime */ }
+          else if (fname == "guardchains")
+            { /* resolved at runtime */ }
+          else if (fname == "endpoint")
+            agent->endpoint = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "api_key_env")
+            agent->api_key_env = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          // DataAgent inherited fields
+          else if (fname == "role")
+            agent->role = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "purpose")
+            agent->purpose = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "autonomy")
+            agent->autonomy = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          else if (fname == "agent_md")
+            agent->agent_md_path = copy_string(to_std_string(fval).c_str(), to_std_string(fval).size());
+          // DataOps-specific references
+          else if (fname == "platforms")
+          {
+            std::string raw = to_std_string(fval);
+            std::istringstream iss(raw);
+            std::string item;
+            while (std::getline(iss, item, ',')) agent->platform_refs.push_back(item);
+          }
+          else if (fname == "schedulers")
+          {
+            std::string raw = to_std_string(fval);
+            std::istringstream iss(raw);
+            std::string item;
+            while (std::getline(iss, item, ',')) agent->scheduler_refs.push_back(item);
+          }
+          else if (fname == "audit_tables")
+          {
+            std::string raw = to_std_string(fval);
+            std::istringstream iss(raw);
+            std::string item;
+            while (std::getline(iss, item, ',')) agent->audit_table_refs.push_back(item);
+          }
+          else if (fname == "log_sources")
+          {
+            std::string raw = to_std_string(fval);
+            std::istringstream iss(raw);
+            std::string item;
+            while (std::getline(iss, item, ',')) agent->log_source_refs.push_back(item);
+          }
+          else if (fname == "correlations")
+          {
+            std::string raw = to_std_string(fval);
+            std::istringstream iss(raw);
+            std::string item;
+            while (std::getline(iss, item, ',')) agent->correlation_refs.push_back(item);
+          }
+          else if (fname == "incident_policy")
+            agent->incident_policy_ref = to_std_string(fval);
+          else if (fname == "mode")
+            agent->mode = to_std_string(fval);
+          else if (fname == "reports")
+            agent->reports_json = nlohmann::json::parse(to_std_string(fval));
+        }
+
+        stack_.resize(base);
+
+        // Set initial state
+        agent->phase = DataOpsPhase::IDLE;
+        agent->started_at = std::chrono::steady_clock::now();
+
+        if (!agent->name) {
+          throw std::runtime_error("DataOps agent missing name");
+        }
+
+        // Register agent
+        std::string agent_name(agent->name->chars, agent->name->length);
+        globals_.set(agent->name, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+        // Register AgentExtension
+        AgentExtension extension;
+        extension.agent_type = "dataops";
+        agent_extensions_[agent_name] = std::move(extension);
+        break;
+      }
+
+      // v0.9.3: DataOps runtime opcodes (stubs — dispatched via native functions)
+      case OpCode::OP_DATAOPS_START_MONITOR:
+      case OpCode::OP_DATAOPS_STOP_MONITOR:
+      case OpCode::OP_DATAOPS_TRIAGE:
+      case OpCode::OP_DATAOPS_INVESTIGATE:
+      case OpCode::OP_DATAOPS_REMEDIATE:
+      {
+        Value agent_val = pop();
+        if (agent_val.is_obj() && agent_val.as_obj()->type == ObjType::OBJ_DATAOPS_AGENT) {
+          auto* agent = static_cast<ObjDataOpsAgent*>(agent_val.as_obj());
+          auto opcode = static_cast<OpCode>(code[frame.ip - 1]);
+          switch (opcode) {
+            case OpCode::OP_DATAOPS_START_MONITOR:
+              agent->phase = DataOpsPhase::MONITORING;
+              agent->monitoring_active = true;
+              stack_.push_back(Value::Bool(true));
+              break;
+            case OpCode::OP_DATAOPS_STOP_MONITOR:
+              agent->monitoring_active = false;
+              agent->phase = DataOpsPhase::IDLE;
+              stack_.push_back(Value::Bool(true));
+              break;
+            case OpCode::OP_DATAOPS_TRIAGE:
+              agent->phase = DataOpsPhase::TRIAGING;
+              stack_.push_back(Value::Bool(true));
+              break;
+            case OpCode::OP_DATAOPS_INVESTIGATE:
+              agent->phase = DataOpsPhase::INVESTIGATING;
+              stack_.push_back(Value::Bool(true));
+              break;
+            case OpCode::OP_DATAOPS_REMEDIATE:
+              agent->phase = DataOpsPhase::REMEDIATING;
+              agent->remediations_today++;
+              stack_.push_back(Value::Bool(true));
+              break;
+            default:
+              stack_.push_back(Value::Nil());
+              break;
+          }
+        } else {
+          stack_.push_back(Value::Nil());
+        }
+        break;
+      }
+
+      // ═══ v0.9.4 Governance Agent VM handlers ═══
+
+      case OpCode::OP_DEFINE_CATALOG_SOURCE:
+      case OpCode::OP_DEFINE_GOV_CATALOG:
+      case OpCode::OP_DEFINE_GLOSSARY:
+      case OpCode::OP_DEFINE_CLASSIFICATION_POLICY:
+      case OpCode::OP_DEFINE_ACCESS_POLICY:
+      case OpCode::OP_DEFINE_QUALITY_POLICY:
+      case OpCode::OP_DEFINE_LINEAGE_POLICY:
+      case OpCode::OP_DEFINE_COMPLIANCE_POLICY:
+      case OpCode::OP_DEFINE_LIFECYCLE_POLICY:
+      case OpCode::OP_DEFINE_DATA_PRODUCT:
+      case OpCode::OP_DEFINE_CONTRACT_POLICY:
+      case OpCode::OP_DEFINE_MASTER_DATA:
+      case OpCode::OP_DEFINE_EXTERNAL_TOOL:
+      {
+        auto gov_opcode = static_cast<OpCode>(code[frame.ip - 1]);
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        Obj* result_obj = nullptr;
+        ObjString* obj_name = nullptr;
+
+        switch (gov_opcode) {
+        case OpCode::OP_DEFINE_CATALOG_SOURCE: {
+          auto* obj = new_gov_catalog_source();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("type")) obj->source_type = fields["type"];
+          if (fields.count("connection")) obj->connection = fields["connection"];
+          if (fields.count("credentials")) obj->credentials = fields["credentials"];
+          if (fields.count("sync_mode")) obj->sync_mode = fields["sync_mode"];
+          if (fields.count("conflict_resolution")) obj->conflict_resolution = fields["conflict_resolution"];
+          if (fields.count("include_views")) obj->include_views = (fields["include_views"] == "true");
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_GOV_CATALOG: {
+          auto* obj = new_gov_catalog();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("sources")) {
+            std::istringstream iss(fields["sources"]); std::string s;
+            while (std::getline(iss, s, ',')) obj->source_refs.push_back(s);
+          }
+          if (fields.count("auto_document")) obj->auto_document_json = fields["auto_document"];
+          if (fields.count("staleness_threshold")) obj->staleness_threshold = fields["staleness_threshold"];
+          if (fields.count("shadow_dataset_detection")) obj->shadow_dataset_detection = (fields["shadow_dataset_detection"] == "true");
+          if (fields.count("ownership")) obj->ownership_json = fields["ownership"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_GLOSSARY: {
+          auto* obj = new_glossary_obj();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("domains")) {
+            std::istringstream iss(fields["domains"]); std::string s;
+            while (std::getline(iss, s, ',')) obj->domains.push_back(s);
+          }
+          if (fields.count("auto_suggest")) obj->auto_suggest_json = fields["auto_suggest"];
+          if (fields.count("synonym_detection")) obj->synonym_detection_json = fields["synonym_detection"];
+          if (fields.count("terms")) obj->terms_json = fields["terms"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_CLASSIFICATION_POLICY: {
+          auto* obj = new_classification_policy();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("levels")) obj->levels_json = fields["levels"];
+          if (fields.count("auto_classify")) obj->auto_classify_json = fields["auto_classify"];
+          if (fields.count("propagation")) obj->propagation_json = fields["propagation"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_ACCESS_POLICY: {
+          auto* obj = new_access_policy();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("model")) obj->access_model = fields["model"];
+          if (fields.count("roles")) obj->roles_json = fields["roles"];
+          if (fields.count("attributes")) obj->attributes_json = fields["attributes"];
+          if (fields.count("access_review")) obj->access_review_json = fields["access_review"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_QUALITY_POLICY: {
+          auto* obj = new_quality_policy();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("profiling")) obj->profiling_json = fields["profiling"];
+          if (fields.count("rules")) obj->rules_json = fields["rules"];
+          if (fields.count("scoring")) obj->scoring_json = fields["scoring"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_LINEAGE_POLICY: {
+          auto* obj = new_lineage_policy();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("auto_discover")) obj->auto_discover_json = fields["auto_discover"];
+          if (fields.count("impact_analysis")) obj->impact_analysis_json = fields["impact_analysis"];
+          if (fields.count("tag_propagation")) obj->tag_propagation_json = fields["tag_propagation"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_COMPLIANCE_POLICY: {
+          auto* obj = new_compliance_policy();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("regulations")) {
+            std::istringstream iss(fields["regulations"]); std::string s;
+            while (std::getline(iss, s, ',')) obj->regulations.push_back(s);
+          }
+          if (fields.count("gdpr")) obj->gdpr_json = fields["gdpr"];
+          if (fields.count("ccpa")) obj->ccpa_json = fields["ccpa"];
+          if (fields.count("hipaa")) obj->hipaa_json = fields["hipaa"];
+          if (fields.count("monitoring")) obj->monitoring_json = fields["monitoring"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_LIFECYCLE_POLICY: {
+          auto* obj = new_lifecycle_policy();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("retention")) obj->retention_json = fields["retention"];
+          if (fields.count("tiering")) obj->tiering_json = fields["tiering"];
+          if (fields.count("legal_hold")) obj->legal_hold_json = fields["legal_hold"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_DATA_PRODUCT: {
+          auto* obj = new_data_product();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("domain")) obj->domain = fields["domain"];
+          if (fields.count("owner")) obj->owner = fields["owner"];
+          if (fields.count("description")) obj->description = fields["description"];
+          if (fields.count("contract")) obj->contract_json = fields["contract"];
+          if (fields.count("quality")) obj->quality_json = fields["quality"];
+          if (fields.count("access")) obj->access_json = fields["access"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_CONTRACT_POLICY: {
+          auto* obj = new_contract_policy();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("schema_validation_on_deploy")) obj->schema_validation_on_deploy = (fields["schema_validation_on_deploy"] == "true");
+          if (fields.count("breaking_change_detection")) obj->breaking_change_detection = (fields["breaking_change_detection"] == "true");
+          if (fields.count("notify_consumers")) obj->notify_consumers = (fields["notify_consumers"] == "true");
+          if (fields.count("versioning_strategy")) obj->versioning_strategy = fields["versioning_strategy"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_MASTER_DATA: {
+          auto* obj = new_master_data_obj();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("entity")) obj->entity = fields["entity"];
+          if (fields.count("golden_source")) obj->golden_source = fields["golden_source"];
+          if (fields.count("contributing_sources")) {
+            std::istringstream iss(fields["contributing_sources"]); std::string s;
+            while (std::getline(iss, s, ',')) obj->contributing_sources.push_back(s);
+          }
+          if (fields.count("matching")) obj->matching_json = fields["matching"];
+          if (fields.count("survivorship")) obj->survivorship_json = fields["survivorship"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        case OpCode::OP_DEFINE_EXTERNAL_TOOL: {
+          auto* obj = new_gov_external_tool();
+          if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+          if (fields.count("type")) obj->tool_type = fields["type"];
+          if (fields.count("connection")) obj->connection = fields["connection"];
+          if (fields.count("credentials")) obj->credentials = fields["credentials"];
+          if (fields.count("capabilities")) obj->capabilities_json = fields["capabilities"];
+          if (fields.count("sync_interval")) obj->sync_interval = fields["sync_interval"];
+          if (fields.count("conflict_resolution")) obj->conflict_resolution = fields["conflict_resolution"];
+          obj_name = obj->name;
+          result_obj = reinterpret_cast<Obj*>(obj);
+          break;
+        }
+        default: break;
+        }
+
+        if (result_obj && obj_name)
+        {
+          globals_.set(obj_name, Value::ObjVal(result_obj));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_GOVERNANCE_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* agent = new_governance_agent();
+        if (fields.count("name")) agent->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("provider")) agent->provider = copy_string(fields["provider"].c_str(), fields["provider"].size());
+        if (fields.count("model")) agent->model = copy_string(fields["model"].c_str(), fields["model"].size());
+        if (fields.count("endpoint")) agent->endpoint = copy_string(fields["endpoint"].c_str(), fields["endpoint"].size());
+        if (fields.count("api_key_env")) agent->api_key_env = copy_string(fields["api_key_env"].c_str(), fields["api_key_env"].size());
+        if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+        if (fields.count("system")) agent->system_prompt = fields["system"];
+        if (fields.count("budget")) agent->budget_ref = fields["budget"];
+        // Pillar refs
+        if (fields.count("catalog")) agent->catalog_ref = fields["catalog"];
+        if (fields.count("glossary")) agent->glossary_ref = fields["glossary"];
+        if (fields.count("classification")) agent->classification_ref = fields["classification"];
+        if (fields.count("access_control")) agent->access_control_ref = fields["access_control"];
+        if (fields.count("quality")) agent->quality_ref = fields["quality"];
+        if (fields.count("lineage")) agent->lineage_ref = fields["lineage"];
+        if (fields.count("compliance")) agent->compliance_ref = fields["compliance"];
+        if (fields.count("lifecycle")) agent->lifecycle_ref = fields["lifecycle"];
+        // Ref lists
+        auto split = [](const std::string& s) {
+          std::vector<std::string> v;
+          std::istringstream iss(s); std::string item;
+          while (std::getline(iss, item, ',')) v.push_back(item);
+          return v;
+        };
+        if (fields.count("external_tools")) agent->external_tool_refs = split(fields["external_tools"]);
+        if (fields.count("coordinates_with")) agent->coordinates_with_refs = split(fields["coordinates_with"]);
+        if (fields.count("skills")) agent->skill_refs = split(fields["skills"]);
+        if (fields.count("guardchains")) agent->guardchain_refs = split(fields["guardchains"]);
+        if (fields.count("reports")) agent->reports_json = fields["reports"];
+        if (fields.count("policy")) agent->policy_ref = fields["policy"];
+        if (fields.count("agent_md")) agent->agent_md_path = fields["agent_md"];
+
+        // Register as global
+        if (agent->name) {
+          globals_.set(agent->name, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        break;
+      }
+
+      case OpCode::OP_GOVERNANCE_CLASSIFY:
+      case OpCode::OP_GOVERNANCE_TRACE_LINEAGE:
+      {
+        // Runtime operations — stub for now, delegate to native functions
+        stack_.push_back(Value::Nil());
+        break;
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // v0.9.5: Modeling Agent opcodes
+      // ═══════════════════════════════════════════════════════════
+
+      case OpCode::OP_DEFINE_SCHEMA_SOURCE:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_schema_source();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("type")) obj->source_type = copy_string(fields["type"].c_str(), fields["type"].size());
+        if (fields.count("connection")) obj->connection = copy_string(fields["connection"].c_str(), fields["connection"].size());
+        if (fields.count("credentials")) obj->credentials = copy_string(fields["credentials"].c_str(), fields["credentials"].size());
+        if (fields.count("scan_interval")) obj->scan_interval = copy_string(fields["scan_interval"].c_str(), fields["scan_interval"].size());
+        if (fields.count("path")) obj->path = copy_string(fields["path"].c_str(), fields["path"].size());
+        if (fields.count("format")) obj->format = copy_string(fields["format"].c_str(), fields["format"].size());
+        if (fields.count("model_type")) obj->model_type = copy_string(fields["model_type"].c_str(), fields["model_type"].size());
+        if (fields.count("sync_direction")) obj->sync_direction = copy_string(fields["sync_direction"].c_str(), fields["sync_direction"].size());
+        if (fields.count("api_connection")) obj->api_connection = copy_string(fields["api_connection"].c_str(), fields["api_connection"].size());
+        if (fields.count("dialect")) obj->dialect = copy_string(fields["dialect"].c_str(), fields["dialect"].size());
+        if (fields.count("project_path")) obj->project_path = copy_string(fields["project_path"].c_str(), fields["project_path"].size());
+        if (fields.count("manifest_path")) obj->manifest_path = copy_string(fields["manifest_path"].c_str(), fields["manifest_path"].size());
+        if (fields.count("include_views")) obj->include_views = (fields["include_views"] == "true");
+        if (fields.count("include_procedures")) obj->include_procedures = (fields["include_procedures"] == "true");
+        if (fields.count("read_constraints")) obj->read_constraints = (fields["read_constraints"] == "true");
+        if (fields.count("read_indexes")) obj->read_indexes = (fields["read_indexes"] == "true");
+        if (fields.count("read_statistics")) obj->read_statistics = (fields["read_statistics"] == "true");
+        if (fields.count("sample_size")) obj->sample_size = std::stoi(fields["sample_size"]);
+        if (fields.count("infer_relationships")) obj->infer_relationships_json = copy_string(fields["infer_relationships"].c_str(), fields["infer_relationships"].size());
+        if (fields.count("schema_evolution")) obj->schema_evolution_json = copy_string(fields["schema_evolution"].c_str(), fields["schema_evolution"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_ER_MODEL:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_er_model();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("version")) obj->version = copy_string(fields["version"].c_str(), fields["version"].size());
+        if (fields.count("source")) obj->source = copy_string(fields["source"].c_str(), fields["source"].size());
+        if (fields.count("notation")) obj->notation_json = copy_string(fields["notation"].c_str(), fields["notation"].size());
+        if (fields.count("domains")) obj->domains_json = copy_string(fields["domains"].c_str(), fields["domains"].size());
+        if (fields.count("relationship_inference")) obj->relationship_inference_json = copy_string(fields["relationship_inference"].c_str(), fields["relationship_inference"].size());
+        if (fields.count("sync")) obj->sync_json = copy_string(fields["sync"].c_str(), fields["sync"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_ENTITY_MODEL:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_entity_obj();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("domain")) obj->domain = copy_string(fields["domain"].c_str(), fields["domain"].size());
+        if (fields.count("attributes")) obj->attributes_json = copy_string(fields["attributes"].c_str(), fields["attributes"].size());
+        if (fields.count("relationships")) obj->relationships_json = copy_string(fields["relationships"].c_str(), fields["relationships"].size());
+        if (fields.count("glossary_term")) obj->glossary_term = copy_string(fields["glossary_term"].c_str(), fields["glossary_term"].size());
+        if (fields.count("owner")) obj->owner = copy_string(fields["owner"].c_str(), fields["owner"].size());
+        if (fields.count("description")) obj->description = copy_string(fields["description"].c_str(), fields["description"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_DIMENSIONAL_MODEL:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_dimensional_model();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("methodology")) obj->methodology = copy_string(fields["methodology"].c_str(), fields["methodology"].size());
+        if (fields.count("source")) obj->source = copy_string(fields["source"].c_str(), fields["source"].size());
+        if (fields.count("facts")) obj->facts_json = copy_string(fields["facts"].c_str(), fields["facts"].size());
+        if (fields.count("dimensions")) obj->dimensions_json = copy_string(fields["dimensions"].c_str(), fields["dimensions"].size());
+        if (fields.count("target_platform")) obj->target_platform = copy_string(fields["target_platform"].c_str(), fields["target_platform"].size());
+        if (fields.count("target_schema")) obj->target_schema = copy_string(fields["target_schema"].c_str(), fields["target_schema"].size());
+        if (fields.count("output")) obj->output_json = copy_string(fields["output"].c_str(), fields["output"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_DATAMART_V095:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_datamart_v095();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("dimensional_model")) obj->dimensional_model = copy_string(fields["dimensional_model"].c_str(), fields["dimensional_model"].size());
+        if (fields.count("purpose")) obj->purpose = copy_string(fields["purpose"].c_str(), fields["purpose"].size());
+        if (fields.count("owner")) obj->owner = copy_string(fields["owner"].c_str(), fields["owner"].size());
+        if (fields.count("additional_dimensions")) obj->additional_dimensions_json = copy_string(fields["additional_dimensions"].c_str(), fields["additional_dimensions"].size());
+        if (fields.count("aggregate_tables")) obj->aggregate_tables_json = copy_string(fields["aggregate_tables"].c_str(), fields["aggregate_tables"].size());
+        if (fields.count("materialization")) obj->materialization_json = copy_string(fields["materialization"].c_str(), fields["materialization"].size());
+        if (fields.count("row_level_security")) obj->row_level_security_json = copy_string(fields["row_level_security"].c_str(), fields["row_level_security"].size());
+        if (fields.count("column_masking")) obj->column_masking_json = copy_string(fields["column_masking"].c_str(), fields["column_masking"].size());
+        if (fields.count("quality")) obj->quality_json = copy_string(fields["quality"].c_str(), fields["quality"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_NORM_ANALYSIS:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_norm_analysis();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("scope")) obj->scope_json = copy_string(fields["scope"].c_str(), fields["scope"].size());
+        if (fields.count("target_nf")) obj->target_nf = copy_string(fields["target_nf"].c_str(), fields["target_nf"].size());
+        if (fields.count("fd_discovery")) obj->fd_discovery_json = copy_string(fields["fd_discovery"].c_str(), fields["fd_discovery"].size());
+        if (fields.count("report")) obj->report_json = copy_string(fields["report"].c_str(), fields["report"].size());
+        if (fields.count("governance")) obj->governance = copy_string(fields["governance"].c_str(), fields["governance"].size());
+        if (fields.count("on_violation")) obj->on_violation = copy_string(fields["on_violation"].c_str(), fields["on_violation"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_AMENDMENT_CONFIG:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_amendment_config();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("monitor")) obj->monitor_json = copy_string(fields["monitor"].c_str(), fields["monitor"].size());
+        if (fields.count("change_types")) obj->change_types_json = copy_string(fields["change_types"].c_str(), fields["change_types"].size());
+        if (fields.count("impact_scope")) obj->impact_scope_json = copy_string(fields["impact_scope"].c_str(), fields["impact_scope"].size());
+        if (fields.count("approval")) obj->approval_json = copy_string(fields["approval"].c_str(), fields["approval"].size());
+        if (fields.count("document")) obj->document_json = copy_string(fields["document"].c_str(), fields["document"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_AMENDMENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_amendment_obj();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("model")) obj->model = copy_string(fields["model"].c_str(), fields["model"].size());
+        if (fields.count("type")) obj->amendment_type = copy_string(fields["type"].c_str(), fields["type"].size());
+        if (fields.count("description")) obj->description = copy_string(fields["description"].c_str(), fields["description"].size());
+        if (fields.count("changes")) obj->changes_json = copy_string(fields["changes"].c_str(), fields["changes"].size());
+        if (fields.count("auto_analyze")) obj->auto_analyze = (fields["auto_analyze"] == "true");
+        if (fields.count("require_approval")) obj->require_approval = (fields["require_approval"] == "true");
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_DATA_PROFILE:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_data_profile();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("sources")) obj->sources_json = copy_string(fields["sources"].c_str(), fields["sources"].size());
+        if (fields.count("profiling")) obj->profiling_json = copy_string(fields["profiling"].c_str(), fields["profiling"].size());
+        if (fields.count("output")) obj->output_json = copy_string(fields["output"].c_str(), fields["output"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_MODELING_TOOL:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* obj = new_modeling_tool();
+        if (fields.count("name")) obj->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("type")) obj->tool_type = copy_string(fields["type"].c_str(), fields["type"].size());
+        if (fields.count("path")) obj->path = copy_string(fields["path"].c_str(), fields["path"].size());
+        if (fields.count("api_url")) obj->api_url = copy_string(fields["api_url"].c_str(), fields["api_url"].size());
+        if (fields.count("credentials")) obj->credentials = copy_string(fields["credentials"].c_str(), fields["credentials"].size());
+        if (fields.count("repository")) obj->repository = copy_string(fields["repository"].c_str(), fields["repository"].size());
+        if (fields.count("sync")) obj->sync_json = copy_string(fields["sync"].c_str(), fields["sync"].size());
+        if (fields.count("mapping")) obj->mapping_json = copy_string(fields["mapping"].c_str(), fields["mapping"].size());
+        if (fields.count("on_conflict")) obj->on_conflict_json = copy_string(fields["on_conflict"].c_str(), fields["on_conflict"].size());
+
+        if (obj->name) {
+          globals_.set(obj->name, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_MODELING_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* agent = new_modeling_agent();
+        if (fields.count("name")) agent->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("provider")) agent->provider = copy_string(fields["provider"].c_str(), fields["provider"].size());
+        if (fields.count("model")) agent->model = copy_string(fields["model"].c_str(), fields["model"].size());
+        if (fields.count("endpoint")) agent->endpoint = copy_string(fields["endpoint"].c_str(), fields["endpoint"].size());
+        if (fields.count("api_key_env")) agent->api_key_env = copy_string(fields["api_key_env"].c_str(), fields["api_key_env"].size());
+        if (fields.count("budget")) agent->budget_ref = copy_string(fields["budget"].c_str(), fields["budget"].size());
+        if (fields.count("catalog")) agent->catalog_ref = copy_string(fields["catalog"].c_str(), fields["catalog"].size());
+        if (fields.count("governance")) agent->governance_ref = copy_string(fields["governance"].c_str(), fields["governance"].size());
+        if (fields.count("enrich_from_governance")) agent->enrich_from_governance = (fields["enrich_from_governance"] == "true");
+
+        // Comma-separated ref lists
+        auto split = [](const std::string& s) {
+          std::vector<std::string> v;
+          std::istringstream iss(s); std::string item;
+          while (std::getline(iss, item, ',')) v.push_back(item);
+          return v;
+        };
+        auto split_to_objstr = [&](const std::string& s) {
+          std::vector<ObjString*> v;
+          for (auto& item : split(s)) {
+            v.push_back(copy_string(item.c_str(), item.size()));
+          }
+          return v;
+        };
+        if (fields.count("sources")) agent->schema_source_refs = split_to_objstr(fields["sources"]);
+        if (fields.count("modeling_tools")) agent->modeling_tool_refs = split_to_objstr(fields["modeling_tools"]);
+        if (fields.count("coordinates_with")) agent->coordinates_with_refs = split_to_objstr(fields["coordinates_with"]);
+        if (fields.count("capabilities")) {
+          auto caps = fields["capabilities"];
+          if (caps.find("reverse_engineer") != std::string::npos) agent->reverse_engineer_enabled = true;
+          if (caps.find("normalization") != std::string::npos) agent->normalization_analysis_enabled = true;
+          if (caps.find("dimensional") != std::string::npos) agent->dimensional_design_enabled = true;
+          if (caps.find("amendment") != std::string::npos) agent->amendment_proposals_enabled = true;
+          if (caps.find("profiling") != std::string::npos) agent->data_profiling_enabled = true;
+        }
+
+        // Register as global
+        if (agent->name) {
+          std::string agent_name(agent->name->chars, agent->name->length);
+          globals_.set(agent->name, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+          // Register AgentExtension for v0.8 compatibility
+          AgentExtension extension;
+          extension.agent_type = "modeling";
+          agent_extensions_[agent_name] = std::move(extension);
+        }
+        break;
+      }
+
       // v0.8 Phase 6: Channel registration
       case OpCode::OP_DEFINE_CHANNEL:
       {

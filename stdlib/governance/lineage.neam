@@ -1,0 +1,20 @@
+//
+// Neam v0.9.4 — Governance lineage standard library
+//
+
+module std.governance.lineage
+
+/// Trace lineage for an asset
+pub fun trace(agent, asset, direction, depth) {
+  return governance_trace_lineage(agent, asset, direction, depth);
+}
+
+/// Run impact analysis for an asset
+pub fun impact(agent, asset) {
+  return governance_impact_analysis(agent, asset);
+}
+
+/// Get lineage report
+pub fun report(agent) {
+  return governance_lineage_report(agent);
+}

@@ -1,0 +1,20 @@
+//
+// Neam v0.9.4 — Governance data quality standard library
+//
+
+module std.governance.quality
+
+/// Profile a specific table
+pub fun profile(agent, fqn) {
+  return governance_profile_table(agent, fqn);
+}
+
+/// Get quality score for a table
+pub fun score(agent, fqn) {
+  return governance_quality_score(agent, fqn);
+}
+
+/// Get quality report
+pub fun report(agent) {
+  return governance_quality_report(agent);
+}

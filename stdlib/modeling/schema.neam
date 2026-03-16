@@ -1,0 +1,25 @@
+//
+// Neam v0.9.5 — Schema reverse-engineering standard library
+//
+
+module std.modeling.schema
+
+/// Reverse-engineer all connected schema sources
+pub fun reverse_engineer(agent) {
+  return modeling_reverse_engineer(agent);
+}
+
+/// Read metadata from a specific source
+pub fun read_metadata(agent, source) {
+  return modeling_reverse_engineer(agent);
+}
+
+/// Infer schema from file-based data
+pub fun infer(agent, path) {
+  return modeling_infer_schema(agent, path);
+}
+
+/// Detect schema changes across sources
+pub fun diff(agent) {
+  return modeling_detect_changes(agent);
+}

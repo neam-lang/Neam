@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -1378,6 +1379,1266 @@ struct ETLAgentDecl
   std::optional<AutoModelBlock> auto_model;
 };
 
+// ============================================================
+// v0.9.2: Migration Agent AST nodes
+// ============================================================
+
+// Migration strategy enum
+enum class MigrationStrategy
+{
+  LIFT_AND_SHIFT,
+  RE_PLATFORM,
+  RE_ARCHITECTURE
+};
+
+// Data movement strategy enum
+enum class DataMovementStrategy
+{
+  FULL_DUMP,
+  INCREMENTAL,
+  PARALLEL_RUN,
+  TRICKLE,
+  BLUE_GREEN
+};
+
+// Cutover strategy enum
+enum class CutoverStrategy
+{
+  BIG_BANG,
+  BLUE_GREEN,
+  CANARY,
+  TRICKLE
+};
+
+// CDC configuration
+struct CDCConfig
+{
+  std::string mechanism;
+  std::string tool;
+  std::string lag_threshold;
+  std::string lag_critical;
+};
+
+// Wave configuration
+struct WaveConfig
+{
+  std::string mode{"auto"};
+  int max_tables_per_wave{50};
+  int max_parallel_extractions{4};
+  std::vector<std::pair<std::string, std::vector<std::string>>> manual_waves;
+  std::unordered_map<std::string, std::vector<std::string>> dependencies;
+};
+
+// Movement configuration
+struct MovementConfig
+{
+  DataMovementStrategy strategy{DataMovementStrategy::FULL_DUMP};
+  CDCConfig cdc;
+  int extraction_threads{4};
+  int load_threads{4};
+  std::string partition_strategy{"range"};
+  std::string staging_format{"parquet"};
+  std::string checkpoint_interval{"5GB"};
+};
+
+// Schema translation configuration
+struct SchemaTranslationConfig
+{
+  std::string type_mapping{"auto"};
+  std::string stored_procedures{"skip"};
+  std::string views{"skip"};
+  std::string materialized_views{"skip"};
+  std::string indexes{"re_evaluate"};
+  std::string sequences{"preserve_values"};
+
+  struct PlatformSpecific
+  {
+    std::string empty_string_handling{"preserve_as_null"};
+    bool date_to_timestamp{false};
+    std::string clob_threshold{"16MB"};
+    std::string number_no_precision{"analyze_and_map"};
+  };
+  std::optional<PlatformSpecific> oracle_specific;
+  std::optional<PlatformSpecific> teradata_specific;
+};
+
+// Reconciliation configuration
+struct ReconciliationConfig
+{
+  bool row_counts{true};
+  bool column_aggregates{false};
+  std::string hash_comparison{"none"};
+  std::string statistical_distribution{"none"};
+  bool boundary_values{false};
+  bool golden_queries{false};
+  bool referential_integrity{false};
+};
+
+// Tolerance configuration
+struct ToleranceConfig
+{
+  std::string financial_columns{"exact"};
+  double floating_point{1e-6};
+  std::string timestamp_precision{"1s"};
+};
+
+// Validation configuration
+struct ValidationConfig
+{
+  std::string mode{"standard"};
+  ReconciliationConfig reconciliation;
+  ToleranceConfig tolerances;
+  std::vector<std::string> golden_queries;
+  bool continuous_enabled{false};
+  std::string continuous_interval;
+};
+
+// Rollback configuration
+struct RollbackConfig
+{
+  std::string window{"72h"};
+  bool auto_trigger{false};
+  std::vector<std::string> trigger_conditions;
+};
+
+// Cutover configuration
+struct CutoverConfig
+{
+  CutoverStrategy strategy{CutoverStrategy::BIG_BANG};
+  RollbackConfig rollback;
+};
+
+// Self-heal guardrails
+struct SelfHealGuardrails
+{
+  int max_auto_fix_rows{1000};
+  double max_auto_fix_percentage{0.001};
+  int max_retries_per_table{3};
+  bool require_dry_run{true};
+  bool audit_all_remediations{true};
+};
+
+// Self-heal configuration (migration-specific)
+struct SelfHealMigrationConfig
+{
+  bool enabled{false};
+  bool missing_rows{false};
+  bool duplicate_rows{false};
+  bool type_conversion_errors{false};
+  bool network_failures{false};
+  bool checkpoint_resume{false};
+  SelfHealGuardrails guardrails;
+};
+
+// Assessment configuration
+struct AssessmentConfig
+{
+  bool auto_discover{true};
+  bool profile_data{true};
+  bool risk_analysis{true};
+  std::string report_format{"json"};
+};
+
+// Governance configuration (migration-specific)
+struct GovernanceMigrationConfig
+{
+  bool preserve_classification{false};
+  bool pii_detection{false};
+  std::string staging_region;
+  std::string target_region;
+  bool log_all_sql{false};
+  bool log_all_data_movement{false};
+  std::string audit_retention{"7y"};
+};
+
+// Migration agent declaration
+struct MigrationAgentDecl
+{
+  Visibility visibility;
+  std::string name;
+
+  // Migration-specific fields
+  std::string source;
+  std::string target;
+  std::optional<std::string> staging;
+  MigrationStrategy strategy{MigrationStrategy::RE_PLATFORM};
+  WaveConfig waves;
+  MovementConfig movement;
+  SchemaTranslationConfig schema_translation;
+  ValidationConfig validation;
+  CutoverConfig cutover;
+  SelfHealMigrationConfig self_heal;
+  std::optional<AssessmentConfig> assessment;
+  std::optional<GovernanceMigrationConfig> governance;
+
+  // Common agent fields
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> system_prompt;
+  std::optional<double> temperature;
+  std::optional<std::string> budget;
+  std::vector<std::string> skills;
+
+  // Inherited DataAgent/ETLAgent fields
+  std::optional<std::string> role;
+  std::optional<std::string> purpose;
+  std::optional<std::string> autonomy;
+  std::optional<PipelineBlock> pipeline;
+  std::optional<std::string> agent_md;
+};
+
+// ============================================================================
+// v0.9.3: DataOps Agent — Platform operations & continuous monitoring
+// ============================================================================
+
+// Scheduler type
+enum class SchedulerType
+{
+  AIRFLOW, CONTROLM, CRON, DATABRICKS, SNOWFLAKE_TASKS,
+  DBT, GLUE, ADF, INFORMATICA, LUIGI
+};
+
+// Log source type
+enum class LogSourceType
+{
+  SNOWFLAKE, ORACLE, POSTGRES, MYSQL, SQLSERVER,
+  SPARK, REDSHIFT, BIGQUERY, KAFKA
+};
+
+// Platform type
+enum class PlatformType
+{
+  SNOWFLAKE, S3, ADLS, GCS, HDFS,
+  REDSHIFT, BIGQUERY, DATABRICKS
+};
+
+// DataOps monitoring mode
+enum class DataOpsMode
+{
+  CONTINUOUS,
+  SCHEDULED,
+  ON_DEMAND
+};
+
+// Scheduler connection declaration
+struct SchedulerDecl
+{
+  Visibility visibility;
+  std::string name;
+  SchedulerType sched_type{SchedulerType::AIRFLOW};
+  std::string connection;
+  std::string credentials;
+  std::string poll_interval{"60s"};
+  std::vector<std::string> filters;       // dag_filter, folder_filter, etc.
+  std::optional<std::string> timezone;
+  std::optional<std::string> datacenter;
+  std::optional<std::string> host;
+};
+
+// Audit table status value mapping
+struct AuditStatusValues
+{
+  std::vector<std::string> success;
+  std::vector<std::string> failure;
+  std::vector<std::string> running;
+  std::vector<std::string> skipped;
+};
+
+// Audit table column mapping
+struct AuditColumnMap
+{
+  std::string job_id;
+  std::string timestamp;
+  std::string status;
+  AuditStatusValues status_values;
+  std::optional<std::string> end_time;
+  std::optional<std::string> target_table;
+  std::optional<std::string> load_type;
+  std::optional<std::string> rows_in;
+  std::optional<std::string> rows_out;
+  std::optional<std::string> rows_inserted;
+  std::optional<std::string> rows_updated;
+  std::optional<std::string> rows_deleted;
+  std::optional<std::string> rows_rejected;
+  std::optional<std::string> error;
+  std::optional<std::string> duration;
+  std::optional<std::string> duration_unit;
+  std::optional<std::string> severity;
+  std::optional<std::string> rule_name;
+};
+
+// Audit table anomaly thresholds
+struct AuditAnomalyConfig
+{
+  double row_count_drop{0.20};
+  double row_count_spike{3.0};
+  double duration_spike{2.0};
+  double failure_rate{0.05};
+  int zero_rows_consecutive{3};
+};
+
+// Audit table declaration
+struct AuditTableDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string source_ref;
+  std::string table_name;
+  AuditColumnMap column_map;
+  std::string poll_interval{"60s"};
+  std::optional<std::string> lookback_window;
+  std::optional<std::string> retention_analysis;
+  AuditAnomalyConfig anomalies;
+};
+
+// Log source alert configuration
+struct LogAlertConfig
+{
+  bool query_timeout{false};
+  double warehouse_credit_spike{0.0};
+  int failed_logins{0};
+  std::optional<std::string> long_running_queries;
+  bool full_table_scans{false};
+  int queued_queries{0};
+  std::vector<std::string> ora_errors;
+  double tablespace_usage{0.0};
+  int redo_log_switches{0};
+  double dead_tuples_ratio{0.0};
+  std::optional<std::string> lock_waits;
+  double connection_usage{0.0};
+  std::optional<std::string> replication_lag;
+  std::optional<std::string> slow_queries;
+  bool oom_errors{false};
+  std::optional<std::string> shuffle_spill;
+  int stage_failures{0};
+  bool executor_lost{false};
+  double skewed_partitions{0.0};
+};
+
+// Log source declaration
+struct LogSourceDecl
+{
+  Visibility visibility;
+  std::string name;
+  LogSourceType log_type{LogSourceType::SNOWFLAKE};
+  std::string connection;
+  std::string credentials;
+  std::vector<std::string> views;
+  std::optional<std::string> log_file;
+  std::optional<std::string> log_format;
+  std::string poll_interval{"60s"};
+  std::optional<std::string> lookback_window;
+  LogAlertConfig alerts;
+};
+
+// Platform health check configuration
+struct PlatformHealthConfig
+{
+  bool storage_growth{false};
+  bool partition_health{false};
+  bool file_format_consistency{false};
+  int small_files_threshold{0};
+  std::optional<std::string> small_files_min_size;
+  std::optional<std::string> stale_data;
+  bool warehouse_utilization{false};
+  std::optional<std::string> query_perf_p50;
+  std::optional<std::string> query_perf_p95;
+  std::optional<std::string> query_perf_p99;
+  bool clustering_health{false};
+  std::optional<std::string> mv_staleness;
+  bool time_travel_usage{false};
+  bool row_count_baseline{false};
+  bool schema_drift{false};
+  bool consumer_query_patterns{false};
+  std::map<std::string, std::string> freshness;
+};
+
+// Platform FinOps configuration
+struct PlatformFinOpsConfig
+{
+  double daily_budget{0.0};
+  std::map<std::string, double> warehouse_budgets;
+  std::optional<std::string> auto_suspend_idle;
+  std::optional<std::string> auto_kill_queries;
+  double cost_anomaly_threshold{0.0};
+};
+
+// Platform declaration
+struct PlatformDecl
+{
+  Visibility visibility;
+  std::string name;
+  PlatformType plat_type{PlatformType::SNOWFLAKE};
+  std::string connection;
+  std::string credentials;
+  std::optional<std::string> database;
+  PlatformHealthConfig health_checks;
+  PlatformFinOpsConfig finops;
+};
+
+// Severity level for incident policy
+struct SeverityLevel
+{
+  std::string level_name;              // "P1_critical", "P2_high", etc.
+  std::vector<std::string> conditions;
+  std::string response;
+  std::optional<std::string> escalation;
+  std::vector<std::string> channels;
+};
+
+// Auto-heal guardrails
+struct AutoHealGuardrails
+{
+  double max_cost_per_action{0.0};
+  int max_retries_per_hour{0};
+  std::vector<std::string> no_actions_during;
+  bool require_dry_run{false};
+};
+
+// Auto-heal configuration
+struct AutoHealConfig
+{
+  bool enabled{false};
+  int max_auto_retries{3};
+  std::string retry_backoff{"exponential"};
+  std::string retry_initial_wait{"30s"};
+  std::vector<std::string> allowed_actions;
+  std::vector<std::string> requires_approval;
+  AutoHealGuardrails guardrails;
+};
+
+// Incident policy declaration
+struct IncidentPolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<SeverityLevel> severity_levels;
+  AutoHealConfig auto_heal;
+};
+
+// Correlation scope
+struct CorrelationScope
+{
+  std::vector<std::string> schedulers;
+  std::vector<std::string> audit_tables;
+  std::vector<std::string> log_sources;
+  std::vector<std::string> job_pattern;
+  std::vector<std::string> table_pattern;
+};
+
+// Correlation SLA
+struct CorrelationSLAConfig
+{
+  std::string deadline;
+  std::optional<std::string> timezone;
+  bool business_days_only{false};
+  std::optional<std::string> escalation;
+};
+
+// Correlation declaration
+struct CorrelationDecl
+{
+  Visibility visibility;
+  std::string name;
+  CorrelationScope scope;
+  std::string time_window{"30m"};
+  std::map<std::string, std::vector<std::string>> dependencies;
+  CorrelationSLAConfig sla;
+};
+
+// DataOps report configuration
+struct DataOpsReportConfig
+{
+  std::optional<std::string> time;
+  std::optional<std::string> day;
+  std::optional<std::string> frequency;
+  std::optional<std::string> channel;
+};
+
+// DataOps agent declaration
+struct DataOpsAgentDecl
+{
+  Visibility visibility;
+  std::string name;
+
+  // Common agent fields
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system_prompt;
+  std::optional<std::string> budget;
+
+  // DataOps-specific references
+  std::vector<std::string> platforms;
+  std::vector<std::string> schedulers;
+  std::vector<std::string> audit_tables;
+  std::vector<std::string> log_sources;
+  std::vector<std::string> correlations;
+
+  // Policy and behavior
+  std::optional<std::string> incident_policy;
+  DataOpsMode mode{DataOpsMode::CONTINUOUS};
+
+  // Reporting
+  DataOpsReportConfig daily_digest;
+  DataOpsReportConfig weekly_summary;
+  DataOpsReportConfig cost_report;
+
+  // Optional agent knowledge
+  std::optional<std::string> agent_md;
+
+  // Skills and guards (inherited pattern)
+  std::vector<std::string> skills;
+  std::vector<std::string> guardchains;
+  std::optional<std::string> policy;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.4 Governance Agent AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+// --- Governance Enums ---
+
+enum class CatalogSourceType
+{
+  SNOWFLAKE, ORACLE, POSTGRES, MYSQL, SQLSERVER,
+  REDSHIFT, BIGQUERY, DATABRICKS,
+  S3, ADLS, GCS, HDFS,
+  COLLIBRA, ATLAS, ALATION, PURVIEW, INFORMATICA, ATLAN
+};
+
+enum class SyncMode
+{
+  PUSH, PULL, BIDIRECTIONAL
+};
+
+enum class ConflictResolution
+{
+  AGENT_WINS, EXTERNAL_WINS, MANUAL
+};
+
+enum class SensitivityLevel
+{
+  PUBLIC,        // L1
+  INTERNAL,      // L2
+  CONFIDENTIAL,  // L3
+  RESTRICTED     // L4
+};
+
+enum class AccessModel
+{
+  RBAC, ABAC, HYBRID_RBAC_ABAC
+};
+
+enum class LineageDepth
+{
+  TABLE, COLUMN, TRANSFORMATION
+};
+
+// --- CatalogSource Declaration ---
+
+struct GovCatalogSourceDecl
+{
+  Visibility visibility;
+  std::string name;
+  CatalogSourceType source_type{CatalogSourceType::SNOWFLAKE};
+  std::string connection;
+  std::string credentials;
+  std::vector<std::string> databases;
+  std::vector<std::string> prefixes;
+  std::string scan_interval;
+  bool include_views{true};
+  bool include_stages{false};
+  bool detect_formats{false};
+  std::vector<std::string> exclude_patterns;
+  SyncMode sync_mode{SyncMode::PULL};
+  std::string sync_interval;
+  ConflictResolution conflict_resolution{ConflictResolution::EXTERNAL_WINS};
+};
+
+// --- Catalog Declaration (v0.9.4 enhanced) ---
+
+struct AutoDocumentConfig
+{
+  bool enabled{false};
+  std::string provider;
+  std::string model;
+  bool require_review{true};
+  std::string review_channel;
+};
+
+struct OwnershipConfig
+{
+  bool auto_assign{false};
+  std::string default_domain;
+  bool require_owner{false};
+};
+
+struct GovCatalogDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> sources;
+  AutoDocumentConfig auto_document;
+  std::string staleness_threshold;
+  bool shadow_dataset_detection{false};
+  OwnershipConfig ownership;
+};
+
+// --- Glossary Declaration ---
+
+struct SynonymDetectionConfig
+{
+  bool enabled{false};
+  double confidence_threshold{0.85};
+  bool cross_database{false};
+};
+
+struct AutoSuggestConfig
+{
+  bool enabled{false};
+  std::string provider;
+  std::string model;
+  std::vector<std::string> sources;
+  bool require_approval{true};
+  std::string approval_channel;
+};
+
+struct GlossaryDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> domains;
+  AutoSuggestConfig auto_suggest;
+  SynonymDetectionConfig synonym_detection;
+  std::string terms_json;
+  std::string external_sync_json;
+};
+
+// --- Classification Policy Declaration ---
+
+struct ClassificationLevel
+{
+  int level{0};
+  std::vector<std::string> controls;
+  std::string retention_max;
+  std::string cross_border;
+};
+
+struct DriftDetectionConfig
+{
+  bool enabled{false};
+  std::string scan_interval;
+  bool alert_on_new_pii{true};
+  bool alert_on_reclassification{true};
+};
+
+struct SemanticClassifyConfig
+{
+  bool column_name_analysis{true};
+  bool sample_value_analysis{true};
+  bool cross_column_inference{true};
+  double confidence_threshold{0.80};
+};
+
+struct AutoClassifyConfig
+{
+  bool enabled{false};
+  std::string provider;
+  std::string model;
+  std::string patterns_json;
+  SemanticClassifyConfig semantic;
+  DriftDetectionConfig drift_detection;
+};
+
+struct TagPropagationConfig
+{
+  bool lineage_based{false};
+  std::string inheritance;
+};
+
+struct ClassificationPolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::map<std::string, ClassificationLevel> levels;
+  AutoClassifyConfig auto_classify;
+  TagPropagationConfig propagation;
+};
+
+// --- Access Policy Declaration ---
+
+struct RoleDefinition
+{
+  std::string description;
+  std::vector<std::string> permissions;
+  std::vector<std::string> databases;
+  std::string masking_json;
+  std::string row_level_security_json;
+  std::string restrictions_json;
+};
+
+struct AccessReviewConfig
+{
+  std::string mode;
+  std::string unused_access_threshold;
+  bool excessive_access_detection{false};
+  std::string service_account_review;
+  bool risk_based_prioritization{false};
+  std::string review_channel;
+  bool auto_revoke_unused{false};
+};
+
+struct MaskingPolicy
+{
+  std::string mask_type;
+  std::string pattern;
+};
+
+struct AccessPolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  AccessModel model{AccessModel::RBAC};
+  std::map<std::string, RoleDefinition> roles;
+  std::string attributes_json;
+  AccessReviewConfig access_review;
+  std::map<std::string, MaskingPolicy> masking_policies;
+};
+
+// --- Quality Policy Declaration ---
+
+struct GovProfilingConfig
+{
+  bool enabled{false};
+  std::string scan_interval;
+  int sample_size{10000};
+  std::string full_scan_interval;
+  std::vector<std::string> targets;
+};
+
+struct QualityScoringConfig
+{
+  bool enabled{false};
+  double accuracy_weight{0.25};
+  double completeness_weight{0.20};
+  double consistency_weight{0.15};
+  double timeliness_weight{0.15};
+  double validity_weight{0.15};
+  double uniqueness_weight{0.10};
+  double minimum_score{0.80};
+  std::string trend_analysis;
+  std::string report_channel;
+};
+
+struct DataOpsIntegrationConfig
+{
+  bool create_incident_on_violation{false};
+  std::string minimum_severity;
+};
+
+struct QualityPolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  GovProfilingConfig profiling;
+  std::string rules_json;
+  QualityScoringConfig scoring;
+  DataOpsIntegrationConfig dataops_integration;
+};
+
+// --- Lineage Policy Declaration ---
+
+struct LineageDiscoveryConfig
+{
+  bool enabled{false};
+  std::vector<std::string> sources;
+  std::vector<std::string> methods;
+  std::string scan_interval;
+  LineageDepth depth{LineageDepth::COLUMN};
+};
+
+struct ImpactAnalysisConfig
+{
+  bool enabled{false};
+  int downstream_depth{10};
+  bool include_reports{true};
+  bool include_apis{true};
+  bool include_ml_models{false};
+  bool notification_on_breaking_change{true};
+};
+
+struct LineageTagPropagationConfig
+{
+  bool enabled{false};
+  std::string direction;
+  std::string inherit_sensitivity;
+  bool inherit_pii_tags{true};
+};
+
+struct LineagePolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  LineageDiscoveryConfig auto_discover;
+  ImpactAnalysisConfig impact_analysis;
+  LineageTagPropagationConfig tag_propagation;
+  std::string external_sync_json;
+};
+
+// --- Compliance Policy Declaration ---
+
+struct DSARConfig
+{
+  bool enabled{false};
+  std::vector<std::string> search_scope;
+  std::string response_format;
+  bool anonymization_on_export{true};
+};
+
+struct ComplianceMonitoringConfig
+{
+  std::string scan_interval;
+  bool scoring{false};
+  bool alert_on_non_compliance{true};
+  std::string report_channel;
+  std::string audit_report_schedule;
+};
+
+struct CompliancePolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> regulations;
+  std::string gdpr_json;
+  std::string ccpa_json;
+  std::string hipaa_json;
+  std::string bcbs_239_json;
+  ComplianceMonitoringConfig monitoring;
+  DSARConfig dsar;
+};
+
+// --- Lifecycle Policy Declaration ---
+
+struct RetentionRule
+{
+  std::string max_retention;
+  std::string min_retention;
+  std::string action_on_expiry;
+  std::string archive_tier;
+  bool requires_approval{false};
+};
+
+struct GovTieringConfig
+{
+  bool enabled{false};
+  std::string hot_to_warm;
+  std::string warm_to_cold;
+  std::string cold_to_archive;
+  std::string targets_json;
+};
+
+struct LegalHoldConfig
+{
+  bool enabled{false};
+  bool hold_overrides_retention{true};
+  std::string notification_channel;
+};
+
+struct CostOptimizationConfig
+{
+  std::string unused_table_detection;
+  bool redundant_copy_detection{false};
+  std::string report_channel;
+};
+
+struct LifecyclePolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::map<std::string, RetentionRule> retention;
+  std::string regulatory_retention_json;
+  GovTieringConfig tiering;
+  LegalHoldConfig legal_hold;
+  CostOptimizationConfig cost_optimization;
+};
+
+// --- Data Product Declaration ---
+
+struct DataContractSLA
+{
+  std::string freshness;
+  std::string availability;
+  double quality_score{0.0};
+};
+
+struct DataContractConfig
+{
+  std::string schema_version;
+  DataContractSLA sla;
+  std::string schema_json;
+  std::string breaking_change_policy;
+  std::vector<std::string> consumers;
+};
+
+struct DataProductDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string domain;
+  std::string owner;
+  std::string description;
+  DataContractConfig contract;
+  std::string quality_json;
+  std::string access_json;
+};
+
+// --- Contract Policy Declaration ---
+
+struct ContractPolicyDecl
+{
+  Visibility visibility;
+  std::string name;
+  bool schema_validation_on_deploy{true};
+  bool schema_validation_on_change{true};
+  bool breaking_change_detection{true};
+  bool notify_consumers{true};
+  std::string freshness_check_interval;
+  std::string availability_check_interval;
+  std::string quality_check_interval;
+  std::string versioning_strategy;
+  bool auto_version_on_schema_change{false};
+  bool require_changelog{false};
+};
+
+// --- Master Data Declaration ---
+
+struct MatchingConfig
+{
+  std::string strategy;
+  std::vector<std::string> fields;
+  double confidence_threshold{0.90};
+  double manual_review_threshold{0.70};
+};
+
+struct StewardshipConfig
+{
+  std::string review_queue;
+  double auto_merge_above{0.95};
+  double require_approval_below{0.90};
+};
+
+struct MasterDataDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string entity;
+  std::string golden_source;
+  std::vector<std::string> contributing_sources;
+  MatchingConfig matching;
+  std::string survivorship_json;
+  std::string quality_json;
+  StewardshipConfig stewardship;
+};
+
+// --- External Tool Declaration ---
+
+struct GovExternalToolDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string tool_type;
+  std::string connection;
+  std::string credentials;
+  std::string capabilities_json;
+  std::string sync_interval;
+  ConflictResolution conflict_resolution{ConflictResolution::MANUAL};
+};
+
+// --- Governance Agent Declaration ---
+
+struct GovernanceReportsConfig
+{
+  std::string governance_scorecard_json;
+  std::string compliance_report_json;
+  std::string quality_report_json;
+  std::string access_review_report_json;
+};
+
+struct GovernanceAgentDecl
+{
+  Visibility visibility;
+  std::string name;
+
+  // Common agent fields
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<double> temperature;
+  std::optional<std::string> system_prompt;
+  std::optional<std::string> budget;
+
+  // Governance pillar references
+  std::optional<std::string> catalog;
+  std::optional<std::string> glossary;
+  std::optional<std::string> classification;
+  std::optional<std::string> access_control;
+  std::optional<std::string> quality;
+  std::optional<std::string> lineage;
+  std::optional<std::string> compliance;
+  std::optional<std::string> lifecycle;
+
+  // External tools & coordination
+  std::vector<std::string> external_tools;
+  std::vector<std::string> coordinates_with;
+
+  // Reports
+  GovernanceReportsConfig reports;
+
+  // Inherited agent features
+  std::vector<std::string> skills;
+  std::vector<std::string> guardchains;
+  std::optional<std::string> policy;
+  std::optional<std::string> agent_md;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.5 Modeling Agent AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+enum class SchemaSourceType
+{
+  SNOWFLAKE, ORACLE, POSTGRES, MYSQL, SQLSERVER,
+  REDSHIFT, BIGQUERY, DATABRICKS,
+  S3, ADLS, GCS, HDFS,
+  ERWIN, ERSTUDIO, POWERDESIGNER, SPARX_EA,
+  DDL, DBT, DATA_LAKE, DELTA_LAKE, ICEBERG, HUDI
+};
+
+enum class DimensionalMethodology
+{
+  STAR, SNOWFLAKE, STARFLAKE, DATA_VAULT
+};
+
+enum class ModelingToolType
+{
+  ERWIN, ERSTUDIO, POWERDESIGNER, SPARX_EA,
+  ORACLE_SDDM, DBDIAGRAM, DBT, LIQUIBASE, FLYWAY
+};
+
+enum class SyncDirection
+{
+  READ_ONLY, WRITE_BACK, BIDIRECTIONAL
+};
+
+enum class NormalForm
+{
+  NF1, NF2, NF3, BCNF, NF4, NF5
+};
+
+enum class AmendmentType
+{
+  NON_BREAKING, BREAKING, REQUIRES_REVIEW
+};
+
+enum class ERNotation
+{
+  CHEN, UML, CROWS_FOOT, IDEF1X, IE
+};
+
+enum class ModelLevel
+{
+  CONCEPTUAL, LOGICAL, PHYSICAL
+};
+
+// --- SchemaSourceDecl ---
+struct SchemaSourceDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string type_str;  // string form of SchemaSourceType
+  std::string connection;
+  std::string credentials;
+  std::vector<std::string> databases;
+  std::string scan_interval;
+  bool include_views{true};
+  bool include_procedures{false};
+  bool read_constraints{true};
+  bool read_indexes{true};
+  bool read_statistics{false};
+  std::string path;
+  std::string format;
+  std::string model_type;
+  bool watch{false};
+  std::string sync_direction;
+  std::string api_connection;
+  std::vector<std::string> prefixes;
+  int sample_size{1000};
+  bool detect_formats{false};
+  std::string dialect;
+  bool apply_migrations{false};
+  std::string project_path;
+  std::string manifest_path;
+  bool read_sources{true};
+  bool read_models{true};
+  bool read_tests{false};
+  std::vector<std::string> submodel_filter;
+  std::string infer_relationships_json;
+  std::string schema_evolution_json;
+};
+
+// --- ERModelDecl ---
+struct ERModelDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string version;
+  std::vector<std::string> levels;
+  std::string source;
+  std::string notation_json;
+  std::string domains_json;
+  std::string relationship_inference_json;
+  std::string sync_json;
+};
+
+// --- EntityDecl (v0.9.5 modeling entity, distinct from keyword "entity") ---
+struct ModelingEntityDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string domain;
+  std::string attributes_json;
+  std::string relationships_json;
+  std::string glossary_term;
+  std::string owner;
+  std::string description;
+};
+
+// --- DimensionalModelDecl ---
+struct DimensionalModelDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string methodology;  // "star", "snowflake", "starflake", "data_vault"
+  std::string source;
+  std::string facts_json;
+  std::string dimensions_json;
+  std::vector<std::string> conformed;
+  std::string target_platform;
+  std::string target_schema;
+  std::string output_json;
+};
+
+// --- DataMartDecl_v095 ---
+struct DataMartDecl_v095
+{
+  Visibility visibility;
+  std::string name;
+  std::string dimensional_model;
+  std::string purpose;
+  std::string owner;
+  std::vector<std::string> facts;
+  std::vector<std::string> dimensions;
+  std::string additional_dimensions_json;
+  std::string aggregate_tables_json;
+  std::string materialization_json;
+  std::string row_level_security_json;
+  std::string column_masking_json;
+  std::string quality_json;
+};
+
+// --- NormalizationAnalysisDecl ---
+struct NormalizationAnalysisDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string scope_json;
+  std::string target_nf;  // "1NF", "2NF", "3NF", "BCNF", "4NF", "5NF"
+  std::string fd_discovery_json;
+  std::string report_json;
+  std::string governance;
+  std::string on_violation;
+};
+
+// --- AmendmentConfigDecl ---
+struct AmendmentConfigDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string monitor_json;
+  std::string change_types_json;
+  std::string impact_scope_json;
+  std::string approval_json;
+  std::string document_json;
+};
+
+// --- AmendmentDecl ---
+struct AmendmentDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string model;
+  std::string type_str;  // "non_breaking", "breaking", "requires_review"
+  std::string description;
+  std::string changes_json;
+  bool auto_analyze{false};
+  bool require_approval{true};
+};
+
+// --- DataProfileDecl ---
+struct DataProfileDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string sources_json;
+  std::string profiling_json;
+  std::string output_json;
+};
+
+// --- ModelingToolDecl ---
+struct ModelingToolDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::string type_str;  // "erwin", "erstudio", etc.
+  std::string path;
+  std::string api_url;
+  std::string credentials;
+  std::string repository;
+  std::vector<std::string> submodels;
+  std::string sync_json;
+  std::string mapping_json;
+  std::string on_conflict_json;
+};
+
+// --- ModelingAgentDecl ---
+struct ModelingAgentDecl
+{
+  Visibility visibility;
+  std::string name;
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::optional<std::string> budget;
+  std::vector<std::string> sources;
+  std::optional<std::string> catalog;
+  std::optional<std::string> governance;
+  std::vector<std::string> modeling_tools;
+  std::string capabilities_json;
+  std::vector<std::string> coordinates_with;
+  bool enrich_from_governance{false};
+  std::optional<std::string> role;
+  std::optional<std::string> purpose;
+  std::optional<std::string> jurisdiction;
+  std::optional<std::string> autonomy;
+  std::vector<std::string> approval_required;
+  std::vector<std::string> handoffs;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -1417,7 +2678,20 @@ struct Statement
                    ClawAgentDecl, ForgeAgentDecl, ChannelDecl,
                    SchemaDecl, SourceDecl, SinkDecl, QualityDecl,
                    ComputeDecl, GovernanceDecl, CatalogDecl, DataAgentDecl,
-                   ETLAgentDecl, MartDecl, SemanticDecl>;
+                   ETLAgentDecl, MartDecl, SemanticDecl,
+                   MigrationAgentDecl,
+                   SchedulerDecl, AuditTableDecl, LogSourceDecl, PlatformDecl,
+                   IncidentPolicyDecl, CorrelationDecl, DataOpsAgentDecl,
+                   GovCatalogSourceDecl, GovCatalogDecl, GlossaryDecl,
+                   ClassificationPolicyDecl, AccessPolicyDecl, QualityPolicyDecl,
+                   LineagePolicyDecl, CompliancePolicyDecl, LifecyclePolicyDecl,
+                   DataProductDecl, ContractPolicyDecl, MasterDataDecl,
+                   GovExternalToolDecl, GovernanceAgentDecl,
+                   SchemaSourceDecl, ERModelDecl, ModelingEntityDecl,
+                   DimensionalModelDecl, DataMartDecl_v095,
+                   NormalizationAnalysisDecl, AmendmentConfigDecl,
+                   AmendmentDecl, DataProfileDecl, ModelingToolDecl,
+                   ModelingAgentDecl>;
   SourceSpan span;
   Variant node;
 };

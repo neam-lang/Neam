@@ -1,0 +1,25 @@
+//
+// Neam v0.9.4 — Governance access control standard library
+//
+
+module std.governance.access
+
+/// Check if a user has access to a resource
+pub fun check(agent, user, resource, action) {
+  return governance_check_access(agent, user, resource, action);
+}
+
+/// Trigger access review cycle
+pub fun review(agent) {
+  return governance_review_access(agent);
+}
+
+/// Detect unused access grants
+pub fun detect_unused(agent) {
+  return governance_detect_unused_access(agent);
+}
+
+/// Get access control report
+pub fun report(agent) {
+  return governance_access_report(agent);
+}

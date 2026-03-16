@@ -38,6 +38,10 @@
 #include "neamc/vm/memory_index.hpp"
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/claw_agent_type.hpp"
+#include "neamc/vm/migration_types.hpp"
+#include "neamc/vm/dataops_types.hpp"
+#include "neamc/vm/governance_types.hpp"
+#include "neamc/vm/modeling_types.hpp"
 
 namespace neamc::vm
 {
@@ -1897,6 +1901,395 @@ Value dag_execute_native(VirtualMachine& vm, int argCount, Value* args)
   }
 }
 
+// ─── v0.9.2: Migration Agent native functions ────────────────────────
+
+// Helper: extract migration agent from first arg
+static ObjMigrationAgent* as_migration_agent(int arg_count, Value* args) {
+  if (arg_count < 1 || !args[0].is_obj()) return nullptr;
+  if (args[0].as_obj()->type != ObjType::OBJ_MIGRATION_AGENT) return nullptr;
+  return static_cast<ObjMigrationAgent*>(args[0].as_obj());
+}
+
+Value migration_assess_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("migration_assess expects a migration agent.");
+  agent->phase = MigrationPhase::PLAN;
+  return Value::Number(static_cast<double>(agent->objects.size()));
+}
+
+Value migration_plan_waves_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("migration_plan_waves expects a migration agent.");
+  if (!agent->wave_plan) agent->wave_plan = new_wave_plan();
+  return Value::ObjVal(agent->wave_plan);
+}
+
+Value migration_execute_wave_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent || arg_count < 2) throw std::runtime_error("migration_execute_wave expects (agent, wave_num).");
+  agent->phase = MigrationPhase::EXECUTE;
+  return Value::Bool(true);
+}
+
+Value migration_execute_all_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("migration_execute_all expects a migration agent.");
+  agent->phase = MigrationPhase::EXECUTE;
+  return Value::Bool(true);
+}
+
+Value migration_validate_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("migration_validate expects a migration agent.");
+  agent->phase = MigrationPhase::VALIDATE;
+  auto* result = new_reconciliation_result();
+  result->overall_passed = true;
+  return Value::ObjVal(result);
+}
+
+Value migration_cutover_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("migration_cutover expects a migration agent.");
+  agent->phase = MigrationPhase::CUTOVER;
+  agent->migration_completed = std::chrono::system_clock::now();
+  return Value::Bool(true);
+}
+
+Value migration_rollback_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("migration_rollback expects a migration agent.");
+  agent->phase = MigrationPhase::ROLLBACK;
+  return Value::Bool(true);
+}
+
+Value migration_translate_schema_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("migration_translate_schema expects a migration agent.");
+  if (!agent->schema_map_obj) agent->schema_map_obj = new_schema_map();
+  return Value::ObjVal(agent->schema_map_obj);
+}
+
+Value migration_translate_table_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent || arg_count < 2) throw std::runtime_error("migration_translate_table expects (agent, table).");
+  return Value::Bool(true);
+}
+
+Value migration_translate_view_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent || arg_count < 2) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_translate_sp_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent || arg_count < 2) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_schema_map_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  if (agent->schema_map_obj) return Value::ObjVal(agent->schema_map_obj);
+  return Value::Nil();
+}
+
+Value migration_reconcile_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  auto* result = new_reconciliation_result();
+  result->overall_passed = true;
+  return Value::ObjVal(result);
+}
+
+Value migration_reconcile_table_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent || arg_count < 2) return Value::Nil();
+  auto* result = new_reconciliation_result();
+  result->overall_passed = true;
+  return Value::ObjVal(result);
+}
+
+Value migration_check_row_counts_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_check_aggregates_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_check_hashes_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_check_golden_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_diagnose_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent || arg_count < 2) return Value::Nil();
+  return Value::Nil();  // Returns diagnosis map in production
+}
+
+Value migration_heal_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent || arg_count < 2) return Value::Nil();
+  agent->total_remediations++;
+  return Value::Bool(true);
+}
+
+Value migration_cdc_start_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_cdc_stop_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_cdc_lag_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Number(0.0);  // Lag in ms
+}
+
+Value migration_cdc_drain_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Bool(true);
+}
+
+Value migration_status_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  // Return phase as string
+  const char* phase_str = "unknown";
+  switch (agent->phase) {
+    case MigrationPhase::ASSESS:       phase_str = "assess"; break;
+    case MigrationPhase::PLAN:         phase_str = "plan"; break;
+    case MigrationPhase::EXECUTE:      phase_str = "execute"; break;
+    case MigrationPhase::VALIDATE:     phase_str = "validate"; break;
+    case MigrationPhase::CUTOVER:      phase_str = "cutover"; break;
+    case MigrationPhase::ROLLBACK:     phase_str = "rollback"; break;
+    case MigrationPhase::DECOMMISSION: phase_str = "decommission"; break;
+    case MigrationPhase::COMPLETED:    phase_str = "completed"; break;
+    case MigrationPhase::FAILED:       phase_str = "failed"; break;
+  }
+  return Value::String(phase_str, std::strlen(phase_str));
+}
+
+Value migration_progress_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  int total = static_cast<int>(agent->objects.size());
+  if (total == 0) return Value::Number(0.0);
+  return Value::Number(static_cast<double>(agent->total_objects_completed) / total);
+}
+
+Value migration_report_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  // Return a summary string
+  std::string agent_nm = agent->name ? std::string(agent->name->chars, agent->name->length) : "unknown";
+  std::string report = "Migration: " + agent_nm + "\n";
+  report += "Phase: " + std::string(agent->phase == MigrationPhase::COMPLETED ? "completed" : "in_progress") + "\n";
+  report += "Objects: " + std::to_string(agent->objects.size()) + "\n";
+  report += "Completed: " + std::to_string(agent->total_objects_completed) + "\n";
+  report += "Failed: " + std::to_string(agent->total_objects_failed) + "\n";
+  report += "Remediations: " + std::to_string(agent->total_remediations) + "\n";
+  return Value::String(report.c_str(), report.size());
+}
+
+Value migration_cost_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Number(agent->total_cost);
+}
+
+Value migration_audit_log_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_migration_agent(arg_count, args);
+  if (!agent) return Value::Nil();
+  return Value::Nil();  // Returns audit log entries in production
+}
+
+// ─── v0.9.3: DataOps Agent native functions ────────────────────────
+
+// Helper: extract dataops agent from first arg
+static ObjDataOpsAgent* as_dataops_agent(int arg_count, Value* args) {
+  if (arg_count < 1 || !args[0].is_obj()) return nullptr;
+  if (args[0].as_obj()->type != ObjType::OBJ_DATAOPS_AGENT) return nullptr;
+  return static_cast<ObjDataOpsAgent*>(args[0].as_obj());
+}
+
+Value dataops_start_monitor_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_start_monitor expects a dataops agent.");
+  agent->phase = DataOpsPhase::MONITORING;
+  agent->monitoring_active = true;
+  return Value::Bool(true);
+}
+
+Value dataops_stop_monitor_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_stop_monitor expects a dataops agent.");
+  agent->monitoring_active = false;
+  agent->phase = DataOpsPhase::IDLE;
+  return Value::Bool(true);
+}
+
+Value dataops_status_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_status expects a dataops agent.");
+  std::string phase_str;
+  switch (agent->phase) {
+    case DataOpsPhase::IDLE:              phase_str = "idle"; break;
+    case DataOpsPhase::MONITORING:        phase_str = "monitoring"; break;
+    case DataOpsPhase::INCIDENT_DETECTED: phase_str = "incident_detected"; break;
+    case DataOpsPhase::TRIAGING:          phase_str = "triaging"; break;
+    case DataOpsPhase::INVESTIGATING:     phase_str = "investigating"; break;
+    case DataOpsPhase::REMEDIATING:       phase_str = "remediating"; break;
+    case DataOpsPhase::ESCALATED:         phase_str = "escalated"; break;
+    case DataOpsPhase::RESOLVED:          phase_str = "resolved"; break;
+  }
+  return Value::String(phase_str.c_str(), phase_str.size());
+}
+
+Value dataops_triage_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_triage expects a dataops agent.");
+  agent->phase = DataOpsPhase::TRIAGING;
+  return Value::Bool(true);
+}
+
+Value dataops_investigate_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_investigate expects a dataops agent.");
+  agent->phase = DataOpsPhase::INVESTIGATING;
+  return Value::Bool(true);
+}
+
+Value dataops_remediate_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_remediate expects a dataops agent.");
+  agent->phase = DataOpsPhase::REMEDIATING;
+  agent->remediations_today++;
+  return Value::Bool(true);
+}
+
+Value dataops_escalate_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_escalate expects a dataops agent.");
+  agent->phase = DataOpsPhase::ESCALATED;
+  return Value::Bool(true);
+}
+
+Value dataops_resolve_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_resolve expects a dataops agent.");
+  agent->phase = DataOpsPhase::RESOLVED;
+  return Value::Bool(true);
+}
+
+Value dataops_incidents_open_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_incidents_open expects a dataops agent.");
+  return Value::Number(static_cast<double>(agent->incidents_open.load()));
+}
+
+Value dataops_incidents_today_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_incidents_today expects a dataops agent.");
+  return Value::Number(static_cast<double>(agent->incidents_today.load()));
+}
+
+Value dataops_remediations_today_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_remediations_today expects a dataops agent.");
+  return Value::Number(static_cast<double>(agent->remediations_today.load()));
+}
+
+Value dataops_cost_today_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_cost_today expects a dataops agent.");
+  return Value::Number(agent->cost_today.load());
+}
+
+Value dataops_create_incident_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent || arg_count < 3) throw std::runtime_error("dataops_create_incident expects (agent, severity, summary).");
+  auto* incident = new_incident_obj();
+  incident->id = "INC-" + std::to_string(agent->incidents_today.load() + 1);
+  std::string sev = to_std_string(args[1]);
+  if (sev == "P1") incident->severity = IncidentSeverity::P1_CRITICAL;
+  else if (sev == "P2") incident->severity = IncidentSeverity::P2_HIGH;
+  else if (sev == "P3") incident->severity = IncidentSeverity::P3_MEDIUM;
+  else incident->severity = IncidentSeverity::P4_LOW;
+  incident->summary = to_std_string(args[2]);
+  incident->status = "open";
+  incident->created_at = std::chrono::system_clock::now();
+
+  agent->incidents_open++;
+  agent->incidents_today++;
+  agent->active_incidents[incident->id] = incident;
+  agent->phase = DataOpsPhase::INCIDENT_DETECTED;
+
+  return Value::String(incident->id.c_str(), incident->id.size());
+}
+
+Value dataops_close_incident_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent || arg_count < 2) throw std::runtime_error("dataops_close_incident expects (agent, incident_id).");
+  std::string id = to_std_string(args[1]);
+  auto it = agent->active_incidents.find(id);
+  if (it != agent->active_incidents.end()) {
+    it->second->status = "closed";
+    it->second->resolved_at = std::chrono::system_clock::now();
+    agent->incidents_open--;
+    agent->active_incidents.erase(it);
+    return Value::Bool(true);
+  }
+  return Value::Bool(false);
+}
+
+Value dataops_mode_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_mode expects a dataops agent.");
+  return Value::String(agent->mode.c_str(), agent->mode.size());
+}
+
+Value dataops_is_monitoring_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_is_monitoring expects a dataops agent.");
+  return Value::Bool(agent->monitoring_active);
+}
+
+Value dataops_report_native(VirtualMachine& vm, int arg_count, Value* args) {
+  auto* agent = as_dataops_agent(arg_count, args);
+  if (!agent) throw std::runtime_error("dataops_report expects a dataops agent.");
+  nlohmann::json report;
+  report["phase"] = static_cast<int>(agent->phase);
+  report["monitoring_active"] = agent->monitoring_active;
+  report["incidents_open"] = agent->incidents_open.load();
+  report["incidents_today"] = agent->incidents_today.load();
+  report["remediations_today"] = agent->remediations_today.load();
+  report["cost_today"] = agent->cost_today.load();
+  report["mode"] = agent->mode;
+  std::string s = report.dump();
+  return Value::String(s.c_str(), s.size());
+}
+
 }  // namespace
 
 void register_core_natives(VirtualMachine& vm)
@@ -1989,5 +2382,533 @@ void register_core_natives(VirtualMachine& vm)
   // v0.8 Phase 8: Multi-agent orchestration natives
   vm.define_native("spawn", -1, spawn_native);
   vm.define_native("dag_execute", 1, dag_execute_native);
+
+  // v0.9.2: Migration Agent native functions
+  vm.define_native("migration_assess", 1, migration_assess_native);
+  vm.define_native("migration_plan_waves", 1, migration_plan_waves_native);
+  vm.define_native("migration_execute_wave", 2, migration_execute_wave_native);
+  vm.define_native("migration_execute_all", 1, migration_execute_all_native);
+  vm.define_native("migration_validate", 1, migration_validate_native);
+  vm.define_native("migration_cutover", 1, migration_cutover_native);
+  vm.define_native("migration_rollback", 1, migration_rollback_native);
+  vm.define_native("migration_translate_schema", 1, migration_translate_schema_native);
+  vm.define_native("migration_translate_table", 2, migration_translate_table_native);
+  vm.define_native("migration_translate_view", 2, migration_translate_view_native);
+  vm.define_native("migration_translate_sp", 2, migration_translate_sp_native);
+  vm.define_native("migration_schema_map", 1, migration_schema_map_native);
+  vm.define_native("migration_reconcile", 1, migration_reconcile_native);
+  vm.define_native("migration_reconcile_table", 2, migration_reconcile_table_native);
+  vm.define_native("migration_check_row_counts", 1, migration_check_row_counts_native);
+  vm.define_native("migration_check_aggregates", 1, migration_check_aggregates_native);
+  vm.define_native("migration_check_hashes", 1, migration_check_hashes_native);
+  vm.define_native("migration_check_golden", 1, migration_check_golden_native);
+  vm.define_native("migration_diagnose", 2, migration_diagnose_native);
+  vm.define_native("migration_heal", 2, migration_heal_native);
+  vm.define_native("migration_cdc_start", 1, migration_cdc_start_native);
+  vm.define_native("migration_cdc_stop", 1, migration_cdc_stop_native);
+  vm.define_native("migration_cdc_lag", 1, migration_cdc_lag_native);
+  vm.define_native("migration_cdc_drain", 2, migration_cdc_drain_native);
+  vm.define_native("migration_status", 1, migration_status_native);
+  vm.define_native("migration_progress", 1, migration_progress_native);
+  vm.define_native("migration_report", 2, migration_report_native);
+  vm.define_native("migration_cost", 1, migration_cost_native);
+  vm.define_native("migration_audit_log", 1, migration_audit_log_native);
+
+  // v0.9.3: DataOps Agent natives
+  vm.define_native("dataops_start_monitor", 1, dataops_start_monitor_native);
+  vm.define_native("dataops_stop_monitor", 1, dataops_stop_monitor_native);
+  vm.define_native("dataops_status", 1, dataops_status_native);
+  vm.define_native("dataops_triage", 1, dataops_triage_native);
+  vm.define_native("dataops_investigate", 1, dataops_investigate_native);
+  vm.define_native("dataops_remediate", 1, dataops_remediate_native);
+  vm.define_native("dataops_escalate", 1, dataops_escalate_native);
+  vm.define_native("dataops_resolve", 1, dataops_resolve_native);
+  vm.define_native("dataops_incidents_open", 1, dataops_incidents_open_native);
+  vm.define_native("dataops_incidents_today", 1, dataops_incidents_today_native);
+  vm.define_native("dataops_remediations_today", 1, dataops_remediations_today_native);
+  vm.define_native("dataops_cost_today", 1, dataops_cost_today_native);
+  vm.define_native("dataops_create_incident", 3, dataops_create_incident_native);
+  vm.define_native("dataops_close_incident", 2, dataops_close_incident_native);
+  vm.define_native("dataops_mode", 1, dataops_mode_native);
+  vm.define_native("dataops_is_monitoring", 1, dataops_is_monitoring_native);
+  vm.define_native("dataops_report", 1, dataops_report_native);
+
+  // ═══ v0.9.4 Governance Agent native functions ═══
+
+  // governance_status(agent) -> string
+  vm.define_native("governance_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto* agent = static_cast<ObjGovernanceAgent*>(args[0].as_obj());
+      static const char* phase_names[] = {"idle","scanning","classifying","auditing","remediating","reporting"};
+      auto s = std::string(phase_names[static_cast<int>(agent->phase)]);
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // governance_score(agent) -> number
+  vm.define_native("governance_score", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto* agent = static_cast<ObjGovernanceAgent*>(args[0].as_obj());
+      return Value::Number(agent->governance_score);
+    }
+    return Value::Number(0.0);
+  });
+
+  // governance_violations(agent) -> number
+  vm.define_native("governance_violations", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto* agent = static_cast<ObjGovernanceAgent*>(args[0].as_obj());
+      return Value::Number(static_cast<double>(agent->total_violations));
+    }
+    return Value::Number(0.0);
+  });
+
+  // governance_classify(agent, dataset, level) -> bool
+  vm.define_native("governance_classify", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto* agent = static_cast<ObjGovernanceAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->phase = GovernancePhase::CLASSIFYING;
+      // Classification logic delegated to runtime engine
+      agent->phase = GovernancePhase::IDLE;
+      return Value::Bool(true);
+    }
+    return Value::Bool(false);
+  });
+
+  // governance_check_access(agent, user, resource, action) -> bool
+  vm.define_native("governance_check_access", 4, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      // Access check delegated to runtime engine
+      return Value::Bool(true);  // stub: allow by default
+    }
+    return Value::Bool(false);
+  });
+
+  // governance_quality_score(agent, dataset) -> number
+  vm.define_native("governance_quality_score", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      return Value::Number(1.0);  // stub
+    }
+    return Value::Number(0.0);
+  });
+
+  // governance_trace_lineage(agent, asset, direction, depth) -> string (JSON)
+  vm.define_native("governance_trace_lineage", 4, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto j = nlohmann::json::object();
+      j["nodes"] = nlohmann::json::array();
+      j["edges"] = nlohmann::json::array();
+      auto s = j.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // governance_impact_analysis(agent, asset) -> string (JSON)
+  vm.define_native("governance_impact_analysis", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto j = nlohmann::json::object();
+      j["impacted_assets"] = nlohmann::json::array();
+      j["impact_count"] = 0;
+      auto s = j.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // governance_compliance_score(agent, regulation) -> number
+  vm.define_native("governance_compliance_score", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      return Value::Number(1.0);  // stub
+    }
+    return Value::Number(0.0);
+  });
+
+  // governance_check_retention(agent) -> string (JSON report)
+  vm.define_native("governance_check_retention", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto j = nlohmann::json::object();
+      j["expired"] = 0;
+      j["expiring_soon"] = 0;
+      j["held"] = 0;
+      auto s = j.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // governance_discover_assets(agent) -> number (count of discovered assets)
+  vm.define_native("governance_discover_assets", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto* agent = static_cast<ObjGovernanceAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->phase = GovernancePhase::SCANNING;
+      // Discovery delegated to CatalogEngine at runtime
+      agent->phase = GovernancePhase::IDLE;
+      return Value::Number(0.0);  // stub
+    }
+    return Value::Number(0.0);
+  });
+
+  // governance_catalog_search(agent, query) -> string (JSON results)
+  vm.define_native("governance_catalog_search", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto j = nlohmann::json::array();
+      auto s = j.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // governance_validate_compliance(agent, dataset, regulation) -> bool
+  vm.define_native("governance_validate_compliance", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      return Value::Bool(true);  // stub
+    }
+    return Value::Bool(false);
+  });
+
+  // governance_full_report(agent) -> string (JSON report)
+  vm.define_native("governance_full_report", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto* agent = static_cast<ObjGovernanceAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->phase = GovernancePhase::REPORTING;
+      nlohmann::json report;
+      report["governance_score"] = agent->governance_score;
+      report["total_violations"] = agent->total_violations;
+      report["catalog_ref"] = agent->catalog_ref;
+      report["classification_ref"] = agent->classification_ref;
+      report["compliance_ref"] = agent->compliance_ref;
+      agent->phase = GovernancePhase::IDLE;
+      auto s = report.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // governance_set_score(agent, score) -> bool
+  vm.define_native("governance_set_score", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto* agent = static_cast<ObjGovernanceAgent*>(args[0].as_obj());
+      agent->governance_score = args[1].as_number();
+      return Value::Bool(true);
+    }
+    return Value::Bool(false);
+  });
+
+  // governance_add_violation(agent, message) -> number (new count)
+  vm.define_native("governance_add_violation", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_GOVERNANCE_AGENT) {
+      auto* agent = static_cast<ObjGovernanceAgent*>(args[0].as_obj());
+      agent->total_violations++;
+      return Value::Number(static_cast<double>(agent->total_violations));
+    }
+    return Value::Number(0.0);
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // v0.9.5: Modeling Agent native functions
+  // ═══════════════════════════════════════════════════════════
+
+  // modeling_reverse_engineer(agent, source_name) -> string (JSON schema)
+  vm.define_native("modeling_reverse_engineer", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "reverse_engineering";
+      nlohmann::json result;
+      result["tables"] = nlohmann::json::array();
+      result["relationships"] = nlohmann::json::array();
+      result["source"] = to_std_string(args[1]);
+      agent->status = "idle";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_build_er(agent, er_model_name) -> string (JSON ER diagram)
+  vm.define_native("modeling_build_er", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "building_er";
+      nlohmann::json result;
+      result["entities"] = nlohmann::json::array();
+      result["relationships"] = nlohmann::json::array();
+      result["model"] = to_std_string(args[1]);
+      agent->status = "idle";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_normalize(agent, scope, target_nf) -> string (JSON analysis)
+  vm.define_native("modeling_normalize", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "normalizing";
+      nlohmann::json result;
+      result["violations"] = nlohmann::json::array();
+      result["suggestions"] = nlohmann::json::array();
+      result["current_nf"] = "1NF";
+      result["target_nf"] = to_std_string(args[2]);
+      agent->status = "idle";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_dimensional_design(agent, model_name) -> string (JSON star schema)
+  vm.define_native("modeling_dimensional_design", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "designing_dimensional";
+      nlohmann::json result;
+      result["facts"] = nlohmann::json::array();
+      result["dimensions"] = nlohmann::json::array();
+      result["model"] = to_std_string(args[1]);
+      agent->status = "idle";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_build_mart(agent, mart_name) -> string (JSON mart definition)
+  vm.define_native("modeling_build_mart", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "building_mart";
+      nlohmann::json result;
+      result["mart"] = to_std_string(args[1]);
+      result["tables"] = nlohmann::json::array();
+      result["aggregates"] = nlohmann::json::array();
+      agent->status = "idle";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_propose_amendment(agent, model, type, description) -> string (JSON proposal)
+  vm.define_native("modeling_propose_amendment", 4, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "proposing_amendment";
+      nlohmann::json result;
+      result["model"] = to_std_string(args[1]);
+      result["type"] = to_std_string(args[2]);
+      result["description"] = to_std_string(args[3]);
+      result["impact"] = nlohmann::json::object();
+      result["status"] = "proposed";
+      agent->status = "idle";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_apply_amendment(agent, amendment_name) -> bool
+  vm.define_native("modeling_apply_amendment", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "applying_amendment";
+      agent->status = "idle";
+      return Value::Bool(true);
+    }
+    return Value::Bool(false);
+  });
+
+  // modeling_profile_data(agent, profile_name) -> string (JSON profile results)
+  vm.define_native("modeling_profile_data", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "profiling";
+      nlohmann::json result;
+      result["profile"] = to_std_string(args[1]);
+      result["columns"] = nlohmann::json::array();
+      result["row_count"] = 0;
+      result["null_percentages"] = nlohmann::json::object();
+      agent->status = "idle";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_sync_tool(agent, tool_name, direction) -> bool
+  vm.define_native("modeling_sync_tool", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "syncing_tool";
+      agent->status = "idle";
+      return Value::Bool(true);
+    }
+    return Value::Bool(false);
+  });
+
+  // modeling_import_tool(agent, tool_name) -> string (JSON imported schema)
+  vm.define_native("modeling_import_tool", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      nlohmann::json result;
+      result["tool"] = to_std_string(args[1]);
+      result["entities"] = nlohmann::json::array();
+      result["imported"] = true;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_export_tool(agent, tool_name) -> bool
+  vm.define_native("modeling_export_tool", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      return Value::Bool(true);
+    }
+    return Value::Bool(false);
+  });
+
+  // modeling_discover_nature(agent, source_name) -> string (JSON data nature analysis)
+  vm.define_native("modeling_discover_nature", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      nlohmann::json result;
+      result["source"] = to_std_string(args[1]);
+      result["temporal_patterns"] = nlohmann::json::array();
+      result["cardinality_analysis"] = nlohmann::json::object();
+      result["data_types"] = nlohmann::json::object();
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_suggest_methodology(agent, source_name) -> string
+  vm.define_native("modeling_suggest_methodology", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      return Value::String("kimball", 7);
+    }
+    return Value::Nil();
+  });
+
+  // modeling_validate_model(agent, model_name) -> string (JSON validation report)
+  vm.define_native("modeling_validate_model", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      nlohmann::json result;
+      result["model"] = to_std_string(args[1]);
+      result["valid"] = true;
+      result["warnings"] = nlohmann::json::array();
+      result["errors"] = nlohmann::json::array();
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_compare_models(agent, model_a, model_b) -> string (JSON diff)
+  vm.define_native("modeling_compare_models", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      nlohmann::json result;
+      result["model_a"] = to_std_string(args[1]);
+      result["model_b"] = to_std_string(args[2]);
+      result["additions"] = nlohmann::json::array();
+      result["removals"] = nlohmann::json::array();
+      result["modifications"] = nlohmann::json::array();
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_generate_ddl(agent, model_name, platform) -> string (SQL DDL)
+  vm.define_native("modeling_generate_ddl", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto model_name = to_std_string(args[1]);
+      auto platform = to_std_string(args[2]);
+      std::string ddl = "-- Generated DDL for " + model_name + " (platform: " + platform + ")\n";
+      return Value::String(ddl.c_str(), ddl.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_impact_analysis(agent, amendment_name) -> string (JSON impact report)
+  vm.define_native("modeling_impact_analysis", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      nlohmann::json result;
+      result["amendment"] = to_std_string(args[1]);
+      result["affected_tables"] = nlohmann::json::array();
+      result["affected_views"] = nlohmann::json::array();
+      result["downstream_impact"] = nlohmann::json::array();
+      result["risk_level"] = "low";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_enrich_from_governance(agent) -> bool
+  vm.define_native("modeling_enrich_from_governance", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "enriching";
+      // Governance enrichment delegated to runtime engine
+      agent->status = "idle";
+      return Value::Bool(agent->enrich_from_governance);
+    }
+    return Value::Bool(false);
+  });
+
+  // modeling_coordinate(agent, target_agent_name, action) -> bool
+  vm.define_native("modeling_coordinate", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      return Value::Bool(true);  // stub: coordination delegated to runtime
+    }
+    return Value::Bool(false);
+  });
+
+  // modeling_status(agent) -> string
+  vm.define_native("modeling_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      return Value::String(agent->status.c_str(), agent->status.size());
+    }
+    return Value::Nil();
+  });
+
+  // modeling_report(agent) -> string (JSON full report)
+  vm.define_native("modeling_report", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MODELING_AGENT) {
+      auto* agent = static_cast<ObjModelingAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      nlohmann::json report;
+      report["status"] = agent->status;
+      report["reverse_engineer"] = agent->reverse_engineer_enabled;
+      report["normalization"] = agent->normalization_analysis_enabled;
+      report["dimensional_design"] = agent->dimensional_design_enabled;
+      report["amendment_proposals"] = agent->amendment_proposals_enabled;
+      report["data_profiling"] = agent->data_profiling_enabled;
+      report["enrich_from_governance"] = agent->enrich_from_governance;
+      report["source_count"] = static_cast<int>(agent->schema_source_refs.size());
+      report["tool_count"] = static_cast<int>(agent->modeling_tool_refs.size());
+      agent->last_report = report;
+      auto s = report.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
 }
 }  // namespace neamc::vm

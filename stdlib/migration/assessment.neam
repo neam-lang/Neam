@@ -1,0 +1,32 @@
+//
+// Neam v0.9.2 — Migration Assessment Helpers
+//
+// Functions for source database assessment and profiling.
+//
+
+module std.migration.assessment
+
+// Run assessment and return results
+pub fun run(agent) {
+    return migration_assess(agent)
+}
+
+// Get schema map for the agent
+pub fun schema_map(agent) {
+    return migration_schema_map(agent)
+}
+
+// Translate a single table
+pub fun translate_table(agent, table) {
+    return migration_translate_table(agent, table)
+}
+
+// Translate a single view
+pub fun translate_view(agent, view) {
+    return migration_translate_view(agent, view)
+}
+
+// Translate a stored procedure
+pub fun translate_sp(agent, sp) {
+    return migration_translate_sp(agent, sp)
+}
