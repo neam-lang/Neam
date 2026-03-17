@@ -2639,6 +2639,278 @@ struct ModelingAgentDecl
   std::vector<std::string> handoffs;
 };
 
+// ═══════════════════════════════════════════════════════════════
+// v0.9.6 Analyst Agent AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+// --- Analyst Enums ---
+enum class SQLPlatform {
+  SNOWFLAKE, BIGQUERY, REDSHIFT, DATABRICKS,
+  POSTGRES, MYSQL, ORACLE, SQLSERVER,
+  DUCKDB, TRINO, SPARK
+};
+
+enum class OutputFormatType {
+  EXCEL, PDF, HTML, CSV, JSON, MARKDOWN, SLACK, TABLE
+};
+
+enum class ChartType {
+  BAR, LINE, PIE, SCATTER, AREA,
+  COMBO, TREEMAP, HEATMAP, HISTOGRAM
+};
+
+enum class AnalysisType {
+  TREND, OUTLIER, CORRELATION, SEGMENTATION,
+  YOY, FORECAST, DRILL_DOWN, PROFILING
+};
+
+// --- SQLConnectionDecl ---
+struct SQLConnectionDecl {
+  Visibility visibility;
+  std::string name;
+  std::string platform_str;  // "snowflake", "bigquery", etc.
+  std::string connection;
+  std::string credentials;
+  std::string warehouse;
+  std::string database;
+  std::string schema;
+  std::string project;
+  std::string dataset;
+  std::string catalog;
+  std::string cluster;
+  int timeout{300};
+  int max_rows{10000};
+  double cost_limit{0.0};
+  std::string queue;
+  bool prefer_materialized_views{true};
+  bool use_result_cache{true};
+  bool partition_pruning{true};
+  std::string schema_source;
+  std::string semantic_layer;
+};
+
+// --- DomainContextDecl ---
+struct DomainContextDecl {
+  Visibility visibility;
+  std::string name;
+  std::vector<std::string> models;
+  std::vector<std::string> dimensional_models;
+  std::vector<std::string> marts;
+  std::vector<std::string> schema_sources;
+  std::string glossary;
+  std::vector<std::string> data_products;
+  std::string classification;
+  std::string access_policy;
+  std::vector<std::string> semantic_layers;
+  bool query_history{false};
+  bool feedback_loop{false};
+};
+
+// --- QueryTemplateDecl ---
+struct QueryTemplateDecl {
+  Visibility visibility;
+  std::string name;
+  std::string description;
+  std::string category;
+  std::string params_json;
+  std::string sql;
+  std::string default_format;
+  std::string chart_json;
+  std::string classification;
+  bool audit{true};
+};
+
+// --- QueryOptimizerDecl ---
+struct QueryOptimizerDecl {
+  Visibility visibility;
+  std::string name;
+  std::string cost_model;
+  double max_cost_per_query{0.0};
+  double max_scan_gb{0.0};
+  int max_execution_time{300};
+  std::string rules_json;
+  bool explain_optimizations{true};
+  bool show_cost_comparison{true};
+};
+
+// --- ExecutionPolicyDecl ---
+struct ExecutionPolicyDecl {
+  Visibility visibility;
+  std::string name;
+  int max_rows{10000};
+  double max_cost{0.0};
+  int timeout{300};
+  bool read_only{true};
+  bool apply_masking{true};
+  bool apply_row_level_security{true};
+  bool audit_all_queries{true};
+  bool retry_on_timeout{false};
+  bool retry_with_smaller_warehouse{false};
+  bool cache_results{true};
+  std::string cache_ttl;
+  std::string cache_key;
+};
+
+// --- OutputFormatDecl ---
+struct OutputFormatDecl {
+  Visibility visibility;
+  std::string name;
+  std::string type_str;  // "excel", "pdf", "html", etc.
+  std::string excel_json;
+  std::string pdf_json;
+  std::string html_json;
+  std::string csv_json;
+  std::string json_config_json;
+  std::string slack_json;
+};
+
+// --- QueryLibraryDecl ---
+struct QueryLibraryDecl {
+  Visibility visibility;
+  std::string name;
+  std::string storage;
+  std::string path;
+  std::vector<std::string> categories;
+  bool tags{false};
+  std::string library_visibility;
+  bool approval_required{false};
+  bool track_usage{false};
+  bool track_performance{false};
+  bool suggest_similar{false};
+  bool auto_optimize{false};
+};
+
+// --- AnalysisScheduleDecl ---
+struct AnalysisScheduleDecl {
+  Visibility visibility;
+  std::string name;
+  std::string query;
+  std::string cron;
+  std::string connection;
+  std::string format;
+  std::string output_path;
+  std::string delivery_json;
+  bool audit{true};
+  std::string budget;
+};
+
+// --- AnalystAgentDecl ---
+struct AnalystAgentDecl {
+  Visibility visibility;
+  std::string name;
+  std::optional<std::string> provider;
+  std::optional<std::string> model;
+  std::optional<std::string> system_prompt;
+  double temperature{0.2};
+  std::optional<std::string> endpoint;
+  std::optional<std::string> api_key_env;
+  std::vector<std::string> connections;
+  std::string domain_context;
+  std::vector<std::string> models;
+  std::vector<std::string> dimensional_models;
+  std::vector<std::string> marts;
+  std::string glossary;
+  std::vector<std::string> semantic_layers;
+  std::string governance;
+  std::string classification;
+  std::string access_policy;
+  std::string optimizer;
+  std::string execution_policy;
+  std::string query_library;
+  std::string default_output;
+  std::vector<std::string> output_formats;
+  std::vector<std::string> skills;
+  std::vector<std::string> extern_skills;
+  std::vector<std::string> coordinates_with;
+  std::vector<std::string> handoffs;
+  std::optional<std::string> role;
+  std::optional<std::string> purpose;
+  std::optional<std::string> autonomy;
+  std::optional<std::string> budget;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.7 Data Pipeline Deployment AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+enum class DeployStrategy {
+  ROLLING,
+  BLUE_GREEN,
+  CANARY
+};
+
+enum class VersioningScheme {
+  SEMVER,
+  TIMESTAMP,
+  GIT_SHA
+};
+
+struct DeployTargetDecl {
+  Visibility visibility;
+  std::string name;
+  std::string environment;
+  std::string connection;
+  std::string namespace_name;
+  std::string region;
+  std::string tags_json;
+  std::string variables_json;
+  bool frozen = false;
+  std::string freeze_reason;
+};
+
+struct PromotionRuleDecl {
+  Visibility visibility;
+  std::string name;
+  std::string from_env;
+  std::string to_env;
+  bool require_tests = true;
+  bool require_approval = false;
+  std::vector<std::string> approvers;
+  bool auto_promote = false;
+  std::string cooldown;
+  std::string gate_checks_json;
+};
+
+struct RollbackPolicyDecl {
+  Visibility visibility;
+  std::string name;
+  std::string strategy;
+  bool keep_data = true;
+  bool notify_dataops = true;
+  std::string max_rollback_window;
+  bool reconciliation = true;
+  std::string pre_rollback_json;
+  std::string notifications_json;
+};
+
+struct ArtifactRegistryDecl {
+  Visibility visibility;
+  std::string name;
+  std::string storage;
+  std::string path;
+  std::string versioning;
+  std::string retention;
+  bool sign_artifacts = false;
+  std::string checksum;
+  bool immutable = true;
+};
+
+struct DeployConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string target;
+  std::string strategy;
+  bool approval_gate = false;
+  std::string pipeline_ref;
+  std::string pre_deploy_json;
+  std::string post_deploy_json;
+  std::string notifications_json;
+  std::string schedule;
+  bool auto_rollback = true;
+  std::string rollback_policy;
+  std::string artifact_registry;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -2691,7 +2963,12 @@ struct Statement
                    DimensionalModelDecl, DataMartDecl_v095,
                    NormalizationAnalysisDecl, AmendmentConfigDecl,
                    AmendmentDecl, DataProfileDecl, ModelingToolDecl,
-                   ModelingAgentDecl>;
+                   ModelingAgentDecl,
+                   SQLConnectionDecl, DomainContextDecl, QueryTemplateDecl,
+                   QueryOptimizerDecl, ExecutionPolicyDecl, OutputFormatDecl,
+                   QueryLibraryDecl, AnalysisScheduleDecl, AnalystAgentDecl,
+                   DeployTargetDecl, PromotionRuleDecl, RollbackPolicyDecl,
+                   ArtifactRegistryDecl, DeployConfigDecl>;
   SourceSpan span;
   Variant node;
 };

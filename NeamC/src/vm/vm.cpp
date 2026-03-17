@@ -39,6 +39,8 @@
 #include "neamc/vm/dataops_types.hpp"
 #include "neamc/vm/governance_types.hpp"
 #include "neamc/vm/modeling_types.hpp"
+#include "neamc/vm/analyst_types.hpp"
+#include "neamc/vm/deploy_types.hpp"
 #include "neamc/vm/forge_loop.hpp"
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/context_builder.hpp"
@@ -9779,6 +9781,542 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           extension.agent_type = "modeling";
           agent_extensions_[agent_name] = std::move(extension);
         }
+        break;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // v0.9.6 Analyst Agent opcode handlers
+      // ═══════════════════════════════════════════════════════════════
+
+      case OpCode::OP_DEFINE_SQL_CONNECTION:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* conn = new_sql_connection();
+        if (fields.count("name")) conn->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("platform")) conn->platform = copy_string(fields["platform"].c_str(), fields["platform"].size());
+        if (fields.count("connection")) conn->connection = copy_string(fields["connection"].c_str(), fields["connection"].size());
+        if (fields.count("credentials")) conn->credentials = copy_string(fields["credentials"].c_str(), fields["credentials"].size());
+        if (fields.count("warehouse")) conn->warehouse = copy_string(fields["warehouse"].c_str(), fields["warehouse"].size());
+        if (fields.count("database")) conn->database = copy_string(fields["database"].c_str(), fields["database"].size());
+        if (fields.count("schema")) conn->schema = copy_string(fields["schema"].c_str(), fields["schema"].size());
+        if (fields.count("project")) conn->project = copy_string(fields["project"].c_str(), fields["project"].size());
+        if (fields.count("dataset")) conn->dataset = copy_string(fields["dataset"].c_str(), fields["dataset"].size());
+        if (fields.count("catalog")) conn->catalog = copy_string(fields["catalog"].c_str(), fields["catalog"].size());
+        if (fields.count("cluster")) conn->cluster = copy_string(fields["cluster"].c_str(), fields["cluster"].size());
+        if (fields.count("timeout")) conn->timeout = std::stoi(fields["timeout"]);
+        if (fields.count("max_rows")) conn->max_rows = std::stoi(fields["max_rows"]);
+        if (fields.count("cost_limit")) conn->cost_limit = std::stod(fields["cost_limit"]);
+        if (fields.count("queue")) conn->queue = copy_string(fields["queue"].c_str(), fields["queue"].size());
+        if (fields.count("prefer_materialized_views")) conn->prefer_materialized_views = (fields["prefer_materialized_views"] != "false");
+        if (fields.count("use_result_cache")) conn->use_result_cache = (fields["use_result_cache"] != "false");
+        if (fields.count("partition_pruning")) conn->partition_pruning = (fields["partition_pruning"] != "false");
+        if (fields.count("schema_source")) conn->schema_source = copy_string(fields["schema_source"].c_str(), fields["schema_source"].size());
+        if (fields.count("semantic_layer")) conn->semantic_layer = copy_string(fields["semantic_layer"].c_str(), fields["semantic_layer"].size());
+
+        if (conn->name) {
+          globals_.set(conn->name, Value::ObjVal(reinterpret_cast<Obj*>(conn)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_DOMAIN_CONTEXT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* ctx = new_domain_context();
+        if (fields.count("name")) ctx->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("glossary")) ctx->glossary = copy_string(fields["glossary"].c_str(), fields["glossary"].size());
+        if (fields.count("classification")) ctx->classification = copy_string(fields["classification"].c_str(), fields["classification"].size());
+        if (fields.count("access_policy")) ctx->access_policy = copy_string(fields["access_policy"].c_str(), fields["access_policy"].size());
+        if (fields.count("query_history")) ctx->query_history = (fields["query_history"] == "true");
+        if (fields.count("feedback_loop")) ctx->feedback_loop = (fields["feedback_loop"] == "true");
+
+        auto split_to_objstr = [&](const std::string& s) {
+          std::vector<ObjString*> v;
+          std::istringstream iss(s); std::string item;
+          while (std::getline(iss, item, ',')) v.push_back(copy_string(item.c_str(), item.size()));
+          return v;
+        };
+        if (fields.count("models")) ctx->model_refs = split_to_objstr(fields["models"]);
+        if (fields.count("dimensional_models")) ctx->dimensional_model_refs = split_to_objstr(fields["dimensional_models"]);
+        if (fields.count("marts")) ctx->mart_refs = split_to_objstr(fields["marts"]);
+        if (fields.count("schema_sources")) ctx->schema_source_refs = split_to_objstr(fields["schema_sources"]);
+        if (fields.count("data_products")) ctx->data_product_refs = split_to_objstr(fields["data_products"]);
+        if (fields.count("semantic_layers")) ctx->semantic_layer_refs = split_to_objstr(fields["semantic_layers"]);
+
+        if (ctx->name) {
+          globals_.set(ctx->name, Value::ObjVal(reinterpret_cast<Obj*>(ctx)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_QUERY_TEMPLATE:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* tmpl = new_query_template();
+        if (fields.count("name")) tmpl->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("description")) tmpl->description = copy_string(fields["description"].c_str(), fields["description"].size());
+        if (fields.count("category")) tmpl->category = copy_string(fields["category"].c_str(), fields["category"].size());
+        if (fields.count("params")) tmpl->params_json = copy_string(fields["params"].c_str(), fields["params"].size());
+        if (fields.count("sql")) tmpl->sql = copy_string(fields["sql"].c_str(), fields["sql"].size());
+        if (fields.count("default_format")) tmpl->default_format = copy_string(fields["default_format"].c_str(), fields["default_format"].size());
+        if (fields.count("chart")) tmpl->chart_json = copy_string(fields["chart"].c_str(), fields["chart"].size());
+        if (fields.count("classification")) tmpl->classification = copy_string(fields["classification"].c_str(), fields["classification"].size());
+        if (fields.count("audit")) tmpl->audit = (fields["audit"] != "false");
+
+        if (tmpl->name) {
+          globals_.set(tmpl->name, Value::ObjVal(reinterpret_cast<Obj*>(tmpl)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_QUERY_OPTIMIZER:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* opt = new_query_optimizer();
+        if (fields.count("name")) opt->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("cost_model")) opt->cost_model = copy_string(fields["cost_model"].c_str(), fields["cost_model"].size());
+        if (fields.count("max_cost_per_query")) opt->max_cost_per_query = std::stod(fields["max_cost_per_query"]);
+        if (fields.count("max_scan_gb")) opt->max_scan_gb = std::stod(fields["max_scan_gb"]);
+        if (fields.count("max_execution_time")) opt->max_execution_time = std::stoi(fields["max_execution_time"]);
+        if (fields.count("rules")) opt->rules_json = copy_string(fields["rules"].c_str(), fields["rules"].size());
+        if (fields.count("explain_optimizations")) opt->explain_optimizations = (fields["explain_optimizations"] != "false");
+        if (fields.count("show_cost_comparison")) opt->show_cost_comparison = (fields["show_cost_comparison"] != "false");
+
+        if (opt->name) {
+          globals_.set(opt->name, Value::ObjVal(reinterpret_cast<Obj*>(opt)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_EXECUTION_POLICY:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* pol = new_execution_policy();
+        if (fields.count("name")) pol->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("max_rows")) pol->max_rows = std::stoi(fields["max_rows"]);
+        if (fields.count("max_cost")) pol->max_cost = std::stod(fields["max_cost"]);
+        if (fields.count("timeout")) pol->timeout = std::stoi(fields["timeout"]);
+        if (fields.count("read_only")) pol->read_only = (fields["read_only"] != "false");
+        if (fields.count("apply_masking")) pol->apply_masking = (fields["apply_masking"] != "false");
+        if (fields.count("apply_row_level_security")) pol->apply_row_level_security = (fields["apply_row_level_security"] != "false");
+        if (fields.count("audit_all_queries")) pol->audit_all_queries = (fields["audit_all_queries"] != "false");
+        if (fields.count("retry_on_timeout")) pol->retry_on_timeout = (fields["retry_on_timeout"] == "true");
+        if (fields.count("retry_with_smaller_warehouse")) pol->retry_with_smaller_warehouse = (fields["retry_with_smaller_warehouse"] == "true");
+        if (fields.count("cache_results")) pol->cache_results = (fields["cache_results"] != "false");
+        if (fields.count("cache_ttl")) pol->cache_ttl = copy_string(fields["cache_ttl"].c_str(), fields["cache_ttl"].size());
+        if (fields.count("cache_key")) pol->cache_key = copy_string(fields["cache_key"].c_str(), fields["cache_key"].size());
+
+        if (pol->name) {
+          globals_.set(pol->name, Value::ObjVal(reinterpret_cast<Obj*>(pol)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_OUTPUT_FORMAT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* fmt = new_output_format();
+        if (fields.count("name")) fmt->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("type")) fmt->format_type = copy_string(fields["type"].c_str(), fields["type"].size());
+        if (fields.count("excel")) fmt->excel_json = copy_string(fields["excel"].c_str(), fields["excel"].size());
+        if (fields.count("pdf")) fmt->pdf_json = copy_string(fields["pdf"].c_str(), fields["pdf"].size());
+        if (fields.count("html")) fmt->html_json = copy_string(fields["html"].c_str(), fields["html"].size());
+        if (fields.count("csv")) fmt->csv_json = copy_string(fields["csv"].c_str(), fields["csv"].size());
+        if (fields.count("json_config")) fmt->json_config_json = copy_string(fields["json_config"].c_str(), fields["json_config"].size());
+        if (fields.count("slack")) fmt->slack_json = copy_string(fields["slack"].c_str(), fields["slack"].size());
+
+        if (fmt->name) {
+          globals_.set(fmt->name, Value::ObjVal(reinterpret_cast<Obj*>(fmt)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_QUERY_LIBRARY:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* lib = new_query_library();
+        if (fields.count("name")) lib->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("storage")) lib->storage = copy_string(fields["storage"].c_str(), fields["storage"].size());
+        if (fields.count("path")) lib->path = copy_string(fields["path"].c_str(), fields["path"].size());
+        if (fields.count("tags")) lib->tags = (fields["tags"] == "true");
+        if (fields.count("visibility")) lib->library_visibility = copy_string(fields["visibility"].c_str(), fields["visibility"].size());
+        if (fields.count("approval_required")) lib->approval_required = (fields["approval_required"] == "true");
+        if (fields.count("track_usage")) lib->track_usage = (fields["track_usage"] == "true");
+        if (fields.count("track_performance")) lib->track_performance = (fields["track_performance"] == "true");
+        if (fields.count("suggest_similar")) lib->suggest_similar = (fields["suggest_similar"] == "true");
+        if (fields.count("auto_optimize")) lib->auto_optimize = (fields["auto_optimize"] == "true");
+
+        auto split_to_objstr = [&](const std::string& s) {
+          std::vector<ObjString*> v;
+          std::istringstream iss(s); std::string item;
+          while (std::getline(iss, item, ',')) v.push_back(copy_string(item.c_str(), item.size()));
+          return v;
+        };
+        if (fields.count("categories")) lib->category_refs = split_to_objstr(fields["categories"]);
+
+        if (lib->name) {
+          globals_.set(lib->name, Value::ObjVal(reinterpret_cast<Obj*>(lib)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_ANALYSIS_SCHEDULE:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* sched = new_analysis_schedule();
+        if (fields.count("name")) sched->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("query")) sched->query = copy_string(fields["query"].c_str(), fields["query"].size());
+        if (fields.count("cron")) sched->cron = copy_string(fields["cron"].c_str(), fields["cron"].size());
+        if (fields.count("connection")) sched->connection = copy_string(fields["connection"].c_str(), fields["connection"].size());
+        if (fields.count("format")) sched->format = copy_string(fields["format"].c_str(), fields["format"].size());
+        if (fields.count("output_path")) sched->output_path = copy_string(fields["output_path"].c_str(), fields["output_path"].size());
+        if (fields.count("delivery")) sched->delivery_json = copy_string(fields["delivery"].c_str(), fields["delivery"].size());
+        if (fields.count("audit")) sched->audit = (fields["audit"] != "false");
+        if (fields.count("budget")) sched->budget = copy_string(fields["budget"].c_str(), fields["budget"].size());
+
+        if (sched->name) {
+          globals_.set(sched->name, Value::ObjVal(reinterpret_cast<Obj*>(sched)));
+        }
+        break;
+      }
+
+      case OpCode::OP_DEFINE_ANALYST_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (std::size_t i = 0; i < field_count; ++i)
+        {
+          fields[to_std_string(stack_[base + i * 2])] = to_std_string(stack_[base + i * 2 + 1]);
+        }
+        stack_.resize(base);
+
+        auto* agent = new_analyst_agent();
+        if (fields.count("name")) agent->name = copy_string(fields["name"].c_str(), fields["name"].size());
+        if (fields.count("provider")) agent->provider = copy_string(fields["provider"].c_str(), fields["provider"].size());
+        if (fields.count("model")) agent->model = copy_string(fields["model"].c_str(), fields["model"].size());
+        if (fields.count("endpoint")) agent->endpoint = copy_string(fields["endpoint"].c_str(), fields["endpoint"].size());
+        if (fields.count("api_key_env")) agent->api_key_env = copy_string(fields["api_key_env"].c_str(), fields["api_key_env"].size());
+        if (fields.count("budget")) agent->budget_ref = copy_string(fields["budget"].c_str(), fields["budget"].size());
+        if (fields.count("domain_context")) agent->domain_context_ref = copy_string(fields["domain_context"].c_str(), fields["domain_context"].size());
+        if (fields.count("glossary")) agent->glossary_ref = copy_string(fields["glossary"].c_str(), fields["glossary"].size());
+        if (fields.count("governance")) agent->governance_ref = copy_string(fields["governance"].c_str(), fields["governance"].size());
+        if (fields.count("classification")) agent->classification_ref = copy_string(fields["classification"].c_str(), fields["classification"].size());
+        if (fields.count("access_policy")) agent->access_policy_ref = copy_string(fields["access_policy"].c_str(), fields["access_policy"].size());
+        if (fields.count("optimizer")) agent->optimizer_ref = copy_string(fields["optimizer"].c_str(), fields["optimizer"].size());
+        if (fields.count("execution_policy")) agent->execution_policy_ref = copy_string(fields["execution_policy"].c_str(), fields["execution_policy"].size());
+        if (fields.count("query_library")) agent->query_library_ref = copy_string(fields["query_library"].c_str(), fields["query_library"].size());
+        if (fields.count("default_output")) agent->default_output = copy_string(fields["default_output"].c_str(), fields["default_output"].size());
+        if (fields.count("system")) agent->system_prompt = fields["system"];
+        if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+
+        auto split = [](const std::string& s) {
+          std::vector<std::string> v;
+          std::istringstream iss(s); std::string item;
+          while (std::getline(iss, item, ',')) v.push_back(item);
+          return v;
+        };
+        auto split_to_objstr = [&](const std::string& s) {
+          std::vector<ObjString*> v;
+          for (auto& item : split(s)) {
+            v.push_back(copy_string(item.c_str(), item.size()));
+          }
+          return v;
+        };
+        if (fields.count("connections")) agent->connection_refs = split_to_objstr(fields["connections"]);
+        if (fields.count("models")) agent->model_refs = split_to_objstr(fields["models"]);
+        if (fields.count("dimensional_models")) agent->dimensional_model_refs = split_to_objstr(fields["dimensional_models"]);
+        if (fields.count("marts")) agent->mart_refs = split_to_objstr(fields["marts"]);
+        if (fields.count("semantic_layers")) agent->semantic_layer_refs = split_to_objstr(fields["semantic_layers"]);
+        if (fields.count("output_formats")) agent->output_format_refs = split_to_objstr(fields["output_formats"]);
+        if (fields.count("skills")) agent->skill_refs = split_to_objstr(fields["skills"]);
+        if (fields.count("extern_skills")) agent->extern_skill_refs = split_to_objstr(fields["extern_skills"]);
+        if (fields.count("coordinates_with")) agent->coordinates_with_refs = split_to_objstr(fields["coordinates_with"]);
+        if (fields.count("handoffs")) agent->handoff_refs = split_to_objstr(fields["handoffs"]);
+
+        // Register as global
+        if (agent->name) {
+          std::string agent_name(agent->name->chars, agent->name->length);
+          globals_.set(agent->name, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+          // Register AgentExtension for v0.8 compatibility
+          AgentExtension extension;
+          extension.agent_type = "analyst";
+          agent_extensions_[agent_name] = std::move(extension);
+        }
+        break;
+      }
+
+      case OpCode::OP_ANALYST_QUERY:
+      case OpCode::OP_ANALYST_EXECUTE:
+      case OpCode::OP_ANALYST_FORMAT:
+      case OpCode::OP_ANALYST_OPTIMIZE:
+      {
+        // Action opcodes — stub implementations for now
+        // These will be used by native functions at runtime
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        stack_.resize(base);
+        stack_.push_back(Value::Nil());
+        break;
+      }
+
+      // v0.9.7: Data Pipeline Deployment opcodes
+      case OpCode::OP_DEFINE_DEPLOY_TARGET:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* target = new_deploy_target();
+        target->name = fields["name"];
+        if (fields.count("environment")) target->environment = fields["environment"];
+        if (fields.count("connection")) target->connection = fields["connection"];
+        if (fields.count("namespace")) target->namespace_name = fields["namespace"];
+        if (fields.count("region")) target->region = fields["region"];
+        if (fields.count("tags"))
+        {
+          try { target->tags = nlohmann::json::parse(fields["tags"]); } catch (...) {}
+        }
+        if (fields.count("variables"))
+        {
+          try { target->variables = nlohmann::json::parse(fields["variables"]); } catch (...) {}
+        }
+        if (fields.count("frozen")) target->frozen = fields["frozen"] == "true";
+        if (fields.count("freeze_reason")) target->freeze_reason = fields["freeze_reason"];
+
+        auto* name_str = copy_string(target->name.c_str(), target->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(target)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(target)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_PROMOTION_RULE:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* rule = new_promotion_rule();
+        rule->name = fields["name"];
+        if (fields.count("from_env")) rule->from_env = fields["from_env"];
+        if (fields.count("to_env")) rule->to_env = fields["to_env"];
+        if (fields.count("require_tests")) rule->require_tests = fields["require_tests"] == "true";
+        if (fields.count("require_approval")) rule->require_approval = fields["require_approval"] == "true";
+        if (fields.count("approvers"))
+        {
+          std::string csv = fields["approvers"];
+          std::stringstream ss(csv);
+          std::string item;
+          while (std::getline(ss, item, ','))
+          {
+            if (!item.empty()) rule->approvers.push_back(item);
+          }
+        }
+        if (fields.count("auto_promote")) rule->auto_promote = fields["auto_promote"] == "true";
+        if (fields.count("cooldown")) rule->cooldown = fields["cooldown"];
+        if (fields.count("gate_checks"))
+        {
+          try { rule->gate_checks = nlohmann::json::parse(fields["gate_checks"]); } catch (...) {}
+        }
+
+        auto* rule_name_str = copy_string(rule->name.c_str(), rule->name.size());
+        globals_.set(rule_name_str, Value::ObjVal(reinterpret_cast<Obj*>(rule)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(rule)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_ROLLBACK_POLICY:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* policy = new_rollback_policy();
+        policy->name = fields["name"];
+        if (fields.count("strategy")) policy->strategy = fields["strategy"];
+        if (fields.count("keep_data")) policy->keep_data = fields["keep_data"] == "true";
+        if (fields.count("notify_dataops")) policy->notify_dataops = fields["notify_dataops"] == "true";
+        if (fields.count("max_rollback_window")) policy->max_rollback_window = fields["max_rollback_window"];
+        if (fields.count("reconciliation")) policy->reconciliation = fields["reconciliation"] == "true";
+        if (fields.count("pre_rollback_checks"))
+        {
+          try { policy->pre_rollback_checks = nlohmann::json::parse(fields["pre_rollback_checks"]); } catch (...) {}
+        }
+        if (fields.count("notifications"))
+        {
+          try { policy->notifications = nlohmann::json::parse(fields["notifications"]); } catch (...) {}
+        }
+
+        auto* policy_name_str = copy_string(policy->name.c_str(), policy->name.size());
+        globals_.set(policy_name_str, Value::ObjVal(reinterpret_cast<Obj*>(policy)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(policy)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_ARTIFACT_REGISTRY:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* registry = new_artifact_registry();
+        registry->name = fields["name"];
+        if (fields.count("storage")) registry->storage = fields["storage"];
+        if (fields.count("path")) registry->path = fields["path"];
+        if (fields.count("versioning")) registry->versioning = fields["versioning"];
+        if (fields.count("retention")) registry->retention = fields["retention"];
+        if (fields.count("sign_artifacts")) registry->sign_artifacts = fields["sign_artifacts"] == "true";
+        if (fields.count("checksum")) registry->checksum = fields["checksum"];
+        if (fields.count("immutable")) registry->immutable = fields["immutable"] == "true";
+
+        auto* reg_name_str = copy_string(registry->name.c_str(), registry->name.size());
+        globals_.set(reg_name_str, Value::ObjVal(reinterpret_cast<Obj*>(registry)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(registry)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_DEPLOY_CONFIG:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* config = new_deploy_config();
+        config->name = fields["name"];
+        if (fields.count("target")) config->target = fields["target"];
+        if (fields.count("strategy")) config->strategy = fields["strategy"];
+        if (fields.count("approval_gate")) config->approval_gate = fields["approval_gate"] == "true";
+        if (fields.count("pipeline_ref")) config->pipeline_ref = fields["pipeline_ref"];
+        if (fields.count("pre_deploy_checks"))
+        {
+          try { config->pre_deploy_checks = nlohmann::json::parse(fields["pre_deploy_checks"]); } catch (...) {}
+        }
+        if (fields.count("post_deploy_checks"))
+        {
+          try { config->post_deploy_checks = nlohmann::json::parse(fields["post_deploy_checks"]); } catch (...) {}
+        }
+        if (fields.count("notifications"))
+        {
+          try { config->notifications = nlohmann::json::parse(fields["notifications"]); } catch (...) {}
+        }
+        if (fields.count("schedule")) config->schedule = fields["schedule"];
+        if (fields.count("auto_rollback")) config->auto_rollback = fields["auto_rollback"] == "true";
+        if (fields.count("rollback_policy")) config->rollback_policy = fields["rollback_policy"];
+        if (fields.count("artifact_registry")) config->artifact_registry = fields["artifact_registry"];
+
+        auto* config_name_str = copy_string(config->name.c_str(), config->name.size());
+        globals_.set(config_name_str, Value::ObjVal(reinterpret_cast<Obj*>(config)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(config)));
+        break;
+      }
+
+      case OpCode::OP_DEPLOY_EXECUTE:
+      case OpCode::OP_DEPLOY_ROLLBACK:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        stack_.resize(base);
+        stack_.push_back(Value::Nil());
         break;
       }
 

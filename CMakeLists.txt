@@ -233,6 +233,8 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/dataops_types.cpp
     NeamC/src/vm/governance_types.cpp
     NeamC/src/vm/modeling_types.cpp
+    NeamC/src/vm/analyst_types.cpp
+    NeamC/src/vm/deploy_types.cpp
     NeamC/src/vm/migration/audit_trail.cpp
     NeamC/src/vm/migration/schema_translator.cpp
     NeamC/src/vm/migration/data_movement.cpp

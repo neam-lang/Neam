@@ -4101,6 +4101,419 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_op(vm::OpCode::OP_DEFINE_MODELING_AGENT);
           chunk_.write_byte(field_count);
         }
+        // ═══════════════════════════════════════════════════════════════
+        // v0.9.6 Analyst Agent emit handlers
+        // ═══════════════════════════════════════════════════════════════
+        else if constexpr (std::is_same_v<T, SQLConnectionDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.platform_str.empty()) push_str("platform", node.platform_str);
+          if (!node.connection.empty()) push_str("connection", node.connection);
+          if (!node.credentials.empty()) push_str("credentials", node.credentials);
+          if (!node.warehouse.empty()) push_str("warehouse", node.warehouse);
+          if (!node.database.empty()) push_str("database", node.database);
+          if (!node.schema.empty()) push_str("schema", node.schema);
+          if (!node.project.empty()) push_str("project", node.project);
+          if (!node.dataset.empty()) push_str("dataset", node.dataset);
+          if (!node.catalog.empty()) push_str("catalog", node.catalog);
+          if (!node.cluster.empty()) push_str("cluster", node.cluster);
+          if (node.timeout != 300) push_str("timeout", std::to_string(node.timeout));
+          if (node.max_rows != 10000) push_str("max_rows", std::to_string(node.max_rows));
+          if (node.cost_limit > 0.0) push_str("cost_limit", std::to_string(node.cost_limit));
+          if (!node.queue.empty()) push_str("queue", node.queue);
+          if (!node.prefer_materialized_views) push_str("prefer_materialized_views", "false");
+          if (!node.use_result_cache) push_str("use_result_cache", "false");
+          if (!node.partition_pruning) push_str("partition_pruning", "false");
+          if (!node.schema_source.empty()) push_str("schema_source", node.schema_source);
+          if (!node.semantic_layer.empty()) push_str("semantic_layer", node.semantic_layer);
+          sql_connection_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_SQL_CONNECTION);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, DomainContextDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          auto push_str_list = [&](const std::string& n, const std::vector<std::string>& list) {
+            std::string joined;
+            for (size_t i = 0; i < list.size(); ++i) { if (i > 0) joined += ","; joined += list[i]; }
+            push_str(n, joined);
+          };
+          push_str("name", node.name);
+          if (!node.models.empty()) push_str_list("models", node.models);
+          if (!node.dimensional_models.empty()) push_str_list("dimensional_models", node.dimensional_models);
+          if (!node.marts.empty()) push_str_list("marts", node.marts);
+          if (!node.schema_sources.empty()) push_str_list("schema_sources", node.schema_sources);
+          if (!node.glossary.empty()) push_str("glossary", node.glossary);
+          if (!node.data_products.empty()) push_str_list("data_products", node.data_products);
+          if (!node.classification.empty()) push_str("classification", node.classification);
+          if (!node.access_policy.empty()) push_str("access_policy", node.access_policy);
+          if (!node.semantic_layers.empty()) push_str_list("semantic_layers", node.semantic_layers);
+          if (node.query_history) push_str("query_history", "true");
+          if (node.feedback_loop) push_str("feedback_loop", "true");
+          domain_context_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DOMAIN_CONTEXT);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, QueryTemplateDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.description.empty()) push_str("description", node.description);
+          if (!node.category.empty()) push_str("category", node.category);
+          if (!node.params_json.empty()) push_str("params", node.params_json);
+          if (!node.sql.empty()) push_str("sql", node.sql);
+          if (!node.default_format.empty()) push_str("default_format", node.default_format);
+          if (!node.chart_json.empty()) push_str("chart", node.chart_json);
+          if (!node.classification.empty()) push_str("classification", node.classification);
+          if (!node.audit) push_str("audit", "false");
+          query_template_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_QUERY_TEMPLATE);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, QueryOptimizerDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.cost_model.empty()) push_str("cost_model", node.cost_model);
+          if (node.max_cost_per_query > 0.0) push_str("max_cost_per_query", std::to_string(node.max_cost_per_query));
+          if (node.max_scan_gb > 0.0) push_str("max_scan_gb", std::to_string(node.max_scan_gb));
+          if (node.max_execution_time != 300) push_str("max_execution_time", std::to_string(node.max_execution_time));
+          if (!node.rules_json.empty()) push_str("rules", node.rules_json);
+          if (!node.explain_optimizations) push_str("explain_optimizations", "false");
+          if (!node.show_cost_comparison) push_str("show_cost_comparison", "false");
+          query_optimizer_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_QUERY_OPTIMIZER);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, ExecutionPolicyDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (node.max_rows != 10000) push_str("max_rows", std::to_string(node.max_rows));
+          if (node.max_cost > 0.0) push_str("max_cost", std::to_string(node.max_cost));
+          if (node.timeout != 300) push_str("timeout", std::to_string(node.timeout));
+          if (!node.read_only) push_str("read_only", "false");
+          if (!node.apply_masking) push_str("apply_masking", "false");
+          if (!node.apply_row_level_security) push_str("apply_row_level_security", "false");
+          if (!node.audit_all_queries) push_str("audit_all_queries", "false");
+          if (node.retry_on_timeout) push_str("retry_on_timeout", "true");
+          if (node.retry_with_smaller_warehouse) push_str("retry_with_smaller_warehouse", "true");
+          if (!node.cache_results) push_str("cache_results", "false");
+          if (!node.cache_ttl.empty()) push_str("cache_ttl", node.cache_ttl);
+          if (!node.cache_key.empty()) push_str("cache_key", node.cache_key);
+          execution_policy_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_EXECUTION_POLICY);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, OutputFormatDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.type_str.empty()) push_str("type", node.type_str);
+          if (!node.excel_json.empty()) push_str("excel", node.excel_json);
+          if (!node.pdf_json.empty()) push_str("pdf", node.pdf_json);
+          if (!node.html_json.empty()) push_str("html", node.html_json);
+          if (!node.csv_json.empty()) push_str("csv", node.csv_json);
+          if (!node.json_config_json.empty()) push_str("json_config", node.json_config_json);
+          if (!node.slack_json.empty()) push_str("slack", node.slack_json);
+          output_format_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_OUTPUT_FORMAT);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, QueryLibraryDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          auto push_str_list = [&](const std::string& n, const std::vector<std::string>& list) {
+            std::string joined;
+            for (size_t i = 0; i < list.size(); ++i) { if (i > 0) joined += ","; joined += list[i]; }
+            push_str(n, joined);
+          };
+          push_str("name", node.name);
+          if (!node.storage.empty()) push_str("storage", node.storage);
+          if (!node.path.empty()) push_str("path", node.path);
+          if (!node.categories.empty()) push_str_list("categories", node.categories);
+          if (node.tags) push_str("tags", "true");
+          if (!node.library_visibility.empty()) push_str("visibility", node.library_visibility);
+          if (node.approval_required) push_str("approval_required", "true");
+          if (node.track_usage) push_str("track_usage", "true");
+          if (node.track_performance) push_str("track_performance", "true");
+          if (node.suggest_similar) push_str("suggest_similar", "true");
+          if (node.auto_optimize) push_str("auto_optimize", "true");
+          query_library_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_QUERY_LIBRARY);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, AnalysisScheduleDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.query.empty()) push_str("query", node.query);
+          if (!node.cron.empty()) push_str("cron", node.cron);
+          if (!node.connection.empty()) push_str("connection", node.connection);
+          if (!node.format.empty()) push_str("format", node.format);
+          if (!node.output_path.empty()) push_str("output_path", node.output_path);
+          if (!node.delivery_json.empty()) push_str("delivery", node.delivery_json);
+          if (!node.audit) push_str("audit", "false");
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          analysis_schedule_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_ANALYSIS_SCHEDULE);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, AnalystAgentDecl>)
+        {
+          validate_analyst_agent(node);
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& n, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(n.c_str(), n.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++;
+          };
+          auto push_str_list = [&](const std::string& n, const std::vector<std::string>& list) {
+            std::string joined;
+            for (size_t i = 0; i < list.size(); ++i) { if (i > 0) joined += ","; joined += list[i]; }
+            push_str(n, joined);
+          };
+          push_str("name", node.name);
+          if (node.provider) push_str("provider", *node.provider);
+          if (node.model) push_str("model", *node.model);
+          if (node.system_prompt) push_str("system", *node.system_prompt);
+          if (node.temperature != 0.2) push_str("temperature", std::to_string(node.temperature));
+          if (node.endpoint) push_str("endpoint", *node.endpoint);
+          if (node.api_key_env) push_str("api_key_env", *node.api_key_env);
+          if (!node.connections.empty()) push_str_list("connections", node.connections);
+          if (!node.domain_context.empty()) push_str("domain_context", node.domain_context);
+          if (!node.models.empty()) push_str_list("models", node.models);
+          if (!node.dimensional_models.empty()) push_str_list("dimensional_models", node.dimensional_models);
+          if (!node.marts.empty()) push_str_list("marts", node.marts);
+          if (!node.glossary.empty()) push_str("glossary", node.glossary);
+          if (!node.semantic_layers.empty()) push_str_list("semantic_layers", node.semantic_layers);
+          if (!node.governance.empty()) push_str("governance", node.governance);
+          if (!node.classification.empty()) push_str("classification", node.classification);
+          if (!node.access_policy.empty()) push_str("access_policy", node.access_policy);
+          if (!node.optimizer.empty()) push_str("optimizer", node.optimizer);
+          if (!node.execution_policy.empty()) push_str("execution_policy", node.execution_policy);
+          if (!node.query_library.empty()) push_str("query_library", node.query_library);
+          if (!node.default_output.empty()) push_str("default_output", node.default_output);
+          if (!node.output_formats.empty()) push_str_list("output_formats", node.output_formats);
+          if (!node.skills.empty()) push_str_list("skills", node.skills);
+          if (!node.extern_skills.empty()) push_str_list("extern_skills", node.extern_skills);
+          if (!node.coordinates_with.empty()) push_str_list("coordinates_with", node.coordinates_with);
+          if (!node.handoffs.empty()) push_str_list("handoffs", node.handoffs);
+          if (node.role) push_str("role", *node.role);
+          if (node.purpose) push_str("purpose", *node.purpose);
+          if (node.autonomy) push_str("autonomy", *node.autonomy);
+          if (node.budget) push_str("budget", *node.budget);
+          analyst_agent_defs_.insert(node.name);
+          agent_types_[node.name] = AgentKind::Analyst;
+          chunk_.write_op(vm::OpCode::OP_DEFINE_ANALYST_AGENT);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.7: Data Pipeline Deployment emit handlers
+        else if constexpr (std::is_same_v<T, DeployTargetDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.environment.empty()) push_str("environment", node.environment);
+          if (!node.connection.empty()) push_str("connection", node.connection);
+          if (!node.namespace_name.empty()) push_str("namespace", node.namespace_name);
+          if (!node.region.empty()) push_str("region", node.region);
+          if (!node.tags_json.empty()) push_str("tags", node.tags_json);
+          if (!node.variables_json.empty()) push_str("variables", node.variables_json);
+          push_str("frozen", node.frozen ? "true" : "false");
+          if (!node.freeze_reason.empty()) push_str("freeze_reason", node.freeze_reason);
+
+          if (!node.environment.empty() &&
+              node.environment != "dev" && node.environment != "staging" &&
+              node.environment != "prod" && node.environment != "test")
+          {
+            compiler_warning("[DEP-009] deploy_target '" + node.name +
+              "' has invalid environment '" + node.environment +
+              "'; expected 'dev', 'staging', 'prod', or 'test'");
+          }
+
+          deploy_target_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DEPLOY_TARGET);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, PromotionRuleDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.from_env.empty()) push_str("from_env", node.from_env);
+          if (!node.to_env.empty()) push_str("to_env", node.to_env);
+          push_str("require_tests", node.require_tests ? "true" : "false");
+          push_str("require_approval", node.require_approval ? "true" : "false");
+          if (!node.approvers.empty())
+          {
+            std::string csv;
+            for (size_t i = 0; i < node.approvers.size(); i++)
+            {
+              if (i > 0) csv += ",";
+              csv += node.approvers[i];
+            }
+            push_str("approvers", csv);
+          }
+          push_str("auto_promote", node.auto_promote ? "true" : "false");
+          if (!node.cooldown.empty()) push_str("cooldown", node.cooldown);
+          if (!node.gate_checks_json.empty()) push_str("gate_checks", node.gate_checks_json);
+
+          if (!node.from_env.empty() && !node.to_env.empty() && node.from_env == node.to_env)
+          {
+            compiler_warning("[DEP-003] promotion_rule '" + node.name +
+              "' has from_env == to_env ('" + node.from_env + "'); environments must differ");
+          }
+          if (node.auto_promote && node.require_approval)
+          {
+            compiler_warning("[DEP-004] promotion_rule '" + node.name +
+              "' has both auto_promote and require_approval; these are mutually exclusive");
+          }
+
+          promotion_rule_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_PROMOTION_RULE);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, RollbackPolicyDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.strategy.empty()) push_str("strategy", node.strategy);
+          push_str("keep_data", node.keep_data ? "true" : "false");
+          push_str("notify_dataops", node.notify_dataops ? "true" : "false");
+          if (!node.max_rollback_window.empty()) push_str("max_rollback_window", node.max_rollback_window);
+          push_str("reconciliation", node.reconciliation ? "true" : "false");
+          if (!node.pre_rollback_json.empty()) push_str("pre_rollback_checks", node.pre_rollback_json);
+          if (!node.notifications_json.empty()) push_str("notifications", node.notifications_json);
+
+          if (!node.strategy.empty() &&
+              node.strategy != "immediate" && node.strategy != "gradual" && node.strategy != "point_in_time")
+          {
+            compiler_warning("[DEP-005] rollback_policy '" + node.name +
+              "' has invalid strategy '" + node.strategy +
+              "'; expected 'immediate', 'gradual', or 'point_in_time'");
+          }
+
+          rollback_policy_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_ROLLBACK_POLICY);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, ArtifactRegistryDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.storage.empty()) push_str("storage", node.storage);
+          if (!node.path.empty()) push_str("path", node.path);
+          if (!node.versioning.empty()) push_str("versioning", node.versioning);
+          if (!node.retention.empty()) push_str("retention", node.retention);
+          push_str("sign_artifacts", node.sign_artifacts ? "true" : "false");
+          if (!node.checksum.empty()) push_str("checksum", node.checksum);
+          push_str("immutable", node.immutable ? "true" : "false");
+
+          if (!node.storage.empty() &&
+              node.storage != "local" && node.storage != "s3" && node.storage != "registry")
+          {
+            compiler_warning("[DEP-006] artifact_registry '" + node.name +
+              "' has invalid storage '" + node.storage + "'; expected 'local', 's3', or 'registry'");
+          }
+          if (!node.versioning.empty() &&
+              node.versioning != "semver" && node.versioning != "timestamp" && node.versioning != "git_sha")
+          {
+            compiler_warning("[DEP-007] artifact_registry '" + node.name +
+              "' has invalid versioning '" + node.versioning +
+              "'; expected 'semver', 'timestamp', or 'git_sha'");
+          }
+
+          artifact_registry_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_ARTIFACT_REGISTRY);
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, DeployConfigDecl>)
+        {
+          validate_deploy_config(node);
+
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.target.empty()) push_str("target", node.target);
+          if (!node.strategy.empty()) push_str("strategy", node.strategy);
+          push_str("approval_gate", node.approval_gate ? "true" : "false");
+          if (!node.pipeline_ref.empty()) push_str("pipeline_ref", node.pipeline_ref);
+          if (!node.pre_deploy_json.empty()) push_str("pre_deploy_checks", node.pre_deploy_json);
+          if (!node.post_deploy_json.empty()) push_str("post_deploy_checks", node.post_deploy_json);
+          if (!node.notifications_json.empty()) push_str("notifications", node.notifications_json);
+          if (!node.schedule.empty()) push_str("schedule", node.schedule);
+          push_str("auto_rollback", node.auto_rollback ? "true" : "false");
+          if (!node.rollback_policy.empty()) push_str("rollback_policy", node.rollback_policy);
+          if (!node.artifact_registry.empty()) push_str("artifact_registry", node.artifact_registry);
+
+          deploy_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DEPLOY_CONFIG);
+          chunk_.write_byte(field_count);
+        }
       },
       stmt.node);
 }
@@ -5279,6 +5692,105 @@ void Compiler::validate_modeling_agent(const ModelingAgentDecl& decl)
   }
   // Track
   agent_types_[decl.name] = AgentKind::Modeling;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.6 Analyst Agent validation
+// ═══════════════════════════════════════════════════════════════
+
+void Compiler::validate_analyst_agent(const AnalystAgentDecl& decl)
+{
+  // ANA-001: Name must not be empty
+  if (decl.name.empty())
+  {
+    compiler_warning("ANA-001: analyst agent name must not be empty");
+  }
+  // ANA-002: Duplicate check
+  if (analyst_agent_defs_.count(decl.name))
+  {
+    compiler_warning("ANA-002: duplicate analyst agent definition '" + decl.name + "'");
+  }
+  // ANA-003: Must have at least one connection
+  if (decl.connections.empty())
+  {
+    compiler_warning("ANA-003: analyst agent '" + decl.name +
+                     "' has no connections — queries will fail at runtime");
+  }
+  // ANA-004: Validate referenced connections exist
+  for (const auto& conn : decl.connections)
+  {
+    if (sql_connection_defs_.find(conn) == sql_connection_defs_.end())
+    {
+      compiler_warning("ANA-004: analyst agent '" + decl.name +
+                       "' references unknown sql_connection '" + conn + "'");
+    }
+  }
+  // ANA-005: Should have a budget
+  if (!decl.budget)
+  {
+    compiler_warning("ANA-005: analyst agent '" + decl.name +
+                     "' should have a 'budget' (analyst operations consume tokens and compute)");
+  }
+  // ANA-006: Validate optimizer reference
+  if (!decl.optimizer.empty() && query_optimizer_defs_.find(decl.optimizer) == query_optimizer_defs_.end())
+  {
+    compiler_warning("ANA-006: analyst agent '" + decl.name +
+                     "' references unknown query_optimizer '" + decl.optimizer + "'");
+  }
+  // ANA-007: Validate execution_policy reference
+  if (!decl.execution_policy.empty() && execution_policy_defs_.find(decl.execution_policy) == execution_policy_defs_.end())
+  {
+    compiler_warning("ANA-007: analyst agent '" + decl.name +
+                     "' references unknown execution_policy '" + decl.execution_policy + "'");
+  }
+  // ANA-008: Validate query_library reference
+  if (!decl.query_library.empty() && query_library_defs_.find(decl.query_library) == query_library_defs_.end())
+  {
+    compiler_warning("ANA-008: analyst agent '" + decl.name +
+                     "' references unknown query_library '" + decl.query_library + "'");
+  }
+  // ANA-009: Validate output_format references
+  for (const auto& fmt : decl.output_formats)
+  {
+    if (output_format_defs_.find(fmt) == output_format_defs_.end())
+    {
+      compiler_warning("ANA-009: analyst agent '" + decl.name +
+                       "' references unknown output_format '" + fmt + "'");
+    }
+  }
+  // ANA-010: Validate domain_context reference
+  if (!decl.domain_context.empty() && domain_context_defs_.find(decl.domain_context) == domain_context_defs_.end())
+  {
+    compiler_warning("ANA-010: analyst agent '" + decl.name +
+                     "' references unknown domain_context '" + decl.domain_context + "'");
+  }
+  // Track
+  agent_types_[decl.name] = AgentKind::Analyst;
+}
+
+void Compiler::validate_deploy_config(const DeployConfigDecl& decl)
+{
+  // DEP-001: target must reference a declared deploy_target
+  if (!decl.target.empty() && deploy_target_defs_.find(decl.target) == deploy_target_defs_.end())
+  {
+    compiler_warning("[DEP-001] deploy_config '" + decl.name +
+      "' references unknown deploy_target '" + decl.target + "'");
+  }
+  // DEP-002: strategy must be valid
+  if (!decl.strategy.empty() &&
+      decl.strategy != "rolling" && decl.strategy != "blue_green" && decl.strategy != "canary")
+  {
+    compiler_warning("[DEP-002] deploy_config '" + decl.name +
+      "' has invalid strategy '" + decl.strategy +
+      "'; expected 'rolling', 'blue_green', or 'canary'");
+  }
+  // DEP-010: rollback_policy must reference a declared rollback_policy
+  if (!decl.rollback_policy.empty() &&
+      rollback_policy_defs_.find(decl.rollback_policy) == rollback_policy_defs_.end())
+  {
+    compiler_warning("[DEP-010] deploy_config '" + decl.name +
+      "' references unknown rollback_policy '" + decl.rollback_policy + "'");
+  }
 }
 
 }  // namespace neamc

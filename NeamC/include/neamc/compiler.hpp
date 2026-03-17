@@ -40,7 +40,7 @@ private:
   void emit_block(const BlockStmt& block);
 
   // v0.8 Phase 1: Agent type tracking for trait validation
-  enum class AgentKind { Stateless, Claw, Forge, Data, ETL, Migration, DataOps, Governance, Modeling };
+  enum class AgentKind { Stateless, Claw, Forge, Data, ETL, Migration, DataOps, Governance, Modeling, Analyst };
   std::unordered_map<std::string, AgentKind> agent_types_;
 
   // v0.9: Data agent definition tracking
@@ -114,6 +114,26 @@ private:
   std::unordered_set<std::string> modeling_tool_defs_;
   std::unordered_set<std::string> modeling_agent_defs_;
   void validate_modeling_agent(const ModelingAgentDecl& decl);
+
+  // v0.9.6: Analyst agent tracking and validation
+  std::unordered_set<std::string> sql_connection_defs_;
+  std::unordered_set<std::string> domain_context_defs_;
+  std::unordered_set<std::string> query_template_defs_;
+  std::unordered_set<std::string> query_optimizer_defs_;
+  std::unordered_set<std::string> execution_policy_defs_;
+  std::unordered_set<std::string> output_format_defs_;
+  std::unordered_set<std::string> query_library_defs_;
+  std::unordered_set<std::string> analysis_schedule_defs_;
+  std::unordered_set<std::string> analyst_agent_defs_;
+  void validate_analyst_agent(const AnalystAgentDecl& decl);
+
+  // v0.9.7: Data Pipeline Deployment tracking and validation
+  std::unordered_set<std::string> deploy_target_defs_;
+  std::unordered_set<std::string> promotion_rule_defs_;
+  std::unordered_set<std::string> rollback_policy_defs_;
+  std::unordered_set<std::string> artifact_registry_defs_;
+  std::unordered_set<std::string> deploy_config_defs_;
+  void validate_deploy_config(const DeployConfigDecl& decl);
   void validate_classification_policy(const ClassificationPolicyDecl& decl);
   void validate_access_policy(const AccessPolicyDecl& decl);
   void validate_quality_policy(const QualityPolicyDecl& decl);

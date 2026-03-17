@@ -320,6 +320,23 @@ private:
   StmtPtr parse_data_profile_decl(const Visibility& visibility);
   StmtPtr parse_modeling_tool_decl(const Visibility& visibility);
   StmtPtr parse_modeling_agent_decl(const Visibility& visibility);
+  // v0.9.6: Analyst agent declarations
+  StmtPtr parse_sql_connection_decl(const Visibility& visibility);
+  StmtPtr parse_domain_context_decl(const Visibility& visibility);
+  StmtPtr parse_query_template_decl(const Visibility& visibility);
+  StmtPtr parse_query_optimizer_decl(const Visibility& visibility);
+  StmtPtr parse_execution_policy_decl(const Visibility& visibility);
+  StmtPtr parse_output_format_decl(const Visibility& visibility);
+  StmtPtr parse_query_library_decl(const Visibility& visibility);
+  StmtPtr parse_analysis_schedule_decl(const Visibility& visibility);
+  StmtPtr parse_analyst_agent_decl(const Visibility& visibility);
+
+  // v0.9.7: Data Pipeline Deployment declarations
+  StmtPtr parse_deploy_target_decl(const Visibility& visibility);
+  StmtPtr parse_promotion_rule_decl(const Visibility& visibility);
+  StmtPtr parse_rollback_policy_decl(const Visibility& visibility);
+  StmtPtr parse_artifact_registry_decl(const Visibility& visibility);
+  StmtPtr parse_deploy_config_decl(const Visibility& visibility);
   // v0.9.4: Governance sub-block parsers
   AutoClassifyConfig parse_auto_classify_config();
   SemanticClassifyConfig parse_semantic_classify_config();

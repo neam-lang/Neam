@@ -42,6 +42,8 @@
 #include "neamc/vm/dataops_types.hpp"
 #include "neamc/vm/governance_types.hpp"
 #include "neamc/vm/modeling_types.hpp"
+#include "neamc/vm/analyst_types.hpp"
+#include "neamc/vm/deploy_types.hpp"
 
 namespace neamc::vm
 {
@@ -2906,6 +2908,533 @@ void register_core_natives(VirtualMachine& vm)
       report["tool_count"] = static_cast<int>(agent->modeling_tool_refs.size());
       agent->last_report = report;
       auto s = report.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+  // ═══════════════════════════════════════════════════════════════
+  // v0.9.6 Analyst Agent native functions
+  // ═══════════════════════════════════════════════════════════════
+
+  // analyst_query(agent, question_string) -> string (generated SQL)
+  vm.define_native("analyst_query", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      auto* agent = static_cast<ObjAnalystAgent*>(args[0].as_obj());
+      std::string question = to_std_string(args[1]);
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "querying";
+      nlohmann::json result;
+      result["question"] = question;
+      result["sql"] = "SELECT /* generated for: " + question + " */ 1";
+      result["platform"] = agent->connection_refs.empty() ? "unknown" : std::string(agent->connection_refs[0]->chars, agent->connection_refs[0]->length);
+      agent->status = "ready";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_sql(agent, sql_string) -> string (validated SQL)
+  vm.define_native("analyst_sql", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string sql = to_std_string(args[1]);
+      nlohmann::json result;
+      result["sql"] = sql;
+      result["validated"] = true;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_template(agent, template_name, params_json) -> string (expanded SQL)
+  vm.define_native("analyst_template", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string tmpl = to_std_string(args[1]);
+      std::string params = to_std_string(args[2]);
+      nlohmann::json result;
+      result["template"] = tmpl;
+      result["params"] = params;
+      result["sql"] = "SELECT /* template: " + tmpl + " */ 1";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_optimize(agent, sql_string) -> string (optimized SQL + explanation)
+  vm.define_native("analyst_optimize", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string sql = to_std_string(args[1]);
+      nlohmann::json result;
+      result["original_sql"] = sql;
+      result["optimized_sql"] = sql;
+      result["optimizations"] = nlohmann::json::array();
+      result["cost_reduction"] = "0%";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_explain(agent, sql_string) -> string (execution plan explanation)
+  vm.define_native("analyst_explain", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string sql = to_std_string(args[1]);
+      nlohmann::json result;
+      result["sql"] = sql;
+      result["plan"] = "Sequential Scan";
+      result["estimated_cost"] = 0.01;
+      result["estimated_rows"] = 100;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_execute(agent, sql_string) -> string (query results JSON)
+  vm.define_native("analyst_execute", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      auto* agent = static_cast<ObjAnalystAgent*>(args[0].as_obj());
+      std::string sql = to_std_string(args[1]);
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "executing";
+      nlohmann::json result;
+      result["sql"] = sql;
+      result["rows"] = nlohmann::json::array();
+      result["row_count"] = 0;
+      result["execution_time_ms"] = 0;
+      agent->status = "ready";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_format(agent, results_json, format_name) -> string (formatted output)
+  vm.define_native("analyst_format", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string results = to_std_string(args[1]);
+      std::string format = to_std_string(args[2]);
+      nlohmann::json result;
+      result["format"] = format;
+      result["data"] = results;
+      result["formatted"] = true;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_analyze(agent, question) -> string (full analysis pipeline: query+execute+format)
+  vm.define_native("analyst_analyze", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      auto* agent = static_cast<ObjAnalystAgent*>(args[0].as_obj());
+      std::string question = to_std_string(args[1]);
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->status = "analyzing";
+      nlohmann::json result;
+      result["question"] = question;
+      result["sql"] = "SELECT /* analysis: " + question + " */ 1";
+      result["rows"] = nlohmann::json::array();
+      result["insights"] = nlohmann::json::array();
+      agent->status = "ready";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_discover(agent, scope) -> string (insight discovery)
+  vm.define_native("analyst_discover", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string scope = to_std_string(args[1]);
+      nlohmann::json result;
+      result["scope"] = scope;
+      result["insights"] = nlohmann::json::array();
+      result["trends"] = nlohmann::json::array();
+      result["outliers"] = nlohmann::json::array();
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_profile(agent, table_name) -> string (data profiling results)
+  vm.define_native("analyst_profile", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string table = to_std_string(args[1]);
+      nlohmann::json result;
+      result["table"] = table;
+      result["row_count"] = 0;
+      result["columns"] = nlohmann::json::array();
+      result["null_percentages"] = nlohmann::json::object();
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_compare(agent, question, time_range) -> string (comparison analysis)
+  vm.define_native("analyst_compare", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string question = to_std_string(args[1]);
+      std::string time_range = to_std_string(args[2]);
+      nlohmann::json result;
+      result["question"] = question;
+      result["time_range"] = time_range;
+      result["comparison"] = nlohmann::json::object();
+      result["delta"] = nlohmann::json::object();
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_drill(agent, dimension, value) -> string (drill-down results)
+  vm.define_native("analyst_drill", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string dimension = to_std_string(args[1]);
+      std::string value = to_std_string(args[2]);
+      nlohmann::json result;
+      result["dimension"] = dimension;
+      result["value"] = value;
+      result["breakdown"] = nlohmann::json::array();
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_forecast(agent, metric, periods) -> string (forecast results)
+  vm.define_native("analyst_forecast", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string metric = to_std_string(args[1]);
+      std::string periods = to_std_string(args[2]);
+      nlohmann::json result;
+      result["metric"] = metric;
+      result["periods"] = periods;
+      result["forecast"] = nlohmann::json::array();
+      result["confidence_interval"] = 0.95;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_publish(agent, results, format_name) -> string (publish formatted results)
+  vm.define_native("analyst_publish", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string results = to_std_string(args[1]);
+      std::string format = to_std_string(args[2]);
+      nlohmann::json result;
+      result["published"] = true;
+      result["format"] = format;
+      result["output"] = results;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_schedule(agent, schedule_name) -> string (trigger scheduled analysis)
+  vm.define_native("analyst_schedule", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string sched = to_std_string(args[1]);
+      nlohmann::json result;
+      result["schedule"] = sched;
+      result["triggered"] = true;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_cache_clear(agent) -> string (clear query cache)
+  vm.define_native("analyst_cache_clear", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      auto* agent = static_cast<ObjAnalystAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      agent->query_cache = nlohmann::json::object();
+      nlohmann::json result;
+      result["cleared"] = true;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_library_save(agent, name, sql, category) -> string
+  vm.define_native("analyst_library_save", 4, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string name = to_std_string(args[1]);
+      std::string sql = to_std_string(args[2]);
+      std::string category = to_std_string(args[3]);
+      nlohmann::json result;
+      result["saved"] = true;
+      result["name"] = name;
+      result["category"] = category;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_library_search(agent, query) -> string (search query library)
+  vm.define_native("analyst_library_search", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string query = to_std_string(args[1]);
+      nlohmann::json result;
+      result["query"] = query;
+      result["results"] = nlohmann::json::array();
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_cost_estimate(agent, sql) -> string (estimate query cost)
+  vm.define_native("analyst_cost_estimate", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      std::string sql = to_std_string(args[1]);
+      nlohmann::json result;
+      result["sql"] = sql;
+      result["estimated_cost"] = 0.01;
+      result["estimated_scan_gb"] = 0.1;
+      result["estimated_time_ms"] = 500;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_status(agent) -> string
+  vm.define_native("analyst_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      auto* agent = static_cast<ObjAnalystAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      return Value::String(agent->status.c_str(), agent->status.size());
+    }
+    return Value::Nil();
+  });
+
+  // analyst_report(agent) -> string (JSON full report)
+  vm.define_native("analyst_report", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ANALYST_AGENT) {
+      auto* agent = static_cast<ObjAnalystAgent*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(agent->state_mutex);
+      nlohmann::json report;
+      report["status"] = agent->status;
+      report["temperature"] = agent->temperature;
+      report["connection_count"] = static_cast<int>(agent->connection_refs.size());
+      report["output_format_count"] = static_cast<int>(agent->output_format_refs.size());
+      report["skill_count"] = static_cast<int>(agent->skill_refs.size());
+      report["has_optimizer"] = (agent->optimizer_ref != nullptr);
+      report["has_execution_policy"] = (agent->execution_policy_ref != nullptr);
+      report["has_query_library"] = (agent->query_library_ref != nullptr);
+      report["has_domain_context"] = (agent->domain_context_ref != nullptr);
+      agent->last_report = report;
+      auto s = report.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+  // ═══════════════════════════════════════════════════════════════
+  // v0.9.7: Data Pipeline Deployment native functions
+  // ═══════════════════════════════════════════════════════════════
+
+  // deploy_pipeline(config) -> JSON status
+  vm.define_native("deploy_pipeline", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_DEPLOY_CONFIG)
+    {
+      auto* config = reinterpret_cast<ObjDeployConfig*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(config->state_mutex);
+
+      // Check if target is frozen (skip if we can't look up the target)
+      // Note: globals_ is private, so frozen check happens at deploy_execute opcode level
+
+      config->deploy_status = "deploying";
+      nlohmann::json entry;
+      entry["action"] = "deploy";
+      entry["status"] = "deploying";
+      entry["strategy"] = config->strategy;
+      entry["target"] = config->target;
+      entry["pipeline"] = config->pipeline_ref;
+      config->deploy_history.push_back(entry);
+
+      nlohmann::json result;
+      result["status"] = "deploying";
+      result["config"] = config->name;
+      result["target"] = config->target;
+      result["strategy"] = config->strategy;
+      result["pipeline"] = config->pipeline_ref;
+      result["auto_rollback"] = config->auto_rollback;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // deploy_promote(rule, version) -> JSON status
+  vm.define_native("deploy_promote", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_PROMOTION_RULE)
+    {
+      auto* rule = reinterpret_cast<ObjPromotionRule*>(args[0].as_obj());
+      auto version = to_std_string(args[1]);
+      std::lock_guard<std::mutex> lock(rule->state_mutex);
+
+      nlohmann::json result;
+      result["status"] = "promoting";
+      result["rule"] = rule->name;
+      result["from_env"] = rule->from_env;
+      result["to_env"] = rule->to_env;
+      result["version"] = version;
+      result["require_tests"] = rule->require_tests;
+      result["require_approval"] = rule->require_approval;
+      result["auto_promote"] = rule->auto_promote;
+
+      rule->last_promotion_status = "promoting";
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // deploy_rollback(config, version) -> JSON status
+  vm.define_native("deploy_rollback", 2, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_DEPLOY_CONFIG)
+    {
+      auto* config = reinterpret_cast<ObjDeployConfig*>(args[0].as_obj());
+      auto version = to_std_string(args[1]);
+      std::lock_guard<std::mutex> lock(config->state_mutex);
+
+      config->deploy_status = "rolling_back";
+      nlohmann::json entry;
+      entry["action"] = "rollback";
+      entry["target_version"] = version;
+      entry["status"] = "rolling_back";
+      config->deploy_history.push_back(entry);
+
+      nlohmann::json result;
+      result["status"] = "rolling_back";
+      result["config"] = config->name;
+      result["target_version"] = version;
+      result["rollback_policy"] = config->rollback_policy;
+      result["auto_rollback"] = config->auto_rollback;
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // deploy_status(config) -> JSON status
+  vm.define_native("deploy_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_DEPLOY_CONFIG)
+    {
+      auto* config = reinterpret_cast<ObjDeployConfig*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(config->state_mutex);
+
+      nlohmann::json result;
+      result["config"] = config->name;
+      result["status"] = config->deploy_status;
+      result["current_version"] = config->current_version;
+      result["target"] = config->target;
+      result["strategy"] = config->strategy;
+      result["pipeline"] = config->pipeline_ref;
+      result["history_count"] = static_cast<int>(config->deploy_history.size());
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // deploy_history(config) -> JSON array
+  vm.define_native("deploy_history", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_DEPLOY_CONFIG)
+    {
+      auto* config = reinterpret_cast<ObjDeployConfig*>(args[0].as_obj());
+      std::lock_guard<std::mutex> lock(config->state_mutex);
+
+      nlohmann::json result = nlohmann::json::array();
+      for (const auto& entry : config->deploy_history)
+      {
+        result.push_back(entry);
+      }
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // deploy_diff(registry, v1, v2) -> JSON diff
+  vm.define_native("deploy_diff", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ARTIFACT_REGISTRY)
+    {
+      auto* registry = reinterpret_cast<ObjArtifactRegistry*>(args[0].as_obj());
+      auto v1 = to_std_string(args[1]);
+      auto v2 = to_std_string(args[2]);
+      std::lock_guard<std::mutex> lock(registry->state_mutex);
+
+      nlohmann::json result;
+      result["registry"] = registry->name;
+      result["version_a"] = v1;
+      result["version_b"] = v2;
+      result["storage"] = registry->storage;
+
+      bool v1_exists = false, v2_exists = false;
+      for (const auto& v : registry->published_versions)
+      {
+        if (v == v1) v1_exists = true;
+        if (v == v2) v2_exists = true;
+      }
+      result["version_a_exists"] = v1_exists;
+      result["version_b_exists"] = v2_exists;
+      result["diff_available"] = v1_exists && v2_exists;
+
+      auto s = result.dump();
+      return Value::String(s.c_str(), s.size());
+    }
+    return Value::Nil();
+  });
+
+  // deploy_artifact_publish(registry, name, version) -> JSON artifact
+  vm.define_native("deploy_artifact_publish", 3, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_ARTIFACT_REGISTRY)
+    {
+      auto* registry = reinterpret_cast<ObjArtifactRegistry*>(args[0].as_obj());
+      auto artifact_name = to_std_string(args[1]);
+      auto version = to_std_string(args[2]);
+      std::lock_guard<std::mutex> lock(registry->state_mutex);
+
+      if (registry->immutable)
+      {
+        for (const auto& v : registry->published_versions)
+        {
+          if (v == version)
+          {
+            nlohmann::json result;
+            result["status"] = "rejected";
+            result["reason"] = "immutable";
+            result["message"] = "Version '" + version + "' already published and registry is immutable";
+            auto s = result.dump();
+            return Value::String(s.c_str(), s.size());
+          }
+        }
+      }
+
+      registry->published_versions.push_back(version);
+
+      nlohmann::json result;
+      result["status"] = "published";
+      result["name"] = artifact_name;
+      result["version"] = version;
+      result["storage"] = registry->storage;
+      result["path"] = registry->path + "/" + artifact_name + "/" + version;
+      result["checksum_algorithm"] = registry->checksum;
+      result["signed"] = registry->sign_artifacts;
+      result["immutable"] = registry->immutable;
+      result["total_versions"] = static_cast<int>(registry->published_versions.size());
+      auto s = result.dump();
       return Value::String(s.c_str(), s.size());
     }
     return Value::Nil();

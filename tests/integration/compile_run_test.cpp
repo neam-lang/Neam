@@ -2583,4 +2583,537 @@ TEST(CompileRunTest, ModelingCrossVersionAllAgents)
   EXPECT_TRUE(result.as_bool());
 }
 
+// ═══════════════════════════════════════════════════════════════
+// v0.9.6 Analyst Agent Integration Tests
+// ═══════════════════════════════════════════════════════════════
+
+TEST(CompileRunTest, AnalystSQLConnectionBasic)
+{
+  auto result = compile_and_run(R"neam(
+    sql_connection SnowDW {
+      platform: "snowflake",
+      connection: "snowflake://account.snowflakecomputing.com",
+      credentials: "env(SNOW_CREDS)",
+      warehouse: "ANALYTICS_WH",
+      database: "PROD_DB",
+      schema: "PUBLIC",
+      timeout: 600,
+      max_rows: 50000
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystDomainContextBasic)
+{
+  auto result = compile_and_run(R"neam(
+    domain_context SalesDomain {
+      glossary: SalesGlossary,
+      query_history: true,
+      feedback_loop: true
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystQueryTemplateBasic)
+{
+  auto result = compile_and_run(R"neam(
+    query_template TopCustomers {
+      description: "Top customers by revenue",
+      category: "revenue",
+      sql: "SELECT customer_name, SUM(amount) as total FROM orders GROUP BY 1 ORDER BY 2 DESC LIMIT 10",
+      default_format: "table",
+      audit: true
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystQueryOptimizerBasic)
+{
+  auto result = compile_and_run(R"neam(
+    query_optimizer SnowOpt {
+      cost_model: "snowflake_credits",
+      max_cost_per_query: 0.50,
+      max_scan_gb: 100,
+      max_execution_time: 600,
+      explain_optimizations: true
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystExecutionPolicyBasic)
+{
+  auto result = compile_and_run(R"neam(
+    execution_policy SafeExec {
+      max_rows: 50000,
+      timeout: 300,
+      read_only: true,
+      apply_masking: true,
+      audit_all_queries: true,
+      cache_results: true,
+      cache_ttl: "1h"
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystOutputFormatBasic)
+{
+  auto result = compile_and_run(R"neam(
+    output_format ExcelReport {
+      type: "excel"
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystQueryLibraryBasic)
+{
+  auto result = compile_and_run(R"neam(
+    query_library TeamQueries {
+      storage: "local",
+      path: "/tmp/queries",
+      categories: ["revenue", "customer", "operational"],
+      track_usage: true,
+      suggest_similar: true
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystScheduleBasic)
+{
+  auto result = compile_and_run(R"neam(
+    sql_connection DW {
+      platform: "snowflake",
+      connection: "snow://test"
+    }
+    analysis_schedule DailyReport {
+      query: "What was yesterday total revenue?",
+      cron: "0 8 * * MON-FRI",
+      connection: DW,
+      audit: true
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystAgentBasic)
+{
+  auto result = compile_and_run(R"neam(
+    budget B { cost: 1.00, tokens: 50000, time: 60000 }
+    sql_connection DW {
+      platform: "snowflake",
+      connection: "snow://test"
+    }
+    analyst agent DataAnalyst {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      connections: [DW],
+      budget: B,
+      default_output: "table",
+      role: "senior_analyst",
+      purpose: "Business intelligence queries"
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystAgentNativeFunctions)
+{
+  auto result = compile_and_run(R"neam(
+    budget B { cost: 1.00, tokens: 50000, time: 60000 }
+    sql_connection DW {
+      platform: "postgres",
+      connection: "postgres://localhost/test"
+    }
+    analyst agent Ana {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      connections: [DW],
+      budget: B
+    }
+    let status = analyst_status(Ana);
+    let report = analyst_report(Ana);
+    return status == "initialized";
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystAgentFullPipeline)
+{
+  auto result = compile_and_run(R"neam(
+    budget B { cost: 5.00, tokens: 100000, time: 120000 }
+    sql_connection SnowDW {
+      platform: "snowflake",
+      connection: "snow://test",
+      warehouse: "ANALYTICS_WH",
+      database: "PROD",
+      schema: "PUBLIC"
+    }
+    query_optimizer Opt {
+      cost_model: "snowflake_credits",
+      max_cost_per_query: 0.50,
+      explain_optimizations: true
+    }
+    execution_policy SafeExec {
+      max_rows: 50000,
+      read_only: true,
+      cache_results: true,
+      cache_ttl: "1h"
+    }
+    output_format ExcelOut {
+      type: "excel"
+    }
+    query_library TeamLib {
+      storage: "local",
+      path: "/tmp/queries",
+      track_usage: true
+    }
+    domain_context SalesDomain {
+      query_history: true,
+      feedback_loop: true
+    }
+    analyst agent DataAnalyst {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      connections: [SnowDW],
+      domain_context: SalesDomain,
+      optimizer: Opt,
+      execution_policy: SafeExec,
+      query_library: TeamLib,
+      output_formats: [ExcelOut],
+      default_output: "table",
+      budget: B,
+      role: "senior_analyst",
+      purpose: "Revenue and customer analytics"
+    }
+    let status = analyst_status(DataAnalyst);
+    return status == "initialized";
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, AnalystCrossVersionAllAgents)
+{
+  auto result = compile_and_run(R"neam(
+    budget B { cost: 10.00, tokens: 500000, time: 300000 }
+
+    sql_connection DW {
+      platform: "snowflake",
+      connection: "snow://test",
+      warehouse: "WH",
+      database: "DB"
+    }
+
+    query_optimizer Opt {
+      cost_model: "snowflake_credits",
+      max_cost_per_query: 1.0
+    }
+
+    execution_policy Safe {
+      max_rows: 50000,
+      read_only: true,
+      cache_results: true
+    }
+
+    output_format Excel {
+      type: "excel"
+    }
+
+    query_library Lib {
+      storage: "local",
+      path: "/tmp/q"
+    }
+
+    domain_context Sales {
+      query_history: true
+    }
+
+    analyst agent Ana {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      connections: [DW],
+      domain_context: Sales,
+      optimizer: Opt,
+      execution_policy: Safe,
+      query_library: Lib,
+      output_formats: [Excel],
+      budget: B,
+      default_output: "table"
+    }
+
+    let s = analyst_status(Ana);
+    let r = analyst_report(Ana);
+    return s == "initialized";
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.7: Data Pipeline Deployment Tests
+// ═══════════════════════════════════════════════════════════════
+
+TEST(CompileRunTest, DeployTargetBasic)
+{
+  auto result = compile_and_run(R"neam(
+    deploy_target Staging {
+      environment: "staging",
+      connection: "SnowflakeStaging",
+      region: "us-east-1",
+      variables: { "warehouse_size": "medium", "concurrency": "4" }
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, DeployPromotionRuleBasic)
+{
+  auto result = compile_and_run(R"neam(
+    promotion_rule DevToStaging {
+      from_env: "dev",
+      to_env: "staging",
+      require_tests: true,
+      auto_promote: true,
+      cooldown: "30m"
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, DeployRollbackPolicyBasic)
+{
+  auto result = compile_and_run(R"neam(
+    rollback_policy SafeRollback {
+      strategy: "gradual",
+      keep_data: true,
+      notify_dataops: true,
+      max_rollback_window: "24h",
+      reconciliation: true
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, DeployArtifactRegistryBasic)
+{
+  auto result = compile_and_run(R"neam(
+    artifact_registry PipelineArtifacts {
+      storage: "s3",
+      path: "s3://my-bucket/artifacts",
+      versioning: "semver",
+      retention: "90d",
+      sign_artifacts: true,
+      checksum: "sha256",
+      immutable: true
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, DeployConfigBasic)
+{
+  auto result = compile_and_run(R"neam(
+    deploy_target Prod {
+      environment: "prod",
+      connection: "SnowflakeProd",
+      region: "us-east-1"
+    }
+
+    rollback_policy QuickRollback {
+      strategy: "immediate",
+      keep_data: true,
+      notify_dataops: true,
+      max_rollback_window: "24h"
+    }
+
+    deploy_config ETLDeploy {
+      target: Prod,
+      strategy: "rolling",
+      approval_gate: false,
+      pipeline_ref: SalesETL,
+      auto_rollback: true,
+      rollback_policy: QuickRollback,
+      pre_deploy_checks: {
+        "schema_compatibility": true
+      },
+      post_deploy_checks: {
+        "row_count_delta": "<= 0.01"
+      }
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, DeployFullPipeline)
+{
+  auto result = compile_and_run(R"neam(
+    deploy_target Dev {
+      environment: "dev",
+      connection: "SnowflakeDev",
+      region: "us-east-1",
+      variables: { "warehouse_size": "xsmall" }
+    }
+
+    deploy_target Staging {
+      environment: "staging",
+      connection: "SnowflakeStaging",
+      region: "us-east-1"
+    }
+
+    deploy_target Production {
+      environment: "prod",
+      connection: "SnowflakeProd",
+      region: "us-east-1",
+      tags: { "team": "data-eng", "cost_center": "DE-001" }
+    }
+
+    promotion_rule DevToStaging {
+      from_env: "dev",
+      to_env: "staging",
+      require_tests: true,
+      auto_promote: true,
+      cooldown: "30m"
+    }
+
+    promotion_rule StagingToProd {
+      from_env: "staging",
+      to_env: "prod",
+      require_tests: true,
+      require_approval: true,
+      approvers: ["data-lead", "platform-lead"],
+      cooldown: "1h",
+      gate_checks: {
+        "data_quality_score": ">= 0.95",
+        "test_coverage": ">= 80",
+        "no_breaking_schema_changes": true
+      }
+    }
+
+    rollback_policy SafeRollback {
+      strategy: "gradual",
+      keep_data: true,
+      notify_dataops: true,
+      max_rollback_window: "24h",
+      reconciliation: true,
+      notifications: {
+        "slack": "#data-incidents",
+        "pagerduty": "data-oncall"
+      }
+    }
+
+    artifact_registry PipelineArtifacts {
+      storage: "s3",
+      path: "s3://acme-artifacts/pipelines",
+      versioning: "semver",
+      retention: "90d",
+      sign_artifacts: true,
+      checksum: "sha256",
+      immutable: true
+    }
+
+    deploy_config SalesETLDeploy {
+      target: Production,
+      strategy: "blue_green",
+      approval_gate: true,
+      pipeline_ref: SalesETL,
+      rollback_policy: SafeRollback,
+      artifact_registry: PipelineArtifacts,
+      auto_rollback: true,
+      pre_deploy_checks: {
+        "schema_compatibility": true,
+        "data_quality_baseline": true,
+        "resource_availability": true
+      },
+      post_deploy_checks: {
+        "row_count_delta": "<= 0.01",
+        "latency_p99": "<= 500ms",
+        "error_rate": "<= 0.001"
+      },
+      notifications: {
+        "slack": "#data-deploys"
+      }
+    }
+    return true;
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
+TEST(CompileRunTest, DeployNativeFunctions)
+{
+  auto result = compile_and_run(R"neam(
+    deploy_target TestEnv {
+      environment: "test",
+      connection: "TestDB",
+      region: "us-east-1"
+    }
+
+    rollback_policy TestRollback {
+      strategy: "immediate",
+      keep_data: true,
+      notify_dataops: false,
+      max_rollback_window: "1h"
+    }
+
+    artifact_registry TestRegistry {
+      storage: "local",
+      path: "/tmp/artifacts",
+      versioning: "semver",
+      retention: "7d",
+      checksum: "sha256",
+      immutable: true
+    }
+
+    deploy_config TestDeploy {
+      target: TestEnv,
+      strategy: "rolling",
+      pipeline_ref: TestPipeline,
+      auto_rollback: true,
+      rollback_policy: TestRollback,
+      artifact_registry: TestRegistry
+    }
+
+    let s = deploy_status(TestDeploy);
+    let p = deploy_artifact_publish(TestRegistry, "TestPipeline", "1.0.0");
+    return s != "";
+  )neam");
+  EXPECT_TRUE(result.is_bool());
+  EXPECT_TRUE(result.as_bool());
+}
+
 }  // namespace
