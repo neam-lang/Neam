@@ -44,6 +44,8 @@
 #include "neamc/vm/modeling_types.hpp"
 #include "neamc/vm/analyst_types.hpp"
 #include "neamc/vm/deploy_types.hpp"
+#include "neamc/vm/datascientist_types.hpp"
+#include "neamc/vm/causal_types.hpp"
 
 namespace neamc::vm
 {
@@ -3439,5 +3441,131 @@ void register_core_natives(VirtualMachine& vm)
     }
     return Value::Nil();
   });
+
+  // ═══════════════════════════════════════════════════════════════
+  // v0.9.8: Data Scientist Agent native functions
+  // ═══════════════════════════════════════════════════════════════
+
+  // ds_status(agent) -> string — returns agent lifecycle status
+  vm.define_native("ds_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_DATASCIENTIST_AGENT) {
+      auto* agent = reinterpret_cast<ObjDataScientistAgent*>(args[0].as_obj());
+      return Value::String(agent->status.c_str(), agent->status.size());
+    }
+    return Value::String("error: expected datascientist agent", 35);
+  });
+
+  // Stub natives — return nil until engine phases are implemented
+  // Each follows: vm.define_native(name, argc, stub_lambda)
+  auto ds_stub = [](VirtualMachine&, int, Value*) -> Value { return Value::Nil(); };
+
+  vm.define_native("ds_frame_problem", 2, ds_stub);
+  vm.define_native("ds_generate_hypotheses", 3, ds_stub);
+  vm.define_native("ds_test_hypothesis", 3, ds_stub);
+  vm.define_native("ds_validate_assumptions", 3, ds_stub);
+  vm.define_native("ds_discover_sources", 2, ds_stub);
+  vm.define_native("ds_probe_volume", 2, ds_stub);
+  vm.define_native("ds_select_compute_tier", 3, ds_stub);
+  vm.define_native("ds_connect", 3, ds_stub);
+  vm.define_native("ds_run_eda", 3, ds_stub);
+  vm.define_native("ds_eda_univariate", 3, ds_stub);
+  vm.define_native("ds_eda_bivariate", 4, ds_stub);
+  vm.define_native("ds_eda_target_analysis", 3, ds_stub);
+  vm.define_native("ds_recommend_techniques", 2, ds_stub);
+  vm.define_native("ds_build_venv", 3, ds_stub);
+  vm.define_native("ds_exec_python", 4, ds_stub);
+  vm.define_native("ds_test_python", 4, ds_stub);
+  vm.define_native("ds_submit_spark", 3, ds_stub);
+  vm.define_native("ds_pushdown_sql", 3, ds_stub);
+  vm.define_native("ds_translate_to_spark", 2, ds_stub);
+  vm.define_native("ds_profile_performance", 2, ds_stub);
+  vm.define_native("ds_discover_features", 3, ds_stub);
+  vm.define_native("ds_engineer_features", 3, ds_stub);
+  vm.define_native("ds_select_features", 4, ds_stub);
+  vm.define_native("ds_profile_features", 2, ds_stub);
+  vm.define_native("ds_train", 2, ds_stub);
+  vm.define_native("ds_evaluate", 3, ds_stub);
+  vm.define_native("ds_cross_validate", 3, ds_stub);
+  vm.define_native("ds_compare_models", 3, ds_stub);
+  vm.define_native("ds_predict", 3, ds_stub);
+  vm.define_native("ds_predict_proba", 3, ds_stub);
+  vm.define_native("ds_automl_search", 3, ds_stub);
+  vm.define_native("ds_tune_hyperparams", 3, ds_stub);
+  vm.define_native("ds_stack_models", 3, ds_stub);
+  vm.define_native("ds_explain_global", 3, ds_stub);
+  vm.define_native("ds_explain_local", 3, ds_stub);
+  vm.define_native("ds_explain_counterfactual", 3, ds_stub);
+  vm.define_native("ds_check_fairness", 4, ds_stub);
+  vm.define_native("ds_predict_churn", 3, ds_stub);
+  vm.define_native("ds_compute_clv", 3, ds_stub);
+  vm.define_native("ds_score_propensity", 3, ds_stub);
+  vm.define_native("ds_recommend", 4, ds_stub);
+  vm.define_native("ds_segment_customers", 3, ds_stub);
+  vm.define_native("ds_basket_analysis", 3, ds_stub);
+  vm.define_native("ds_design_experiment", 2, ds_stub);
+  vm.define_native("ds_analyze_experiment", 3, ds_stub);
+  vm.define_native("ds_scenario_analysis", 2, ds_stub);
+  vm.define_native("ds_generate_report", 3, ds_stub);
+  vm.define_native("ds_profile_data", 2, ds_stub);
+  vm.define_native("ds_assess_quality", 3, ds_stub);
+  vm.define_native("ds_remediate_quality", 3, ds_stub);
+  vm.define_native("ds_select_strategy", 3, ds_stub);
+  vm.define_native("ds_retrieve_similar", 3, ds_stub);
+  vm.define_native("ds_self_assess", 3, ds_stub);
+  vm.define_native("ds_self_correct", 3, ds_stub);
+  vm.define_native("ds_detect_drift", 3, ds_stub);
+  vm.define_native("ds_monitor_performance", 4, ds_stub);
+  vm.define_native("ds_log_analysis", 3, ds_stub);
+  vm.define_native("ds_register_model", 4, ds_stub);
+  vm.define_native("ds_promote_model", 3, ds_stub);
+  vm.define_native("ds_retrain_model", 3, ds_stub);
+
+  // ═══════════════════════════════════════════════════════════════
+  // v0.9.8.1 Causal Agent natives
+  // ═══════════════════════════════════════════════════════════════
+
+  vm.define_native("causal_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_CAUSAL_AGENT) {
+      auto* agent = reinterpret_cast<ObjCausalAgent*>(args[0].as_obj());
+      return Value::String(agent->status.c_str(), agent->status.size());
+    }
+    return Value::String("error: expected causal agent", 28);
+  });
+
+  auto causal_stub = [](VirtualMachine&, int, Value*) -> Value { return Value::Nil(); };
+
+  // Discovery (6)
+  vm.define_native("causal_discover_dag", 3, causal_stub);
+  vm.define_native("causal_propose_dag", 2, causal_stub);
+  vm.define_native("causal_validate_dag", 3, causal_stub);
+  vm.define_native("causal_merge_dags", 3, causal_stub);
+  vm.define_native("causal_add_edge", 4, causal_stub);
+  vm.define_native("causal_remove_edge", 4, causal_stub);
+  // SCM & Intervention (6)
+  vm.define_native("causal_build_scm", 4, causal_stub);
+  vm.define_native("causal_do", 3, causal_stub);
+  vm.define_native("causal_identify", 3, causal_stub);
+  vm.define_native("causal_estimate", 3, causal_stub);
+  vm.define_native("causal_ate", 3, causal_stub);
+  vm.define_native("causal_cate", 5, causal_stub);
+  // Counterfactual (4)
+  vm.define_native("causal_counterfactual", 4, causal_stub);
+  vm.define_native("causal_abduction", 3, causal_stub);
+  vm.define_native("causal_pns", 3, causal_stub);
+  vm.define_native("causal_ett", 3, causal_stub);
+  // Bayesian (5)
+  vm.define_native("causal_bayesian_fit", 3, causal_stub);
+  vm.define_native("causal_posterior_summary", 2, causal_stub);
+  vm.define_native("causal_posterior_predictive", 3, causal_stub);
+  vm.define_native("causal_model_compare", 2, causal_stub);
+  vm.define_native("causal_prior_predictive", 2, causal_stub);
+  // Robustness (4)
+  vm.define_native("causal_sensitivity", 3, causal_stub);
+  vm.define_native("causal_refute", 3, causal_stub);
+  vm.define_native("causal_e_value", 2, causal_stub);
+  vm.define_native("causal_assumption_check", 3, causal_stub);
+  // Explanation (2)
+  vm.define_native("causal_explain", 3, causal_stub);
+  vm.define_native("causal_visualize_dag", 2, causal_stub);
 }
 }  // namespace neamc::vm

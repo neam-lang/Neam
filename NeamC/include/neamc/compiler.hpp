@@ -40,7 +40,7 @@ private:
   void emit_block(const BlockStmt& block);
 
   // v0.8 Phase 1: Agent type tracking for trait validation
-  enum class AgentKind { Stateless, Claw, Forge, Data, ETL, Migration, DataOps, Governance, Modeling, Analyst };
+  enum class AgentKind { Stateless, Claw, Forge, Data, ETL, Migration, DataOps, Governance, Modeling, Analyst, DataScientist, Causal };
   std::unordered_map<std::string, AgentKind> agent_types_;
 
   // v0.9: Data agent definition tracking
@@ -134,6 +134,61 @@ private:
   std::unordered_set<std::string> artifact_registry_defs_;
   std::unordered_set<std::string> deploy_config_defs_;
   void validate_deploy_config(const DeployConfigDecl& decl);
+
+  // v0.9.8: Data Scientist Agent tracking sets
+  std::unordered_set<std::string> problem_statement_defs_;
+  std::unordered_set<std::string> hypothesis_test_defs_;
+  std::unordered_set<std::string> feature_engineering_defs_;
+  std::unordered_set<std::string> ml_experiment_defs_;
+  std::unordered_set<std::string> automl_config_defs_;
+  std::unordered_set<std::string> hyperparameter_config_defs_;
+  std::unordered_set<std::string> stacked_model_defs_;
+  std::unordered_set<std::string> evaluation_config_defs_;
+  std::unordered_set<std::string> ds_model_registry_defs_;
+  std::unordered_set<std::string> explainability_config_defs_;
+  std::unordered_set<std::string> code_interpreter_defs_;
+  std::unordered_set<std::string> venv_manager_defs_;
+  std::unordered_set<std::string> nlp_pipeline_defs_;
+  std::unordered_set<std::string> churn_analysis_defs_;
+  std::unordered_set<std::string> clv_model_defs_;
+  std::unordered_set<std::string> propensity_model_defs_;
+  std::unordered_set<std::string> recommendation_engine_defs_;
+  std::unordered_set<std::string> experiment_design_defs_;
+  std::unordered_set<std::string> scenario_analysis_defs_;
+  std::unordered_set<std::string> decision_support_defs_;
+  std::unordered_set<std::string> eda_config_defs_;
+  std::unordered_set<std::string> eda_technique_selector_defs_;
+  std::unordered_set<std::string> smart_connector_defs_;
+  std::unordered_set<std::string> volume_router_defs_;
+  std::unordered_set<std::string> compute_connector_defs_;
+  std::unordered_set<std::string> file_connector_defs_;
+  std::unordered_set<std::string> distributed_compute_config_defs_;
+  std::unordered_set<std::string> performance_config_defs_;
+  std::unordered_set<std::string> data_quality_pipeline_defs_;
+  std::unordered_set<std::string> self_correction_config_defs_;
+  std::unordered_set<std::string> self_assessment_defs_;
+  std::unordered_set<std::string> adaptive_knowledge_config_defs_;
+  std::unordered_set<std::string> analysis_history_defs_;
+  std::unordered_set<std::string> observability_config_defs_;
+  std::unordered_set<std::string> datascientist_agent_defs_;
+  void validate_datascientist_agent(const DataScientistAgentDecl& decl);
+
+  // v0.9.8.1: Cross-cutting tracking for causal validation
+  std::unordered_set<std::string> budget_defs_;
+  std::unordered_set<std::string> forge_agent_defs_;
+
+  // v0.9.8.1: Causal Agent tracking
+  std::unordered_set<std::string> causal_discovery_defs_;
+  std::unordered_set<std::string> scm_defs_;
+  std::unordered_set<std::string> intervention_defs_;
+  std::unordered_set<std::string> counterfactual_defs_;
+  std::unordered_set<std::string> bayesian_model_defs_;
+  std::unordered_set<std::string> causal_estimator_defs_;
+  std::unordered_set<std::string> quasi_experiment_defs_;
+  std::unordered_set<std::string> causal_sensitivity_defs_;
+  std::unordered_set<std::string> causal_data_requirements_defs_;
+  std::unordered_set<std::string> causal_agent_defs_;
+  void validate_causal_agent(const CausalAgentDecl& decl);
   void validate_classification_policy(const ClassificationPolicyDecl& decl);
   void validate_access_policy(const AccessPolicyDecl& decl);
   void validate_quality_policy(const QualityPolicyDecl& decl);

@@ -41,6 +41,8 @@
 #include "neamc/vm/modeling_types.hpp"
 #include "neamc/vm/analyst_types.hpp"
 #include "neamc/vm/deploy_types.hpp"
+#include "neamc/vm/datascientist_types.hpp"
+#include "neamc/vm/causal_types.hpp"
 #include "neamc/vm/forge_loop.hpp"
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/context_builder.hpp"
@@ -10312,6 +10314,1032 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
 
       case OpCode::OP_DEPLOY_EXECUTE:
       case OpCode::OP_DEPLOY_ROLLBACK:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        stack_.resize(base);
+        stack_.push_back(Value::Nil());
+        break;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // v0.9.8: Data Scientist Agent opcodes
+      // ═══════════════════════════════════════════════════════════════
+
+      // --- 6 key DEFINE opcodes with full field mapping ---
+
+      case OpCode::OP_DEFINE_PROBLEM_STATEMENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* obj = new_problem_statement();
+        obj->name = fields["name"];
+        if (fields.count("statement")) obj->statement = fields["statement"];
+        if (fields.count("business_context"))
+        {
+          try { obj->business_context_json = fields["business_context"]; } catch (...) {}
+        }
+        if (fields.count("constraints"))
+        {
+          try { obj->constraints_json = fields["constraints"]; } catch (...) {}
+        }
+        if (fields.count("deliverables"))
+        {
+          try { obj->deliverables_json = fields["deliverables"]; } catch (...) {}
+        }
+
+        auto* name_str = copy_string(obj->name.c_str(), obj->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_ML_EXPERIMENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* obj = new_ml_experiment();
+        obj->name = fields["name"];
+        if (fields.count("problem_type")) obj->problem_type = fields["problem_type"];
+        if (fields.count("target")) obj->target = fields["target"];
+        if (fields.count("positive_class")) obj->positive_class = fields["positive_class"];
+        if (fields.count("dataset")) obj->dataset = fields["dataset"];
+        if (fields.count("train_test_split")) obj->train_test_split = std::stod(fields["train_test_split"]);
+        if (fields.count("stratify")) obj->stratify = fields["stratify"] == "true";
+        if (fields.count("cross_validation"))
+        {
+          try { obj->cross_validation_json = fields["cross_validation"]; } catch (...) {}
+        }
+        if (fields.count("algorithms")) obj->algorithms = fields["algorithms"];
+        if (fields.count("metrics"))
+        {
+          try { obj->metrics_json = fields["metrics"]; } catch (...) {}
+        }
+        if (fields.count("interpretability")) obj->interpretability = fields["interpretability"];
+        if (fields.count("budget")) obj->budget_ref = fields["budget"];
+
+        auto* name_str = copy_string(obj->name.c_str(), obj->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_EDA_CONFIG:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* obj = new_eda_config();
+        obj->name = fields["name"];
+        if (fields.count("structural"))
+        {
+          try { obj->structural_json = fields["structural"]; } catch (...) {}
+        }
+        if (fields.count("univariate"))
+        {
+          try { obj->univariate_json = fields["univariate"]; } catch (...) {}
+        }
+        if (fields.count("bivariate"))
+        {
+          try { obj->bivariate_json = fields["bivariate"]; } catch (...) {}
+        }
+        if (fields.count("multivariate"))
+        {
+          try { obj->multivariate_json = fields["multivariate"]; } catch (...) {}
+        }
+        if (fields.count("temporal"))
+        {
+          try { obj->temporal_json = fields["temporal"]; } catch (...) {}
+        }
+        if (fields.count("performance"))
+        {
+          try { obj->performance_json = fields["performance"]; } catch (...) {}
+        }
+        if (fields.count("output"))
+        {
+          try { obj->output_json = fields["output"]; } catch (...) {}
+        }
+
+        auto* name_str = copy_string(obj->name.c_str(), obj->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_VOLUME_ROUTER:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* obj = new_volume_router();
+        obj->name = fields["name"];
+        if (fields.count("volume_probe"))
+        {
+          try { obj->volume_probe_json = fields["volume_probe"]; } catch (...) {}
+        }
+        if (fields.count("routing_rules"))
+        {
+          try { obj->routing_rules_json = fields["routing_rules"]; } catch (...) {}
+        }
+        if (fields.count("auto_escalate"))
+        {
+          try { obj->auto_escalate_json = fields["auto_escalate"]; } catch (...) {}
+        }
+        if (fields.count("sampling_strategy"))
+        {
+          try { obj->sampling_strategy_json = fields["sampling_strategy"]; } catch (...) {}
+        }
+
+        auto* name_str = copy_string(obj->name.c_str(), obj->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_CODE_INTERPRETER:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* obj = new_code_interpreter();
+        obj->name = fields["name"];
+        if (fields.count("runtime")) obj->runtime = fields["runtime"];
+        if (fields.count("version")) obj->version = fields["version"];
+        if (fields.count("venv_manager")) obj->venv_manager_ref = fields["venv_manager"];
+        if (fields.count("profiles"))
+        {
+          try { obj->profiles_json = fields["profiles"]; } catch (...) {}
+        }
+        if (fields.count("profile_selection")) obj->profile_selection = fields["profile_selection"];
+        if (fields.count("sandbox"))
+        {
+          try { obj->sandbox_json = fields["sandbox"]; } catch (...) {}
+        }
+        if (fields.count("auto_test"))
+        {
+          try { obj->auto_test_json = fields["auto_test"]; } catch (...) {}
+        }
+        if (fields.count("data_bridge"))
+        {
+          try { obj->data_bridge_json = fields["data_bridge"]; } catch (...) {}
+        }
+
+        auto* name_str = copy_string(obj->name.c_str(), obj->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        break;
+      }
+
+      case OpCode::OP_DEFINE_DATASCIENTIST_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* obj = new_datascientist_agent();
+        obj->name = fields["name"];
+        // LLM base
+        if (fields.count("provider")) obj->provider = fields["provider"];
+        if (fields.count("model")) obj->llm_model = fields["model"];
+        if (fields.count("system")) obj->system_prompt = fields["system"];
+        if (fields.count("temperature")) obj->temperature = std::stod(fields["temperature"]);
+        if (fields.count("endpoint")) obj->endpoint = fields["endpoint"];
+        if (fields.count("api_key_env")) obj->api_key_env = fields["api_key_env"];
+        // Agent.MD
+        if (fields.count("agent_md")) obj->agent_md_path = fields["agent_md"];
+        // Problem
+        if (fields.count("problem")) obj->problem_ref = fields["problem"];
+        if (fields.count("problem_types")) obj->problem_types = fields["problem_types"];
+        // Sub-agents & forge
+        if (fields.count("sub_agents"))
+        {
+          try { obj->sub_agents_json = fields["sub_agents"]; } catch (...) {}
+        }
+        if (fields.count("forge")) obj->forge_ref = fields["forge"];
+        // Data
+        if (fields.count("data_sources"))
+        {
+          try { obj->data_sources_json = fields["data_sources"]; } catch (...) {}
+        }
+        // Component refs
+        if (fields.count("eda_config")) obj->eda_config_ref = fields["eda_config"];
+        if (fields.count("feature_config")) obj->feature_config_ref = fields["feature_config"];
+        if (fields.count("experiment")) obj->experiment_ref = fields["experiment"];
+        if (fields.count("automl")) obj->automl_ref = fields["automl"];
+        if (fields.count("ensemble")) obj->ensemble_ref = fields["ensemble"];
+        if (fields.count("hypotheses")) obj->hypotheses_refs = fields["hypotheses"];
+        if (fields.count("evaluation")) obj->evaluation_ref = fields["evaluation"];
+        if (fields.count("explainability")) obj->explainability_ref = fields["explainability"];
+        if (fields.count("code_interpreter")) obj->code_interpreter_ref = fields["code_interpreter"];
+        if (fields.count("model_registry")) obj->model_registry_ref = fields["model_registry"];
+        if (fields.count("churn")) obj->churn_ref = fields["churn"];
+        if (fields.count("clv")) obj->clv_ref = fields["clv"];
+        if (fields.count("propensity")) obj->propensity_ref = fields["propensity"];
+        if (fields.count("recommendation")) obj->recommendation_ref = fields["recommendation"];
+        if (fields.count("experiment_engine")) obj->experiment_engine_ref = fields["experiment_engine"];
+        if (fields.count("decision_framework")) obj->decision_framework_ref = fields["decision_framework"];
+        if (fields.count("volume_router")) obj->volume_router_ref = fields["volume_router"];
+        if (fields.count("distributed_compute")) obj->distributed_compute_ref = fields["distributed_compute"];
+        if (fields.count("performance")) obj->performance_ref = fields["performance"];
+        if (fields.count("data_quality")) obj->data_quality_ref = fields["data_quality"];
+        if (fields.count("self_correction")) obj->self_correction_ref = fields["self_correction"];
+        if (fields.count("self_assessment")) obj->self_assessment_ref = fields["self_assessment"];
+        if (fields.count("adaptive_knowledge")) obj->adaptive_knowledge_ref = fields["adaptive_knowledge"];
+        if (fields.count("deployment")) obj->deployment_ref = fields["deployment"];
+        // Coordination
+        if (fields.count("coordinates_with")) obj->coordinates_with = fields["coordinates_with"];
+        if (fields.count("handoffs")) obj->handoffs = fields["handoffs"];
+        // Identity
+        if (fields.count("role")) obj->role = fields["role"];
+        if (fields.count("purpose")) obj->purpose = fields["purpose"];
+        if (fields.count("autonomy")) obj->autonomy = fields["autonomy"];
+        // Budget
+        if (fields.count("budget")) obj->budget_ref = fields["budget"];
+
+        obj->status = "initialized";
+
+        auto* name_str = copy_string(obj->name.c_str(), obj->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        break;
+      }
+
+      // --- 29 remaining DEFINE opcodes: generic field-reading handlers ---
+
+      case OpCode::OP_DEFINE_HYPOTHESIS_TEST:
+      case OpCode::OP_DEFINE_FEATURE_ENGINEERING:
+      case OpCode::OP_DEFINE_AUTOML_CONFIG:
+      case OpCode::OP_DEFINE_HYPERPARAMETER_CONFIG:
+      case OpCode::OP_DEFINE_STACKED_MODEL:
+      case OpCode::OP_DEFINE_EVALUATION_CONFIG:
+      case OpCode::OP_DEFINE_DS_MODEL_REGISTRY:
+      case OpCode::OP_DEFINE_EXPLAINABILITY_CONFIG:
+      case OpCode::OP_DEFINE_VENV_MANAGER:
+      case OpCode::OP_DEFINE_NLP_PIPELINE:
+      case OpCode::OP_DEFINE_CHURN_ANALYSIS:
+      case OpCode::OP_DEFINE_CLV_MODEL:
+      case OpCode::OP_DEFINE_PROPENSITY_MODEL:
+      case OpCode::OP_DEFINE_RECOMMENDATION_ENGINE:
+      case OpCode::OP_DEFINE_EXPERIMENT_DESIGN:
+      case OpCode::OP_DEFINE_SCENARIO_ANALYSIS:
+      case OpCode::OP_DEFINE_DECISION_SUPPORT:
+      case OpCode::OP_DEFINE_EDA_TECHNIQUE_SELECTOR:
+      case OpCode::OP_DEFINE_SMART_CONNECTOR:
+      case OpCode::OP_DEFINE_COMPUTE_CONNECTOR:
+      case OpCode::OP_DEFINE_FILE_CONNECTOR:
+      case OpCode::OP_DEFINE_DISTRIBUTED_COMPUTE_CONFIG:
+      case OpCode::OP_DEFINE_PERFORMANCE_CONFIG:
+      case OpCode::OP_DEFINE_DATA_QUALITY_PIPELINE:
+      case OpCode::OP_DEFINE_SELF_CORRECTION_CONFIG:
+      case OpCode::OP_DEFINE_SELF_ASSESSMENT:
+      case OpCode::OP_DEFINE_ADAPTIVE_KNOWLEDGE_CONFIG:
+      case OpCode::OP_DEFINE_ANALYSIS_HISTORY:
+      case OpCode::OP_DEFINE_OBSERVABILITY_CONFIG:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        // Create the appropriate runtime object based on opcode
+        Obj* runtime_obj = nullptr;
+        std::string obj_name;
+
+        switch (op)
+        {
+          case OpCode::OP_DEFINE_HYPOTHESIS_TEST:
+          {
+            auto* o = new_hypothesis_test();
+            o->name = fields["name"];
+            if (fields.count("null_hypothesis")) o->null_hypothesis = fields["null_hypothesis"];
+            if (fields.count("alternative")) o->alternative = fields["alternative"];
+            if (fields.count("test_type")) o->test_type = fields["test_type"];
+            if (fields.count("significance_level")) o->significance_level = std::stod(fields["significance_level"]);
+            if (fields.count("power")) o->power = std::stod(fields["power"]);
+            if (fields.count("effect_size")) o->effect_size = fields["effect_size"];
+            if (fields.count("data_source")) o->data_source = fields["data_source"];
+            if (fields.count("group_a")) o->group_a = fields["group_a"];
+            if (fields.count("group_b")) o->group_b = fields["group_b"];
+            if (fields.count("assumptions")) o->assumptions_json = fields["assumptions"];
+            if (fields.count("if_significant")) o->if_significant_json = fields["if_significant"];
+            if (fields.count("if_not_significant")) o->if_not_significant_json = fields["if_not_significant"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_FEATURE_ENGINEERING:
+          {
+            auto* o = new_feature_engineering();
+            o->name = fields["name"];
+            if (fields.count("source_tables")) o->source_tables_json = fields["source_tables"];
+            if (fields.count("strategies")) o->strategies_json = fields["strategies"];
+            if (fields.count("selection")) o->selection_json = fields["selection"];
+            if (fields.count("output")) o->output_json = fields["output"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_AUTOML_CONFIG:
+          {
+            auto* o = new_automl_config();
+            o->name = fields["name"];
+            if (fields.count("algorithms")) o->algorithms = fields["algorithms"];
+            if (fields.count("preprocessing_search")) o->preprocessing_search_json = fields["preprocessing_search"];
+            if (fields.count("optimization")) o->optimization_json = fields["optimization"];
+            if (fields.count("cv_folds")) o->cv_folds = std::stoi(fields["cv_folds"]);
+            if (fields.count("primary_metric")) o->primary_metric = fields["primary_metric"];
+            if (fields.count("holdout_validation")) o->holdout_validation = fields["holdout_validation"] == "true";
+            if (fields.count("selection_criteria")) o->selection_criteria_json = fields["selection_criteria"];
+            if (fields.count("leaderboard")) o->leaderboard = fields["leaderboard"] == "true";
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_HYPERPARAMETER_CONFIG:
+          {
+            auto* o = new_hyperparameter_config();
+            o->name = fields["name"];
+            if (fields.count("algorithm")) o->algorithm = fields["algorithm"];
+            if (fields.count("search_space")) o->search_space_json = fields["search_space"];
+            if (fields.count("optimizer")) o->optimizer_json = fields["optimizer"];
+            if (fields.count("early_stopping")) o->early_stopping_json = fields["early_stopping"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_STACKED_MODEL:
+          {
+            auto* o = new_stacked_model();
+            o->name = fields["name"];
+            if (fields.count("base_learners")) o->base_learners_json = fields["base_learners"];
+            if (fields.count("meta_learner")) o->meta_learner_json = fields["meta_learner"];
+            if (fields.count("strategy")) o->strategy_json = fields["strategy"];
+            if (fields.count("compare_against")) o->compare_against = fields["compare_against"];
+            if (fields.count("improvement_threshold")) o->improvement_threshold = std::stod(fields["improvement_threshold"]);
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_EVALUATION_CONFIG:
+          {
+            auto* o = new_evaluation_config();
+            o->name = fields["name"];
+            if (fields.count("classification")) o->classification_json = fields["classification"];
+            if (fields.count("regression")) o->regression_json = fields["regression"];
+            if (fields.count("clustering")) o->clustering_json = fields["clustering"];
+            if (fields.count("business")) o->business_json = fields["business"];
+            if (fields.count("cv_strategy")) o->cv_strategy = fields["cv_strategy"];
+            if (fields.count("outer_folds")) o->outer_folds = std::stoi(fields["outer_folds"]);
+            if (fields.count("inner_folds")) o->inner_folds = std::stoi(fields["inner_folds"]);
+            if (fields.count("model_comparison")) o->model_comparison_json = fields["model_comparison"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_DS_MODEL_REGISTRY:
+          {
+            auto* o = new_ds_model_registry();
+            o->name = fields["name"];
+            if (fields.count("storage")) o->storage_json = fields["storage"];
+            if (fields.count("tracking")) o->tracking_json = fields["tracking"];
+            if (fields.count("model_card")) o->model_card_json = fields["model_card"];
+            if (fields.count("lifecycle")) o->lifecycle_json = fields["lifecycle"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_EXPLAINABILITY_CONFIG:
+          {
+            auto* o = new_explainability_config();
+            o->name = fields["name"];
+            if (fields.count("global")) o->global_json = fields["global"];
+            if (fields.count("local")) o->local_json = fields["local"];
+            if (fields.count("fairness")) o->fairness_json = fields["fairness"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_VENV_MANAGER:
+          {
+            auto* o = new_venv_manager();
+            o->name = fields["name"];
+            if (fields.count("lifecycle")) o->lifecycle_json = fields["lifecycle"];
+            if (fields.count("pool")) o->pool_json = fields["pool"];
+            if (fields.count("dependency_resolver")) o->dependency_resolver_json = fields["dependency_resolver"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_NLP_PIPELINE:
+          {
+            auto* o = new_nlp_pipeline();
+            o->name = fields["name"];
+            if (fields.count("preprocessing")) o->preprocessing_json = fields["preprocessing"];
+            if (fields.count("tasks")) o->tasks_json = fields["tasks"];
+            if (fields.count("embedding_model")) o->embedding_model = fields["embedding_model"];
+            if (fields.count("vector_store")) o->vector_store = fields["vector_store"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_CHURN_ANALYSIS:
+          {
+            auto* o = new_churn_analysis();
+            o->name = fields["name"];
+            if (fields.count("churn_definition")) o->churn_definition_json = fields["churn_definition"];
+            if (fields.count("features")) o->features_json = fields["features"];
+            if (fields.count("primary_model")) o->primary_model = fields["primary_model"];
+            if (fields.count("calibration")) o->calibration = fields["calibration"];
+            if (fields.count("threshold_optimization")) o->threshold_optimization = fields["threshold_optimization"];
+            if (fields.count("outputs")) o->outputs_json = fields["outputs"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_CLV_MODEL:
+          {
+            auto* o = new_clv_model();
+            o->name = fields["name"];
+            if (fields.count("model_type")) o->model_type = fields["model_type"];
+            if (fields.count("frequency")) o->frequency = fields["frequency"];
+            if (fields.count("recency")) o->recency = fields["recency"];
+            if (fields.count("monetary")) o->monetary = fields["monetary"];
+            if (fields.count("T")) o->T = fields["T"];
+            if (fields.count("prediction_periods")) o->prediction_periods_json = fields["prediction_periods"];
+            if (fields.count("discount_rate")) o->discount_rate = std::stod(fields["discount_rate"]);
+            if (fields.count("segments")) o->segments_json = fields["segments"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_PROPENSITY_MODEL:
+          {
+            auto* o = new_propensity_model();
+            o->name = fields["name"];
+            if (fields.count("target_action")) o->target_action = fields["target_action"];
+            if (fields.count("training_window")) o->training_window = fields["training_window"];
+            if (fields.count("features")) o->features_json = fields["features"];
+            if (fields.count("algorithm")) o->algorithm = fields["algorithm"];
+            if (fields.count("calibration_method")) o->calibration_method = fields["calibration_method"];
+            if (fields.count("score_output")) o->score_output_json = fields["score_output"];
+            if (fields.count("actions")) o->actions_json = fields["actions"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_RECOMMENDATION_ENGINE:
+          {
+            auto* o = new_recommendation_engine();
+            o->name = fields["name"];
+            if (fields.count("strategy")) o->strategy = fields["strategy"];
+            if (fields.count("collaborative")) o->collaborative_json = fields["collaborative"];
+            if (fields.count("content_based")) o->content_based_json = fields["content_based"];
+            if (fields.count("blending")) o->blending_json = fields["blending"];
+            if (fields.count("rules")) o->rules_json = fields["rules"];
+            if (fields.count("metrics")) o->metrics = fields["metrics"];
+            if (fields.count("serving")) o->serving_json = fields["serving"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_EXPERIMENT_DESIGN:
+          {
+            auto* o = new_experiment_design();
+            o->name = fields["name"];
+            if (fields.count("experiment_type")) o->experiment_type = fields["experiment_type"];
+            if (fields.count("control")) o->control_json = fields["control"];
+            if (fields.count("treatments")) o->treatments_json = fields["treatments"];
+            if (fields.count("unit")) o->unit = fields["unit"];
+            if (fields.count("stratify_by")) o->stratify_by = fields["stratify_by"];
+            if (fields.count("power_analysis")) o->power_analysis_json = fields["power_analysis"];
+            if (fields.count("primary_metric")) o->primary_metric_json = fields["primary_metric"];
+            if (fields.count("guardrails")) o->guardrails_json = fields["guardrails"];
+            if (fields.count("analysis")) o->analysis_json = fields["analysis"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_SCENARIO_ANALYSIS:
+          {
+            auto* o = new_scenario_analysis();
+            o->name = fields["name"];
+            if (fields.count("base_model")) o->base_model = fields["base_model"];
+            if (fields.count("scenarios")) o->scenarios_json = fields["scenarios"];
+            if (fields.count("simulation")) o->simulation_json = fields["simulation"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_DECISION_SUPPORT:
+          {
+            auto* o = new_decision_support();
+            o->name = fields["name"];
+            if (fields.count("deliverables")) o->deliverables_json = fields["deliverables"];
+            if (fields.count("confidence")) o->confidence_json = fields["confidence"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_EDA_TECHNIQUE_SELECTOR:
+          {
+            auto* o = new_eda_technique_selector();
+            o->name = fields["name"];
+            if (fields.count("rules")) o->rules_json = fields["rules"];
+            if (fields.count("output")) o->output_json = fields["output"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_SMART_CONNECTOR:
+          {
+            auto* o = new_smart_connector();
+            o->name = fields["name"];
+            if (fields.count("discovery")) o->discovery_json = fields["discovery"];
+            if (fields.count("metadata_cache")) o->metadata_cache_json = fields["metadata_cache"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_COMPUTE_CONNECTOR:
+          {
+            auto* o = new_compute_connector();
+            o->name = fields["name"];
+            if (fields.count("engine")) o->engine = fields["engine"];
+            if (fields.count("connection")) o->connection = fields["connection"];
+            if (fields.count("token")) o->token = fields["token"];
+            if (fields.count("cluster_config")) o->cluster_config_json = fields["cluster_config"];
+            if (fields.count("idle_timeout")) o->idle_timeout = fields["idle_timeout"];
+            if (fields.count("cost_tracking")) o->cost_tracking = fields["cost_tracking"] == "true";
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_FILE_CONNECTOR:
+          {
+            auto* o = new_file_connector();
+            o->name = fields["name"];
+            if (fields.count("base_path")) o->base_path = fields["base_path"];
+            if (fields.count("auto_detect_schema")) o->auto_detect_schema = fields["auto_detect_schema"] == "true";
+            if (fields.count("auto_detect_delimiter")) o->auto_detect_delimiter = fields["auto_detect_delimiter"] == "true";
+            if (fields.count("auto_detect_encoding")) o->auto_detect_encoding = fields["auto_detect_encoding"] == "true";
+            if (fields.count("supported_formats")) o->supported_formats_json = fields["supported_formats"];
+            if (fields.count("large_file_strategy")) o->large_file_strategy_json = fields["large_file_strategy"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_DISTRIBUTED_COMPUTE_CONFIG:
+          {
+            auto* o = new_distributed_compute_config();
+            o->name = fields["name"];
+            if (fields.count("spark")) o->spark_json = fields["spark"];
+            if (fields.count("databricks")) o->databricks_json = fields["databricks"];
+            if (fields.count("snowflake")) o->snowflake_json = fields["snowflake"];
+            if (fields.count("hadoop")) o->hadoop_json = fields["hadoop"];
+            if (fields.count("gpu")) o->gpu_json = fields["gpu"];
+            if (fields.count("selection_logic")) o->selection_logic_json = fields["selection_logic"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_PERFORMANCE_CONFIG:
+          {
+            auto* o = new_performance_config();
+            o->name = fields["name"];
+            if (fields.count("phase_slas")) o->phase_slas_json = fields["phase_slas"];
+            if (fields.count("cache")) o->cache_json = fields["cache"];
+            if (fields.count("parallelism")) o->parallelism_json = fields["parallelism"];
+            if (fields.count("lazy_eval")) o->lazy_eval_json = fields["lazy_eval"];
+            if (fields.count("memory")) o->memory_json = fields["memory"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_DATA_QUALITY_PIPELINE:
+          {
+            auto* o = new_data_quality_pipeline();
+            o->name = fields["name"];
+            if (fields.count("profiling")) o->profiling_json = fields["profiling"];
+            if (fields.count("scoring")) o->scoring_json = fields["scoring"];
+            if (fields.count("remediation")) o->remediation_json = fields["remediation"];
+            if (fields.count("governance")) o->governance_ref = fields["governance"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_SELF_CORRECTION_CONFIG:
+          {
+            auto* o = new_self_correction_config();
+            o->name = fields["name"];
+            if (fields.count("code_errors")) o->code_errors_json = fields["code_errors"];
+            if (fields.count("statistical_errors")) o->statistical_errors_json = fields["statistical_errors"];
+            if (fields.count("model_errors")) o->model_errors_json = fields["model_errors"];
+            if (fields.count("reasoning_errors")) o->reasoning_errors_json = fields["reasoning_errors"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_SELF_ASSESSMENT:
+          {
+            auto* o = new_self_assessment();
+            o->name = fields["name"];
+            if (fields.count("planning")) o->planning_json = fields["planning"];
+            if (fields.count("execution")) o->execution_json = fields["execution"];
+            if (fields.count("interpretation")) o->interpretation_json = fields["interpretation"];
+            if (fields.count("communication")) o->communication_json = fields["communication"];
+            if (fields.count("gate")) o->gate_json = fields["gate"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_ADAPTIVE_KNOWLEDGE_CONFIG:
+          {
+            auto* o = new_adaptive_knowledge_config();
+            o->name = fields["name"];
+            if (fields.count("knowledge_sources")) o->knowledge_sources_json = fields["knowledge_sources"];
+            if (fields.count("adaptation")) o->adaptation_json = fields["adaptation"];
+            if (fields.count("learning")) o->learning_json = fields["learning"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_ANALYSIS_HISTORY:
+          {
+            auto* o = new_analysis_history();
+            o->name = fields["name"];
+            if (fields.count("knowledge_base")) o->knowledge_base = fields["knowledge_base"];
+            if (fields.count("vector_store")) o->vector_store = fields["vector_store"];
+            if (fields.count("embedding_model")) o->embedding_model = fields["embedding_model"];
+            if (fields.count("retrieval_strategy")) o->retrieval_strategy = fields["retrieval_strategy"];
+            if (fields.count("record_fields")) o->record_fields_json = fields["record_fields"];
+            if (fields.count("retention")) o->retention = fields["retention"];
+            if (fields.count("max_records")) o->max_records = std::stoi(fields["max_records"]);
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_OBSERVABILITY_CONFIG:
+          {
+            auto* o = new_observability_config();
+            o->name = fields["name"];
+            if (fields.count("feature_monitoring")) o->feature_monitoring_json = fields["feature_monitoring"];
+            if (fields.count("prediction_monitoring")) o->prediction_monitoring_json = fields["prediction_monitoring"];
+            if (fields.count("alerts")) o->alerts_json = fields["alerts"];
+            if (fields.count("auto_remediation")) o->auto_remediation_json = fields["auto_remediation"];
+            if (fields.count("dataops")) o->dataops_ref = fields["dataops"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          default:
+            break;
+        }
+
+        if (runtime_obj)
+        {
+          auto* name_str = copy_string(obj_name.c_str(), obj_name.size());
+          globals_.set(name_str, Value::ObjVal(runtime_obj));
+          stack_.push_back(Value::ObjVal(runtime_obj));
+        }
+        else
+        {
+          stack_.push_back(Value::Nil());
+        }
+        break;
+      }
+
+      // --- 17 ACTION opcodes: runtime stubs ---
+
+      case OpCode::OP_DS_DISCOVER_DATA:
+      case OpCode::OP_DS_SENSE_VOLUME:
+      case OpCode::OP_DS_RUN_EDA:
+      case OpCode::OP_DS_FRAME_PROBLEM:
+      case OpCode::OP_DS_TEST_HYPOTHESIS:
+      case OpCode::OP_DS_ENGINEER_FEATURES:
+      case OpCode::OP_DS_TRAIN_MODEL:
+      case OpCode::OP_DS_EVALUATE_MODEL:
+      case OpCode::OP_DS_EXPLAIN_MODEL:
+      case OpCode::OP_DS_PREDICT:
+      case OpCode::OP_DS_RECOMMEND:
+      case OpCode::OP_DS_RUN_EXPERIMENT:
+      case OpCode::OP_DS_SCENARIO:
+      case OpCode::OP_DS_BUILD_VENV:
+      case OpCode::OP_DS_EXEC_PYTHON:
+      case OpCode::OP_DS_SUBMIT_SPARK:
+      case OpCode::OP_DS_PUSHDOWN_SQL:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        stack_.resize(base);
+        stack_.push_back(Value::Nil());
+        break;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // v0.9.8.1 Causal Agent opcodes
+      // ═══════════════════════════════════════════════════════════════
+
+      case OpCode::OP_DEFINE_CAUSAL_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* obj = new_causal_agent();
+        obj->name = fields["name"];
+        // LLM base
+        if (fields.count("provider")) obj->provider = fields["provider"];
+        if (fields.count("model")) obj->llm_model = fields["model"];
+        if (fields.count("system")) obj->system_prompt = fields["system"];
+        if (fields.count("temperature")) obj->temperature = std::stod(fields["temperature"]);
+        // Agent.MD
+        if (fields.count("agent_md")) obj->agent_md_path = fields["agent_md"];
+        // Sub-agents & forge
+        if (fields.count("sub_agents"))
+        {
+          try { obj->sub_agents_json = fields["sub_agents"]; } catch (...) {}
+        }
+        if (fields.count("forge")) obj->forge_ref = fields["forge"];
+        // Peer agent
+        if (fields.count("peer_agent")) obj->peer_agent_ref = fields["peer_agent"];
+        // Component refs
+        if (fields.count("discovery")) obj->discovery_ref = fields["discovery"];
+        if (fields.count("scm")) obj->scm_ref = fields["scm"];
+        if (fields.count("intervention")) obj->intervention_ref = fields["intervention"];
+        if (fields.count("counterfactual")) obj->counterfactual_ref = fields["counterfactual"];
+        if (fields.count("bayesian_model")) obj->bayesian_model_ref = fields["bayesian_model"];
+        if (fields.count("estimator")) obj->estimator_ref = fields["estimator"];
+        if (fields.count("sensitivity")) obj->sensitivity_ref = fields["sensitivity"];
+        if (fields.count("data_requirements")) obj->data_requirements_ref = fields["data_requirements"];
+        if (fields.count("code_interpreter")) obj->code_interpreter_ref = fields["code_interpreter"];
+        // Coordination
+        if (fields.count("coordinates_with")) obj->coordinates_with = fields["coordinates_with"];
+        if (fields.count("handoffs")) obj->handoffs = fields["handoffs"];
+        // Identity
+        if (fields.count("role")) obj->role = fields["role"];
+        if (fields.count("purpose")) obj->purpose = fields["purpose"];
+        if (fields.count("autonomy")) obj->autonomy = fields["autonomy"];
+        // Budget
+        if (fields.count("budget")) obj->budget_ref = fields["budget"];
+
+        obj->status = "initialized";
+
+        auto* name_str = copy_string(obj->name.c_str(), obj->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(obj)));
+        break;
+      }
+
+      // --- 9 remaining Causal DEFINE opcodes: generic field-reading handlers ---
+
+      case OpCode::OP_DEFINE_CAUSAL_DISCOVERY:
+      case OpCode::OP_DEFINE_SCM:
+      case OpCode::OP_DEFINE_INTERVENTION:
+      case OpCode::OP_DEFINE_COUNTERFACTUAL:
+      case OpCode::OP_DEFINE_BAYESIAN_MODEL:
+      case OpCode::OP_DEFINE_CAUSAL_ESTIMATOR:
+      case OpCode::OP_DEFINE_QUASI_EXPERIMENT:
+      case OpCode::OP_DEFINE_CAUSAL_SENSITIVITY:
+      case OpCode::OP_DEFINE_CAUSAL_DATA_REQUIREMENTS:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        // Create the appropriate runtime object based on opcode
+        Obj* runtime_obj = nullptr;
+        std::string obj_name;
+
+        switch (op)
+        {
+          case OpCode::OP_DEFINE_CAUSAL_DISCOVERY:
+          {
+            auto* o = new_causal_discovery();
+            o->name = fields["name"];
+            if (fields.count("llm_discovery")) o->llm_discovery_json = fields["llm_discovery"];
+            if (fields.count("algorithmic_discovery")) o->algorithmic_discovery_json = fields["algorithmic_discovery"];
+            if (fields.count("merge_strategy")) o->merge_strategy_json = fields["merge_strategy"];
+            if (fields.count("validation")) o->validation_json = fields["validation"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_SCM:
+          {
+            auto* o = new_scm();
+            o->name = fields["name"];
+            if (fields.count("variables")) o->variables_json = fields["variables"];
+            if (fields.count("exogenous")) o->exogenous_json = fields["exogenous"];
+            if (fields.count("latent_confounders")) o->latent_confounders_json = fields["latent_confounders"];
+            if (fields.count("dag")) o->dag_ref = fields["dag"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_INTERVENTION:
+          {
+            auto* o = new_intervention();
+            o->name = fields["name"];
+            if (fields.count("scm")) o->scm_ref = fields["scm"];
+            if (fields.count("do")) o->do_json = fields["do"];
+            if (fields.count("outcome")) o->outcome = fields["outcome"];
+            if (fields.count("identification")) o->identification_json = fields["identification"];
+            if (fields.count("estimation")) o->estimation_json = fields["estimation"];
+            if (fields.count("compare_with_naive")) o->compare_with_naive = fields["compare_with_naive"] == "true";
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_COUNTERFACTUAL:
+          {
+            auto* o = new_counterfactual();
+            o->name = fields["name"];
+            if (fields.count("scm")) o->scm_ref = fields["scm"];
+            if (fields.count("evidence")) o->evidence_json = fields["evidence"];
+            if (fields.count("question")) o->question = fields["question"];
+            if (fields.count("abduction")) o->abduction_json = fields["abduction"];
+            if (fields.count("action")) o->action_json = fields["action"];
+            if (fields.count("prediction")) o->prediction_json = fields["prediction"];
+            if (fields.count("attribution")) o->attribution_json = fields["attribution"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_BAYESIAN_MODEL:
+          {
+            auto* o = new_bayesian_model();
+            o->name = fields["name"];
+            if (fields.count("framework")) o->framework = fields["framework"];
+            if (fields.count("version")) o->version = fields["version"];
+            if (fields.count("priors")) o->priors_json = fields["priors"];
+            if (fields.count("likelihood")) o->likelihood_json = fields["likelihood"];
+            if (fields.count("sampling")) o->sampling_json = fields["sampling"];
+            if (fields.count("posterior")) o->posterior_json = fields["posterior"];
+            if (fields.count("comparison")) o->comparison_json = fields["comparison"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_CAUSAL_ESTIMATOR:
+          {
+            auto* o = new_causal_estimator();
+            o->name = fields["name"];
+            if (fields.count("scm")) o->scm_ref = fields["scm"];
+            if (fields.count("treatment")) o->treatment = fields["treatment"];
+            if (fields.count("outcome")) o->outcome = fields["outcome"];
+            if (fields.count("primary")) o->primary_json = fields["primary"];
+            if (fields.count("secondary")) o->secondary_json = fields["secondary"];
+            if (fields.count("heterogeneous")) o->heterogeneous_json = fields["heterogeneous"];
+            if (fields.count("compare_estimators")) o->compare_estimators = fields["compare_estimators"] == "true";
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_QUASI_EXPERIMENT:
+          {
+            auto* o = new_quasi_experiment();
+            o->name = fields["name"];
+            if (fields.count("method")) o->method = fields["method"];
+            if (fields.count("treatment_time")) o->treatment_time = fields["treatment_time"];
+            if (fields.count("treatment_group")) o->treatment_group = fields["treatment_group"];
+            if (fields.count("control_group")) o->control_group = fields["control_group"];
+            if (fields.count("outcome")) o->outcome = fields["outcome"];
+            if (fields.count("covariates")) o->covariates = fields["covariates"];
+            if (fields.count("parallel_trends_test")) o->parallel_trends_test = fields["parallel_trends_test"] == "true";
+            if (fields.count("bayesian")) o->bayesian = fields["bayesian"] == "true";
+            if (fields.count("mcmc")) o->mcmc_json = fields["mcmc"];
+            if (fields.count("running_variable")) o->running_variable = fields["running_variable"];
+            if (fields.count("cutoff")) o->cutoff = std::stod(fields["cutoff"]);
+            if (fields.count("bandwidth")) o->bandwidth = fields["bandwidth"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_CAUSAL_SENSITIVITY:
+          {
+            auto* o = new_causal_sensitivity();
+            o->name = fields["name"];
+            if (fields.count("estimator")) o->estimator_ref = fields["estimator"];
+            if (fields.count("rosenbaum")) o->rosenbaum_json = fields["rosenbaum"];
+            if (fields.count("e_value")) o->e_value = fields["e_value"] == "true";
+            if (fields.count("refutations")) o->refutations_json = fields["refutations"];
+            if (fields.count("assumptions")) o->assumptions_json = fields["assumptions"];
+            if (fields.count("output")) o->output_json = fields["output"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          case OpCode::OP_DEFINE_CAUSAL_DATA_REQUIREMENTS:
+          {
+            auto* o = new_causal_data_requirements();
+            o->name = fields["name"];
+            if (fields.count("temporal")) o->temporal_json = fields["temporal"];
+            if (fields.count("required_confounders")) o->required_confounders = fields["required_confounders"];
+            if (fields.count("instruments")) o->instruments_json = fields["instruments"];
+            if (fields.count("natural_experiments")) o->natural_experiments = fields["natural_experiments"];
+            if (fields.count("quality")) o->quality_json = fields["quality"];
+            obj_name = o->name;
+            runtime_obj = reinterpret_cast<Obj*>(o);
+            break;
+          }
+          default:
+            break;
+        }
+
+        if (runtime_obj)
+        {
+          auto* name_str = copy_string(obj_name.c_str(), obj_name.size());
+          globals_.set(name_str, Value::ObjVal(runtime_obj));
+          stack_.push_back(Value::ObjVal(runtime_obj));
+        }
+        else
+        {
+          stack_.push_back(Value::Nil());
+        }
+        break;
+      }
+
+      // --- 10 Causal ACTION opcodes: runtime stubs ---
+
+      case OpCode::OP_CAUSAL_DISCOVER:
+      case OpCode::OP_CAUSAL_BUILD_SCM:
+      case OpCode::OP_CAUSAL_DO:
+      case OpCode::OP_CAUSAL_IDENTIFY:
+      case OpCode::OP_CAUSAL_ESTIMATE:
+      case OpCode::OP_CAUSAL_COUNTERFACTUAL:
+      case OpCode::OP_CAUSAL_BAYESIAN_FIT:
+      case OpCode::OP_CAUSAL_SENSITIVITY:
+      case OpCode::OP_CAUSAL_EXPLAIN:
+      case OpCode::OP_CAUSAL_VISUALIZE_DAG:
       {
         const auto field_count = code[frame.ip++];
         std::size_t base = stack_.size() - field_count * 2;

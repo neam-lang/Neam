@@ -2911,6 +2911,581 @@ struct DeployConfigDecl {
   std::string artifact_registry;
 };
 
+// ═══════════════════════════════════════════════════════════════
+// v0.9.8 Data Scientist Agent AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+enum class DSProblemType {
+  CLASSIFICATION, REGRESSION, CLUSTERING, TIME_SERIES,
+  RECOMMENDATION, ANOMALY_DETECTION, NLP, CAUSAL_INFERENCE,
+  ASSOCIATION, OPTIMIZATION
+};
+
+enum class StatTestType {
+  T_TEST_ONE, T_TEST_TWO, T_TEST_PAIRED,
+  MANN_WHITNEY_U, KRUSKAL_WALLIS, WILCOXON,
+  CHI_SQUARE, FISHER_EXACT,
+  ANOVA, MANOVA,
+  PEARSON, SPEARMAN, KENDALL,
+  SHAPIRO_WILK, ANDERSON_DARLING, KS_TEST,
+  LEVENE, BARTLETT,
+  BAYESIAN_T_TEST, BAYESIAN_REGRESSION
+};
+
+enum class InterpreterRuntime { PYTHON, R };
+
+struct ProblemStatementDecl {
+  Visibility visibility;
+  std::string name;
+  std::string statement;
+  std::string business_context_json;
+  std::string constraints_json;
+  std::string deliverables_json;
+};
+
+struct HypothesisTestDecl {
+  Visibility visibility;
+  std::string name;
+  std::string null_hypothesis;
+  std::string alternative;
+  std::string test_type;
+  double significance_level = 0.05;
+  double power = 0.80;
+  std::string effect_size;
+  std::string data_source;
+  std::string group_a;
+  std::string group_b;
+  std::string assumptions_json;
+  std::string if_significant_json;
+  std::string if_not_significant_json;
+};
+
+struct FeatureEngineeringDecl {
+  Visibility visibility;
+  std::string name;
+  std::string source_tables_json;
+  std::string strategies_json;
+  std::string selection_json;
+  std::string output_json;
+};
+
+struct MLExperimentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string problem_type;
+  std::string target;
+  std::string positive_class;
+  std::string dataset;
+  double train_test_split = 0.8;
+  bool stratify = true;
+  std::string cross_validation_json;
+  std::string algorithms;
+  std::string metrics_json;
+  std::string interpretability;
+  std::string latency_requirement;
+  std::string max_training_time;
+  std::string budget;
+};
+
+struct AutoMLConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string algorithms;
+  std::string preprocessing_search_json;
+  std::string optimization_json;
+  int cv_folds = 5;
+  std::string primary_metric;
+  bool holdout_validation = true;
+  std::string selection_criteria_json;
+  bool leaderboard = true;
+};
+
+struct HyperparameterConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string algorithm;
+  std::string search_space_json;
+  std::string optimizer_json;
+  std::string early_stopping_json;
+};
+
+struct StackedModelDecl {
+  Visibility visibility;
+  std::string name;
+  std::string base_learners_json;
+  std::string meta_learner_json;
+  std::string strategy_json;
+  std::string compare_against;
+  double improvement_threshold = 0.005;
+};
+
+struct EvaluationConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string classification_json;
+  std::string regression_json;
+  std::string clustering_json;
+  std::string business_json;
+  std::string cv_strategy;
+  int outer_folds = 5;
+  int inner_folds = 3;
+  std::string model_comparison_json;
+};
+
+struct ModelRegistryDecl {
+  Visibility visibility;
+  std::string name;
+  std::string storage_json;
+  std::string tracking_json;
+  std::string model_card_json;
+  std::string lifecycle_json;
+};
+
+struct ExplainabilityConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string global_json;
+  std::string local_json;
+  std::string fairness_json;
+};
+
+struct CodeInterpreterDecl {
+  Visibility visibility;
+  std::string name;
+  std::string runtime;
+  std::string version;
+  std::string venv_manager;
+  std::string profiles_json;
+  std::string profile_selection;
+  std::string sandbox_json;
+  std::string auto_test_json;
+  std::string data_bridge_json;
+};
+
+struct VenvManagerDecl {
+  Visibility visibility;
+  std::string name;
+  std::string lifecycle_json;
+  std::string pool_json;
+  std::string dependency_resolver_json;
+};
+
+struct NLPPipelineDecl {
+  Visibility visibility;
+  std::string name;
+  std::string preprocessing_json;
+  std::string tasks_json;
+  std::string embedding_model;
+  std::string vector_store;
+};
+
+struct ChurnAnalysisDecl {
+  Visibility visibility;
+  std::string name;
+  std::string churn_definition_json;
+  std::string features_json;
+  std::string primary_model;
+  std::string calibration;
+  std::string threshold_optimization;
+  std::string outputs_json;
+};
+
+struct CLVModelDecl {
+  Visibility visibility;
+  std::string name;
+  std::string model_type;
+  std::string frequency;
+  std::string recency;
+  std::string monetary;
+  std::string T;
+  std::string prediction_periods_json;
+  double discount_rate = 0.10;
+  std::string segments_json;
+};
+
+struct PropensityModelDecl {
+  Visibility visibility;
+  std::string name;
+  std::string target_action;
+  std::string training_window;
+  std::string features_json;
+  std::string algorithm;
+  std::string calibration_method;
+  std::string score_output_json;
+  std::string actions_json;
+};
+
+struct RecommendationEngineDecl {
+  Visibility visibility;
+  std::string name;
+  std::string strategy;
+  std::string collaborative_json;
+  std::string content_based_json;
+  std::string blending_json;
+  std::string rules_json;
+  std::string metrics;
+  std::string serving_json;
+};
+
+struct ExperimentDesignDecl {
+  Visibility visibility;
+  std::string name;
+  std::string experiment_type;
+  std::string control_json;
+  std::string treatments_json;
+  std::string unit;
+  std::string stratify_by;
+  std::string power_analysis_json;
+  std::string primary_metric_json;
+  std::string guardrails_json;
+  std::string analysis_json;
+};
+
+struct ScenarioAnalysisDecl {
+  Visibility visibility;
+  std::string name;
+  std::string base_model;
+  std::string scenarios_json;
+  std::string simulation_json;
+};
+
+struct DecisionSupportDecl {
+  Visibility visibility;
+  std::string name;
+  std::string deliverables_json;
+  std::string confidence_json;
+};
+
+struct EDAConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string structural_json;
+  std::string univariate_json;
+  std::string bivariate_json;
+  std::string multivariate_json;
+  std::string temporal_json;
+  std::string performance_json;
+  std::string output_json;
+};
+
+struct EDATechniqueSelectorDecl {
+  Visibility visibility;
+  std::string name;
+  std::string rules_json;
+  std::string output_json;
+};
+
+struct SmartConnectorDecl {
+  Visibility visibility;
+  std::string name;
+  std::string discovery_json;
+  std::string metadata_cache_json;
+};
+
+struct VolumeRouterDecl {
+  Visibility visibility;
+  std::string name;
+  std::string volume_probe_json;
+  std::string routing_rules_json;
+  std::string auto_escalate_json;
+  std::string sampling_strategy_json;
+};
+
+struct ComputeConnectorDecl {
+  Visibility visibility;
+  std::string name;
+  std::string engine;
+  std::string connection;
+  std::string token;
+  std::string cluster_config_json;
+  std::string idle_timeout;
+  bool cost_tracking = true;
+};
+
+struct FileConnectorDecl {
+  Visibility visibility;
+  std::string name;
+  std::string base_path;
+  bool auto_detect_schema = true;
+  bool auto_detect_delimiter = true;
+  bool auto_detect_encoding = true;
+  std::string supported_formats_json;
+  std::string large_file_strategy_json;
+};
+
+struct DistributedComputeConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string spark_json;
+  std::string databricks_json;
+  std::string snowflake_json;
+  std::string hadoop_json;
+  std::string gpu_json;
+  std::string selection_logic_json;
+};
+
+struct PerformanceConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string phase_slas_json;
+  std::string total_analysis_sla_json;
+  std::string cache_json;
+  std::string parallelism_json;
+  std::string lazy_eval_json;
+  std::string memory_json;
+};
+
+struct DataQualityPipelineDecl {
+  Visibility visibility;
+  std::string name;
+  std::string profiling_json;
+  std::string scoring_json;
+  std::string remediation_json;
+  std::string report_json;
+  std::string governance_ref;
+};
+
+struct SelfCorrectionConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string code_errors_json;
+  std::string statistical_errors_json;
+  std::string model_errors_json;
+  std::string reasoning_errors_json;
+};
+
+struct SelfAssessmentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string planning_json;
+  std::string execution_json;
+  std::string interpretation_json;
+  std::string communication_json;
+  std::string gate_json;
+};
+
+struct AdaptiveKnowledgeConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string knowledge_sources_json;
+  std::string adaptation_json;
+  std::string learning_json;
+};
+
+struct AnalysisHistoryDecl {
+  Visibility visibility;
+  std::string name;
+  std::string knowledge_base;
+  std::string vector_store;
+  std::string embedding_model;
+  std::string retrieval_strategy;
+  std::string record_fields_json;
+  std::string retention;
+  int max_records = 10000;
+};
+
+struct ObservabilityConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string feature_monitoring_json;
+  std::string prediction_monitoring_json;
+  std::string alerts_json;
+  std::string auto_remediation_json;
+  std::string dataops_ref;
+};
+
+struct DataScientistAgentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::string system;
+  double temperature = 0.2;
+  std::string endpoint;
+  std::string api_key_env;
+  std::string agent_md;
+  std::string problem;
+  std::string problem_types;
+  std::string sub_agents_json;
+  std::string forge;
+  std::string data_sources_json;
+  std::string eda_config;
+  std::string feature_config;
+  std::string experiment;
+  std::string automl;
+  std::string ensemble;
+  std::vector<std::string> hypotheses;
+  std::string evaluation;
+  std::string explainability;
+  std::string code_interpreter;
+  std::string model_registry;
+  std::string churn;
+  std::string clv;
+  std::string propensity;
+  std::string recommendation;
+  std::string experiment_engine;
+  std::string decision_framework;
+  std::string volume_router;
+  std::string distributed_compute;
+  std::string performance;
+  std::string data_quality;
+  std::string self_correction;
+  std::string self_assessment;
+  std::string adaptive_knowledge;
+  std::string deployment;
+  std::vector<std::string> coordinates_with;
+  std::vector<std::string> handoffs;
+  std::string role;
+  std::string purpose;
+  std::string autonomy;
+  std::string budget;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.8.1 Causal Agent AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+enum class CausalDiscoveryAlgorithm {
+  PC, FCI, GES, NOTEARS, DAG_GNN, LINGAM, PCMCI, LLM_ASSISTED
+};
+
+enum class CausalIdentificationMethod {
+  AUTO, BACKDOOR, FRONTDOOR, INSTRUMENTAL_VARIABLE
+};
+
+struct CausalDiscoveryDecl {
+  Visibility visibility;
+  std::string name;
+  std::string llm_discovery_json;
+  std::string algorithmic_discovery_json;
+  std::string merge_strategy_json;
+  std::string validation_json;
+};
+
+struct SCMDecl {
+  Visibility visibility;
+  std::string name;
+  std::string variables_json;
+  std::string exogenous_json;
+  std::string latent_confounders_json;
+  std::string dag;
+};
+
+struct InterventionDecl {
+  Visibility visibility;
+  std::string name;
+  std::string scm;
+  std::string do_json;
+  std::string outcome;
+  std::string identification_json;
+  std::string estimation_json;
+  bool compare_with_naive = true;
+};
+
+struct CounterfactualDecl {
+  Visibility visibility;
+  std::string name;
+  std::string scm;
+  std::string evidence_json;
+  std::string question;
+  std::string abduction_json;
+  std::string action_json;
+  std::string prediction_json;
+  std::string attribution_json;
+};
+
+struct BayesianModelDecl {
+  Visibility visibility;
+  std::string name;
+  std::string framework;
+  std::string version;
+  std::string priors_json;
+  std::string likelihood_json;
+  std::string sampling_json;
+  std::string posterior_json;
+  std::string comparison_json;
+};
+
+struct CausalEstimatorDecl {
+  Visibility visibility;
+  std::string name;
+  std::string scm;
+  std::string treatment;
+  std::string outcome;
+  std::string primary_json;
+  std::string secondary_json;
+  std::string heterogeneous_json;
+  bool compare_estimators = true;
+};
+
+struct QuasiExperimentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string method;
+  std::string treatment_time;
+  std::string treatment_group;
+  std::string control_group;
+  std::string outcome;
+  std::string covariates;
+  bool parallel_trends_test = true;
+  bool bayesian = true;
+  std::string mcmc_json;
+  std::string running_variable;
+  double cutoff = 0.0;
+  std::string bandwidth;
+};
+
+struct CausalSensitivityDecl {
+  Visibility visibility;
+  std::string name;
+  std::string estimator;
+  std::string rosenbaum_json;
+  bool e_value = true;
+  std::string refutations_json;
+  std::string assumptions_json;
+  std::string output_json;
+};
+
+struct CausalDataRequirementsDecl {
+  Visibility visibility;
+  std::string name;
+  std::string temporal_json;
+  std::string required_confounders;
+  std::string instruments_json;
+  std::string natural_experiments;
+  std::string quality_json;
+};
+
+struct CausalAgentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::string system;
+  double temperature = 0.3;
+  std::string endpoint;
+  std::string api_key_env;
+  std::string agent_md;
+  std::string sub_agents_json;
+  std::string forge;
+  std::string peer_agent;
+  std::string discovery;
+  std::string scm;
+  std::string intervention;
+  std::string counterfactual;
+  std::string bayesian_model;
+  std::string estimator;
+  std::string sensitivity;
+  std::string data_requirements;
+  std::string code_interpreter;
+  std::vector<std::string> coordinates_with;
+  std::vector<std::string> handoffs;
+  std::string role;
+  std::string purpose;
+  std::string autonomy;
+  std::string budget;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -2968,7 +3543,22 @@ struct Statement
                    QueryOptimizerDecl, ExecutionPolicyDecl, OutputFormatDecl,
                    QueryLibraryDecl, AnalysisScheduleDecl, AnalystAgentDecl,
                    DeployTargetDecl, PromotionRuleDecl, RollbackPolicyDecl,
-                   ArtifactRegistryDecl, DeployConfigDecl>;
+                   ArtifactRegistryDecl, DeployConfigDecl,
+                   ProblemStatementDecl, HypothesisTestDecl, FeatureEngineeringDecl,
+                   MLExperimentDecl, AutoMLConfigDecl, HyperparameterConfigDecl,
+                   StackedModelDecl, EvaluationConfigDecl, ModelRegistryDecl,
+                   ExplainabilityConfigDecl, CodeInterpreterDecl, VenvManagerDecl,
+                   NLPPipelineDecl, ChurnAnalysisDecl, CLVModelDecl, PropensityModelDecl,
+                   RecommendationEngineDecl, ExperimentDesignDecl, ScenarioAnalysisDecl,
+                   DecisionSupportDecl, EDAConfigDecl, EDATechniqueSelectorDecl,
+                   SmartConnectorDecl, VolumeRouterDecl, ComputeConnectorDecl,
+                   FileConnectorDecl, DistributedComputeConfigDecl, PerformanceConfigDecl,
+                   DataQualityPipelineDecl, SelfCorrectionConfigDecl, SelfAssessmentDecl,
+                   AdaptiveKnowledgeConfigDecl, AnalysisHistoryDecl, ObservabilityConfigDecl,
+                   DataScientistAgentDecl,
+                   CausalDiscoveryDecl, SCMDecl, InterventionDecl, CounterfactualDecl,
+                   BayesianModelDecl, CausalEstimatorDecl, QuasiExperimentDecl,
+                   CausalSensitivityDecl, CausalDataRequirementsDecl, CausalAgentDecl>;
   SourceSpan span;
   Variant node;
 };

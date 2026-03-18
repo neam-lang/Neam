@@ -235,6 +235,8 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/modeling_types.cpp
     NeamC/src/vm/analyst_types.cpp
     NeamC/src/vm/deploy_types.cpp
+    NeamC/src/vm/datascientist_types.cpp
+    NeamC/src/vm/causal_types.cpp
     NeamC/src/vm/migration/audit_trail.cpp
     NeamC/src/vm/migration/schema_translator.cpp
     NeamC/src/vm/migration/data_movement.cpp

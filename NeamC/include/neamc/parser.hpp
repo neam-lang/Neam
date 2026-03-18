@@ -337,6 +337,56 @@ private:
   StmtPtr parse_rollback_policy_decl(const Visibility& visibility);
   StmtPtr parse_artifact_registry_decl(const Visibility& visibility);
   StmtPtr parse_deploy_config_decl(const Visibility& visibility);
+
+  // v0.9.8: Data Scientist Agent declarations
+  StmtPtr parse_problem_statement_decl(const Visibility& visibility);
+  StmtPtr parse_hypothesis_test_decl(const Visibility& visibility);
+  StmtPtr parse_feature_engineering_decl(const Visibility& visibility);
+  StmtPtr parse_ml_experiment_decl(const Visibility& visibility);
+  StmtPtr parse_automl_config_decl(const Visibility& visibility);
+  StmtPtr parse_hyperparameter_config_decl(const Visibility& visibility);
+  StmtPtr parse_stacked_model_decl(const Visibility& visibility);
+  StmtPtr parse_evaluation_config_decl(const Visibility& visibility);
+  StmtPtr parse_model_registry_decl(const Visibility& visibility);
+  StmtPtr parse_explainability_config_decl(const Visibility& visibility);
+  StmtPtr parse_code_interpreter_decl(const Visibility& visibility);
+  StmtPtr parse_venv_manager_decl(const Visibility& visibility);
+  StmtPtr parse_nlp_pipeline_decl(const Visibility& visibility);
+  StmtPtr parse_churn_analysis_decl(const Visibility& visibility);
+  StmtPtr parse_clv_model_decl(const Visibility& visibility);
+  StmtPtr parse_propensity_model_decl(const Visibility& visibility);
+  StmtPtr parse_recommendation_engine_decl(const Visibility& visibility);
+  StmtPtr parse_experiment_design_decl(const Visibility& visibility);
+  StmtPtr parse_scenario_analysis_decl(const Visibility& visibility);
+  StmtPtr parse_decision_support_decl(const Visibility& visibility);
+  StmtPtr parse_eda_config_decl(const Visibility& visibility);
+  StmtPtr parse_eda_technique_selector_decl(const Visibility& visibility);
+  StmtPtr parse_smart_connector_decl(const Visibility& visibility);
+  StmtPtr parse_volume_router_decl(const Visibility& visibility);
+  StmtPtr parse_compute_connector_decl(const Visibility& visibility);
+  StmtPtr parse_file_connector_decl(const Visibility& visibility);
+  StmtPtr parse_distributed_compute_config_decl(const Visibility& visibility);
+  StmtPtr parse_performance_config_decl(const Visibility& visibility);
+  StmtPtr parse_data_quality_pipeline_decl(const Visibility& visibility);
+  StmtPtr parse_self_correction_config_decl(const Visibility& visibility);
+  StmtPtr parse_self_assessment_decl(const Visibility& visibility);
+  StmtPtr parse_adaptive_knowledge_config_decl(const Visibility& visibility);
+  StmtPtr parse_analysis_history_decl(const Visibility& visibility);
+  StmtPtr parse_observability_config_decl(const Visibility& visibility);
+  StmtPtr parse_datascientist_agent_decl(const Visibility& visibility);
+
+  // v0.9.8.1: Causal Agent declarations
+  StmtPtr parse_causal_discovery_decl(const Visibility& visibility);
+  StmtPtr parse_scm_decl(const Visibility& visibility);
+  StmtPtr parse_intervention_decl(const Visibility& visibility);
+  StmtPtr parse_counterfactual_decl(const Visibility& visibility);
+  StmtPtr parse_bayesian_model_decl(const Visibility& visibility);
+  StmtPtr parse_causal_estimator_decl(const Visibility& visibility);
+  StmtPtr parse_quasi_experiment_decl(const Visibility& visibility);
+  StmtPtr parse_sensitivity_analysis_decl(const Visibility& visibility);
+  StmtPtr parse_causal_data_requirements_decl(const Visibility& visibility);
+  StmtPtr parse_causal_agent_decl(const Visibility& visibility);
+
   // v0.9.4: Governance sub-block parsers
   AutoClassifyConfig parse_auto_classify_config();
   SemanticClassifyConfig parse_semantic_classify_config();

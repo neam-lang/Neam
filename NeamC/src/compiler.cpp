@@ -4514,6 +4514,1080 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_op(vm::OpCode::OP_DEFINE_DEPLOY_CONFIG);
           chunk_.write_byte(field_count);
         }
+        // v0.9.8: Data Scientist Agent emit handlers
+        // ═══════════════════════════════════════════════════════════════
+        // Key type 1: ProblemStatementDecl (full handler)
+        else if constexpr (std::is_same_v<T, ProblemStatementDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.statement.empty()) push_str("statement", node.statement);
+          if (!node.business_context_json.empty()) push_str("business_context", node.business_context_json);
+          if (!node.constraints_json.empty()) push_str("constraints", node.constraints_json);
+          if (!node.deliverables_json.empty()) push_str("deliverables", node.deliverables_json);
+
+          problem_statement_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_PROBLEM_STATEMENT);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: HypothesisTestDecl
+        else if constexpr (std::is_same_v<T, HypothesisTestDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.null_hypothesis.empty()) push_str("null_hypothesis", node.null_hypothesis);
+          if (!node.alternative.empty()) push_str("alternative", node.alternative);
+          if (!node.test_type.empty()) push_str("test_type", node.test_type);
+          if (node.significance_level != 0.05) push_str("significance_level", std::to_string(node.significance_level));
+          if (node.power != 0.80) push_str("power", std::to_string(node.power));
+          if (!node.effect_size.empty()) push_str("effect_size", node.effect_size);
+          if (!node.data_source.empty()) push_str("data_source", node.data_source);
+          if (!node.group_a.empty()) push_str("group_a", node.group_a);
+          if (!node.group_b.empty()) push_str("group_b", node.group_b);
+          if (!node.assumptions_json.empty()) push_str("assumptions", node.assumptions_json);
+          if (!node.if_significant_json.empty()) push_str("if_significant", node.if_significant_json);
+          if (!node.if_not_significant_json.empty()) push_str("if_not_significant", node.if_not_significant_json);
+
+          hypothesis_test_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_HYPOTHESIS_TEST);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: FeatureEngineeringDecl
+        else if constexpr (std::is_same_v<T, FeatureEngineeringDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.source_tables_json.empty()) push_str("source_tables", node.source_tables_json);
+          if (!node.strategies_json.empty()) push_str("strategies", node.strategies_json);
+          if (!node.selection_json.empty()) push_str("selection", node.selection_json);
+          if (!node.output_json.empty()) push_str("output", node.output_json);
+
+          feature_engineering_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_FEATURE_ENGINEERING);
+          chunk_.write_byte(field_count);
+        }
+        // Key type 2: MLExperimentDecl (full handler)
+        else if constexpr (std::is_same_v<T, MLExperimentDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          auto push_num = [&](const std::string& key, double val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(val)));
+            field_count++;
+          };
+          auto push_bool = [&](const std::string& key, bool val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Bool(val));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.problem_type.empty()) push_str("problem_type", node.problem_type);
+          if (!node.target.empty()) push_str("target", node.target);
+          if (!node.positive_class.empty()) push_str("positive_class", node.positive_class);
+          if (!node.dataset.empty()) push_str("dataset", node.dataset);
+          if (node.train_test_split != 0.8) push_num("train_test_split", node.train_test_split);
+          push_bool("stratify", node.stratify);
+          if (!node.cross_validation_json.empty()) push_str("cross_validation", node.cross_validation_json);
+          if (!node.algorithms.empty()) push_str("algorithms", node.algorithms);
+          if (!node.metrics_json.empty()) push_str("metrics", node.metrics_json);
+          if (!node.interpretability.empty()) push_str("interpretability", node.interpretability);
+          if (!node.latency_requirement.empty()) push_str("latency_requirement", node.latency_requirement);
+          if (!node.max_training_time.empty()) push_str("max_training_time", node.max_training_time);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+
+          ml_experiment_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_ML_EXPERIMENT);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: AutoMLConfigDecl
+        else if constexpr (std::is_same_v<T, AutoMLConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.algorithms.empty()) push_str("algorithms", node.algorithms);
+          if (!node.preprocessing_search_json.empty()) push_str("preprocessing_search", node.preprocessing_search_json);
+          if (!node.optimization_json.empty()) push_str("optimization", node.optimization_json);
+          if (node.cv_folds != 5) push_str("cv_folds", std::to_string(node.cv_folds));
+          if (!node.primary_metric.empty()) push_str("primary_metric", node.primary_metric);
+          push_str("holdout_validation", node.holdout_validation ? "true" : "false");
+          if (!node.selection_criteria_json.empty()) push_str("selection_criteria", node.selection_criteria_json);
+          push_str("leaderboard", node.leaderboard ? "true" : "false");
+
+          automl_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_AUTOML_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: HyperparameterConfigDecl
+        else if constexpr (std::is_same_v<T, HyperparameterConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.algorithm.empty()) push_str("algorithm", node.algorithm);
+          if (!node.search_space_json.empty()) push_str("search_space", node.search_space_json);
+          if (!node.optimizer_json.empty()) push_str("optimizer", node.optimizer_json);
+          if (!node.early_stopping_json.empty()) push_str("early_stopping", node.early_stopping_json);
+
+          hyperparameter_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_HYPERPARAMETER_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: StackedModelDecl
+        else if constexpr (std::is_same_v<T, StackedModelDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.base_learners_json.empty()) push_str("base_learners", node.base_learners_json);
+          if (!node.meta_learner_json.empty()) push_str("meta_learner", node.meta_learner_json);
+          if (!node.strategy_json.empty()) push_str("strategy", node.strategy_json);
+          if (!node.compare_against.empty()) push_str("compare_against", node.compare_against);
+          if (node.improvement_threshold != 0.005) push_str("improvement_threshold", std::to_string(node.improvement_threshold));
+
+          stacked_model_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_STACKED_MODEL);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: EvaluationConfigDecl
+        else if constexpr (std::is_same_v<T, EvaluationConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.classification_json.empty()) push_str("classification", node.classification_json);
+          if (!node.regression_json.empty()) push_str("regression", node.regression_json);
+          if (!node.clustering_json.empty()) push_str("clustering", node.clustering_json);
+          if (!node.business_json.empty()) push_str("business", node.business_json);
+          if (!node.cv_strategy.empty()) push_str("cv_strategy", node.cv_strategy);
+          if (node.outer_folds != 5) push_str("outer_folds", std::to_string(node.outer_folds));
+          if (node.inner_folds != 3) push_str("inner_folds", std::to_string(node.inner_folds));
+          if (!node.model_comparison_json.empty()) push_str("model_comparison", node.model_comparison_json);
+
+          evaluation_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_EVALUATION_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: ModelRegistryDecl
+        else if constexpr (std::is_same_v<T, ModelRegistryDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.storage_json.empty()) push_str("storage", node.storage_json);
+          if (!node.tracking_json.empty()) push_str("tracking", node.tracking_json);
+          if (!node.model_card_json.empty()) push_str("model_card", node.model_card_json);
+          if (!node.lifecycle_json.empty()) push_str("lifecycle", node.lifecycle_json);
+
+          ds_model_registry_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DS_MODEL_REGISTRY);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: ExplainabilityConfigDecl
+        else if constexpr (std::is_same_v<T, ExplainabilityConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.global_json.empty()) push_str("global", node.global_json);
+          if (!node.local_json.empty()) push_str("local", node.local_json);
+          if (!node.fairness_json.empty()) push_str("fairness", node.fairness_json);
+
+          explainability_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_EXPLAINABILITY_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Key type 5: CodeInterpreterDecl (full handler)
+        else if constexpr (std::is_same_v<T, CodeInterpreterDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.runtime.empty()) push_str("runtime", node.runtime);
+          if (!node.version.empty()) push_str("version", node.version);
+          if (!node.venv_manager.empty()) push_str("venv_manager", node.venv_manager);
+          if (!node.profiles_json.empty()) push_str("profiles", node.profiles_json);
+          if (!node.profile_selection.empty()) push_str("profile_selection", node.profile_selection);
+          if (!node.sandbox_json.empty()) push_str("sandbox", node.sandbox_json);
+          if (!node.auto_test_json.empty()) push_str("auto_test", node.auto_test_json);
+          if (!node.data_bridge_json.empty()) push_str("data_bridge", node.data_bridge_json);
+
+          if (!node.runtime.empty() && node.runtime != "python" && node.runtime != "r")
+          {
+            compiler_warning("[DS-001] code_interpreter '" + node.name +
+              "' has invalid runtime '" + node.runtime +
+              "'; expected 'python' or 'r'");
+          }
+
+          code_interpreter_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_CODE_INTERPRETER);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: VenvManagerDecl
+        else if constexpr (std::is_same_v<T, VenvManagerDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.lifecycle_json.empty()) push_str("lifecycle", node.lifecycle_json);
+          if (!node.pool_json.empty()) push_str("pool", node.pool_json);
+          if (!node.dependency_resolver_json.empty()) push_str("dependency_resolver", node.dependency_resolver_json);
+
+          venv_manager_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_VENV_MANAGER);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: NLPPipelineDecl
+        else if constexpr (std::is_same_v<T, NLPPipelineDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.preprocessing_json.empty()) push_str("preprocessing", node.preprocessing_json);
+          if (!node.tasks_json.empty()) push_str("tasks", node.tasks_json);
+          if (!node.embedding_model.empty()) push_str("embedding_model", node.embedding_model);
+          if (!node.vector_store.empty()) push_str("vector_store", node.vector_store);
+
+          nlp_pipeline_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_NLP_PIPELINE);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: ChurnAnalysisDecl
+        else if constexpr (std::is_same_v<T, ChurnAnalysisDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.churn_definition_json.empty()) push_str("churn_definition", node.churn_definition_json);
+          if (!node.features_json.empty()) push_str("features", node.features_json);
+          if (!node.primary_model.empty()) push_str("primary_model", node.primary_model);
+          if (!node.calibration.empty()) push_str("calibration", node.calibration);
+          if (!node.threshold_optimization.empty()) push_str("threshold_optimization", node.threshold_optimization);
+          if (!node.outputs_json.empty()) push_str("outputs", node.outputs_json);
+
+          churn_analysis_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_CHURN_ANALYSIS);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: CLVModelDecl
+        else if constexpr (std::is_same_v<T, CLVModelDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.model_type.empty()) push_str("model_type", node.model_type);
+          if (!node.frequency.empty()) push_str("frequency", node.frequency);
+          if (!node.recency.empty()) push_str("recency", node.recency);
+          if (!node.monetary.empty()) push_str("monetary", node.monetary);
+          if (!node.T.empty()) push_str("T", node.T);
+          if (!node.prediction_periods_json.empty()) push_str("prediction_periods", node.prediction_periods_json);
+          if (node.discount_rate != 0.10) push_str("discount_rate", std::to_string(node.discount_rate));
+          if (!node.segments_json.empty()) push_str("segments", node.segments_json);
+
+          clv_model_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_CLV_MODEL);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: PropensityModelDecl
+        else if constexpr (std::is_same_v<T, PropensityModelDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.target_action.empty()) push_str("target_action", node.target_action);
+          if (!node.training_window.empty()) push_str("training_window", node.training_window);
+          if (!node.features_json.empty()) push_str("features", node.features_json);
+          if (!node.algorithm.empty()) push_str("algorithm", node.algorithm);
+          if (!node.calibration_method.empty()) push_str("calibration_method", node.calibration_method);
+          if (!node.score_output_json.empty()) push_str("score_output", node.score_output_json);
+          if (!node.actions_json.empty()) push_str("actions", node.actions_json);
+
+          propensity_model_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_PROPENSITY_MODEL);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: RecommendationEngineDecl
+        else if constexpr (std::is_same_v<T, RecommendationEngineDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.strategy.empty()) push_str("strategy", node.strategy);
+          if (!node.collaborative_json.empty()) push_str("collaborative", node.collaborative_json);
+          if (!node.content_based_json.empty()) push_str("content_based", node.content_based_json);
+          if (!node.blending_json.empty()) push_str("blending", node.blending_json);
+          if (!node.rules_json.empty()) push_str("rules", node.rules_json);
+          if (!node.metrics.empty()) push_str("metrics", node.metrics);
+          if (!node.serving_json.empty()) push_str("serving", node.serving_json);
+
+          recommendation_engine_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_RECOMMENDATION_ENGINE);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: ExperimentDesignDecl
+        else if constexpr (std::is_same_v<T, ExperimentDesignDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.experiment_type.empty()) push_str("experiment_type", node.experiment_type);
+          if (!node.control_json.empty()) push_str("control", node.control_json);
+          if (!node.treatments_json.empty()) push_str("treatments", node.treatments_json);
+          if (!node.unit.empty()) push_str("unit", node.unit);
+          if (!node.stratify_by.empty()) push_str("stratify_by", node.stratify_by);
+          if (!node.power_analysis_json.empty()) push_str("power_analysis", node.power_analysis_json);
+          if (!node.primary_metric_json.empty()) push_str("primary_metric", node.primary_metric_json);
+          if (!node.guardrails_json.empty()) push_str("guardrails", node.guardrails_json);
+          if (!node.analysis_json.empty()) push_str("analysis", node.analysis_json);
+
+          experiment_design_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_EXPERIMENT_DESIGN);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: ScenarioAnalysisDecl
+        else if constexpr (std::is_same_v<T, ScenarioAnalysisDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.base_model.empty()) push_str("base_model", node.base_model);
+          if (!node.scenarios_json.empty()) push_str("scenarios", node.scenarios_json);
+          if (!node.simulation_json.empty()) push_str("simulation", node.simulation_json);
+
+          scenario_analysis_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_SCENARIO_ANALYSIS);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: DecisionSupportDecl
+        else if constexpr (std::is_same_v<T, DecisionSupportDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.deliverables_json.empty()) push_str("deliverables", node.deliverables_json);
+          if (!node.confidence_json.empty()) push_str("confidence", node.confidence_json);
+
+          decision_support_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DECISION_SUPPORT);
+          chunk_.write_byte(field_count);
+        }
+        // Key type 3: EDAConfigDecl (full handler)
+        else if constexpr (std::is_same_v<T, EDAConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.structural_json.empty()) push_str("structural", node.structural_json);
+          if (!node.univariate_json.empty()) push_str("univariate", node.univariate_json);
+          if (!node.bivariate_json.empty()) push_str("bivariate", node.bivariate_json);
+          if (!node.multivariate_json.empty()) push_str("multivariate", node.multivariate_json);
+          if (!node.temporal_json.empty()) push_str("temporal", node.temporal_json);
+          if (!node.performance_json.empty()) push_str("performance", node.performance_json);
+          if (!node.output_json.empty()) push_str("output", node.output_json);
+
+          eda_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_EDA_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: EDATechniqueSelectorDecl
+        else if constexpr (std::is_same_v<T, EDATechniqueSelectorDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.rules_json.empty()) push_str("rules", node.rules_json);
+          if (!node.output_json.empty()) push_str("output", node.output_json);
+
+          eda_technique_selector_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_EDA_TECHNIQUE_SELECTOR);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: SmartConnectorDecl
+        else if constexpr (std::is_same_v<T, SmartConnectorDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.discovery_json.empty()) push_str("discovery", node.discovery_json);
+          if (!node.metadata_cache_json.empty()) push_str("metadata_cache", node.metadata_cache_json);
+
+          smart_connector_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_SMART_CONNECTOR);
+          chunk_.write_byte(field_count);
+        }
+        // Key type 4: VolumeRouterDecl (full handler)
+        else if constexpr (std::is_same_v<T, VolumeRouterDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.volume_probe_json.empty()) push_str("volume_probe", node.volume_probe_json);
+          if (!node.routing_rules_json.empty()) push_str("routing_rules", node.routing_rules_json);
+          if (!node.auto_escalate_json.empty()) push_str("auto_escalate", node.auto_escalate_json);
+          if (!node.sampling_strategy_json.empty()) push_str("sampling_strategy", node.sampling_strategy_json);
+
+          volume_router_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_VOLUME_ROUTER);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: ComputeConnectorDecl
+        else if constexpr (std::is_same_v<T, ComputeConnectorDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.engine.empty()) push_str("engine", node.engine);
+          if (!node.connection.empty()) push_str("connection", node.connection);
+          if (!node.token.empty()) push_str("token", node.token);
+          if (!node.cluster_config_json.empty()) push_str("cluster_config", node.cluster_config_json);
+          if (!node.idle_timeout.empty()) push_str("idle_timeout", node.idle_timeout);
+          push_str("cost_tracking", node.cost_tracking ? "true" : "false");
+
+          compute_connector_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_COMPUTE_CONNECTOR);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: FileConnectorDecl
+        else if constexpr (std::is_same_v<T, FileConnectorDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.base_path.empty()) push_str("base_path", node.base_path);
+          push_str("auto_detect_schema", node.auto_detect_schema ? "true" : "false");
+          push_str("auto_detect_delimiter", node.auto_detect_delimiter ? "true" : "false");
+          push_str("auto_detect_encoding", node.auto_detect_encoding ? "true" : "false");
+          if (!node.supported_formats_json.empty()) push_str("supported_formats", node.supported_formats_json);
+          if (!node.large_file_strategy_json.empty()) push_str("large_file_strategy", node.large_file_strategy_json);
+
+          file_connector_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_FILE_CONNECTOR);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: DistributedComputeConfigDecl
+        else if constexpr (std::is_same_v<T, DistributedComputeConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.spark_json.empty()) push_str("spark", node.spark_json);
+          if (!node.databricks_json.empty()) push_str("databricks", node.databricks_json);
+          if (!node.snowflake_json.empty()) push_str("snowflake", node.snowflake_json);
+          if (!node.hadoop_json.empty()) push_str("hadoop", node.hadoop_json);
+          if (!node.gpu_json.empty()) push_str("gpu", node.gpu_json);
+          if (!node.selection_logic_json.empty()) push_str("selection_logic", node.selection_logic_json);
+
+          distributed_compute_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DISTRIBUTED_COMPUTE_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: PerformanceConfigDecl
+        else if constexpr (std::is_same_v<T, PerformanceConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.phase_slas_json.empty()) push_str("phase_slas", node.phase_slas_json);
+          if (!node.total_analysis_sla_json.empty()) push_str("total_analysis_sla", node.total_analysis_sla_json);
+          if (!node.cache_json.empty()) push_str("cache", node.cache_json);
+          if (!node.parallelism_json.empty()) push_str("parallelism", node.parallelism_json);
+          if (!node.lazy_eval_json.empty()) push_str("lazy_eval", node.lazy_eval_json);
+          if (!node.memory_json.empty()) push_str("memory", node.memory_json);
+
+          performance_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_PERFORMANCE_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: DataQualityPipelineDecl
+        else if constexpr (std::is_same_v<T, DataQualityPipelineDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.profiling_json.empty()) push_str("profiling", node.profiling_json);
+          if (!node.scoring_json.empty()) push_str("scoring", node.scoring_json);
+          if (!node.remediation_json.empty()) push_str("remediation", node.remediation_json);
+          if (!node.report_json.empty()) push_str("report", node.report_json);
+          if (!node.governance_ref.empty()) push_str("governance_ref", node.governance_ref);
+
+          data_quality_pipeline_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DATA_QUALITY_PIPELINE);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: SelfCorrectionConfigDecl
+        else if constexpr (std::is_same_v<T, SelfCorrectionConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.code_errors_json.empty()) push_str("code_errors", node.code_errors_json);
+          if (!node.statistical_errors_json.empty()) push_str("statistical_errors", node.statistical_errors_json);
+          if (!node.model_errors_json.empty()) push_str("model_errors", node.model_errors_json);
+          if (!node.reasoning_errors_json.empty()) push_str("reasoning_errors", node.reasoning_errors_json);
+
+          self_correction_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_SELF_CORRECTION_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: SelfAssessmentDecl
+        else if constexpr (std::is_same_v<T, SelfAssessmentDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.planning_json.empty()) push_str("planning", node.planning_json);
+          if (!node.execution_json.empty()) push_str("execution", node.execution_json);
+          if (!node.interpretation_json.empty()) push_str("interpretation", node.interpretation_json);
+          if (!node.communication_json.empty()) push_str("communication", node.communication_json);
+          if (!node.gate_json.empty()) push_str("gate", node.gate_json);
+
+          self_assessment_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_SELF_ASSESSMENT);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: AdaptiveKnowledgeConfigDecl
+        else if constexpr (std::is_same_v<T, AdaptiveKnowledgeConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.knowledge_sources_json.empty()) push_str("knowledge_sources", node.knowledge_sources_json);
+          if (!node.adaptation_json.empty()) push_str("adaptation", node.adaptation_json);
+          if (!node.learning_json.empty()) push_str("learning", node.learning_json);
+
+          adaptive_knowledge_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_ADAPTIVE_KNOWLEDGE_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: AnalysisHistoryDecl
+        else if constexpr (std::is_same_v<T, AnalysisHistoryDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.knowledge_base.empty()) push_str("knowledge_base", node.knowledge_base);
+          if (!node.vector_store.empty()) push_str("vector_store", node.vector_store);
+          if (!node.embedding_model.empty()) push_str("embedding_model", node.embedding_model);
+          if (!node.retrieval_strategy.empty()) push_str("retrieval_strategy", node.retrieval_strategy);
+          if (!node.record_fields_json.empty()) push_str("record_fields", node.record_fields_json);
+          if (!node.retention.empty()) push_str("retention", node.retention);
+          if (node.max_records != 10000) push_str("max_records", std::to_string(node.max_records));
+
+          analysis_history_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_ANALYSIS_HISTORY);
+          chunk_.write_byte(field_count);
+        }
+        // Compact type: ObservabilityConfigDecl
+        else if constexpr (std::is_same_v<T, ObservabilityConfigDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.feature_monitoring_json.empty()) push_str("feature_monitoring", node.feature_monitoring_json);
+          if (!node.prediction_monitoring_json.empty()) push_str("prediction_monitoring", node.prediction_monitoring_json);
+          if (!node.alerts_json.empty()) push_str("alerts", node.alerts_json);
+          if (!node.auto_remediation_json.empty()) push_str("auto_remediation", node.auto_remediation_json);
+          if (!node.dataops_ref.empty()) push_str("dataops_ref", node.dataops_ref);
+
+          observability_config_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_OBSERVABILITY_CONFIG);
+          chunk_.write_byte(field_count);
+        }
+        // Key type 6: DataScientistAgentDecl (full handler)
+        else if constexpr (std::is_same_v<T, DataScientistAgentDecl>)
+        {
+          validate_datascientist_agent(node);
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          auto push_str_list = [&](const std::string& n, const std::vector<std::string>& list) {
+            std::string joined;
+            for (size_t i = 0; i < list.size(); ++i) { if (i > 0) joined += ","; joined += list[i]; }
+            push_str(n, joined);
+          };
+          auto push_num = [&](const std::string& key, double val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(val)));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          if (!node.system.empty()) push_str("system", node.system);
+          if (node.temperature != 0.2) push_num("temperature", node.temperature);
+          if (!node.endpoint.empty()) push_str("endpoint", node.endpoint);
+          if (!node.api_key_env.empty()) push_str("api_key_env", node.api_key_env);
+          if (!node.agent_md.empty()) push_str("agent_md", node.agent_md);
+          if (!node.problem.empty()) push_str("problem", node.problem);
+          if (!node.problem_types.empty()) push_str("problem_types", node.problem_types);
+          if (!node.sub_agents_json.empty()) push_str("sub_agents", node.sub_agents_json);
+          if (!node.forge.empty()) push_str("forge", node.forge);
+          if (!node.data_sources_json.empty()) push_str("data_sources", node.data_sources_json);
+          if (!node.eda_config.empty()) push_str("eda_config", node.eda_config);
+          if (!node.feature_config.empty()) push_str("feature_config", node.feature_config);
+          if (!node.experiment.empty()) push_str("experiment", node.experiment);
+          if (!node.automl.empty()) push_str("automl", node.automl);
+          if (!node.ensemble.empty()) push_str("ensemble", node.ensemble);
+          if (!node.hypotheses.empty()) push_str_list("hypotheses", node.hypotheses);
+          if (!node.evaluation.empty()) push_str("evaluation", node.evaluation);
+          if (!node.explainability.empty()) push_str("explainability", node.explainability);
+          if (!node.code_interpreter.empty()) push_str("code_interpreter", node.code_interpreter);
+          if (!node.model_registry.empty()) push_str("model_registry", node.model_registry);
+          if (!node.churn.empty()) push_str("churn", node.churn);
+          if (!node.clv.empty()) push_str("clv", node.clv);
+          if (!node.propensity.empty()) push_str("propensity", node.propensity);
+          if (!node.recommendation.empty()) push_str("recommendation", node.recommendation);
+          if (!node.experiment_engine.empty()) push_str("experiment_engine", node.experiment_engine);
+          if (!node.decision_framework.empty()) push_str("decision_framework", node.decision_framework);
+          if (!node.volume_router.empty()) push_str("volume_router", node.volume_router);
+          if (!node.distributed_compute.empty()) push_str("distributed_compute", node.distributed_compute);
+          if (!node.performance.empty()) push_str("performance", node.performance);
+          if (!node.data_quality.empty()) push_str("data_quality", node.data_quality);
+          if (!node.self_correction.empty()) push_str("self_correction", node.self_correction);
+          if (!node.self_assessment.empty()) push_str("self_assessment", node.self_assessment);
+          if (!node.adaptive_knowledge.empty()) push_str("adaptive_knowledge", node.adaptive_knowledge);
+          if (!node.deployment.empty()) push_str("deployment", node.deployment);
+          if (!node.coordinates_with.empty()) push_str_list("coordinates_with", node.coordinates_with);
+          if (!node.handoffs.empty()) push_str_list("handoffs", node.handoffs);
+          if (!node.role.empty()) push_str("role", node.role);
+          if (!node.purpose.empty()) push_str("purpose", node.purpose);
+          if (!node.autonomy.empty()) push_str("autonomy", node.autonomy);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+
+          datascientist_agent_defs_.insert(node.name);
+          agent_types_[node.name] = AgentKind::DataScientist;
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DATASCIENTIST_AGENT);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: CausalDiscoveryDecl
+        else if constexpr (std::is_same_v<T, CausalDiscoveryDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.llm_discovery_json.empty()) push_str("llm_discovery", node.llm_discovery_json);
+          if (!node.algorithmic_discovery_json.empty()) push_str("algorithmic_discovery", node.algorithmic_discovery_json);
+          if (!node.merge_strategy_json.empty()) push_str("merge_strategy", node.merge_strategy_json);
+          if (!node.validation_json.empty()) push_str("validation", node.validation_json);
+
+          causal_discovery_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_CAUSAL_DISCOVERY);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: SCMDecl
+        else if constexpr (std::is_same_v<T, SCMDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.variables_json.empty()) push_str("variables", node.variables_json);
+          if (!node.exogenous_json.empty()) push_str("exogenous", node.exogenous_json);
+          if (!node.latent_confounders_json.empty()) push_str("latent_confounders", node.latent_confounders_json);
+          if (!node.dag.empty()) push_str("dag", node.dag);
+
+          scm_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_SCM);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: InterventionDecl
+        else if constexpr (std::is_same_v<T, InterventionDecl>)
+        {
+          // CAU-003: Intervention must reference a declared SCM
+          if (!node.scm.empty() && scm_defs_.find(node.scm) == scm_defs_.end()) {
+            compiler_warning("CAU-003: intervention '" + node.name + "' references undeclared SCM '" + node.scm + "'");
+          }
+          // CAU-004: Intervention must have an outcome
+          if (node.outcome.empty()) {
+            compiler_warning("CAU-004: intervention '" + node.name + "' must declare an outcome");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          auto push_bool = [&](const std::string& key, bool val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Bool(val));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.scm.empty()) push_str("scm", node.scm);
+          if (!node.do_json.empty()) push_str("do", node.do_json);
+          if (!node.outcome.empty()) push_str("outcome", node.outcome);
+          if (!node.identification_json.empty()) push_str("identification", node.identification_json);
+          if (!node.estimation_json.empty()) push_str("estimation", node.estimation_json);
+          if (!node.compare_with_naive) push_bool("compare_with_naive", node.compare_with_naive);
+
+          intervention_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_INTERVENTION);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: CounterfactualDecl
+        else if constexpr (std::is_same_v<T, CounterfactualDecl>)
+        {
+          // CAU-005: Counterfactual must reference a declared SCM
+          if (!node.scm.empty() && scm_defs_.find(node.scm) == scm_defs_.end()) {
+            compiler_warning("CAU-005: counterfactual '" + node.name + "' references undeclared SCM '" + node.scm + "'");
+          }
+          // CAU-006: Counterfactual must have a question
+          if (node.question.empty()) {
+            compiler_warning("CAU-006: counterfactual '" + node.name + "' must declare a question");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.scm.empty()) push_str("scm", node.scm);
+          if (!node.evidence_json.empty()) push_str("evidence", node.evidence_json);
+          if (!node.question.empty()) push_str("question", node.question);
+          if (!node.abduction_json.empty()) push_str("abduction", node.abduction_json);
+          if (!node.action_json.empty()) push_str("action", node.action_json);
+          if (!node.prediction_json.empty()) push_str("prediction", node.prediction_json);
+          if (!node.attribution_json.empty()) push_str("attribution", node.attribution_json);
+
+          counterfactual_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_COUNTERFACTUAL);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: BayesianModelDecl
+        else if constexpr (std::is_same_v<T, BayesianModelDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.framework.empty()) push_str("framework", node.framework);
+          if (!node.version.empty()) push_str("version", node.version);
+          if (!node.priors_json.empty()) push_str("priors", node.priors_json);
+          if (!node.likelihood_json.empty()) push_str("likelihood", node.likelihood_json);
+          if (!node.sampling_json.empty()) push_str("sampling", node.sampling_json);
+          if (!node.posterior_json.empty()) push_str("posterior", node.posterior_json);
+          if (!node.comparison_json.empty()) push_str("comparison", node.comparison_json);
+
+          bayesian_model_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_BAYESIAN_MODEL);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: CausalEstimatorDecl
+        else if constexpr (std::is_same_v<T, CausalEstimatorDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          auto push_bool = [&](const std::string& key, bool val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Bool(val));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.scm.empty()) push_str("scm", node.scm);
+          if (!node.treatment.empty()) push_str("treatment", node.treatment);
+          if (!node.outcome.empty()) push_str("outcome", node.outcome);
+          if (!node.primary_json.empty()) push_str("primary", node.primary_json);
+          if (!node.secondary_json.empty()) push_str("secondary", node.secondary_json);
+          if (!node.heterogeneous_json.empty()) push_str("heterogeneous", node.heterogeneous_json);
+          if (!node.compare_estimators) push_bool("compare_estimators", node.compare_estimators);
+
+          causal_estimator_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_CAUSAL_ESTIMATOR);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: QuasiExperimentDecl
+        else if constexpr (std::is_same_v<T, QuasiExperimentDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          auto push_num = [&](const std::string& key, double val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(val)));
+            field_count++;
+          };
+          auto push_bool = [&](const std::string& key, bool val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Bool(val));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.method.empty()) push_str("method", node.method);
+          if (!node.treatment_time.empty()) push_str("treatment_time", node.treatment_time);
+          if (!node.treatment_group.empty()) push_str("treatment_group", node.treatment_group);
+          if (!node.control_group.empty()) push_str("control_group", node.control_group);
+          if (!node.outcome.empty()) push_str("outcome", node.outcome);
+          if (!node.covariates.empty()) push_str("covariates", node.covariates);
+          if (!node.parallel_trends_test) push_bool("parallel_trends_test", node.parallel_trends_test);
+          if (!node.bayesian) push_bool("bayesian", node.bayesian);
+          if (!node.mcmc_json.empty()) push_str("mcmc", node.mcmc_json);
+          if (!node.running_variable.empty()) push_str("running_variable", node.running_variable);
+          if (node.cutoff != 0.0) push_num("cutoff", node.cutoff);
+          if (!node.bandwidth.empty()) push_str("bandwidth", node.bandwidth);
+
+          quasi_experiment_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_QUASI_EXPERIMENT);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: CausalSensitivityDecl
+        else if constexpr (std::is_same_v<T, CausalSensitivityDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          auto push_bool = [&](const std::string& key, bool val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Bool(val));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.estimator.empty()) push_str("estimator", node.estimator);
+          if (!node.rosenbaum_json.empty()) push_str("rosenbaum", node.rosenbaum_json);
+          if (!node.e_value) push_bool("e_value", node.e_value);
+          if (!node.refutations_json.empty()) push_str("refutations", node.refutations_json);
+          if (!node.assumptions_json.empty()) push_str("assumptions", node.assumptions_json);
+          if (!node.output_json.empty()) push_str("output", node.output_json);
+
+          causal_sensitivity_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_CAUSAL_SENSITIVITY);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: CausalDataRequirementsDecl
+        else if constexpr (std::is_same_v<T, CausalDataRequirementsDecl>)
+        {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.temporal_json.empty()) push_str("temporal", node.temporal_json);
+          if (!node.required_confounders.empty()) push_str("required_confounders", node.required_confounders);
+          if (!node.instruments_json.empty()) push_str("instruments", node.instruments_json);
+          if (!node.natural_experiments.empty()) push_str("natural_experiments", node.natural_experiments);
+          if (!node.quality_json.empty()) push_str("quality", node.quality_json);
+
+          causal_data_requirements_defs_.insert(node.name);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_CAUSAL_DATA_REQUIREMENTS);
+          chunk_.write_byte(field_count);
+        }
+        // v0.9.8.1: CausalAgentDecl (full handler)
+        else if constexpr (std::is_same_v<T, CausalAgentDecl>)
+        {
+          validate_causal_agent(node);
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& key, const std::string& val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::String(val.c_str(), val.size()));
+            field_count++;
+          };
+          auto push_str_list = [&](const std::string& n, const std::vector<std::string>& list) {
+            std::string joined;
+            for (size_t i = 0; i < list.size(); ++i) { if (i > 0) joined += ","; joined += list[i]; }
+            push_str(n, joined);
+          };
+          auto push_num = [&](const std::string& key, double val) {
+            chunk_.emit_constant(vm::Value::String(key.c_str(), key.size()));
+            chunk_.emit_constant(vm::Value::Number(static_cast<double>(val)));
+            field_count++;
+          };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          if (!node.system.empty()) push_str("system", node.system);
+          if (node.temperature != 0.3) push_num("temperature", node.temperature);
+          if (!node.endpoint.empty()) push_str("endpoint", node.endpoint);
+          if (!node.api_key_env.empty()) push_str("api_key_env", node.api_key_env);
+          if (!node.agent_md.empty()) push_str("agent_md", node.agent_md);
+          if (!node.sub_agents_json.empty()) push_str("sub_agents", node.sub_agents_json);
+          if (!node.forge.empty()) push_str("forge", node.forge);
+          if (!node.peer_agent.empty()) push_str("peer_agent", node.peer_agent);
+          if (!node.discovery.empty()) push_str("discovery", node.discovery);
+          if (!node.scm.empty()) push_str("scm", node.scm);
+          if (!node.intervention.empty()) push_str("intervention", node.intervention);
+          if (!node.counterfactual.empty()) push_str("counterfactual", node.counterfactual);
+          if (!node.bayesian_model.empty()) push_str("bayesian_model", node.bayesian_model);
+          if (!node.estimator.empty()) push_str("estimator", node.estimator);
+          if (!node.sensitivity.empty()) push_str("sensitivity", node.sensitivity);
+          if (!node.data_requirements.empty()) push_str("data_requirements", node.data_requirements);
+          if (!node.code_interpreter.empty()) push_str("code_interpreter", node.code_interpreter);
+          if (!node.coordinates_with.empty()) push_str_list("coordinates_with", node.coordinates_with);
+          if (!node.handoffs.empty()) push_str_list("handoffs", node.handoffs);
+          if (!node.role.empty()) push_str("role", node.role);
+          if (!node.purpose.empty()) push_str("purpose", node.purpose);
+          if (!node.autonomy.empty()) push_str("autonomy", node.autonomy);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+
+          causal_agent_defs_.insert(node.name);
+          agent_types_[node.name] = AgentKind::Causal;
+          chunk_.write_op(vm::OpCode::OP_DEFINE_CAUSAL_AGENT);
+          chunk_.write_byte(field_count);
+        }
       },
       stmt.node);
 }
@@ -5791,6 +6865,84 @@ void Compiler::validate_deploy_config(const DeployConfigDecl& decl)
     compiler_warning("[DEP-010] deploy_config '" + decl.name +
       "' references unknown rollback_policy '" + decl.rollback_policy + "'");
   }
+}
+
+// v0.9.8: DataScientistAgent validation
+void Compiler::validate_datascientist_agent(const DataScientistAgentDecl& decl)
+{
+  // DS-010: Name must not be empty
+  if (decl.name.empty())
+  {
+    compiler_warning("DS-010: datascientist agent name must not be empty");
+  }
+  // DS-011: Duplicate check
+  if (datascientist_agent_defs_.count(decl.name))
+  {
+    compiler_warning("DS-011: duplicate datascientist agent definition '" + decl.name + "'");
+  }
+  // DS-012: Should have a budget
+  if (decl.budget.empty())
+  {
+    compiler_warning("DS-012: datascientist agent '" + decl.name +
+                     "' should have a 'budget' (ML experiments consume significant compute)");
+  }
+  // DS-013: Validate code_interpreter reference
+  if (!decl.code_interpreter.empty() &&
+      code_interpreter_defs_.find(decl.code_interpreter) == code_interpreter_defs_.end())
+  {
+    compiler_warning("DS-013: datascientist agent '" + decl.name +
+                     "' references unknown code_interpreter '" + decl.code_interpreter + "'");
+  }
+  // DS-014: Validate experiment reference
+  if (!decl.experiment.empty() &&
+      ml_experiment_defs_.find(decl.experiment) == ml_experiment_defs_.end())
+  {
+    compiler_warning("DS-014: datascientist agent '" + decl.name +
+                     "' references unknown ml_experiment '" + decl.experiment + "'");
+  }
+  // DS-015: Validate eda_config reference
+  if (!decl.eda_config.empty() &&
+      eda_config_defs_.find(decl.eda_config) == eda_config_defs_.end())
+  {
+    compiler_warning("DS-015: datascientist agent '" + decl.name +
+                     "' references unknown eda_config '" + decl.eda_config + "'");
+  }
+  // DS-016: Validate volume_router reference
+  if (!decl.volume_router.empty() &&
+      volume_router_defs_.find(decl.volume_router) == volume_router_defs_.end())
+  {
+    compiler_warning("DS-016: datascientist agent '" + decl.name +
+                     "' references unknown volume_router '" + decl.volume_router + "'");
+  }
+  // DS-017: Validate problem reference
+  if (!decl.problem.empty() &&
+      problem_statement_defs_.find(decl.problem) == problem_statement_defs_.end())
+  {
+    compiler_warning("DS-017: datascientist agent '" + decl.name +
+                     "' references unknown problem_statement '" + decl.problem + "'");
+  }
+  // DS-018: Validate model_registry reference
+  if (!decl.model_registry.empty() &&
+      ds_model_registry_defs_.find(decl.model_registry) == ds_model_registry_defs_.end())
+  {
+    compiler_warning("DS-018: datascientist agent '" + decl.name +
+                     "' references unknown model_registry '" + decl.model_registry + "'");
+  }
+  // Track
+  agent_types_[decl.name] = AgentKind::DataScientist;
+}
+
+void Compiler::validate_causal_agent(const CausalAgentDecl& decl) {
+  if (decl.name.empty()) {
+    compiler_warning("CAU-001: causal agent name must not be empty");
+  }
+  if (causal_agent_defs_.count(decl.name)) {
+    compiler_warning("CAU-001: duplicate causal agent definition '" + decl.name + "'");
+  }
+  if (decl.budget.empty()) {
+    compiler_warning("CAU-001: causal agent '" + decl.name + "' should have a 'budget'");
+  }
+  agent_types_[decl.name] = AgentKind::Causal;
 }
 
 }  // namespace neamc
