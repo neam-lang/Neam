@@ -3486,6 +3486,338 @@ struct CausalAgentDecl {
   std::string budget;
 };
 
+// ═══════════════════════════════════════════════════════════════
+// v0.9.8.2 MLOps Agent AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+enum class MLDeployStrategy { CANARY, SHADOW, BLUE_GREEN, AB_TEST };
+enum class DriftType { DATA, CONCEPT, PREDICTION, LABEL, FEATURE, SCHEMA };
+enum class RetrainingStrategy { FULL_RETRAIN, INCREMENTAL_UPDATE, FINE_TUNE, ONLINE_LEARNING, WARM_START, ENSEMBLE_MEMBER_REPLACE };
+
+struct DriftMonitorDecl {
+  Visibility visibility;
+  std::string name;
+  std::string model;
+  std::string reference_dataset;
+  std::string data_drift_json;
+  std::string concept_drift_json;
+  std::string prediction_drift_json;
+  std::string alerts_json;
+  std::string root_cause_analysis_json;
+};
+
+struct RetrainingPipelineDecl {
+  Visibility visibility;
+  std::string name;
+  std::string triggers_json;
+  std::string data_json;
+  std::string training_json;
+  std::string validation_json;
+  std::string deployment_json;
+  std::string notifications_json;
+};
+
+struct MLDeployStrategyDecl {
+  Visibility visibility;
+  std::string name;
+  std::string strategy;
+  std::string config_json;
+};
+
+struct ChampionChallengerDecl {
+  Visibility visibility;
+  std::string name;
+  std::string champion_json;
+  std::string challenger_json;
+  std::string evaluation_json;
+  std::string promotion_json;
+  std::string rollback_json;
+};
+
+struct ServingInfraDecl {
+  Visibility visibility;
+  std::string name;
+  std::string mode;
+  std::string platform_json;
+  std::string sla_json;
+  std::string cost_json;
+  std::string health_json;
+};
+
+struct TrainingInfraDecl {
+  Visibility visibility;
+  std::string name;
+  std::string compute_tiers_json;
+  std::string selection_json;
+  std::string cost_tracking_json;
+};
+
+struct MLOpsRollbackDecl {
+  Visibility visibility;
+  std::string name;
+  std::string auto_triggers_json;
+  std::string strategy_json;
+  std::string post_rollback_json;
+  std::string recovery_json;
+};
+
+struct MonitoringStackDecl {
+  Visibility visibility;
+  std::string name;
+  std::string evidently_json;
+  std::string prometheus_json;
+  std::string whylabs_json;
+};
+
+struct MLflowConfigDecl {
+  Visibility visibility;
+  std::string name;
+  std::string mcp_server;
+  std::string tracking_json;
+  std::string registry_json;
+  std::string lifecycle_json;
+};
+
+struct BusinessKPITrackerDecl {
+  Visibility visibility;
+  std::string name;
+  std::string model;
+  std::string kpis_json;
+  std::string report_frequency;
+  std::string compare_with;
+};
+
+struct DatasetVersionDecl {
+  Visibility visibility;
+  std::string name;
+  std::string versioning_tool;
+  std::string source;
+  std::string query;
+  std::string hash_method;
+  std::string storage;
+  std::string lineage_json;
+  std::string schema_validation_json;
+};
+
+struct FeedbackLoopDecl {
+  Visibility visibility;
+  std::string name;
+  std::string production_metrics_json;
+  std::string recommendations_json;
+  std::string trigger_ds_agent_json;
+};
+
+struct DecisionEngineDecl {
+  Visibility visibility;
+  std::string name;
+  std::string retrain_policy_json;
+  std::string rollback_policy;
+  std::string scaling_policy_json;
+  std::string human_in_the_loop_json;
+};
+
+struct EventBusDecl {
+  Visibility visibility;
+  std::string name;
+  std::string emits_json;
+  std::string listens_json;
+  std::string routing_json;
+};
+
+struct DriftRCADecl {
+  Visibility visibility;
+  std::string name;
+  std::string causal_agent;
+  std::string investigation_json;
+  std::string actions_json;
+};
+
+struct MLOpsAgentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::string system;
+  double temperature = 0.2;
+  std::string endpoint;
+  std::string api_key_env;
+  std::string agent_md;
+  std::string sub_agents_json;
+  std::string drift_monitor;
+  std::string retraining_pipeline;
+  std::string deployment_strategy;
+  std::string champion_challenger;
+  std::string serving_infra;
+  std::string training_infra;
+  std::string rollback_policy;
+  std::string monitoring_stack;
+  std::string mlflow;
+  std::string business_kpi_tracker;
+  std::string feedback_loop;
+  std::string decision_engine;
+  std::string event_bus;
+  std::vector<std::string> coordinates_with;
+  std::vector<std::string> handoffs;
+  std::string role;
+  std::string purpose;
+  std::string autonomy;
+  std::string budget;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.8.3 Data Business Analyst Agent AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+struct RequirementsElicitationDecl { Visibility visibility; std::string name; std::string stakeholders_json; std::string methods_json; std::string output_json; };
+struct BRDGeneratorDecl { Visibility visibility; std::string name; std::string project_json; std::string objectives_json; std::string scope_json; std::string benefits_json; std::string constraints_json; std::string assumptions_json; std::string risks_json; std::string output_json; };
+struct FunctionalSpecDecl { Visibility visibility; std::string name; std::string data_requirements_json; std::string etl_requirements_json; std::string ml_requirements_json; std::string analytics_requirements_json; };
+struct NonfunctionalSpecDecl { Visibility visibility; std::string name; std::string performance_json; std::string reliability_json; std::string security_json; std::string scalability_json; std::string data_quality_json; std::string maintainability_json; };
+struct AcceptanceCriteriaGenDecl { Visibility visibility; std::string name; std::string patterns_json; bool auto_generate = true; bool review_required = true; std::string quality_json; };
+struct DataRequirementsBADecl { Visibility visibility; std::string name; std::string source_to_target_json; std::string target_schema_json; std::string quality_rules_json; };
+struct ImpactAnalysisBADecl { Visibility visibility; std::string name; std::string upstream_json; std::string downstream_json; std::string change_scenarios_json; std::string lineage_json; };
+struct TraceabilityMatrixDecl { Visibility visibility; std::string name; std::string entries_json; std::string auto_trace_json; std::string reports_json; };
+struct ETLRequirementSpecDecl { Visibility visibility; std::string name; std::string pipeline_json; std::string feature_groups_json; std::string quality_gates_json; std::string upstream_dependencies; std::string downstream_consumers; };
+struct MLRequirementSpecDecl { Visibility visibility; std::string name; std::string problem_json; std::string success_criteria_json; std::string feature_requirements_json; std::string serving_json; std::string explainability_json; std::string monitoring_json; };
+struct GovernanceRequirementSpecDecl { Visibility visibility; std::string name; std::string data_classification_json; std::string access_requirements_json; std::string compliance_json; std::string quality_sla_json; };
+struct AnalyticsRequirementSpecDecl { Visibility visibility; std::string name; std::string reports_json; std::string kpi_definitions_json; };
+struct StakeholderAnalysisDecl { Visibility visibility; std::string name; std::string stakeholders_json; std::string raci_matrix_json; };
+struct UserStoryGeneratorDecl { Visibility visibility; std::string name; std::string source; std::string epics_json; std::string stories_json; std::string generation_json; };
+struct ScopeManagementDecl { Visibility visibility; std::string name; std::string bcar_json; std::string change_management_json; };
+struct ChangeImpactAnalyzerDecl { Visibility visibility; std::string name; std::string analysis_json; std::string output_json; };
+
+struct DataBAAgentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::string system;
+  double temperature = 0.3;
+  std::string endpoint;
+  std::string api_key_env;
+  std::string agent_md;
+  std::string downstream_agents_json;
+  std::string elicitation;
+  std::string brd;
+  std::string functional_spec;
+  std::string nfr_spec;
+  std::string data_requirements;
+  std::string impact_analysis;
+  std::string traceability;
+  std::string etl_spec;
+  std::string ml_spec;
+  std::string governance_spec;
+  std::string analytics_spec;
+  std::string stakeholders;
+  std::string user_stories;
+  std::string scope;
+  std::vector<std::string> coordinates_with;
+  std::vector<std::string> handoffs;
+  std::string role;
+  std::string purpose;
+  std::string autonomy;
+  std::string budget;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.8.4 Data Testing Agent AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+struct TestStrategyDecl { Visibility visibility; std::string name; std::string source_spec; std::string source_nfr; std::string levels_json; std::string test_data_json; std::string gates_json; std::string reporting_json; };
+struct TestCaseGeneratorDecl { Visibility visibility; std::string name; std::string source; std::string generation_json; std::string output_json; };
+struct TestCaseDecl { Visibility visibility; std::string name; std::string requirement; std::string acceptance_criteria; std::string type; std::string priority; std::string preconditions_json; std::string steps_json; std::string expected_result; std::string automation_json; };
+struct ETLTestSuiteDecl { Visibility visibility; std::string name; std::string pipeline; std::string connection; std::string tests_json; };
+struct DWTestSuiteDecl { Visibility visibility; std::string name; std::string connection; std::string tests_json; };
+struct MLTestSuiteDecl { Visibility visibility; std::string name; std::string model; std::string tests_json; };
+struct APITestSuiteDecl { Visibility visibility; std::string name; std::string endpoint; std::string auth_json; std::string tests_json; };
+struct PerformanceTestSuiteDecl { Visibility visibility; std::string name; std::string pipeline_performance_json; std::string query_performance_json; std::string api_performance_json; };
+struct EdgeCaseTestsDecl { Visibility visibility; std::string name; std::string generation_json; std::string tests_json; };
+struct SITSuiteDecl { Visibility visibility; std::string name; std::string scope; std::string tests_json; };
+struct UATSuiteDecl { Visibility visibility; std::string name; std::string business_validation_json; std::string data_quality_uat_json; };
+struct RegressionSuiteDecl { Visibility visibility; std::string name; std::string baseline_json; std::string checks_json; std::string trigger; };
+struct QualityGateDecl { Visibility visibility; std::string name; std::string data_quality_gate_json; std::string model_quality_gate_json; std::string api_quality_gate_json; std::string performance_gate_json; std::string uat_gate_json; std::string deployment_decision_json; };
+struct TestReportConfigDecl { Visibility visibility; std::string name; std::string execution_json; std::string report_json; std::string notify_json; };
+struct DefectManagementDecl { Visibility visibility; std::string name; std::string on_failure_json; std::string rca_json; std::string tracking_json; };
+
+struct DataTestAgentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::string system;
+  double temperature = 0.2;
+  std::string agent_md;
+  std::string sub_agents_json;
+  std::string forge;
+  std::string test_strategy;
+  std::string test_generator;
+  std::string etl_tests;
+  std::string dw_tests;
+  std::string ml_tests;
+  std::string api_tests;
+  std::string performance_tests;
+  std::string edge_tests;
+  std::string sit_suite;
+  std::string uat_suite;
+  std::string regression_suite;
+  std::string quality_gate;
+  std::string report_config;
+  std::string defect_mgmt;
+  std::vector<std::string> coordinates_with;
+  std::vector<std::string> handoffs;
+  std::string role;
+  std::string purpose;
+  std::string autonomy;
+  std::string budget;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.9 Data Intelligent Orchestrator AST Nodes
+// ═══════════════════════════════════════════════════════════════
+
+struct AgentRegistryDecl { Visibility visibility; std::string name; std::string agents_json; };
+struct AgentContractsDecl { Visibility visibility; std::string name; std::string contracts_json; };
+struct RACIMatrixDecl { Visibility visibility; std::string name; std::string tasks_json; };
+struct TaskUnderstandingDecl { Visibility visibility; std::string name; std::string intent_classifier_json; std::string detail_extraction_json; };
+struct TaskDecomposerDecl { Visibility visibility; std::string name; std::string strategy_json; std::string output_json; };
+struct CrewFormationDecl { Visibility visibility; std::string name; std::string strategy_json; };
+struct PatternSelectorDecl { Visibility visibility; std::string name; std::string patterns_json; std::string selection_json; };
+struct ExecutionManagerDIODecl { Visibility visibility; std::string name; std::string modes_json; std::string resources_json; std::string monitoring_json; };
+struct DIOStateMachineDecl { Visibility visibility; std::string name; std::string states_json; std::string transitions_json; std::string persistence_json; };
+struct DIOErrorHandlingDecl { Visibility visibility; std::string name; std::string strategies_json; std::string self_healing_json; };
+struct ResultSynthesizerDecl { Visibility visibility; std::string name; std::string synthesis_json; std::string delivery_json; };
+struct InfrastructureProfileDecl { Visibility visibility; std::string name; std::string data_warehouse_json; std::string data_lake_json; std::string databases_json; std::string streaming_json; std::string data_science_json; std::string governance_json; std::string cicd_json; };
+struct RoleFrameworkDecl { Visibility visibility; std::string name; std::string roles_json; std::string dio_role_json; };
+struct DelegationProtocolDecl { Visibility visibility; std::string name; std::string delegation_json; };
+struct DIOAccountabilityDecl { Visibility visibility; std::string name; std::string escalation_json; };
+
+struct DIOAgentDecl {
+  Visibility visibility;
+  std::string name;
+  std::string provider;
+  std::string model;
+  std::string system;
+  double temperature = 0.2;
+  std::string mode;
+  std::string task;
+  std::string agent_md;
+  std::string infrastructure;
+  std::string agent_registry;
+  std::string raci_matrix;
+  std::string pattern_selector;
+  std::string crew_formation;
+  std::string execution_manager;
+  std::string state_machine;
+  std::string error_handling;
+  std::string result_synthesizer;
+  std::string managed_agents_json;
+  std::string guardrails_json;
+  std::vector<std::string> coordinates_with;
+  std::string role;
+  std::string purpose;
+  std::string autonomy;
+  std::string budget;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -3558,7 +3890,32 @@ struct Statement
                    DataScientistAgentDecl,
                    CausalDiscoveryDecl, SCMDecl, InterventionDecl, CounterfactualDecl,
                    BayesianModelDecl, CausalEstimatorDecl, QuasiExperimentDecl,
-                   CausalSensitivityDecl, CausalDataRequirementsDecl, CausalAgentDecl>;
+                   CausalSensitivityDecl, CausalDataRequirementsDecl, CausalAgentDecl,
+                   DriftMonitorDecl, RetrainingPipelineDecl, MLDeployStrategyDecl,
+                   ChampionChallengerDecl, ServingInfraDecl, TrainingInfraDecl,
+                   MLOpsRollbackDecl, MonitoringStackDecl, MLflowConfigDecl,
+                   BusinessKPITrackerDecl, DatasetVersionDecl, FeedbackLoopDecl,
+                   DecisionEngineDecl, EventBusDecl, DriftRCADecl, MLOpsAgentDecl,
+                   RequirementsElicitationDecl, BRDGeneratorDecl,
+                   FunctionalSpecDecl, NonfunctionalSpecDecl,
+                   AcceptanceCriteriaGenDecl, DataRequirementsBADecl,
+                   ImpactAnalysisBADecl, TraceabilityMatrixDecl,
+                   ETLRequirementSpecDecl, MLRequirementSpecDecl,
+                   GovernanceRequirementSpecDecl, AnalyticsRequirementSpecDecl,
+                   StakeholderAnalysisDecl, UserStoryGeneratorDecl,
+                   ScopeManagementDecl, ChangeImpactAnalyzerDecl, DataBAAgentDecl,
+                   TestStrategyDecl, TestCaseGeneratorDecl, TestCaseDecl,
+                   ETLTestSuiteDecl, DWTestSuiteDecl, MLTestSuiteDecl,
+                   APITestSuiteDecl, PerformanceTestSuiteDecl, EdgeCaseTestsDecl,
+                   SITSuiteDecl, UATSuiteDecl, RegressionSuiteDecl,
+                   QualityGateDecl, TestReportConfigDecl, DefectManagementDecl,
+                   DataTestAgentDecl,
+                   AgentRegistryDecl, AgentContractsDecl, RACIMatrixDecl,
+                   TaskUnderstandingDecl, TaskDecomposerDecl, CrewFormationDecl,
+                   PatternSelectorDecl, ExecutionManagerDIODecl, DIOStateMachineDecl,
+                   DIOErrorHandlingDecl, ResultSynthesizerDecl, InfrastructureProfileDecl,
+                   RoleFrameworkDecl, DelegationProtocolDecl, DIOAccountabilityDecl,
+                   DIOAgentDecl>;
   SourceSpan span;
   Variant node;
 };

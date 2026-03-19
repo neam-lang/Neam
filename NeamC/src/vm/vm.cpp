@@ -43,6 +43,10 @@
 #include "neamc/vm/deploy_types.hpp"
 #include "neamc/vm/datascientist_types.hpp"
 #include "neamc/vm/causal_types.hpp"
+#include "neamc/vm/mlops_types.hpp"
+#include "neamc/vm/databa_types.hpp"
+#include "neamc/vm/datatest_types.hpp"
+#include "neamc/vm/dio_types.hpp"
 #include "neamc/vm/forge_loop.hpp"
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/context_builder.hpp"
@@ -11347,6 +11351,306 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
         stack_.push_back(Value::Nil());
         break;
       }
+
+      // ═══════════════════════════════════════════════════════════════
+      // v0.9.8.2 MLOps Agent opcodes
+      // ═══════════════════════════════════════════════════════════════
+
+      case OpCode::OP_DEFINE_MLOPS_AGENT:
+      {
+        const auto field_count = code[frame.ip++];
+        std::size_t base = stack_.size() - field_count * 2;
+        std::unordered_map<std::string, std::string> fields;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        auto* agent = new_mlops_agent();
+        agent->name = fields["name"];
+        // LLM base
+        if (fields.count("provider")) agent->provider = fields["provider"];
+        if (fields.count("model")) agent->llm_model = fields["model"];
+        if (fields.count("system")) agent->system_prompt = fields["system"];
+        if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+        // Agent.MD
+        if (fields.count("agent_md")) agent->agent_md_path = fields["agent_md"];
+        // Sub-agents & forge
+        if (fields.count("sub_agents"))
+        {
+          try { agent->sub_agents_json = fields["sub_agents"]; } catch (...) {}
+        }
+        // Component refs
+        if (fields.count("drift_monitor")) agent->drift_monitor_ref = fields["drift_monitor"];
+        if (fields.count("retraining_pipeline")) agent->retraining_pipeline_ref = fields["retraining_pipeline"];
+        if (fields.count("deployment_strategy")) agent->deployment_strategy_ref = fields["deployment_strategy"];
+        if (fields.count("champion_challenger")) agent->champion_challenger_ref = fields["champion_challenger"];
+        if (fields.count("serving_infra")) agent->serving_infra_ref = fields["serving_infra"];
+        if (fields.count("training_infra")) agent->training_infra_ref = fields["training_infra"];
+        if (fields.count("rollback_policy")) agent->rollback_policy_ref = fields["rollback_policy"];
+        if (fields.count("monitoring_stack")) agent->monitoring_stack_ref = fields["monitoring_stack"];
+        if (fields.count("mlflow")) agent->mlflow_ref = fields["mlflow"];
+        if (fields.count("business_kpi_tracker")) agent->business_kpi_tracker_ref = fields["business_kpi_tracker"];
+        if (fields.count("feedback_loop")) agent->feedback_loop_ref = fields["feedback_loop"];
+        if (fields.count("decision_engine")) agent->decision_engine_ref = fields["decision_engine"];
+        if (fields.count("event_bus")) agent->event_bus_ref = fields["event_bus"];
+        // Coordination
+        if (fields.count("coordinates_with")) agent->coordinates_with = fields["coordinates_with"];
+        if (fields.count("handoffs")) agent->handoffs = fields["handoffs"];
+        // Identity
+        if (fields.count("role")) agent->role = fields["role"];
+        if (fields.count("purpose")) agent->purpose = fields["purpose"];
+        if (fields.count("autonomy")) agent->autonomy = fields["autonomy"];
+        // Budget
+        if (fields.count("budget")) agent->budget_ref = fields["budget"];
+
+        agent->status = "initialized";
+
+        auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+        globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        break;
+      }
+
+      // --- 15 remaining MLOps DEFINE opcodes: generic field-reading handlers ---
+
+      case OpCode::OP_DEFINE_DRIFT_MONITOR:
+      case OpCode::OP_DEFINE_RETRAINING_PIPELINE:
+      case OpCode::OP_DEFINE_ML_DEPLOY_STRATEGY:
+      case OpCode::OP_DEFINE_CHAMPION_CHALLENGER:
+      case OpCode::OP_DEFINE_SERVING_INFRA:
+      case OpCode::OP_DEFINE_TRAINING_INFRA_MLOPS:
+      case OpCode::OP_DEFINE_MLOPS_ROLLBACK:
+      case OpCode::OP_DEFINE_MONITORING_STACK:
+      case OpCode::OP_DEFINE_MLFLOW_CONFIG:
+      case OpCode::OP_DEFINE_BUSINESS_KPI_TRACKER:
+      case OpCode::OP_DEFINE_DATASET_VERSION:
+      case OpCode::OP_DEFINE_FEEDBACK_LOOP:
+      case OpCode::OP_DEFINE_DECISION_ENGINE:
+      case OpCode::OP_DEFINE_EVENT_BUS:
+      case OpCode::OP_DEFINE_DRIFT_RCA:
+      {
+        const auto field_count = code[frame.ip++];
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+        stack_.push_back(Value::Nil());
+        break;
+      }
+
+      // v0.9.8.3: Data-BA Agent consolidated opcode
+      case OpCode::OP_DEFINE_BA_DECLARATION:
+      {
+        const auto sub_type = code[frame.ip++];
+        const auto field_count = code[frame.ip++];
+
+        // Read all key-value pairs into a map
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val = to_std_string(stack_[base + i * 2 + 1]);
+          fields[key] = val;
+        }
+        stack_.resize(base);
+
+        // For sub_type 16 (DataBAAgent), create full agent object
+        if (sub_type == 16)
+        {
+          auto* agent = new_databa_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("system")) agent->system_prompt = fields["system"];
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("agent_md")) agent->agent_md_path = fields["agent_md"];
+          if (fields.count("downstream_agents")) agent->downstream_agents_json = fields["downstream_agents"];
+          if (fields.count("elicitation")) agent->elicitation_ref = fields["elicitation"];
+          if (fields.count("brd")) agent->brd_ref = fields["brd"];
+          if (fields.count("functional_spec")) agent->functional_spec_ref = fields["functional_spec"];
+          if (fields.count("nfr_spec")) agent->nfr_spec_ref = fields["nfr_spec"];
+          if (fields.count("data_requirements")) agent->data_requirements_ref = fields["data_requirements"];
+          if (fields.count("impact_analysis")) agent->impact_analysis_ref = fields["impact_analysis"];
+          if (fields.count("traceability")) agent->traceability_ref = fields["traceability"];
+          if (fields.count("etl_spec")) agent->etl_spec_ref = fields["etl_spec"];
+          if (fields.count("ml_spec")) agent->ml_spec_ref = fields["ml_spec"];
+          if (fields.count("governance_spec")) agent->governance_spec_ref = fields["governance_spec"];
+          if (fields.count("analytics_spec")) agent->analytics_spec_ref = fields["analytics_spec"];
+          if (fields.count("stakeholders")) agent->stakeholders_ref = fields["stakeholders"];
+          if (fields.count("user_stories")) agent->user_stories_ref = fields["user_stories"];
+          if (fields.count("scope")) agent->scope_ref = fields["scope"];
+          if (fields.count("coordinates_with")) agent->coordinates_with = fields["coordinates_with"];
+          if (fields.count("handoffs")) agent->handoffs = fields["handoffs"];
+          if (fields.count("role")) agent->role = fields["role"];
+          if (fields.count("purpose")) agent->purpose = fields["purpose"];
+          if (fields.count("autonomy")) agent->autonomy = fields["autonomy"];
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else
+        {
+          // For sub_types 0-15, just pop fields and push Nil (generic handler)
+          stack_.push_back(Value::Nil());
+        }
+        break;
+      }
+
+      // v0.9.8.4: Data Testing Agent consolidated opcode
+      case OpCode::OP_DEFINE_TEST_DECLARATION:
+      {
+        const auto sub_type = code[frame.ip++];
+        const auto field_count = code[frame.ip++];
+
+        // Read all key-value pairs into a map
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val_v = stack_[base + i * 2 + 1];
+          if (val_v.is_string())
+          {
+            fields[key] = to_std_string(val_v);
+          }
+          else if (val_v.is_number())
+          {
+            fields[key] = std::to_string(val_v.as_number());
+          }
+          else if (val_v.is_bool())
+          {
+            fields[key] = val_v.as_bool() ? "true" : "false";
+          }
+        }
+        stack_.resize(base);
+
+        // For sub_type 15 (DataTestAgent), create full agent object
+        if (sub_type == 15)
+        {
+          auto* agent = new_datatest_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("system")) agent->name = fields["name"];  // system_prompt not in struct; name already set
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("agent_md")) agent->agent_md_path = fields["agent_md"];
+          if (fields.count("sub_agents")) agent->sub_agents_json = fields["sub_agents"];
+          if (fields.count("forge")) agent->forge_ref = fields["forge"];
+          if (fields.count("test_strategy")) agent->test_strategy_ref = fields["test_strategy"];
+          if (fields.count("test_generator")) agent->test_generator_ref = fields["test_generator"];
+          if (fields.count("etl_tests")) agent->etl_tests_ref = fields["etl_tests"];
+          if (fields.count("dw_tests")) agent->dw_tests_ref = fields["dw_tests"];
+          if (fields.count("ml_tests")) agent->ml_tests_ref = fields["ml_tests"];
+          if (fields.count("api_tests")) agent->api_tests_ref = fields["api_tests"];
+          if (fields.count("performance_tests")) agent->performance_tests_ref = fields["performance_tests"];
+          if (fields.count("edge_tests")) agent->edge_tests_ref = fields["edge_tests"];
+          if (fields.count("sit_suite")) agent->sit_suite_ref = fields["sit_suite"];
+          if (fields.count("uat_suite")) agent->uat_suite_ref = fields["uat_suite"];
+          if (fields.count("regression_suite")) agent->regression_suite_ref = fields["regression_suite"];
+          if (fields.count("quality_gate")) agent->quality_gate_ref = fields["quality_gate"];
+          if (fields.count("report_config")) agent->report_config_ref = fields["report_config"];
+          if (fields.count("defect_mgmt")) agent->defect_mgmt_ref = fields["defect_mgmt"];
+          if (fields.count("coordinates_with")) agent->coordinates_with = fields["coordinates_with"];
+          if (fields.count("handoffs")) agent->handoffs = fields["handoffs"];
+          if (fields.count("role")) agent->role = fields["role"];
+          if (fields.count("purpose")) agent->purpose = fields["purpose"];
+          if (fields.count("autonomy")) agent->autonomy = fields["autonomy"];
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else
+        {
+          // For sub_types 0-14, just pop fields and push Nil (generic handler)
+          stack_.push_back(Value::Nil());
+        }
+        break;
+      }
+
+      // v0.9.9: Data Intelligent Orchestrator consolidated opcode
+      case OpCode::OP_DEFINE_DIO_DECLARATION:
+      {
+        const auto sub_type = code[frame.ip++];
+        const auto field_count = code[frame.ip++];
+
+        // Read all key-value pairs into a map
+        std::unordered_map<std::string, std::string> fields;
+        std::size_t base = stack_.size() - field_count * 2;
+        for (int i = 0; i < field_count; i++)
+        {
+          auto key = to_std_string(stack_[base + i * 2]);
+          auto val_v = stack_[base + i * 2 + 1];
+          if (val_v.is_string())
+          {
+            fields[key] = to_std_string(val_v);
+          }
+          else if (val_v.is_number())
+          {
+            fields[key] = std::to_string(val_v.as_number());
+          }
+          else if (val_v.is_bool())
+          {
+            fields[key] = val_v.as_bool() ? "true" : "false";
+          }
+        }
+        stack_.resize(base);
+
+        // For sub_type 15 (DIOAgent), create full agent object
+        if (sub_type == 15)
+        {
+          auto* agent = new_dio_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("mode")) agent->mode = fields["mode"];
+          if (fields.count("task")) agent->task = fields["task"];
+          if (fields.count("agent_md")) agent->agent_md_path = fields["agent_md"];
+          if (fields.count("infrastructure")) agent->infrastructure_ref = fields["infrastructure"];
+          if (fields.count("agent_registry")) agent->agent_registry_ref = fields["agent_registry"];
+          if (fields.count("raci_matrix")) agent->raci_matrix_ref = fields["raci_matrix"];
+          if (fields.count("pattern_selector")) agent->pattern_selector_ref = fields["pattern_selector"];
+          if (fields.count("crew_formation")) agent->crew_formation_ref = fields["crew_formation"];
+          if (fields.count("execution_manager")) agent->execution_manager_ref = fields["execution_manager"];
+          if (fields.count("state_machine")) agent->state_machine_ref = fields["state_machine"];
+          if (fields.count("error_handling")) agent->error_handling_ref = fields["error_handling"];
+          if (fields.count("result_synthesizer")) agent->result_synthesizer_ref = fields["result_synthesizer"];
+          if (fields.count("managed_agents")) agent->managed_agents_json = fields["managed_agents"];
+          if (fields.count("guardrails")) agent->guardrails_json = fields["guardrails"];
+          if (fields.count("coordinates_with")) agent->coordinates_with = fields["coordinates_with"];
+          if (fields.count("role")) agent->role = fields["role"];
+          if (fields.count("purpose")) agent->purpose = fields["purpose"];
+          if (fields.count("autonomy")) agent->autonomy = fields["autonomy"];
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else
+        {
+          // For sub_types 0-14, just pop fields and push Nil (generic handler)
+          stack_.push_back(Value::Nil());
+        }
+        break;
+      }
+
+      // v0.9.8.2: MLOps ACTION opcodes handled via native functions (not opcodes)
+      // to stay within uint8_t opcode limit (256 max)
 
       // v0.8 Phase 6: Channel registration
       case OpCode::OP_DEFINE_CHANNEL:

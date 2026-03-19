@@ -297,6 +297,44 @@ enum class OpCode : uint8_t
   OP_CAUSAL_SENSITIVITY,
   OP_CAUSAL_EXPLAIN,
   OP_CAUSAL_VISUALIZE_DAG,
+
+  // v0.9.8.2: MLOps Agent opcodes — DEFINE
+  OP_DEFINE_DRIFT_MONITOR,
+  OP_DEFINE_RETRAINING_PIPELINE,
+  OP_DEFINE_ML_DEPLOY_STRATEGY,
+  OP_DEFINE_CHAMPION_CHALLENGER,
+  OP_DEFINE_SERVING_INFRA,
+  OP_DEFINE_TRAINING_INFRA_MLOPS,
+  OP_DEFINE_MLOPS_ROLLBACK,
+  OP_DEFINE_MONITORING_STACK,
+  OP_DEFINE_MLFLOW_CONFIG,
+  OP_DEFINE_BUSINESS_KPI_TRACKER,
+  OP_DEFINE_DATASET_VERSION,
+  OP_DEFINE_FEEDBACK_LOOP,
+  OP_DEFINE_DECISION_ENGINE,
+  OP_DEFINE_EVENT_BUS,
+  OP_DEFINE_DRIFT_RCA,
+  OP_DEFINE_MLOPS_AGENT,
+
+  // v0.9.8.2: MLOps Agent ACTION opcodes omitted — handled via native functions
+
+  // v0.9.8.3: Data-BA Agent — consolidated opcode (saves opcode budget)
+  // Sub-type byte follows: 0=elicitation, 1=brd, 2=functional, 3=nonfunctional,
+  // 4=acceptance, 5=data_req, 6=impact, 7=trace, 8=etl_spec, 9=ml_spec,
+  // 10=gov_spec, 11=analytics_spec, 12=stakeholder, 13=user_story,
+  // 14=scope, 15=change_impact, 16=databa_agent
+  OP_DEFINE_BA_DECLARATION,
+
+  // v0.9.8.4: Data Testing Agent — consolidated opcode
+  // Sub-type byte: 0=TestStrategy, 1=TestCaseGenerator, 2=TestCase, 3=ETLTestSuite,
+  // 4=DWTestSuite, 5=MLTestSuite, 6=APITestSuite, 7=PerformanceTestSuite,
+  // 8=EdgeCaseTests, 9=SITSuite, 10=UATSuite, 11=RegressionSuite,
+  // 12=QualityGate, 13=TestReportConfig, 14=DefectManagement, 15=DataTestAgent
+  OP_DEFINE_TEST_DECLARATION,
+
+  // v0.9.9: Data Intelligent Orchestrator — THE LAST uint8_t OPCODE
+  // After this, OpCode enum is FULL (256/256). Future agents must widen to uint16_t.
+  OP_DEFINE_DIO_DECLARATION,
 };
 
 class Bytecode

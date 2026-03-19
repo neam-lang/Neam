@@ -387,6 +387,79 @@ private:
   StmtPtr parse_causal_data_requirements_decl(const Visibility& visibility);
   StmtPtr parse_causal_agent_decl(const Visibility& visibility);
 
+  // v0.9.8.2: MLOps Agent declarations
+  StmtPtr parse_drift_monitor_decl(const Visibility& visibility);
+  StmtPtr parse_retraining_pipeline_decl(const Visibility& visibility);
+  StmtPtr parse_deployment_strategy_decl(const Visibility& visibility);
+  StmtPtr parse_champion_challenger_decl(const Visibility& visibility);
+  StmtPtr parse_serving_infra_decl(const Visibility& visibility);
+  StmtPtr parse_training_infra_decl(const Visibility& visibility);
+  StmtPtr parse_mlops_rollback_decl(const Visibility& visibility);
+  StmtPtr parse_monitoring_stack_decl(const Visibility& visibility);
+  StmtPtr parse_mlflow_config_decl(const Visibility& visibility);
+  StmtPtr parse_business_kpi_tracker_decl(const Visibility& visibility);
+  StmtPtr parse_dataset_version_decl(const Visibility& visibility);
+  StmtPtr parse_feedback_loop_decl(const Visibility& visibility);
+  StmtPtr parse_decision_engine_decl(const Visibility& visibility);
+  StmtPtr parse_event_bus_decl(const Visibility& visibility);
+  StmtPtr parse_drift_rca_decl(const Visibility& visibility);
+  StmtPtr parse_mlops_agent_decl(const Visibility& visibility);
+
+  // v0.9.8.3: Data Business Analyst Agent declarations
+  StmtPtr parse_requirements_elicitation_decl(const Visibility& visibility);
+  StmtPtr parse_brd_generator_decl(const Visibility& visibility);
+  StmtPtr parse_functional_spec_decl(const Visibility& visibility);
+  StmtPtr parse_nonfunctional_spec_decl(const Visibility& visibility);
+  StmtPtr parse_acceptance_criteria_gen_decl(const Visibility& visibility);
+  StmtPtr parse_data_requirements_ba_decl(const Visibility& visibility);
+  StmtPtr parse_impact_analysis_ba_decl(const Visibility& visibility);
+  StmtPtr parse_traceability_matrix_decl(const Visibility& visibility);
+  StmtPtr parse_etl_requirement_spec_decl(const Visibility& visibility);
+  StmtPtr parse_ml_requirement_spec_decl(const Visibility& visibility);
+  StmtPtr parse_governance_requirement_spec_decl(const Visibility& visibility);
+  StmtPtr parse_analytics_requirement_spec_decl(const Visibility& visibility);
+  StmtPtr parse_stakeholder_analysis_decl(const Visibility& visibility);
+  StmtPtr parse_user_story_generator_decl(const Visibility& visibility);
+  StmtPtr parse_scope_management_decl(const Visibility& visibility);
+  StmtPtr parse_change_impact_analyzer_decl(const Visibility& visibility);
+  StmtPtr parse_databa_agent_decl(const Visibility& visibility);
+
+  // v0.9.8.4: Data Testing Agent declarations
+  StmtPtr parse_test_strategy_decl(const Visibility& visibility);
+  StmtPtr parse_test_case_generator_decl(const Visibility& visibility);
+  StmtPtr parse_test_case_decl(const Visibility& visibility);
+  StmtPtr parse_etl_test_suite_decl(const Visibility& visibility);
+  StmtPtr parse_dw_test_suite_decl(const Visibility& visibility);
+  StmtPtr parse_ml_test_suite_decl(const Visibility& visibility);
+  StmtPtr parse_api_test_suite_decl(const Visibility& visibility);
+  StmtPtr parse_performance_test_suite_decl(const Visibility& visibility);
+  StmtPtr parse_edge_case_tests_decl(const Visibility& visibility);
+  StmtPtr parse_sit_suite_decl(const Visibility& visibility);
+  StmtPtr parse_uat_suite_decl(const Visibility& visibility);
+  StmtPtr parse_regression_suite_decl(const Visibility& visibility);
+  StmtPtr parse_quality_gate_decl(const Visibility& visibility);
+  StmtPtr parse_test_report_config_decl(const Visibility& visibility);
+  StmtPtr parse_defect_management_decl(const Visibility& visibility);
+  StmtPtr parse_datatest_agent_decl(const Visibility& visibility);
+
+  // v0.9.9: Data Intelligent Orchestrator declarations
+  StmtPtr parse_agent_registry_decl(const Visibility& visibility);
+  StmtPtr parse_agent_contracts_decl(const Visibility& visibility);
+  StmtPtr parse_raci_matrix_decl(const Visibility& visibility);
+  StmtPtr parse_task_understanding_decl(const Visibility& visibility);
+  StmtPtr parse_task_decomposer_decl(const Visibility& visibility);
+  StmtPtr parse_crew_formation_decl(const Visibility& visibility);
+  StmtPtr parse_pattern_selector_decl(const Visibility& visibility);
+  StmtPtr parse_execution_manager_dio_decl(const Visibility& visibility);
+  StmtPtr parse_dio_state_machine_decl(const Visibility& visibility);
+  StmtPtr parse_dio_error_handling_decl(const Visibility& visibility);
+  StmtPtr parse_result_synthesizer_decl(const Visibility& visibility);
+  StmtPtr parse_infrastructure_profile_decl(const Visibility& visibility);
+  StmtPtr parse_role_framework_decl(const Visibility& visibility);
+  StmtPtr parse_delegation_protocol_decl(const Visibility& visibility);
+  StmtPtr parse_dio_accountability_decl(const Visibility& visibility);
+  StmtPtr parse_dio_agent_decl(const Visibility& visibility);
+
   // v0.9.4: Governance sub-block parsers
   AutoClassifyConfig parse_auto_classify_config();
   SemanticClassifyConfig parse_semantic_classify_config();

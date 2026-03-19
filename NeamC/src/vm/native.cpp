@@ -46,6 +46,10 @@
 #include "neamc/vm/deploy_types.hpp"
 #include "neamc/vm/datascientist_types.hpp"
 #include "neamc/vm/causal_types.hpp"
+#include "neamc/vm/mlops_types.hpp"
+#include "neamc/vm/databa_types.hpp"
+#include "neamc/vm/datatest_types.hpp"
+#include "neamc/vm/dio_types.hpp"
 
 namespace neamc::vm
 {
@@ -3567,5 +3571,133 @@ void register_core_natives(VirtualMachine& vm)
   // Explanation (2)
   vm.define_native("causal_explain", 3, causal_stub);
   vm.define_native("causal_visualize_dag", 2, causal_stub);
+
+  // ═══════════════════════════════════════════════════════════════
+  // v0.9.8.2 MLOps Agent natives
+  // ═══════════════════════════════════════════════════════════════
+
+  vm.define_native("mlops_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_MLOPS_AGENT) {
+      auto* agent = reinterpret_cast<ObjMLOpsAgent*>(args[0].as_obj());
+      return Value::String(agent->status.c_str(), agent->status.size());
+    }
+    return Value::String("error: expected mlops agent", 26);
+  });
+
+  auto mlops_stub = [](VirtualMachine&, int, Value*) -> Value { return Value::Nil(); };
+
+  vm.define_native("mlops_check_drift", 3, mlops_stub);
+  vm.define_native("mlops_drift_report", 2, mlops_stub);
+  vm.define_native("mlops_detect_data_drift", 3, mlops_stub);
+  vm.define_native("mlops_detect_concept_drift", 3, mlops_stub);
+  vm.define_native("mlops_detect_prediction_drift", 3, mlops_stub);
+  vm.define_native("mlops_detect_schema_drift", 3, mlops_stub);
+  vm.define_native("mlops_drift_severity", 2, mlops_stub);
+  vm.define_native("mlops_trigger_rca", 3, mlops_stub);
+  vm.define_native("mlops_trigger_retrain", 3, mlops_stub);
+  vm.define_native("mlops_evaluate_challenger", 3, mlops_stub);
+  vm.define_native("mlops_promote_model", 3, mlops_stub);
+  vm.define_native("mlops_rollback", 3, mlops_stub);
+  vm.define_native("mlops_version_dataset", 3, mlops_stub);
+  vm.define_native("mlops_check_retraining_needed", 2, mlops_stub);
+  vm.define_native("mlops_deploy_canary", 3, mlops_stub);
+  vm.define_native("mlops_deploy_shadow", 3, mlops_stub);
+  vm.define_native("mlops_deploy_ab", 3, mlops_stub);
+  vm.define_native("mlops_deploy_blue_green", 3, mlops_stub);
+  vm.define_native("mlops_check_deployment_health", 2, mlops_stub);
+  vm.define_native("mlops_check_serving_health", 2, mlops_stub);
+  vm.define_native("mlops_optimize_cost", 2, mlops_stub);
+  vm.define_native("mlops_scale", 3, mlops_stub);
+  vm.define_native("mlops_check_latency", 2, mlops_stub);
+  vm.define_native("mlops_infra_report", 2, mlops_stub);
+  vm.define_native("mlops_business_kpi_report", 2, mlops_stub);
+  vm.define_native("mlops_model_health_report", 2, mlops_stub);
+  vm.define_native("mlops_feedback_to_ds", 2, mlops_stub);
+  vm.define_native("mlops_incident_report", 2, mlops_stub);
+
+  // v0.9.8.3 Data-BA Agent natives
+  vm.define_native("ba_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_DATABA_AGENT)
+    {
+      auto* agent = reinterpret_cast<ObjDataBAAgent*>(args[0].as_obj());
+      return Value::String(agent->status.c_str(), agent->status.size());
+    }
+    return Value::String("error: expected databa agent", 28);
+  });
+
+  auto ba_stub = [](VirtualMachine&, int, Value*) -> Value { return Value::Nil(); };
+
+  vm.define_native("ba_elicit_requirements", 3, ba_stub);
+  vm.define_native("ba_generate_questions", 3, ba_stub);
+  vm.define_native("ba_analyze_documents", 2, ba_stub);
+  vm.define_native("ba_identify_gaps", 2, ba_stub);
+  vm.define_native("ba_validate_requirements", 3, ba_stub);
+  vm.define_native("ba_generate_brd", 2, ba_stub);
+  vm.define_native("ba_generate_functional_spec", 2, ba_stub);
+  vm.define_native("ba_generate_nfr_spec", 2, ba_stub);
+  vm.define_native("ba_generate_acceptance_criteria", 2, ba_stub);
+  vm.define_native("ba_generate_user_stories", 3, ba_stub);
+  vm.define_native("ba_analyze_upstream", 2, ba_stub);
+  vm.define_native("ba_analyze_downstream", 2, ba_stub);
+  vm.define_native("ba_analyze_change_impact", 3, ba_stub);
+  vm.define_native("ba_generate_traceability", 4, ba_stub);
+  vm.define_native("ba_analyze_stakeholders", 2, ba_stub);
+  vm.define_native("ba_generate_etl_spec", 2, ba_stub);
+  vm.define_native("ba_generate_ml_spec", 2, ba_stub);
+  vm.define_native("ba_generate_governance_spec", 2, ba_stub);
+  vm.define_native("ba_generate_analytics_spec", 2, ba_stub);
+  vm.define_native("ba_manage_scope", 2, ba_stub);
+  vm.define_native("ba_prioritize_requirements", 3, ba_stub);
+
+  // ── v0.9.8.4: Data Testing Agent natives ──────────────────────────────────
+  vm.define_native("test_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_DATATEST_AGENT) {
+      auto* agent = reinterpret_cast<ObjDataTestAgent*>(args[0].as_obj());
+      return Value::String(agent->status.c_str(), agent->status.size());
+    }
+    return Value::String("error: expected datatest agent", 30);
+  });
+  auto test_stub = [](VirtualMachine&, int, Value*) -> Value { return Value::Nil(); };
+  vm.define_native("test_generate_cases", 3, test_stub);
+  vm.define_native("test_generate_edge_cases", 2, test_stub);
+  vm.define_native("test_generate_sql", 2, test_stub);
+  vm.define_native("test_generate_api_tests", 2, test_stub);
+  vm.define_native("test_run_suite", 2, test_stub);
+  vm.define_native("test_run_etl", 2, test_stub);
+  vm.define_native("test_run_dw", 2, test_stub);
+  vm.define_native("test_run_ml", 2, test_stub);
+  vm.define_native("test_run_api", 2, test_stub);
+  vm.define_native("test_validate_schema", 3, test_stub);
+  vm.define_native("test_validate_row_count", 4, test_stub);
+  vm.define_native("test_validate_quality", 3, test_stub);
+  vm.define_native("test_validate_model", 3, test_stub);
+  vm.define_native("test_report", 3, test_stub);
+  vm.define_native("test_check_gate", 3, test_stub);
+  vm.define_native("test_coverage", 3, test_stub);
+
+  // ═══════════════════════════════════════════════════════════════
+  // v0.9.9: Data Intelligent Orchestrator native functions
+  // ═══════════════════════════════════════════════════════════════
+  vm.define_native("dio_status", 1, [](VirtualMachine& vm, int argc, Value* args) -> Value {
+    if (args[0].is_obj() && args[0].as_obj()->type == ObjType::OBJ_DIO_AGENT) {
+      auto* agent = reinterpret_cast<ObjDIOAgent*>(args[0].as_obj());
+      return Value::String(agent->status.c_str(), agent->status.size());
+    }
+    return Value::String("error: expected dio agent", 24);
+  });
+  auto dio_stub = [](VirtualMachine&, int, Value*) -> Value { return Value::Nil(); };
+  vm.define_native("dio_solve", 2, dio_stub);
+  vm.define_native("dio_plan", 2, dio_stub);
+  vm.define_native("dio_execute", 2, dio_stub);
+  vm.define_native("dio_form_crew", 2, dio_stub);
+  vm.define_native("dio_delegate", 4, dio_stub);
+  vm.define_native("dio_collect", 2, dio_stub);
+  vm.define_native("dio_check_gate", 3, dio_stub);
+  vm.define_native("dio_get_progress", 1, dio_stub);
+  vm.define_native("dio_pause", 1, dio_stub);
+  vm.define_native("dio_resume", 1, dio_stub);
+  vm.define_native("dio_configure", 2, dio_stub);
+  vm.define_native("dio_synthesize", 2, dio_stub);
+  vm.define_native("dio_escalate", 3, dio_stub);
 }
 }  // namespace neamc::vm

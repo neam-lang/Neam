@@ -1871,9 +1871,8 @@ StmtPtr Parser::parse_declaration()
   {
     auto saved = current_;
     advance();
-    if (check(TokenType::Identifier) && peek().lexeme == "agent")
+    if (match(TokenType::Agent))
     {
-      advance();
       if (check(TokenType::Identifier))
       {
         return parse_causal_agent_decl(has_visibility ? visibility : Visibility{});
@@ -1977,6 +1976,733 @@ StmtPtr Parser::parse_declaration()
     if (check(TokenType::Identifier))
     {
       return parse_causal_data_requirements_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: mlops agent declaration (contextual "mlops agent" two-keyword prefix)
+  if (check(TokenType::Identifier) && peek().lexeme == "mlops")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_mlops_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: drift_monitor declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "drift_monitor")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_drift_monitor_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: retraining_pipeline declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "retraining_pipeline")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_retraining_pipeline_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: deployment_strategy declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "deployment_strategy")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_deployment_strategy_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: champion_challenger declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "champion_challenger")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_champion_challenger_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: serving_infra declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "serving_infra")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_serving_infra_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: training_infra declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "training_infra")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_training_infra_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: mlops_rollback declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "mlops_rollback")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_mlops_rollback_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: monitoring_stack declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "monitoring_stack")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_monitoring_stack_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: mlflow_config declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "mlflow_config")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_mlflow_config_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: business_kpi_tracker declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "business_kpi_tracker")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_business_kpi_tracker_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: dataset_version declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "dataset_version")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_dataset_version_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: feedback_loop declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "feedback_loop")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_feedback_loop_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: decision_engine declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "decision_engine")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_decision_engine_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: event_bus declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "event_bus")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_event_bus_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.2: drift_rca declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "drift_rca")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_drift_rca_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: databa agent declaration (contextual "databa agent" two-keyword prefix)
+  if (check(TokenType::Identifier) && peek().lexeme == "databa")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_databa_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: requirements_elicitation declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "requirements_elicitation")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_requirements_elicitation_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: brd_generator declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "brd_generator")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_brd_generator_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: functional_spec declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "functional_spec")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_functional_spec_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: nonfunctional_spec declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "nonfunctional_spec")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_nonfunctional_spec_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: acceptance_criteria_generator declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "acceptance_criteria_generator")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_acceptance_criteria_gen_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: data_requirements_ba declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "data_requirements_ba")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_data_requirements_ba_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: impact_analysis_ba declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "impact_analysis_ba")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_impact_analysis_ba_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: traceability_matrix declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "traceability_matrix")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_traceability_matrix_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: etl_requirement_spec declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "etl_requirement_spec")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_etl_requirement_spec_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: ml_requirement_spec declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "ml_requirement_spec")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_ml_requirement_spec_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: governance_requirement_spec declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "governance_requirement_spec")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_governance_requirement_spec_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: analytics_requirement_spec declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "analytics_requirement_spec")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_analytics_requirement_spec_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: stakeholder_analysis declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "stakeholder_analysis")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_stakeholder_analysis_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: user_story_generator declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "user_story_generator")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_user_story_generator_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: scope_management declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "scope_management")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_scope_management_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.3: change_impact_analyzer declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "change_impact_analyzer")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_change_impact_analyzer_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: datatest agent declaration (contextual "datatest agent" two-keyword prefix)
+  if (check(TokenType::Identifier) && peek().lexeme == "datatest")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_datatest_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: test_strategy declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "test_strategy")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_test_strategy_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: test_case_generator declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "test_case_generator")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_test_case_generator_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: test_case declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "test_case")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_test_case_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: etl_test_suite declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "etl_test_suite")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_etl_test_suite_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: dw_test_suite declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "dw_test_suite")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_dw_test_suite_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: ml_test_suite declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "ml_test_suite")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_ml_test_suite_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: api_test_suite declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "api_test_suite")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_api_test_suite_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: performance_test_suite declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "performance_test_suite")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_performance_test_suite_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: edge_case_tests declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "edge_case_tests")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_edge_case_tests_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: sit_suite declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "sit_suite")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_sit_suite_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: uat_suite declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "uat_suite")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_uat_suite_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: regression_suite declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "regression_suite")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_regression_suite_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: quality_gate declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "quality_gate")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_quality_gate_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: test_report_config declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "test_report_config")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_test_report_config_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.8.4: defect_management declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "defect_management")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_defect_management_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: dio agent declaration (contextual "dio agent" two-keyword prefix)
+  if (check(TokenType::Identifier) && peek().lexeme == "dio")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_dio_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+    }
+    current_ = saved;
+  }
+  // v0.9.9: agent_registry declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "agent_registry")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_agent_registry_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: agent_contracts declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "agent_contracts")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_agent_contracts_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: raci_matrix declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "raci_matrix")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_raci_matrix_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: task_understanding declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "task_understanding")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_task_understanding_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: task_decomposer declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "task_decomposer")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_task_decomposer_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: crew_formation declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "crew_formation")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_crew_formation_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: pattern_selector declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "pattern_selector")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_pattern_selector_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: execution_manager_dio declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "execution_manager_dio")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_execution_manager_dio_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: dio_state_machine declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "dio_state_machine")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_dio_state_machine_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: dio_error_handling declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "dio_error_handling")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_dio_error_handling_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: result_synthesizer declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "result_synthesizer")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_result_synthesizer_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: infrastructure_profile declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "infrastructure_profile")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_infrastructure_profile_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: role_framework declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "role_framework")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_role_framework_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: delegation_protocol declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "delegation_protocol")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_delegation_protocol_decl(has_visibility ? visibility : Visibility{});
+    }
+    current_ = saved;
+  }
+  // v0.9.9: dio_accountability declaration
+  if (check(TokenType::Identifier) && peek().lexeme == "dio_accountability")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_dio_accountability_decl(has_visibility ? visibility : Visibility{});
     }
     current_ = saved;
   }
@@ -16532,6 +17258,2047 @@ StmtPtr Parser::parse_causal_agent_decl(const Visibility& visibility)
     match(TokenType::Comma);
   }
   if (!match(TokenType::RightBrace)) error("Expected '}' after causal agent body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v0.9.8.2: MLOps Agent Parse Functions
+// ═══════════════════════════════════════════════════════════════
+
+StmtPtr Parser::parse_drift_monitor_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected drift_monitor name");
+  DriftMonitorDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after drift_monitor name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in drift_monitor");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "model") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.model = previous().lexeme; }
+    else if (fname == "reference_dataset") { if (!match(TokenType::String)) error("Expected string"); decl.reference_dataset = previous().lexeme; }
+    else if (fname == "data_drift") { decl.data_drift_json = consume_nested_block_as_json(); }
+    else if (fname == "concept_drift") { decl.concept_drift_json = consume_nested_block_as_json(); }
+    else if (fname == "prediction_drift") { decl.prediction_drift_json = consume_nested_block_as_json(); }
+    else if (fname == "alerts") { decl.alerts_json = consume_nested_block_as_json(); }
+    else if (fname == "root_cause_analysis") { decl.root_cause_analysis_json = consume_nested_block_as_json(); }
+    else { error("Unknown drift_monitor field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after drift_monitor body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_retraining_pipeline_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected retraining_pipeline name");
+  RetrainingPipelineDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after retraining_pipeline name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in retraining_pipeline");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "triggers") { decl.triggers_json = consume_nested_block_as_json(); }
+    else if (fname == "data") { decl.data_json = consume_nested_block_as_json(); }
+    else if (fname == "training") { decl.training_json = consume_nested_block_as_json(); }
+    else if (fname == "validation") { decl.validation_json = consume_nested_block_as_json(); }
+    else if (fname == "deployment") { decl.deployment_json = consume_nested_block_as_json(); }
+    else if (fname == "notifications") { decl.notifications_json = consume_nested_block_as_json(); }
+    else { error("Unknown retraining_pipeline field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after retraining_pipeline body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_deployment_strategy_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected deployment_strategy name");
+  MLDeployStrategyDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after deployment_strategy name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in deployment_strategy");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "strategy") { if (!match(TokenType::String)) error("Expected string"); decl.strategy = previous().lexeme; }
+    else if (fname == "config") { decl.config_json = consume_nested_block_as_json(); }
+    else { error("Unknown deployment_strategy field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after deployment_strategy body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_champion_challenger_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected champion_challenger name");
+  ChampionChallengerDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after champion_challenger name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in champion_challenger");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "champion") { decl.champion_json = consume_nested_block_as_json(); }
+    else if (fname == "challenger") { decl.challenger_json = consume_nested_block_as_json(); }
+    else if (fname == "evaluation") { decl.evaluation_json = consume_nested_block_as_json(); }
+    else if (fname == "promotion") { decl.promotion_json = consume_nested_block_as_json(); }
+    else if (fname == "rollback") { decl.rollback_json = consume_nested_block_as_json(); }
+    else { error("Unknown champion_challenger field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after champion_challenger body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_serving_infra_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected serving_infra name");
+  ServingInfraDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after serving_infra name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in serving_infra");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "mode") { if (!match(TokenType::String)) error("Expected string"); decl.mode = previous().lexeme; }
+    else if (fname == "platform") { decl.platform_json = consume_nested_block_as_json(); }
+    else if (fname == "sla") { decl.sla_json = consume_nested_block_as_json(); }
+    else if (fname == "cost") { decl.cost_json = consume_nested_block_as_json(); }
+    else if (fname == "health") { decl.health_json = consume_nested_block_as_json(); }
+    else { error("Unknown serving_infra field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after serving_infra body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_training_infra_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected training_infra name");
+  TrainingInfraDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after training_infra name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in training_infra");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "compute_tiers") { decl.compute_tiers_json = consume_nested_block_as_json(); }
+    else if (fname == "selection") { decl.selection_json = consume_nested_block_as_json(); }
+    else if (fname == "cost_tracking") { decl.cost_tracking_json = consume_nested_block_as_json(); }
+    else { error("Unknown training_infra field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after training_infra body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_mlops_rollback_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected mlops_rollback name");
+  MLOpsRollbackDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after mlops_rollback name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in mlops_rollback");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "auto_triggers") { decl.auto_triggers_json = consume_nested_block_as_json(); }
+    else if (fname == "strategy") { decl.strategy_json = consume_nested_block_as_json(); }
+    else if (fname == "post_rollback") { decl.post_rollback_json = consume_nested_block_as_json(); }
+    else if (fname == "recovery") { decl.recovery_json = consume_nested_block_as_json(); }
+    else { error("Unknown mlops_rollback field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after mlops_rollback body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_monitoring_stack_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected monitoring_stack name");
+  MonitoringStackDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after monitoring_stack name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in monitoring_stack");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "evidently") { decl.evidently_json = consume_nested_block_as_json(); }
+    else if (fname == "prometheus") { decl.prometheus_json = consume_nested_block_as_json(); }
+    else if (fname == "whylabs") { decl.whylabs_json = consume_nested_block_as_json(); }
+    else { error("Unknown monitoring_stack field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after monitoring_stack body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_mlflow_config_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected mlflow_config name");
+  MLflowConfigDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after mlflow_config name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in mlflow_config");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "mcp_server") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.mcp_server = previous().lexeme; }
+    else if (fname == "tracking") { decl.tracking_json = consume_nested_block_as_json(); }
+    else if (fname == "registry") { decl.registry_json = consume_nested_block_as_json(); }
+    else if (fname == "lifecycle") { decl.lifecycle_json = consume_nested_block_as_json(); }
+    else { error("Unknown mlflow_config field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after mlflow_config body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_business_kpi_tracker_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected business_kpi_tracker name");
+  BusinessKPITrackerDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after business_kpi_tracker name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in business_kpi_tracker");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "model") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.model = previous().lexeme; }
+    else if (fname == "kpis") { decl.kpis_json = consume_nested_block_as_json(); }
+    else if (fname == "report_frequency") { if (!match(TokenType::String)) error("Expected string"); decl.report_frequency = previous().lexeme; }
+    else if (fname == "compare_with") { if (!match(TokenType::String)) error("Expected string"); decl.compare_with = previous().lexeme; }
+    else { error("Unknown business_kpi_tracker field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after business_kpi_tracker body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_dataset_version_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected dataset_version name");
+  DatasetVersionDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after dataset_version name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in dataset_version");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "versioning_tool") { if (!match(TokenType::String)) error("Expected string"); decl.versioning_tool = previous().lexeme; }
+    else if (fname == "source") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.source = previous().lexeme; }
+    else if (fname == "query") { if (!match(TokenType::String)) error("Expected string"); decl.query = previous().lexeme; }
+    else if (fname == "hash_method") { if (!match(TokenType::String)) error("Expected string"); decl.hash_method = previous().lexeme; }
+    else if (fname == "storage") { if (!match(TokenType::String)) error("Expected string"); decl.storage = previous().lexeme; }
+    else if (fname == "lineage") { decl.lineage_json = consume_nested_block_as_json(); }
+    else if (fname == "schema_validation") { decl.schema_validation_json = consume_nested_block_as_json(); }
+    else { error("Unknown dataset_version field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after dataset_version body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_feedback_loop_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected feedback_loop name");
+  FeedbackLoopDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after feedback_loop name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in feedback_loop");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "production_metrics") { decl.production_metrics_json = consume_nested_block_as_json(); }
+    else if (fname == "recommendations") { decl.recommendations_json = consume_nested_block_as_json(); }
+    else if (fname == "trigger_ds_agent") { decl.trigger_ds_agent_json = consume_nested_block_as_json(); }
+    else { error("Unknown feedback_loop field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after feedback_loop body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_decision_engine_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected decision_engine name");
+  DecisionEngineDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after decision_engine name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in decision_engine");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "retrain_policy") { decl.retrain_policy_json = consume_nested_block_as_json(); }
+    else if (fname == "rollback_policy") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.rollback_policy = previous().lexeme; }
+    else if (fname == "scaling_policy") { decl.scaling_policy_json = consume_nested_block_as_json(); }
+    else if (fname == "human_in_the_loop") { decl.human_in_the_loop_json = consume_nested_block_as_json(); }
+    else { error("Unknown decision_engine field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after decision_engine body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_event_bus_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected event_bus name");
+  EventBusDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after event_bus name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in event_bus");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "emits") { decl.emits_json = consume_nested_block_as_json(); }
+    else if (fname == "listens") { decl.listens_json = consume_nested_block_as_json(); }
+    else if (fname == "routing") { decl.routing_json = consume_nested_block_as_json(); }
+    else { error("Unknown event_bus field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after event_bus body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_drift_rca_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected drift_rca name");
+  DriftRCADecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after drift_rca name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in drift_rca");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "causal_agent") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.causal_agent = previous().lexeme; }
+    else if (fname == "investigation") { decl.investigation_json = consume_nested_block_as_json(); }
+    else if (fname == "actions") { decl.actions_json = consume_nested_block_as_json(); }
+    else { error("Unknown drift_rca field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after drift_rca body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_mlops_agent_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected mlops agent name");
+  MLOpsAgentDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after mlops agent name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in mlops agent");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+    else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+    else if (fname == "system") { if (!match(TokenType::String)) error("Expected string"); decl.system = previous().lexeme; }
+    else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+    else if (fname == "endpoint") { if (!match(TokenType::String)) error("Expected string"); decl.endpoint = previous().lexeme; }
+    else if (fname == "api_key_env") { if (!match(TokenType::String)) error("Expected string"); decl.api_key_env = previous().lexeme; }
+    else if (fname == "agent_md") { if (!match(TokenType::String)) error("Expected string"); decl.agent_md = previous().lexeme; }
+    else if (fname == "sub_agents") { decl.sub_agents_json = consume_nested_block_as_json(); }
+    else if (fname == "drift_monitor") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.drift_monitor = previous().lexeme; }
+    else if (fname == "retraining_pipeline") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.retraining_pipeline = previous().lexeme; }
+    else if (fname == "deployment_strategy") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.deployment_strategy = previous().lexeme; }
+    else if (fname == "champion_challenger") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.champion_challenger = previous().lexeme; }
+    else if (fname == "serving_infra") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.serving_infra = previous().lexeme; }
+    else if (fname == "training_infra") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.training_infra = previous().lexeme; }
+    else if (fname == "rollback_policy") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.rollback_policy = previous().lexeme; }
+    else if (fname == "monitoring_stack") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.monitoring_stack = previous().lexeme; }
+    else if (fname == "mlflow") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.mlflow = previous().lexeme; }
+    else if (fname == "business_kpi_tracker") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.business_kpi_tracker = previous().lexeme; }
+    else if (fname == "feedback_loop") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.feedback_loop = previous().lexeme; }
+    else if (fname == "decision_engine") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.decision_engine = previous().lexeme; }
+    else if (fname == "event_bus") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.event_bus = previous().lexeme; }
+    else if (fname == "coordinates_with")
+    {
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end()) { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.coordinates_with.push_back(previous().lexeme); match(TokenType::Comma); }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+    }
+    else if (fname == "handoffs")
+    {
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end()) { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.handoffs.push_back(previous().lexeme); match(TokenType::Comma); }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+    }
+    else if (fname == "role") { if (!match(TokenType::String)) error("Expected string"); decl.role = previous().lexeme; }
+    else if (fname == "purpose") { if (!match(TokenType::String)) error("Expected string"); decl.purpose = previous().lexeme; }
+    else if (fname == "autonomy") { if (!match(TokenType::String)) error("Expected string"); decl.autonomy = previous().lexeme; }
+    else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.budget = previous().lexeme; }
+    else { error("Unknown mlops agent field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after mlops agent body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_requirements_elicitation_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected requirements_elicitation name");
+  RequirementsElicitationDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after requirements_elicitation name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in requirements_elicitation");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "stakeholders") { decl.stakeholders_json = consume_nested_block_as_json(); }
+    else if (fname == "methods") { decl.methods_json = consume_nested_block_as_json(); }
+    else if (fname == "output") { decl.output_json = consume_nested_block_as_json(); }
+    else { error("Unknown requirements_elicitation field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after requirements_elicitation body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_brd_generator_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected brd_generator name");
+  BRDGeneratorDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after brd_generator name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in brd_generator");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "project") { decl.project_json = consume_nested_block_as_json(); }
+    else if (fname == "objectives") { decl.objectives_json = consume_nested_block_as_json(); }
+    else if (fname == "scope") { decl.scope_json = consume_nested_block_as_json(); }
+    else if (fname == "benefits") { decl.benefits_json = consume_nested_block_as_json(); }
+    else if (fname == "constraints") { decl.constraints_json = consume_nested_block_as_json(); }
+    else if (fname == "assumptions") { decl.assumptions_json = consume_nested_block_as_json(); }
+    else if (fname == "risks") { decl.risks_json = consume_nested_block_as_json(); }
+    else if (fname == "output") { decl.output_json = consume_nested_block_as_json(); }
+    else { error("Unknown brd_generator field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after brd_generator body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_functional_spec_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected functional_spec name");
+  FunctionalSpecDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after functional_spec name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in functional_spec");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "data_requirements") { decl.data_requirements_json = consume_nested_block_as_json(); }
+    else if (fname == "etl_requirements") { decl.etl_requirements_json = consume_nested_block_as_json(); }
+    else if (fname == "ml_requirements") { decl.ml_requirements_json = consume_nested_block_as_json(); }
+    else if (fname == "analytics_requirements") { decl.analytics_requirements_json = consume_nested_block_as_json(); }
+    else { error("Unknown functional_spec field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after functional_spec body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_nonfunctional_spec_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected nonfunctional_spec name");
+  NonfunctionalSpecDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after nonfunctional_spec name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in nonfunctional_spec");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "performance") { decl.performance_json = consume_nested_block_as_json(); }
+    else if (fname == "reliability") { decl.reliability_json = consume_nested_block_as_json(); }
+    else if (fname == "security") { decl.security_json = consume_nested_block_as_json(); }
+    else if (fname == "scalability") { decl.scalability_json = consume_nested_block_as_json(); }
+    else if (fname == "data_quality") { decl.data_quality_json = consume_nested_block_as_json(); }
+    else if (fname == "maintainability") { decl.maintainability_json = consume_nested_block_as_json(); }
+    else { error("Unknown nonfunctional_spec field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after nonfunctional_spec body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_acceptance_criteria_gen_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected acceptance_criteria_generator name");
+  AcceptanceCriteriaGenDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after acceptance_criteria_generator name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in acceptance_criteria_generator");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "patterns") { decl.patterns_json = consume_nested_block_as_json(); }
+    else if (fname == "auto_generate") { if (match(TokenType::True)) decl.auto_generate = true; else if (match(TokenType::False)) decl.auto_generate = false; else error("Expected 'true' or 'false' for auto_generate"); }
+    else if (fname == "review_required") { if (match(TokenType::True)) decl.review_required = true; else if (match(TokenType::False)) decl.review_required = false; else error("Expected 'true' or 'false' for review_required"); }
+    else if (fname == "quality") { decl.quality_json = consume_nested_block_as_json(); }
+    else { error("Unknown acceptance_criteria_generator field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after acceptance_criteria_generator body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_data_requirements_ba_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected data_requirements_ba name");
+  DataRequirementsBADecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after data_requirements_ba name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in data_requirements_ba");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "source_to_target") { decl.source_to_target_json = consume_nested_block_as_json(); }
+    else if (fname == "target_schema") { decl.target_schema_json = consume_nested_block_as_json(); }
+    else if (fname == "quality_rules") { decl.quality_rules_json = consume_nested_block_as_json(); }
+    else { error("Unknown data_requirements_ba field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after data_requirements_ba body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_impact_analysis_ba_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected impact_analysis_ba name");
+  ImpactAnalysisBADecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after impact_analysis_ba name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in impact_analysis_ba");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "upstream") { decl.upstream_json = consume_nested_block_as_json(); }
+    else if (fname == "downstream") { decl.downstream_json = consume_nested_block_as_json(); }
+    else if (fname == "change_scenarios") { decl.change_scenarios_json = consume_nested_block_as_json(); }
+    else if (fname == "lineage") { decl.lineage_json = consume_nested_block_as_json(); }
+    else { error("Unknown impact_analysis_ba field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after impact_analysis_ba body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_traceability_matrix_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected traceability_matrix name");
+  TraceabilityMatrixDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after traceability_matrix name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in traceability_matrix");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "entries") { decl.entries_json = consume_nested_block_as_json(); }
+    else if (fname == "auto_trace") { decl.auto_trace_json = consume_nested_block_as_json(); }
+    else if (fname == "reports") { decl.reports_json = consume_nested_block_as_json(); }
+    else { error("Unknown traceability_matrix field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after traceability_matrix body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_etl_requirement_spec_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected etl_requirement_spec name");
+  ETLRequirementSpecDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after etl_requirement_spec name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in etl_requirement_spec");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "pipeline") { decl.pipeline_json = consume_nested_block_as_json(); }
+    else if (fname == "feature_groups") { decl.feature_groups_json = consume_nested_block_as_json(); }
+    else if (fname == "quality_gates") { decl.quality_gates_json = consume_nested_block_as_json(); }
+    else if (fname == "upstream_dependencies") { if (!match(TokenType::String)) error("Expected string"); decl.upstream_dependencies = previous().lexeme; }
+    else if (fname == "downstream_consumers") { if (!match(TokenType::String)) error("Expected string"); decl.downstream_consumers = previous().lexeme; }
+    else { error("Unknown etl_requirement_spec field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after etl_requirement_spec body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_ml_requirement_spec_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected ml_requirement_spec name");
+  MLRequirementSpecDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after ml_requirement_spec name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in ml_requirement_spec");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "problem") { decl.problem_json = consume_nested_block_as_json(); }
+    else if (fname == "success_criteria") { decl.success_criteria_json = consume_nested_block_as_json(); }
+    else if (fname == "feature_requirements") { decl.feature_requirements_json = consume_nested_block_as_json(); }
+    else if (fname == "serving") { decl.serving_json = consume_nested_block_as_json(); }
+    else if (fname == "explainability") { decl.explainability_json = consume_nested_block_as_json(); }
+    else if (fname == "monitoring") { decl.monitoring_json = consume_nested_block_as_json(); }
+    else { error("Unknown ml_requirement_spec field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after ml_requirement_spec body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_governance_requirement_spec_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected governance_requirement_spec name");
+  GovernanceRequirementSpecDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after governance_requirement_spec name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in governance_requirement_spec");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "data_classification") { decl.data_classification_json = consume_nested_block_as_json(); }
+    else if (fname == "access_requirements") { decl.access_requirements_json = consume_nested_block_as_json(); }
+    else if (fname == "compliance") { decl.compliance_json = consume_nested_block_as_json(); }
+    else if (fname == "quality_sla") { decl.quality_sla_json = consume_nested_block_as_json(); }
+    else { error("Unknown governance_requirement_spec field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after governance_requirement_spec body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_analytics_requirement_spec_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected analytics_requirement_spec name");
+  AnalyticsRequirementSpecDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after analytics_requirement_spec name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in analytics_requirement_spec");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "reports") { decl.reports_json = consume_nested_block_as_json(); }
+    else if (fname == "kpi_definitions") { decl.kpi_definitions_json = consume_nested_block_as_json(); }
+    else { error("Unknown analytics_requirement_spec field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after analytics_requirement_spec body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_stakeholder_analysis_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected stakeholder_analysis name");
+  StakeholderAnalysisDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after stakeholder_analysis name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in stakeholder_analysis");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "stakeholders") { decl.stakeholders_json = consume_nested_block_as_json(); }
+    else if (fname == "raci_matrix") { decl.raci_matrix_json = consume_nested_block_as_json(); }
+    else { error("Unknown stakeholder_analysis field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after stakeholder_analysis body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_user_story_generator_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected user_story_generator name");
+  UserStoryGeneratorDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after user_story_generator name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in user_story_generator");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "source") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.source = previous().lexeme; }
+    else if (fname == "epics") { decl.epics_json = consume_nested_block_as_json(); }
+    else if (fname == "stories") { decl.stories_json = consume_nested_block_as_json(); }
+    else if (fname == "generation") { decl.generation_json = consume_nested_block_as_json(); }
+    else { error("Unknown user_story_generator field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after user_story_generator body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_scope_management_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected scope_management name");
+  ScopeManagementDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after scope_management name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in scope_management");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "bcar") { decl.bcar_json = consume_nested_block_as_json(); }
+    else if (fname == "change_management") { decl.change_management_json = consume_nested_block_as_json(); }
+    else { error("Unknown scope_management field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after scope_management body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_change_impact_analyzer_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected change_impact_analyzer name");
+  ChangeImpactAnalyzerDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after change_impact_analyzer name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in change_impact_analyzer");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "analysis") { decl.analysis_json = consume_nested_block_as_json(); }
+    else if (fname == "output") { decl.output_json = consume_nested_block_as_json(); }
+    else { error("Unknown change_impact_analyzer field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after change_impact_analyzer body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_databa_agent_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected databa agent name");
+  DataBAAgentDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after databa agent name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in databa agent");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+    else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+    else if (fname == "system") { if (!match(TokenType::String)) error("Expected string"); decl.system = previous().lexeme; }
+    else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+    else if (fname == "endpoint") { if (!match(TokenType::String)) error("Expected string"); decl.endpoint = previous().lexeme; }
+    else if (fname == "api_key_env") { if (!match(TokenType::String)) error("Expected string"); decl.api_key_env = previous().lexeme; }
+    else if (fname == "agent_md") { if (!match(TokenType::String)) error("Expected string"); decl.agent_md = previous().lexeme; }
+    else if (fname == "downstream_agents") { decl.downstream_agents_json = consume_nested_block_as_json(); }
+    else if (fname == "elicitation") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.elicitation = previous().lexeme; }
+    else if (fname == "brd") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.brd = previous().lexeme; }
+    else if (fname == "functional_spec") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.functional_spec = previous().lexeme; }
+    else if (fname == "nfr_spec") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.nfr_spec = previous().lexeme; }
+    else if (fname == "data_requirements") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.data_requirements = previous().lexeme; }
+    else if (fname == "impact_analysis") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.impact_analysis = previous().lexeme; }
+    else if (fname == "traceability") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.traceability = previous().lexeme; }
+    else if (fname == "etl_spec") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.etl_spec = previous().lexeme; }
+    else if (fname == "ml_spec") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.ml_spec = previous().lexeme; }
+    else if (fname == "governance_spec") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.governance_spec = previous().lexeme; }
+    else if (fname == "analytics_spec") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.analytics_spec = previous().lexeme; }
+    else if (fname == "stakeholders") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.stakeholders = previous().lexeme; }
+    else if (fname == "user_stories") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.user_stories = previous().lexeme; }
+    else if (fname == "scope") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.scope = previous().lexeme; }
+    else if (fname == "coordinates_with")
+    {
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end()) { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.coordinates_with.push_back(previous().lexeme); match(TokenType::Comma); }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+    }
+    else if (fname == "handoffs")
+    {
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end()) { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.handoffs.push_back(previous().lexeme); match(TokenType::Comma); }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+    }
+    else if (fname == "role") { if (!match(TokenType::String)) error("Expected string"); decl.role = previous().lexeme; }
+    else if (fname == "purpose") { if (!match(TokenType::String)) error("Expected string"); decl.purpose = previous().lexeme; }
+    else if (fname == "autonomy") { if (!match(TokenType::String)) error("Expected string"); decl.autonomy = previous().lexeme; }
+    else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.budget = previous().lexeme; }
+    else { error("Unknown databa agent field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after databa agent body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_test_strategy_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected test_strategy name");
+  TestStrategyDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after test_strategy name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in test_strategy");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "source_spec") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.source_spec = previous().lexeme; }
+    else if (fname == "source_nfr") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.source_nfr = previous().lexeme; }
+    else if (fname == "levels") { decl.levels_json = consume_nested_block_as_json(); }
+    else if (fname == "test_data") { decl.test_data_json = consume_nested_block_as_json(); }
+    else if (fname == "gates") { decl.gates_json = consume_nested_block_as_json(); }
+    else if (fname == "reporting") { decl.reporting_json = consume_nested_block_as_json(); }
+    else { error("Unknown test_strategy field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after test_strategy body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_test_case_generator_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected test_case_generator name");
+  TestCaseGeneratorDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after test_case_generator name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in test_case_generator");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "source") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.source = previous().lexeme; }
+    else if (fname == "generation") { decl.generation_json = consume_nested_block_as_json(); }
+    else if (fname == "output") { decl.output_json = consume_nested_block_as_json(); }
+    else { error("Unknown test_case_generator field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after test_case_generator body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_test_case_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected test_case name");
+  TestCaseDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after test_case name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in test_case");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "requirement") { if (!match(TokenType::String)) error("Expected string"); decl.requirement = previous().lexeme; }
+    else if (fname == "acceptance_criteria") { if (!match(TokenType::String)) error("Expected string"); decl.acceptance_criteria = previous().lexeme; }
+    else if (fname == "type") { if (!match(TokenType::String)) error("Expected string"); decl.type = previous().lexeme; }
+    else if (fname == "priority") { if (!match(TokenType::String)) error("Expected string"); decl.priority = previous().lexeme; }
+    else if (fname == "preconditions") { decl.preconditions_json = consume_nested_block_as_json(); }
+    else if (fname == "steps") { decl.steps_json = consume_nested_block_as_json(); }
+    else if (fname == "expected_result") { if (!match(TokenType::String)) error("Expected string"); decl.expected_result = previous().lexeme; }
+    else if (fname == "automation") { decl.automation_json = consume_nested_block_as_json(); }
+    else { error("Unknown test_case field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after test_case body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_etl_test_suite_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected etl_test_suite name");
+  ETLTestSuiteDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after etl_test_suite name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in etl_test_suite");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "pipeline") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.pipeline = previous().lexeme; }
+    else if (fname == "connection") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.connection = previous().lexeme; }
+    else if (fname == "tests") { decl.tests_json = consume_nested_block_as_json(); }
+    else { error("Unknown etl_test_suite field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after etl_test_suite body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_dw_test_suite_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected dw_test_suite name");
+  DWTestSuiteDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after dw_test_suite name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in dw_test_suite");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "connection") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.connection = previous().lexeme; }
+    else if (fname == "tests") { decl.tests_json = consume_nested_block_as_json(); }
+    else { error("Unknown dw_test_suite field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after dw_test_suite body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_ml_test_suite_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected ml_test_suite name");
+  MLTestSuiteDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after ml_test_suite name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in ml_test_suite");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "model") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.model = previous().lexeme; }
+    else if (fname == "tests") { decl.tests_json = consume_nested_block_as_json(); }
+    else { error("Unknown ml_test_suite field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after ml_test_suite body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_api_test_suite_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected api_test_suite name");
+  APITestSuiteDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after api_test_suite name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in api_test_suite");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "endpoint") { if (!match(TokenType::String)) error("Expected string"); decl.endpoint = previous().lexeme; }
+    else if (fname == "auth") { decl.auth_json = consume_nested_block_as_json(); }
+    else if (fname == "tests") { decl.tests_json = consume_nested_block_as_json(); }
+    else { error("Unknown api_test_suite field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after api_test_suite body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_performance_test_suite_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected performance_test_suite name");
+  PerformanceTestSuiteDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after performance_test_suite name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in performance_test_suite");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "pipeline_performance") { decl.pipeline_performance_json = consume_nested_block_as_json(); }
+    else if (fname == "query_performance") { decl.query_performance_json = consume_nested_block_as_json(); }
+    else if (fname == "api_performance") { decl.api_performance_json = consume_nested_block_as_json(); }
+    else { error("Unknown performance_test_suite field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after performance_test_suite body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_edge_case_tests_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected edge_case_tests name");
+  EdgeCaseTestsDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after edge_case_tests name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in edge_case_tests");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "generation") { decl.generation_json = consume_nested_block_as_json(); }
+    else if (fname == "tests") { decl.tests_json = consume_nested_block_as_json(); }
+    else { error("Unknown edge_case_tests field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after edge_case_tests body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_sit_suite_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected sit_suite name");
+  SITSuiteDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after sit_suite name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in sit_suite");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "scope") { if (!match(TokenType::String)) error("Expected string"); decl.scope = previous().lexeme; }
+    else if (fname == "tests") { decl.tests_json = consume_nested_block_as_json(); }
+    else { error("Unknown sit_suite field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after sit_suite body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_uat_suite_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected uat_suite name");
+  UATSuiteDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after uat_suite name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in uat_suite");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "business_validation") { decl.business_validation_json = consume_nested_block_as_json(); }
+    else if (fname == "data_quality_uat") { decl.data_quality_uat_json = consume_nested_block_as_json(); }
+    else { error("Unknown uat_suite field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after uat_suite body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_regression_suite_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected regression_suite name");
+  RegressionSuiteDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after regression_suite name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in regression_suite");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "baseline") { decl.baseline_json = consume_nested_block_as_json(); }
+    else if (fname == "checks") { decl.checks_json = consume_nested_block_as_json(); }
+    else if (fname == "trigger") { if (!match(TokenType::String)) error("Expected string"); decl.trigger = previous().lexeme; }
+    else { error("Unknown regression_suite field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after regression_suite body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_quality_gate_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected quality_gate name");
+  QualityGateDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after quality_gate name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in quality_gate");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "data_quality_gate") { decl.data_quality_gate_json = consume_nested_block_as_json(); }
+    else if (fname == "model_quality_gate") { decl.model_quality_gate_json = consume_nested_block_as_json(); }
+    else if (fname == "api_quality_gate") { decl.api_quality_gate_json = consume_nested_block_as_json(); }
+    else if (fname == "performance_gate") { decl.performance_gate_json = consume_nested_block_as_json(); }
+    else if (fname == "uat_gate") { decl.uat_gate_json = consume_nested_block_as_json(); }
+    else if (fname == "deployment_decision") { decl.deployment_decision_json = consume_nested_block_as_json(); }
+    else { error("Unknown quality_gate field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after quality_gate body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_test_report_config_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected test_report_config name");
+  TestReportConfigDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after test_report_config name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in test_report_config");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "execution") { decl.execution_json = consume_nested_block_as_json(); }
+    else if (fname == "report") { decl.report_json = consume_nested_block_as_json(); }
+    else if (fname == "notify") { decl.notify_json = consume_nested_block_as_json(); }
+    else { error("Unknown test_report_config field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after test_report_config body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_defect_management_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected defect_management name");
+  DefectManagementDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after defect_management name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in defect_management");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "on_failure") { decl.on_failure_json = consume_nested_block_as_json(); }
+    else if (fname == "rca") { decl.rca_json = consume_nested_block_as_json(); }
+    else if (fname == "tracking") { decl.tracking_json = consume_nested_block_as_json(); }
+    else { error("Unknown defect_management field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after defect_management body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_datatest_agent_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected datatest agent name");
+  DataTestAgentDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after datatest agent name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in datatest agent");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+    else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+    else if (fname == "system") { if (!match(TokenType::String)) error("Expected string"); decl.system = previous().lexeme; }
+    else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+    else if (fname == "agent_md") { if (!match(TokenType::String)) error("Expected string"); decl.agent_md = previous().lexeme; }
+    else if (fname == "sub_agents") { decl.sub_agents_json = consume_nested_block_as_json(); }
+    else if (fname == "forge") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.forge = previous().lexeme; }
+    else if (fname == "test_strategy") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.test_strategy = previous().lexeme; }
+    else if (fname == "test_generator") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.test_generator = previous().lexeme; }
+    else if (fname == "etl_tests") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.etl_tests = previous().lexeme; }
+    else if (fname == "dw_tests") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.dw_tests = previous().lexeme; }
+    else if (fname == "ml_tests") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.ml_tests = previous().lexeme; }
+    else if (fname == "api_tests") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.api_tests = previous().lexeme; }
+    else if (fname == "performance_tests") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.performance_tests = previous().lexeme; }
+    else if (fname == "edge_tests") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.edge_tests = previous().lexeme; }
+    else if (fname == "sit_suite") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.sit_suite = previous().lexeme; }
+    else if (fname == "uat_suite") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.uat_suite = previous().lexeme; }
+    else if (fname == "regression_suite") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.regression_suite = previous().lexeme; }
+    else if (fname == "quality_gate") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.quality_gate = previous().lexeme; }
+    else if (fname == "report_config") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.report_config = previous().lexeme; }
+    else if (fname == "defect_mgmt") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.defect_mgmt = previous().lexeme; }
+    else if (fname == "coordinates_with")
+    {
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end()) { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.coordinates_with.push_back(previous().lexeme); match(TokenType::Comma); }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+    }
+    else if (fname == "handoffs")
+    {
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end()) { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.handoffs.push_back(previous().lexeme); match(TokenType::Comma); }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+    }
+    else if (fname == "role") { if (!match(TokenType::String)) error("Expected string"); decl.role = previous().lexeme; }
+    else if (fname == "purpose") { if (!match(TokenType::String)) error("Expected string"); decl.purpose = previous().lexeme; }
+    else if (fname == "autonomy") { if (!match(TokenType::String)) error("Expected string"); decl.autonomy = previous().lexeme; }
+    else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.budget = previous().lexeme; }
+    else { error("Unknown datatest agent field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after datatest agent body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_agent_registry_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected agent_registry name");
+  AgentRegistryDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after agent_registry name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in agent_registry");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "agents") { decl.agents_json = consume_nested_block_as_json(); }
+    else { error("Unknown agent_registry field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after agent_registry body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_agent_contracts_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected agent_contracts name");
+  AgentContractsDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after agent_contracts name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in agent_contracts");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "contracts") { decl.contracts_json = consume_nested_block_as_json(); }
+    else { error("Unknown agent_contracts field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after agent_contracts body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_raci_matrix_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected raci_matrix name");
+  RACIMatrixDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after raci_matrix name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in raci_matrix");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "tasks") { decl.tasks_json = consume_nested_block_as_json(); }
+    else { error("Unknown raci_matrix field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after raci_matrix body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_task_understanding_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected task_understanding name");
+  TaskUnderstandingDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after task_understanding name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in task_understanding");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "intent_classifier") { decl.intent_classifier_json = consume_nested_block_as_json(); }
+    else if (fname == "detail_extraction") { decl.detail_extraction_json = consume_nested_block_as_json(); }
+    else { error("Unknown task_understanding field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after task_understanding body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_task_decomposer_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected task_decomposer name");
+  TaskDecomposerDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after task_decomposer name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in task_decomposer");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "strategy") { decl.strategy_json = consume_nested_block_as_json(); }
+    else if (fname == "output") { decl.output_json = consume_nested_block_as_json(); }
+    else { error("Unknown task_decomposer field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after task_decomposer body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_crew_formation_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected crew_formation name");
+  CrewFormationDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after crew_formation name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in crew_formation");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "strategy") { decl.strategy_json = consume_nested_block_as_json(); }
+    else { error("Unknown crew_formation field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after crew_formation body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_pattern_selector_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected pattern_selector name");
+  PatternSelectorDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after pattern_selector name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in pattern_selector");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "patterns") { decl.patterns_json = consume_nested_block_as_json(); }
+    else if (fname == "selection") { decl.selection_json = consume_nested_block_as_json(); }
+    else { error("Unknown pattern_selector field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after pattern_selector body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_execution_manager_dio_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected execution_manager_dio name");
+  ExecutionManagerDIODecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after execution_manager_dio name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in execution_manager_dio");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "modes") { decl.modes_json = consume_nested_block_as_json(); }
+    else if (fname == "resources") { decl.resources_json = consume_nested_block_as_json(); }
+    else if (fname == "monitoring") { decl.monitoring_json = consume_nested_block_as_json(); }
+    else { error("Unknown execution_manager_dio field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after execution_manager_dio body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_dio_state_machine_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected dio_state_machine name");
+  DIOStateMachineDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after dio_state_machine name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in dio_state_machine");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "states") { decl.states_json = consume_nested_block_as_json(); }
+    else if (fname == "transitions") { decl.transitions_json = consume_nested_block_as_json(); }
+    else if (fname == "persistence") { decl.persistence_json = consume_nested_block_as_json(); }
+    else { error("Unknown dio_state_machine field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after dio_state_machine body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_dio_error_handling_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected dio_error_handling name");
+  DIOErrorHandlingDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after dio_error_handling name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in dio_error_handling");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "strategies") { decl.strategies_json = consume_nested_block_as_json(); }
+    else if (fname == "self_healing") { decl.self_healing_json = consume_nested_block_as_json(); }
+    else { error("Unknown dio_error_handling field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after dio_error_handling body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_result_synthesizer_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected result_synthesizer name");
+  ResultSynthesizerDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after result_synthesizer name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in result_synthesizer");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "synthesis") { decl.synthesis_json = consume_nested_block_as_json(); }
+    else if (fname == "delivery") { decl.delivery_json = consume_nested_block_as_json(); }
+    else { error("Unknown result_synthesizer field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after result_synthesizer body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_infrastructure_profile_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected infrastructure_profile name");
+  InfrastructureProfileDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after infrastructure_profile name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in infrastructure_profile");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "data_warehouse") { decl.data_warehouse_json = consume_nested_block_as_json(); }
+    else if (fname == "data_lake") { decl.data_lake_json = consume_nested_block_as_json(); }
+    else if (fname == "databases") { decl.databases_json = consume_nested_block_as_json(); }
+    else if (fname == "streaming") { decl.streaming_json = consume_nested_block_as_json(); }
+    else if (fname == "data_science") { decl.data_science_json = consume_nested_block_as_json(); }
+    else if (fname == "governance") { decl.governance_json = consume_nested_block_as_json(); }
+    else if (fname == "cicd") { decl.cicd_json = consume_nested_block_as_json(); }
+    else { error("Unknown infrastructure_profile field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after infrastructure_profile body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_role_framework_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected role_framework name");
+  RoleFrameworkDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after role_framework name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in role_framework");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "roles") { decl.roles_json = consume_nested_block_as_json(); }
+    else if (fname == "dio_role") { decl.dio_role_json = consume_nested_block_as_json(); }
+    else { error("Unknown role_framework field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after role_framework body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_delegation_protocol_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected delegation_protocol name");
+  DelegationProtocolDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after delegation_protocol name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in delegation_protocol");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "delegation") { decl.delegation_json = consume_nested_block_as_json(); }
+    else { error("Unknown delegation_protocol field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after delegation_protocol body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_dio_accountability_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected dio_accountability name");
+  DIOAccountabilityDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after dio_accountability name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in dio_accountability");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "escalation") { decl.escalation_json = consume_nested_block_as_json(); }
+    else { error("Unknown dio_accountability field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after dio_accountability body");
+
+  auto stmt = std::make_unique<Statement>();
+  stmt->span = {0, 0, span, 0};
+  stmt->node = std::move(decl);
+  return stmt;
+}
+
+StmtPtr Parser::parse_dio_agent_decl(const Visibility& visibility)
+{
+  auto span = previous().line;
+  if (!match(TokenType::Identifier)) error("Expected dio agent name");
+  DIOAgentDecl decl;
+  decl.visibility = visibility;
+  decl.name = previous().lexeme;
+  if (!match(TokenType::LeftBrace)) error("Expected '{' after dio agent name");
+
+  while (!check(TokenType::RightBrace) && !is_at_end())
+  {
+    if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name in dio agent");
+    std::string fname = previous().lexeme;
+    if (!match(TokenType::Colon)) error("Expected ':' after field name");
+
+    if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+    else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+    else if (fname == "system") { if (!match(TokenType::String)) error("Expected string"); decl.system = previous().lexeme; }
+    else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+    else if (fname == "mode") { if (!match(TokenType::String)) error("Expected string"); decl.mode = previous().lexeme; }
+    else if (fname == "task") { if (!match(TokenType::String)) error("Expected string"); decl.task = previous().lexeme; }
+    else if (fname == "agent_md") { if (!match(TokenType::String)) error("Expected string"); decl.agent_md = previous().lexeme; }
+    else if (fname == "infrastructure") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.infrastructure = previous().lexeme; }
+    else if (fname == "agent_registry") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.agent_registry = previous().lexeme; }
+    else if (fname == "raci_matrix") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.raci_matrix = previous().lexeme; }
+    else if (fname == "pattern_selector") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.pattern_selector = previous().lexeme; }
+    else if (fname == "crew_formation") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.crew_formation = previous().lexeme; }
+    else if (fname == "execution_manager") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.execution_manager = previous().lexeme; }
+    else if (fname == "state_machine") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.state_machine = previous().lexeme; }
+    else if (fname == "error_handling") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.error_handling = previous().lexeme; }
+    else if (fname == "result_synthesizer") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.result_synthesizer = previous().lexeme; }
+    else if (fname == "managed_agents") { decl.managed_agents_json = consume_nested_block_as_json(); }
+    else if (fname == "guardrails") { decl.guardrails_json = consume_nested_block_as_json(); }
+    else if (fname == "coordinates_with")
+    {
+      if (!match(TokenType::LeftBracket)) error("Expected '['");
+      while (!check(TokenType::RightBracket) && !is_at_end()) { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.coordinates_with.push_back(previous().lexeme); match(TokenType::Comma); }
+      if (!match(TokenType::RightBracket)) error("Expected ']'");
+    }
+    else if (fname == "role") { if (!match(TokenType::String)) error("Expected string"); decl.role = previous().lexeme; }
+    else if (fname == "purpose") { if (!match(TokenType::String)) error("Expected string"); decl.purpose = previous().lexeme; }
+    else if (fname == "autonomy") { if (!match(TokenType::String)) error("Expected string"); decl.autonomy = previous().lexeme; }
+    else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected identifier"); decl.budget = previous().lexeme; }
+    else { error("Unknown dio agent field: " + fname); }
+    match(TokenType::Comma);
+  }
+  if (!match(TokenType::RightBrace)) error("Expected '}' after dio agent body");
 
   auto stmt = std::make_unique<Statement>();
   stmt->span = {0, 0, span, 0};

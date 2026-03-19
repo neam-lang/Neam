@@ -237,6 +237,10 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/deploy_types.cpp
     NeamC/src/vm/datascientist_types.cpp
     NeamC/src/vm/causal_types.cpp
+    NeamC/src/vm/mlops_types.cpp
+    NeamC/src/vm/databa_types.cpp
+    NeamC/src/vm/datatest_types.cpp
+    NeamC/src/vm/dio_types.cpp
     NeamC/src/vm/migration/audit_trail.cpp
     NeamC/src/vm/migration/schema_translator.cpp
     NeamC/src/vm/migration/data_movement.cpp
@@ -629,6 +633,46 @@ add_executable(v095_modeling_agent_test
 )
 target_link_libraries(v095_modeling_agent_test PRIVATE neamc_core gtest_main)
 add_test(NAME v095_modeling_agent_test COMMAND v095_modeling_agent_test)
+
+# ============================================================================
+# v0.9.8–v0.9.9 Intelligence Agent Tests
+# ============================================================================
+
+add_executable(v098_datascientist_agent_test
+    tests/unit/v098_datascientist_agent_test.cpp
+)
+target_link_libraries(v098_datascientist_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v098_datascientist_agent_test COMMAND v098_datascientist_agent_test)
+
+add_executable(v0981_causal_agent_test
+    tests/unit/v0981_causal_agent_test.cpp
+)
+target_link_libraries(v0981_causal_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v0981_causal_agent_test COMMAND v0981_causal_agent_test)
+
+add_executable(v0982_mlops_agent_test
+    tests/unit/v0982_mlops_agent_test.cpp
+)
+target_link_libraries(v0982_mlops_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v0982_mlops_agent_test COMMAND v0982_mlops_agent_test)
+
+add_executable(v0983_databa_agent_test
+    tests/unit/v0983_databa_agent_test.cpp
+)
+target_link_libraries(v0983_databa_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v0983_databa_agent_test COMMAND v0983_databa_agent_test)
+
+add_executable(v0984_datatest_agent_test
+    tests/unit/v0984_datatest_agent_test.cpp
+)
+target_link_libraries(v0984_datatest_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v0984_datatest_agent_test COMMAND v0984_datatest_agent_test)
+
+add_executable(v099_dio_agent_test
+    tests/unit/v099_dio_agent_test.cpp
+)
+target_link_libraries(v099_dio_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v099_dio_agent_test COMMAND v099_dio_agent_test)
 
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)

@@ -40,7 +40,7 @@ private:
   void emit_block(const BlockStmt& block);
 
   // v0.8 Phase 1: Agent type tracking for trait validation
-  enum class AgentKind { Stateless, Claw, Forge, Data, ETL, Migration, DataOps, Governance, Modeling, Analyst, DataScientist, Causal };
+  enum class AgentKind { Stateless, Claw, Forge, Data, ETL, Migration, DataOps, Governance, Modeling, Analyst, DataScientist, Causal, MLOps, DataBA, DataTest, DIO };
   std::unordered_map<std::string, AgentKind> agent_types_;
 
   // v0.9: Data agent definition tracking
@@ -189,6 +189,83 @@ private:
   std::unordered_set<std::string> causal_data_requirements_defs_;
   std::unordered_set<std::string> causal_agent_defs_;
   void validate_causal_agent(const CausalAgentDecl& decl);
+
+  // v0.9.8.2: MLOps Agent tracking
+  std::unordered_set<std::string> drift_monitor_defs_;
+  std::unordered_set<std::string> retraining_pipeline_defs_;
+  std::unordered_set<std::string> ml_deploy_strategy_defs_;
+  std::unordered_set<std::string> champion_challenger_defs_;
+  std::unordered_set<std::string> serving_infra_defs_;
+  std::unordered_set<std::string> training_infra_defs_;
+  std::unordered_set<std::string> mlops_rollback_defs_;
+  std::unordered_set<std::string> monitoring_stack_defs_;
+  std::unordered_set<std::string> mlflow_config_defs_;
+  std::unordered_set<std::string> business_kpi_tracker_defs_;
+  std::unordered_set<std::string> dataset_version_defs_;
+  std::unordered_set<std::string> feedback_loop_defs_;
+  std::unordered_set<std::string> decision_engine_defs_;
+  std::unordered_set<std::string> event_bus_defs_;
+  std::unordered_set<std::string> drift_rca_defs_;
+  std::unordered_set<std::string> mlops_agent_defs_;
+  void validate_mlops_agent(const MLOpsAgentDecl& decl);
+
+  // v0.9.8.3: Data-BA Agent tracking
+  std::unordered_set<std::string> requirements_elicitation_defs_;
+  std::unordered_set<std::string> brd_generator_defs_;
+  std::unordered_set<std::string> functional_spec_defs_;
+  std::unordered_set<std::string> nonfunctional_spec_defs_;
+  std::unordered_set<std::string> acceptance_criteria_gen_defs_;
+  std::unordered_set<std::string> data_requirements_ba_defs_;
+  std::unordered_set<std::string> impact_analysis_ba_defs_;
+  std::unordered_set<std::string> traceability_matrix_defs_;
+  std::unordered_set<std::string> etl_requirement_spec_defs_;
+  std::unordered_set<std::string> ml_requirement_spec_defs_;
+  std::unordered_set<std::string> governance_requirement_spec_defs_;
+  std::unordered_set<std::string> analytics_requirement_spec_defs_;
+  std::unordered_set<std::string> stakeholder_analysis_defs_;
+  std::unordered_set<std::string> user_story_generator_defs_;
+  std::unordered_set<std::string> scope_management_defs_;
+  std::unordered_set<std::string> change_impact_analyzer_defs_;
+  std::unordered_set<std::string> databa_agent_defs_;
+  void validate_databa_agent(const DataBAAgentDecl& decl);
+
+  // v0.9.8.4: Data Testing Agent tracking
+  std::unordered_set<std::string> test_strategy_defs_;
+  std::unordered_set<std::string> test_case_generator_defs_;
+  std::unordered_set<std::string> test_case_defs_;
+  std::unordered_set<std::string> etl_test_suite_defs_;
+  std::unordered_set<std::string> dw_test_suite_defs_;
+  std::unordered_set<std::string> ml_test_suite_defs_;
+  std::unordered_set<std::string> api_test_suite_defs_;
+  std::unordered_set<std::string> performance_test_suite_defs_;
+  std::unordered_set<std::string> edge_case_tests_defs_;
+  std::unordered_set<std::string> sit_suite_defs_;
+  std::unordered_set<std::string> uat_suite_defs_;
+  std::unordered_set<std::string> regression_suite_defs_;
+  std::unordered_set<std::string> quality_gate_test_defs_;
+  std::unordered_set<std::string> test_report_config_defs_;
+  std::unordered_set<std::string> defect_management_defs_;
+  std::unordered_set<std::string> datatest_agent_defs_;
+  void validate_datatest_agent(const DataTestAgentDecl& decl);
+
+  // v0.9.9: Data Intelligent Orchestrator tracking
+  std::unordered_set<std::string> agent_registry_defs_;
+  std::unordered_set<std::string> agent_contracts_defs_;
+  std::unordered_set<std::string> raci_matrix_defs_;
+  std::unordered_set<std::string> task_understanding_defs_;
+  std::unordered_set<std::string> task_decomposer_defs_;
+  std::unordered_set<std::string> crew_formation_defs_;
+  std::unordered_set<std::string> pattern_selector_defs_;
+  std::unordered_set<std::string> execution_manager_dio_defs_;
+  std::unordered_set<std::string> dio_state_machine_defs_;
+  std::unordered_set<std::string> dio_error_handling_defs_;
+  std::unordered_set<std::string> result_synthesizer_defs_;
+  std::unordered_set<std::string> infrastructure_profile_defs_;
+  std::unordered_set<std::string> role_framework_defs_;
+  std::unordered_set<std::string> delegation_protocol_defs_;
+  std::unordered_set<std::string> dio_accountability_defs_;
+  std::unordered_set<std::string> dio_agent_defs_;
+  void validate_dio_agent(const DIOAgentDecl& decl);
   void validate_classification_policy(const ClassificationPolicyDecl& decl);
   void validate_access_policy(const AccessPolicyDecl& decl);
   void validate_quality_policy(const QualityPolicyDecl& decl);
