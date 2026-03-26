@@ -1,0 +1,25 @@
+//
+// Neam v0.9.4 — Governance classification standard library
+//
+
+module std.governance.classify
+
+/// Classify a specific table
+pub fun classify(agent, database, table) {
+  return governance_classify(agent, database, table);
+}
+
+/// Classify all assets in catalog
+pub fun classify_all(agent) {
+  return governance_classify_all(agent);
+}
+
+/// Detect classification drift
+pub fun detect_drift(agent) {
+  return governance_detect_drift(agent);
+}
+
+/// Get classification report
+pub fun report(agent) {
+  return governance_classification_report(agent);
+}

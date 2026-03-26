@@ -1,0 +1,45 @@
+//
+// Neam v0.9.2 — Migration Agent Standard Library
+//
+// Core lifecycle functions for migration orchestration.
+//
+
+module std.migration
+
+// Run the full migration lifecycle
+pub fun run(agent) {
+    var assessment = migration_assess(agent)
+    print("Assessment complete: " + str(assessment))
+
+    var plan = migration_plan_waves(agent)
+    print("Wave plan: " + str(plan))
+
+    migration_translate_schema(agent)
+    print("Schema translation complete")
+
+    migration_execute_all(agent)
+    print("Data movement complete")
+
+    var validation = migration_validate(agent)
+    print("Validation: " + str(validation))
+    print("Ready for cutover. Call migration_cutover(agent) to proceed.")
+    return validation
+}
+
+// Individual lifecycle steps
+pub fun assess(agent)          { return migration_assess(agent) }
+pub fun plan(agent)            { return migration_plan_waves(agent) }
+pub fun translate(agent)       { return migration_translate_schema(agent) }
+pub fun execute(agent)         { return migration_execute_all(agent) }
+pub fun validate(agent)        { return migration_validate(agent) }
+pub fun cutover(agent)         { return migration_cutover(agent) }
+pub fun rollback(agent)        { return migration_rollback(agent) }
+
+// Reconciliation
+pub fun reconcile(agent)       { return migration_reconcile(agent) }
+
+// Status and reporting
+pub fun status(agent)          { return migration_status(agent) }
+pub fun progress(agent)        { return migration_progress(agent) }
+pub fun cost(agent)            { return migration_cost(agent) }
+pub fun report(agent, format)  { return migration_report(agent, format) }

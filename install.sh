@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Neam v0.7.2 Installer
+# Neam v0.9.9 Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/neam-lang/Neam/main/install.sh | bash
 set -euo pipefail
 
-VERSION="0.7.2"
-REPO="neam-lang/Neam"
+VERSION="0.9.9"
+REPO="neam-lang/neam-nightly"
 INSTALL_DIR="${NEAM_INSTALL_DIR:-/usr/local/bin}"
 
 # Colors
@@ -49,28 +49,56 @@ esac
 
 info "Detected platform: ${PLATFORM}-${ARCH}"
 
-# Determine asset name
+# Determine asset name (matches CI output naming convention)
+case "$PLATFORM" in
+    macos)   CI_PLATFORM="darwin" ;;
+    linux)   CI_PLATFORM="linux" ;;
+    windows) CI_PLATFORM="windows" ;;
+esac
+
+case "$ARCH" in
+    arm64)   CI_ARCH="arm64" ;;
+    x86_64)  CI_ARCH="amd64" ;;
+esac
+
 if [ "$PLATFORM" = "windows" ]; then
-    ASSET="neam-v${VERSION}-windows-${ARCH}.zip"
+    ASSET="neam-v${VERSION}-${CI_PLATFORM}-${CI_ARCH}.zip"
 else
-    ASSET="neam-v${VERSION}-${PLATFORM}-${ARCH}.tar.gz"
+    ASSET="neam-v${VERSION}-${CI_PLATFORM}-${CI_ARCH}.tar.gz"
 fi
 
+# Fallback: try local build naming if CI naming fails
+ASSET_ALT="neam-${PLATFORM}-${ARCH}-v${VERSION}.tar.gz"
+
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${ASSET}"
+DOWNLOAD_URL_ALT="https://github.com/${REPO}/releases/download/v${VERSION}/${ASSET_ALT}"
 
 # Create temp directory
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
-# Download
+# Download (try CI naming first, fallback to local build naming)
 info "Downloading ${ASSET}..."
+DOWNLOADED=false
 if command -v curl &>/dev/null; then
-    curl -fSL --progress-bar -o "${TMPDIR}/${ASSET}" "$DOWNLOAD_URL" || fail "Download failed. Asset '${ASSET}' may not exist for your platform.\n  URL: ${DOWNLOAD_URL}\n  Try building from source: https://github.com/${REPO}#building-from-source"
+    if curl -fSL --progress-bar -o "${TMPDIR}/${ASSET}" "$DOWNLOAD_URL" 2>/dev/null; then
+        DOWNLOADED=true
+    elif curl -fSL --progress-bar -o "${TMPDIR}/${ASSET_ALT}" "$DOWNLOAD_URL_ALT" 2>/dev/null; then
+        ASSET="$ASSET_ALT"
+        DOWNLOADED=true
+    fi
 elif command -v wget &>/dev/null; then
-    wget -q --show-progress -O "${TMPDIR}/${ASSET}" "$DOWNLOAD_URL" || fail "Download failed."
+    if wget -q --show-progress -O "${TMPDIR}/${ASSET}" "$DOWNLOAD_URL" 2>/dev/null; then
+        DOWNLOADED=true
+    elif wget -q --show-progress -O "${TMPDIR}/${ASSET_ALT}" "$DOWNLOAD_URL_ALT" 2>/dev/null; then
+        ASSET="$ASSET_ALT"
+        DOWNLOADED=true
+    fi
 else
     fail "Neither curl nor wget found. Please install one and retry."
 fi
+
+[ "$DOWNLOADED" = false ] && fail "Download failed. No release asset found for ${PLATFORM}-${ARCH}.\n  Tried: ${DOWNLOAD_URL}\n  Tried: ${DOWNLOAD_URL_ALT}\n  Try building from source: https://github.com/${REPO}#building-from-source"
 
 # Extract
 info "Extracting..."

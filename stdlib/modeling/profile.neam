@@ -1,0 +1,25 @@
+//
+// Neam v0.9.5 — Data profiling standard library
+//
+
+module std.modeling.profile
+
+/// Profile structured data sources
+pub fun profile_structured(agent) {
+  return modeling_profile_data(agent);
+}
+
+/// Profile semi-structured data sources
+pub fun profile_semi(agent) {
+  return modeling_profile_data(agent);
+}
+
+/// Profile unstructured data sources
+pub fun profile_unstructured(agent) {
+  return modeling_profile_data(agent);
+}
+
+/// Get full profiling report
+pub fun report(agent) {
+  return modeling_report(agent);
+}

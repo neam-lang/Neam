@@ -1,0 +1,16 @@
+// Simple Neam test program
+
+let name = "World";
+print(f"Hello, {name}!");
+
+let numbers = [1, 2, 3, 4, 5];
+let total = 0;
+
+for num in numbers {
+    total = total + num;
+}
+
+print(f"Sum of 1 to 5 = {total}");
+
+let greeting = "Neam is working!";
+print(greeting);

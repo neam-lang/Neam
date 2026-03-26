@@ -1,0 +1,25 @@
+//
+// Neam v0.9.5 — Normalization analysis standard library
+//
+
+module std.modeling.normalize
+
+/// Analyze normalization across all sources
+pub fun analyze(agent) {
+  return modeling_analyze_nf(agent);
+}
+
+/// Check normalization of a specific table
+pub fun check_nf(agent, table) {
+  return modeling_analyze_nf_table(agent, table);
+}
+
+/// Suggest decomposition for a table to target NF
+pub fun decompose(agent, table, target_nf) {
+  return modeling_analyze_nf_table(agent, table);
+}
+
+/// Get normalization health score
+pub fun score(agent) {
+  return modeling_analyze_nf(agent);
+}

@@ -1,37 +1,56 @@
 //
-// Neam v0.8 Phase 3 — Context Builder
-// Token-aware message assembly for claw agents
+// v0.8: Context builder & compaction engine — assembles LLM context from session state
 //
 
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
-#include "neamc/vm/claw_agent_type.hpp"
+#include "neamc/vm/session_manager.hpp"
 
 namespace neamc::vm
 {
 
+struct ObjClawAgent;
+
 struct AssembledContext
 {
   std::string system_prompt;
-  std::vector<std::pair<std::string, std::string>> messages;  // role, content
-  int token_estimate{0};
-  bool was_truncated{false};
+  std::vector<std::pair<std::string, std::string>> messages;
 };
 
 class ContextBuilder
 {
 public:
-  // Build assembled context from session history, respecting token budget
-  // and max_history_turns from the agent config.
-  AssembledContext build(const ObjClawAgent* agent,
-                         const SessionState& session,
-                         int max_context_tokens = 128000);
+  AssembledContext build(ObjClawAgent* agent, const Session& session)
+  {
+    AssembledContext ctx;
+    if (agent)
+    {
+      // Placeholder: copy session history as messages
+      ctx.messages = session.history;
+    }
+    return ctx;
+  }
+};
 
-  // Estimate tokens for a text string (chars/4 heuristic).
-  static int estimate_tokens(const std::string& text);
+class CompactionEngine
+{
+public:
+  bool needs_compaction(ObjClawAgent* /*agent*/, const Session& session)
+  {
+    // Placeholder: never triggers compaction
+    (void)session;
+    return false;
+  }
+
+  template <typename SummarizeFn>
+  std::string compact(ObjClawAgent* /*agent*/, const Session& /*session*/, SummarizeFn /*fn*/)
+  {
+    return {};
+  }
 };
 
 }  // namespace neamc::vm

@@ -1,0 +1,30 @@
+//
+// Neam v0.9.4 — Governance catalog standard library
+//
+
+module std.governance.catalog
+
+/// Discover all assets across catalog sources
+pub fun discover(agent) {
+  return governance_discover_assets(agent);
+}
+
+/// Search the catalog
+pub fun search(agent, query) {
+  return governance_catalog_search(agent, query);
+}
+
+/// Get catalog report
+pub fun report(agent) {
+  return governance_catalog_report(agent);
+}
+
+/// Auto-document a specific asset
+pub fun document(agent, fqn) {
+  return governance_document_asset(agent, fqn);
+}
+
+/// Detect shadow (undocumented) datasets
+pub fun detect_shadow(agent) {
+  return governance_detect_shadow(agent);
+}

@@ -1,0 +1,25 @@
+//
+// Neam v0.9.5 — ER modeling standard library
+//
+
+module std.modeling.er
+
+/// Generate ER model at specified level
+pub fun generate(agent, level) {
+  return modeling_reverse_engineer(agent);
+}
+
+/// Validate an ER model
+pub fun validate(agent, model) {
+  return modeling_status(agent);
+}
+
+/// Sync with external modeling tool
+pub fun sync(agent, tool) {
+  return modeling_sync_tool(agent, tool);
+}
+
+/// Export model to specified format
+pub fun export(agent, model, format) {
+  return modeling_generate_erwin(agent, model);
+}

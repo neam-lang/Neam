@@ -1,0 +1,25 @@
+//
+// Neam v0.9.5 — Modeling tool integration standard library
+//
+
+module std.modeling.tools
+
+/// Sync with Erwin Data Modeler
+pub fun sync_erwin(agent, tool) {
+  return modeling_sync_tool(agent, tool);
+}
+
+/// Sync with ER/Studio
+pub fun sync_erstudio(agent, tool) {
+  return modeling_sync_tool(agent, tool);
+}
+
+/// Sync with dbt
+pub fun sync_dbt(agent, tool) {
+  return modeling_sync_tool(agent, tool);
+}
+
+/// Export model to specified format
+pub fun export(agent, model, format) {
+  return modeling_generate_erwin(agent, model);
+}

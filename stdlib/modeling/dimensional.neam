@@ -1,0 +1,25 @@
+//
+// Neam v0.9.5 — Dimensional design standard library
+//
+
+module std.modeling.dimensional
+
+/// Design star schema from sources
+pub fun design_star(agent, sources) {
+  return modeling_generate_star(agent, sources);
+}
+
+/// Design snowflake schema from sources
+pub fun design_snowflake(agent, sources) {
+  return modeling_generate_snowflake(agent, sources);
+}
+
+/// Design starflake schema from sources
+pub fun design_starflake(agent, sources) {
+  return modeling_generate_starflake(agent, sources);
+}
+
+/// Design Data Vault 2.0 from sources
+pub fun design_vault(agent, sources) {
+  return modeling_generate_data_vault(agent, sources);
+}

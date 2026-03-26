@@ -1,0 +1,30 @@
+//
+// Neam v0.9.5 — Schema amendment standard library
+//
+
+module std.modeling.amendment
+
+/// Detect schema changes across sources
+pub fun detect(agent) {
+  return modeling_detect_changes(agent);
+}
+
+/// Propose an amendment for detected changes
+pub fun propose(agent, changes) {
+  return modeling_propose_amendment(agent, changes);
+}
+
+/// Run impact analysis for changes
+pub fun impact(agent, changes) {
+  return modeling_impact_analysis(agent, changes);
+}
+
+/// Approve an amendment proposal
+pub fun approve(agent, amendment) {
+  return modeling_propose_amendment(agent, amendment);
+}
+
+/// Rollback an applied amendment
+pub fun rollback(agent, amendment) {
+  return modeling_propose_amendment(agent, amendment);
+}

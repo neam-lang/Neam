@@ -1,0 +1,30 @@
+//
+// Neam v0.9.4 — Governance regulatory compliance standard library
+//
+
+module std.governance.compliance
+
+/// Get compliance score for a regulation
+pub fun score(agent, regulation) {
+  return governance_compliance_score(agent, regulation);
+}
+
+/// Validate compliance for an operation
+pub fun validate(agent, operation, scope) {
+  return governance_validate_compliance(agent, operation, scope);
+}
+
+/// Generate compliance evidence package
+pub fun evidence(agent, regulation) {
+  return governance_generate_evidence(agent, regulation);
+}
+
+/// Process a data subject access request (DSAR)
+pub fun dsar(agent, subject_id) {
+  return governance_process_dsar(agent, subject_id);
+}
+
+/// Get compliance report
+pub fun report(agent) {
+  return governance_compliance_report(agent);
+}
