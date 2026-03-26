@@ -1,8 +1,10 @@
-# Neam
+# Neam v0.9.9
 
 **The programming language for AI agents.**
 
 Neam is a compiled domain-specific language for building AI agent systems. It provides first-class support for LLM providers, RAG (Retrieval-Augmented Generation), multi-agent orchestration, multi-cloud deployment, GPU/SIMD acceleration, and cost management — all in a clean, expressive syntax.
+
+**v0.9.9** introduces the **Data Intelligence Ecosystem** — 14 specialist AI agents coordinated by the **Data Intelligent Orchestrator (DIO)** for autonomous data lifecycle management.
 
 ```neam
 agent Assistant {
@@ -17,7 +19,81 @@ emit answer;
 
 ---
 
-## Setup
+## Books
+
+| | Title | Link |
+|---|---|---|
+| **The Intelligent Data Organization with Neam** | How 14 agents + 1 orchestrator manage the entire data lifecycle — from ingestion to production ML. Includes the DataSims evaluation (50 experiments, 93.7% cost reduction). | [Read Online](https://neam-lang.github.io/The-Intelligent-Data-Organization-with-Neam/index.html) |
+| **Neam: The AI-Native Programming Language** | Complete language reference — syntax, agents, RAG, skills, tools, guards, budgets, deployment, and 100+ built-in functions. | [Read Online](https://neam-lang.github.io/Neam-The-AI-Native-Programming-Language/index.html) |
+
+---
+
+## Install
+
+**One-line install (macOS / Linux):**
+
+```bash
+curl -fsSL https://github.com/neam-lang/Neam/releases/download/v0.9.9/install.sh | bash
+```
+
+Auto-detects your OS and architecture, downloads the correct binary, and installs to `/usr/local/bin` (or `~/.neam/bin`).
+
+**Manual install:**
+
+```bash
+# Download from https://github.com/neam-lang/Neam/releases/tag/v0.9.9
+tar -xzf neam-v0.9.9-darwin-arm64.tar.gz   # or linux-amd64
+cd bin
+sudo cp neamc neam neam-cli neam-api neam-pkg neam-lambda neam-lsp neam-dap neam-gym neam-forge /usr/local/bin/
+```
+
+### 10 Executables
+
+| Binary | Purpose |
+|---|---|
+| `neamc` | Compiler — compiles `.neam` source to `.neamb` bytecode |
+| `neam` | Runtime — executes `.neamb` bytecode |
+| `neam-cli` | Interactive REPL and script runner |
+| `neam-api` | HTTP API server |
+| `neam-pkg` | Package manager |
+| `neam-lambda` | AWS Lambda runtime |
+| `neam-lsp` | Language Server Protocol |
+| `neam-dap` | Debug Adapter Protocol |
+| `neam-gym` | Training and benchmarking |
+| `neam-forge` | Forge agent runner |
+
+---
+
+## What's New in v0.9.9
+
+### 14 Specialist Agents + 1 Orchestrator
+
+| Layer | Agents | Role |
+|---|---|---|
+| **Infrastructure** | Data Agent, ETL Agent, Migration Agent | Source discovery, SQL-first warehousing, zero-downtime migrations |
+| **Platform** | DataOps, Governance, Modeling, Analyst | SRE for data, compliance, architecture intelligence, NL-to-SQL |
+| **Analytical** | Data-BA, DataScientist, Causal, DataTest, MLOps | Requirements, EDA-to-AutoML, causal reasoning, testing, production ops |
+| **Orchestration** | DIO | Dynamic crew, RACI, 8 auto-patterns, swarm, evolutionary |
+
+### Key Capabilities
+
+- 111 declaration types, 250 runtime types, 429 native functions
+- 10+ infrastructure profiles (Snowflake, BigQuery, Databricks, Redshift, Oracle, PostgreSQL, Teradata, Fabric)
+- 7 RAG retrieval strategies (basic, MMR, hybrid, HyDE, self-RAG, CRAG, agentic)
+
+### Validated Results ([DataSims](https://github.com/neam-lang/Data-Sims))
+
+| Metric | Traditional Team | Neam Agent Stack |
+|---|---|---|
+| **Cost** | $548,000 | $34,700 |
+| **Model AUC** | Varies | 0.847 |
+| **Test coverage** | Varies | 94% |
+| **Reproducibility** | Low | 100% (50/50 runs) |
+| **Cost reduction** | — | 93.7% |
+
+---
+
+## Build from Source
 
 ### Prerequisites
 
@@ -38,13 +114,6 @@ mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build . --parallel
 ```
-
-This produces two binaries:
-
-| Binary | Purpose |
-|---|---|
-| `neamc` | Compiler — compiles `.neam` source to `.neamb` bytecode |
-| `neam-cli` | Runtime — executes bytecode, includes interactive REPL |
 
 ### Verify Installation
 
@@ -916,6 +985,13 @@ emit answer;
 | `AWS_REGION` | us-east-1 | AWS region for Bedrock |
 
 ---
+
+## Resources
+
+- [The Intelligent Data Organization with Neam](https://neam-lang.github.io/The-Intelligent-Data-Organization-with-Neam/index.html) — Book: agent-driven data lifecycle management
+- [Neam: The AI-Native Programming Language](https://neam-lang.github.io/Neam-The-AI-Native-Programming-Language/index.html) — Book: complete language reference
+- [DataSims](https://github.com/neam-lang/Data-Sims) — Simulated enterprise evaluation platform
+- [Releases](https://github.com/neam-lang/Neam/releases) — Download binaries
 
 ## Contributing
 
