@@ -241,6 +241,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/databa_types.cpp
     NeamC/src/vm/datatest_types.cpp
     NeamC/src/vm/dio_types.cpp
+    NeamC/src/vm/security_v10_types.cpp
     NeamC/src/vm/migration/audit_trail.cpp
     NeamC/src/vm/migration/schema_translator.cpp
     NeamC/src/vm/migration/data_movement.cpp
