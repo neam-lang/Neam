@@ -15,7 +15,7 @@
 
 namespace neamc::vm
 {
-enum class OpCode : uint8_t
+enum class OpCode : uint16_t
 {
   OP_CONST = 0,
   OP_NIL,
@@ -332,9 +332,47 @@ enum class OpCode : uint8_t
   // 12=QualityGate, 13=TestReportConfig, 14=DefectManagement, 15=DataTestAgent
   OP_DEFINE_TEST_DECLARATION,
 
-  // v0.9.9: Data Intelligent Orchestrator — THE LAST uint8_t OPCODE
-  // After this, OpCode enum is FULL (256/256). Future agents must widen to uint16_t.
+  // v0.9.9: Data Intelligent Orchestrator
   OP_DEFINE_DIO_DECLARATION,
+
+  // ═══ v1.0: Enum widened to uint16_t for type safety ═══
+  // Bytecode encoding: opcodes 0-255 remain single-byte for backward compat.
+  // v1.0 uses enum values > 255 ONLY as internal identifiers.
+  // In bytecode, v1.0 constructs are emitted using consolidated opcodes
+  // from v0.9.8.3+ pattern (existing opcode + sub-type + field_count).
+
+  // v1.0: OWASP Security (sub-types of OP_DEFINE_BA_DECLARATION or new consolidated)
+  OP_DEFINE_GOAL_INTEGRITY = 256,
+  OP_DEFINE_TOOL_VALIDATOR,
+  OP_DEFINE_AGENT_IDENTITY,
+  OP_DEFINE_SUPPLY_CHAIN_POLICY,
+  OP_DEFINE_CODE_SANDBOX,
+  OP_DEFINE_MEMORY_INTEGRITY,
+  OP_DEFINE_MESSAGE_SECURITY,
+  OP_DEFINE_CIRCUIT_BREAKER_DECL,
+  OP_DEFINE_HUMAN_GATE,
+  OP_DEFINE_AGENT_ATTESTATION,
+
+  // v1.0: MCP Security
+  OP_DEFINE_MCP_ALLOWLIST,
+  OP_DEFINE_TOOL_PINNING,
+  OP_DEFINE_CONTEXT_GUARD,
+
+  // v1.0: NHI + AIBOM
+  OP_DEFINE_AIBOM_CONFIG,
+
+  // v1.0: Evaluation
+  OP_DEFINE_GYM_EVALUATOR,
+
+  // v1.0: Cloud Stack
+  OP_DEFINE_GATEWAY,
+  OP_DEFINE_MODEL_ROUTER,
+  OP_DEFINE_MARKETPLACE_DECL,
+
+  // v1.0: Special Agents
+  OP_DEFINE_SECURITY_SENTINEL,
+  OP_DEFINE_PROTOCOL_BRIDGE,
+  OP_DEFINE_COST_GUARDIAN,
 };
 
 class Bytecode

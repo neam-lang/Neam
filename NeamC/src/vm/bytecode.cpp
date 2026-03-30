@@ -30,7 +30,7 @@ std::size_t Bytecode::add_constant(Value value)
 
 void Bytecode::write_op(OpCode op)
 {
-  code_.push_back(static_cast<uint8_t>(op));
+  code_.push_back(static_cast<uint8_t>(static_cast<uint16_t>(op) & 0xFF));
   if (current_line_ != std::numeric_limits<std::size_t>::max())
   {
     const std::size_t offset = code_.size() - 1;
