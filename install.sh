@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Neam v0.9.9 Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/neam-lang/Neam/main/install.sh | bash
+# Neam v1.0.0 Installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/neam-lang/neam-nightly/main/install.sh | bash
 set -euo pipefail
 
-VERSION="0.9.9"
+VERSION="1.0.0"
 REPO="neam-lang/neam-nightly"
 INSTALL_DIR="${NEAM_INSTALL_DIR:-/usr/local/bin}"
 
