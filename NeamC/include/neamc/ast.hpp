@@ -3818,6 +3818,39 @@ struct DIOAgentDecl {
   std::string budget;
 };
 
+// ═══ v1.0: OWASP Security Declarations ═══
+struct GoalIntegrityDecl { std::string name; std::vector<std::string> declared_objectives; std::string verification_json; std::string input_guard_ref; std::string output_guard_ref; bool audit = true; };
+struct ToolValidatorDecl { std::string name; std::string schema_enforcement; bool additional_properties = false; std::string rate_limits_json; int max_call_depth = 5; bool detect_cycles = true; std::string budget_per_call_json; };
+struct AgentIdentityDecl { std::string name; std::string credential_mode; std::string ttl; std::string rotation; std::string scope_json; bool session_binding = true; bool cross_agent_sharing = false; };
+struct SupplyChainPolicyDecl { std::string name; std::string agent_md_signing_json; std::string tool_pinning_json; std::string mcp_verification_json; std::string aibom_json; };
+struct CodeSandboxDecl { std::string name; std::string runtime; std::string filesystem_json; std::string network_json; std::string resources_json; std::string pre_execution_review_json; bool log_all_executions = true; };
+struct MemoryIntegrityDecl { std::string name; std::string hash_algorithm; bool verify_on_read = true; bool verify_on_write = true; std::string provenance_json; std::string access_guard_json; std::string integrity_scan_json; };
+struct MessageSecurityDecl { std::string name; std::string signing_json; std::string encryption_json; std::string authentication_json; bool log_all_messages = true; };
+struct CircuitBreakerV10Decl { std::string name; int failure_threshold = 3; int success_threshold = 5; std::string half_open_timeout; std::string isolation_json; };
+struct HumanGateDecl { std::string name; std::vector<std::string> approve_before; std::string confidence_escalation_json; std::string workflow_json; bool log_all_decisions = true; };
+struct AgentAttestationDecl { std::string name; std::string attest_interval; std::string baseline_json; std::string kill_switch_json; std::string collusion_detection_json; };
+
+// v1.0: MCP Security
+struct MCPAllowlistDecl { std::string name; std::string servers_json; bool block_unlisted = true; bool alert_on_new = true; };
+struct ToolPinningDecl { std::string name; std::string method; bool pin_descriptions = true; bool block_on_change = true; };
+struct ContextGuardDecl { std::string name; bool compartmentalize = true; std::string cross_task_sharing; std::string max_context_age; bool purge_on_completion = true; };
+
+// v1.0: AIBOM
+struct AIBOMConfigDecl { std::string name; std::string format; std::string version; std::string components_json; std::string provenance_json; bool auto_generate = true; std::string trigger; std::string output_path; std::string eu_ai_act_json; };
+
+// v1.0: Evaluation
+struct GymEvaluatorDecl { std::string name; std::string mode; std::string agent_path; std::string dataset_path; std::string graders_json; std::string thresholds_json; std::string reproducibility_json; std::string metrics_json; std::string output_path; };
+
+// v1.0: Cloud Stack
+struct GatewayDecl { std::string name; std::string auth_json; std::string rate_limit_json; std::string routes_json; std::string observability_json; };
+struct ModelRouterDecl { std::string name; std::string strategy; std::string routes_json; std::string fallback_chain_json; std::string budget_json; };
+struct MarketplaceV10Decl { std::string name; std::string package_format_json; std::string publish_requires_json; std::string install_policy_json; };
+
+// v1.0: Special Agents
+struct SecuritySentinelAgentDecl { Visibility visibility; std::string name; std::string provider; std::string model; double temperature = 0.2; std::string budget; std::string monitors_json; std::string actions_json; std::string reporting_json; };
+struct ProtocolBridgeAgentDecl { Visibility visibility; std::string name; std::string provider; std::string model; double temperature = 0.2; std::string budget; std::string protocols_json; std::string firewall_json; };
+struct CostGuardianAgentDecl { Visibility visibility; std::string name; std::string provider; std::string model; double temperature = 0.2; std::string budget; std::string tracking_json; std::string optimization_json; std::string alerts_json; };
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -3915,7 +3948,21 @@ struct Statement
                    PatternSelectorDecl, ExecutionManagerDIODecl, DIOStateMachineDecl,
                    DIOErrorHandlingDecl, ResultSynthesizerDecl, InfrastructureProfileDecl,
                    RoleFrameworkDecl, DelegationProtocolDecl, DIOAccountabilityDecl,
-                   DIOAgentDecl>;
+                   DIOAgentDecl,
+                   // v1.0: OWASP Security
+                   GoalIntegrityDecl, ToolValidatorDecl, AgentIdentityDecl,
+                   SupplyChainPolicyDecl, CodeSandboxDecl, MemoryIntegrityDecl,
+                   MessageSecurityDecl, CircuitBreakerV10Decl, HumanGateDecl,
+                   AgentAttestationDecl,
+                   // v1.0: MCP Security
+                   MCPAllowlistDecl, ToolPinningDecl, ContextGuardDecl,
+                   // v1.0: AIBOM + Evaluation
+                   AIBOMConfigDecl, GymEvaluatorDecl,
+                   // v1.0: Cloud Stack
+                   GatewayDecl, ModelRouterDecl, MarketplaceV10Decl,
+                   // v1.0: Special Agents
+                   SecuritySentinelAgentDecl, ProtocolBridgeAgentDecl,
+                   CostGuardianAgentDecl>;
   SourceSpan span;
   Variant node;
 };

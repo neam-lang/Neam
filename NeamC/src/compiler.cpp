@@ -6980,6 +6980,101 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_byte(15);  // sub-type 15 = DIOAgent
           chunk_.write_byte(field_count);
         }
+        // ═══ v1.0: OWASP Security, MCP, Cloud, Eval, Special Agents ═══
+        // All v1.0 constructs follow the same emit pattern: push fields, emit opcode, write field_count
+#define V10_EMIT_SIMPLE(DeclType, OpCodeVal, FieldName) \
+        else if constexpr (std::is_same_v<T, DeclType>) { \
+          uint8_t field_count = 0; \
+          auto push_str = [&](const std::string& k, const std::string& v) { \
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size())); \
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size())); \
+            field_count++; }; \
+          push_str("name", node.name); \
+          if (!node.FieldName.empty()) push_str(#FieldName, node.FieldName); \
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION); \
+          chunk_.write_byte(15); /* reuse DIO consolidated pattern for now */ \
+          chunk_.write_byte(field_count); \
+        }
+
+        V10_EMIT_SIMPLE(GoalIntegrityDecl, OP_DEFINE_GOAL_INTEGRITY, verification_json)
+        V10_EMIT_SIMPLE(ToolValidatorDecl, OP_DEFINE_TOOL_VALIDATOR, rate_limits_json)
+        V10_EMIT_SIMPLE(AgentIdentityDecl, OP_DEFINE_AGENT_IDENTITY, scope_json)
+        V10_EMIT_SIMPLE(SupplyChainPolicyDecl, OP_DEFINE_SUPPLY_CHAIN_POLICY, agent_md_signing_json)
+        V10_EMIT_SIMPLE(CodeSandboxDecl, OP_DEFINE_CODE_SANDBOX, resources_json)
+        V10_EMIT_SIMPLE(MemoryIntegrityDecl, OP_DEFINE_MEMORY_INTEGRITY, provenance_json)
+        V10_EMIT_SIMPLE(MessageSecurityDecl, OP_DEFINE_MESSAGE_SECURITY, signing_json)
+        V10_EMIT_SIMPLE(CircuitBreakerV10Decl, OP_DEFINE_CIRCUIT_BREAKER_DECL, isolation_json)
+        V10_EMIT_SIMPLE(HumanGateDecl, OP_DEFINE_HUMAN_GATE, workflow_json)
+        V10_EMIT_SIMPLE(AgentAttestationDecl, OP_DEFINE_AGENT_ATTESTATION, baseline_json)
+        V10_EMIT_SIMPLE(MCPAllowlistDecl, OP_DEFINE_MCP_ALLOWLIST, servers_json)
+        V10_EMIT_SIMPLE(ToolPinningDecl, OP_DEFINE_TOOL_PINNING, method)
+        V10_EMIT_SIMPLE(ContextGuardDecl, OP_DEFINE_CONTEXT_GUARD, cross_task_sharing)
+        V10_EMIT_SIMPLE(AIBOMConfigDecl, OP_DEFINE_AIBOM_CONFIG, components_json)
+        V10_EMIT_SIMPLE(GymEvaluatorDecl, OP_DEFINE_GYM_EVALUATOR, graders_json)
+        V10_EMIT_SIMPLE(GatewayDecl, OP_DEFINE_GATEWAY, routes_json)
+        V10_EMIT_SIMPLE(ModelRouterDecl, OP_DEFINE_MODEL_ROUTER, routes_json)
+        V10_EMIT_SIMPLE(MarketplaceV10Decl, OP_DEFINE_MARKETPLACE_DECL, package_format_json)
+
+        // v1.0: Special agents
+        else if constexpr (std::is_same_v<T, SecuritySentinelAgentDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          auto push_num = [&](const std::string& k, double v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::Number(v));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          if (node.temperature != 0.2) push_num("temperature", node.temperature);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          if (!node.monitors_json.empty()) push_str("monitors", node.monitors_json);
+          if (!node.actions_json.empty()) push_str("actions", node.actions_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(15);
+          chunk_.write_byte(field_count);
+          // name registered via VM dispatch
+        }
+        else if constexpr (std::is_same_v<T, ProtocolBridgeAgentDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          if (!node.protocols_json.empty()) push_str("protocols", node.protocols_json);
+          if (!node.firewall_json.empty()) push_str("firewall", node.firewall_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(15);
+          chunk_.write_byte(field_count);
+          // name registered via VM dispatch
+        }
+        else if constexpr (std::is_same_v<T, CostGuardianAgentDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          if (!node.tracking_json.empty()) push_str("tracking", node.tracking_json);
+          if (!node.optimization_json.empty()) push_str("optimization", node.optimization_json);
+          if (!node.alerts_json.empty()) push_str("alerts", node.alerts_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(15);
+          chunk_.write_byte(field_count);
+          // name registered via VM dispatch
+        }
+
+#undef V10_EMIT_SIMPLE
       },
       stmt.node);
 }

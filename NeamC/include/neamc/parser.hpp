@@ -460,6 +460,15 @@ private:
   StmtPtr parse_dio_accountability_decl(const Visibility& visibility);
   StmtPtr parse_dio_agent_decl(const Visibility& visibility);
 
+  // v1.0: JSON block reader (reads { ... } as string including nested braces)
+  std::string consume_json_block();
+
+  // v1.0: OWASP Security, MCP, Cloud, Evaluation, Special Agents
+  StmtPtr parse_v10_generic_decl(const std::string& keyword, int type_id);
+  StmtPtr parse_security_sentinel_agent_decl(const Visibility& visibility);
+  StmtPtr parse_protocol_bridge_agent_decl(const Visibility& visibility);
+  StmtPtr parse_cost_guardian_agent_decl(const Visibility& visibility);
+
   // v0.9.4: Governance sub-block parsers
   AutoClassifyConfig parse_auto_classify_config();
   SemanticClassifyConfig parse_semantic_classify_config();
