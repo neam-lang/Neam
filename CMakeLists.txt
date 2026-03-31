@@ -675,6 +675,13 @@ add_executable(v099_dio_agent_test
 target_link_libraries(v099_dio_agent_test PRIVATE neamc_core gtest_main)
 add_test(NAME v099_dio_agent_test COMMAND v099_dio_agent_test)
 
+# v1.0: Security, Cloud, RAG, Evaluation & Special Agents tests
+add_executable(v100_security_cloud_eval_test
+    tests/unit/v100_security_cloud_eval_test.cpp
+)
+target_link_libraries(v100_security_cloud_eval_test PRIVATE neamc_core gtest_main)
+add_test(NAME v100_security_cloud_eval_test COMMAND v100_security_cloud_eval_test)
+
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)
 # ============================================================================
