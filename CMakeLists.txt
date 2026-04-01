@@ -242,6 +242,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/datatest_types.cpp
     NeamC/src/vm/dio_types.cpp
     NeamC/src/vm/security_v10_types.cpp
+    NeamC/src/vm/neamos_types.cpp
     NeamC/src/vm/migration/audit_trail.cpp
     NeamC/src/vm/migration/schema_translator.cpp
     NeamC/src/vm/migration/data_movement.cpp
@@ -681,6 +682,13 @@ add_executable(v100_security_cloud_eval_test
 )
 target_link_libraries(v100_security_cloud_eval_test PRIVATE neamc_core gtest_main)
 add_test(NAME v100_security_cloud_eval_test COMMAND v100_security_cloud_eval_test)
+
+# v1.1: NeamOS Foundation tests (knowledge cards, personas, governance, adapters, blueprints, new agents)
+add_executable(v110_neamos_foundation_test
+    tests/unit/v110_neamos_foundation_test.cpp
+)
+target_link_libraries(v110_neamos_foundation_test PRIVATE neamc_core gtest_main)
+add_test(NAME v110_neamos_foundation_test COMMAND v110_neamos_foundation_test)
 
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)

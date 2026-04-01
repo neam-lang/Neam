@@ -469,6 +469,11 @@ private:
   StmtPtr parse_protocol_bridge_agent_decl(const Visibility& visibility);
   StmtPtr parse_cost_guardian_agent_decl(const Visibility& visibility);
 
+  // v1.1: NeamOS Foundation agents
+  StmtPtr parse_knowledge_weaver_agent_decl(const Visibility& visibility);
+  StmtPtr parse_adapt_agent_decl(const Visibility& visibility);
+  StmtPtr parse_storyteller_agent_decl(const Visibility& visibility);
+
   // v0.9.4: Governance sub-block parsers
   AutoClassifyConfig parse_auto_classify_config();
   SemanticClassifyConfig parse_semantic_classify_config();

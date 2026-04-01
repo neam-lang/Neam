@@ -7015,6 +7015,30 @@ void Compiler::emit_statement(const Statement& stmt)
         V10_EMIT_SIMPLE(ModelRouterDecl, OP_DEFINE_MODEL_ROUTER, routes_json)
         V10_EMIT_SIMPLE(MarketplaceV10Decl, OP_DEFINE_MARKETPLACE_DECL, package_format_json)
 
+        // ═══ v1.1: NeamOS Foundation ═══
+        // Simple keywords use consolidated DIO handler with sub_type=16
+#define V11_EMIT_SIMPLE(DeclType, FieldName) \
+        else if constexpr (std::is_same_v<T, DeclType>) { \
+          uint8_t field_count = 0; \
+          auto push_str = [&](const std::string& k, const std::string& v) { \
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size())); \
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size())); \
+            field_count++; }; \
+          push_str("name", node.name); \
+          if (!node.FieldName.empty()) push_str(#FieldName, node.FieldName); \
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION); \
+          chunk_.write_byte(16); /* v1.1 consolidated sub-type */ \
+          chunk_.write_byte(field_count); \
+        }
+
+        V11_EMIT_SIMPLE(KnowledgeCardDecl, fields_json)
+        V11_EMIT_SIMPLE(ContextAssemblyDecl, target_agent_ref)
+        V11_EMIT_SIMPLE(AgentPersonaDecl, personality_json)
+        V11_EMIT_SIMPLE(LocaleConfigDecl, string_table)
+        V11_EMIT_SIMPLE(GovernanceRuleDecl, condition_json)
+        V11_EMIT_SIMPLE(AgentAdapterDecl, capabilities_json)
+        V11_EMIT_SIMPLE(BlueprintDecl, parameters_json)
+
         // v1.0: Special agents
         else if constexpr (std::is_same_v<T, SecuritySentinelAgentDecl>) {
           uint8_t field_count = 0;
@@ -7074,6 +7098,72 @@ void Compiler::emit_statement(const Statement& stmt)
           // name registered via VM dispatch
         }
 
+        // v1.1: NeamOS Foundation agents
+        else if constexpr (std::is_same_v<T, KnowledgeWeaverAgentDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          auto push_num = [&](const std::string& k, double v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::Number(v));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          push_num("temperature", node.temperature);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          if (!node.fabric_json.empty()) push_str("fabric", node.fabric_json);
+          if (!node.monitors_json.empty()) push_str("monitors", node.monitors_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(17); // sub-type 17 = KnowledgeWeaver
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, AdaptAgentDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          auto push_num = [&](const std::string& k, double v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::Number(v));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          push_num("temperature", node.temperature);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          if (!node.monitors_json.empty()) push_str("monitors", node.monitors_json);
+          if (!node.proposals_json.empty()) push_str("proposals", node.proposals_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(18); // sub-type 18 = AdaptAgent
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, StorytellerAgentDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          auto push_num = [&](const std::string& k, double v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::Number(v));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          push_num("temperature", node.temperature);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          if (!node.sub_agents_json.empty()) push_str("sub_agents", node.sub_agents_json);
+          if (!node.safety_json.empty()) push_str("safety", node.safety_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(19); // sub-type 19 = Storyteller
+          chunk_.write_byte(field_count);
+        }
+
+#undef V11_EMIT_SIMPLE
 #undef V10_EMIT_SIMPLE
       },
       stmt.node);

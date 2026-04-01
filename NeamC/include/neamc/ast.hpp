@@ -3851,6 +3851,138 @@ struct SecuritySentinelAgentDecl { Visibility visibility; std::string name; std:
 struct ProtocolBridgeAgentDecl { Visibility visibility; std::string name; std::string provider; std::string model; double temperature = 0.2; std::string budget; std::string protocols_json; std::string firewall_json; };
 struct CostGuardianAgentDecl { Visibility visibility; std::string name; std::string provider; std::string model; double temperature = 0.2; std::string budget; std::string tracking_json; std::string optimization_json; std::string alerts_json; };
 
+// ═══ v1.1: NeamOS Foundation ═══
+
+// Knowledge Card (4 sub-types: concept, policy, decision, skill)
+struct KnowledgeCardDecl {
+    std::string name;
+    std::string card_type;                 // "concept"|"policy"|"decision"|"skill"
+    std::string fields_json;               // type-specific fields as JSON
+    std::string owner_agent_ref;           // agent reference (cross-validated)
+    std::string version;                   // semver
+    std::string ttl;                       // duration ("180d", "24h") or empty
+    std::string domain;                    // dot-path ("telecom.retention")
+    std::string provenance_json;           // {created_by, verified_by, source, last_reviewed}
+    SourceSpan span;
+};
+
+// Context Assembly (Minimum Viable Context)
+struct ContextAssemblyDecl {
+    std::string name;
+    std::string target_agent_ref;          // agent reference (cross-validated)
+    std::string phase;                     // DIO phase or empty for all
+    std::vector<std::string> card_refs;    // knowledge_card references (cross-validated)
+    int max_context_tokens = 4000;
+    std::string assembly_strategy;         // "relevance_ranked"|"chronological"|"priority"
+    bool include_metadata = false;
+    std::string fallback;                  // "truncate"|"prioritize"|"error"
+    SourceSpan span;
+};
+
+// Agent Persona (voice, personality, localization)
+struct AgentPersonaDecl {
+    std::string name;
+    std::string target_agent_ref;          // agent reference (cross-validated)
+    std::string display_name;
+    std::string avatar_path;               // file path (existence checked at compile)
+    std::string voice_json;                // {engine, voice_id}
+    std::string personality_json;          // {trait: float} all 0.0-1.0
+    std::string catchphrase;
+    std::string locales_json;              // {lang: {voice_id, catchphrases}}
+    std::string animation_set;             // directory path
+    SourceSpan span;
+};
+
+// Locale Configuration (i18n)
+struct LocaleConfigDecl {
+    std::string name;
+    std::vector<std::string> supported;    // ISO 639-1 codes
+    std::vector<std::string> rtl;          // RTL subset
+    std::string fallback;                  // must be in supported
+    std::string string_table;              // path template "./locales/{lang}.json"
+    SourceSpan span;
+};
+
+// Governance Rule (declarative policy with typed conditions)
+struct GovernanceRuleDecl {
+    std::string name;
+    std::string trigger;                   // "data_write"|"data_read"|"tool_call"|"agent_spawn"|"config_change"|"budget_exceed"
+    std::string condition_json;            // type-checked condition expression as JSON AST
+    std::string action_json;               // {enforce_ttl, require_consent, notify, audit, block}
+    std::string regulatory_basis;
+    std::string effective_date;
+    std::string review_date;
+    SourceSpan span;
+};
+
+// Agent Adapter (external agent interface)
+struct AgentAdapterDecl {
+    std::string name;
+    std::string adapter_type;              // "local_coding_agent"|"gateway_agent"|"cloud_agent"|"custom"
+    std::string binary;                    // for local agents
+    std::string protocol;                  // "stdin_stdout"|"rpc"|"sse"|"websocket"
+    std::string endpoint;                  // for gateway/cloud agents
+    std::string capabilities_json;         // ["code_gen", "review", ...]
+    std::string communication;             // "stdin_stdout"|"rpc"|"sse"|"websocket"
+    bool skill_injection = false;
+    std::string cost_tracking;             // "token_based"|"api_based"|"time_based"|"none"
+    bool device_key_pairing = false;
+    SourceSpan span;
+};
+
+// Blueprint (portable ecosystem package)
+struct BlueprintDecl {
+    std::string name;
+    std::string version;                   // semver
+    std::string description;
+    std::string author;
+    std::vector<std::string> agent_refs;   // agent references (cross-validated)
+    std::vector<std::string> skill_refs;   // skill references
+    std::vector<std::string> card_refs;    // knowledge_card references
+    std::string dio_spec_ref;
+    std::string parameters_json;           // {param: {type, default, range}}
+    SourceSpan span;
+};
+
+// KnowledgeWeaver Agent
+struct KnowledgeWeaverAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget;
+    std::string fabric_json;               // {card_store, embedding_model, search, certification}
+    std::string monitors_json;             // {card_freshness, coverage_gaps, conflict_detection}
+    SourceSpan span;
+};
+
+// AdaptAgent
+struct AdaptAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget;
+    std::string monitors_json;             // {model_releases, protocol_updates, security_advisories}
+    std::string proposals_json;            // {channel, requires_approval}
+    SourceSpan span;
+};
+
+// Storyteller Agent (Dreamland)
+struct StorytellerAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.7;
+    std::string budget;
+    std::string sub_agents_json;           // {scene_artist, voice_caster, mood_composer}
+    std::string safety_json;               // {content_filter, age_groups, image_scan, parent_preview}
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -3962,7 +4094,14 @@ struct Statement
                    GatewayDecl, ModelRouterDecl, MarketplaceV10Decl,
                    // v1.0: Special Agents
                    SecuritySentinelAgentDecl, ProtocolBridgeAgentDecl,
-                   CostGuardianAgentDecl>;
+                   CostGuardianAgentDecl,
+                   // v1.1: NeamOS Foundation
+                   KnowledgeCardDecl, ContextAssemblyDecl,
+                   AgentPersonaDecl, LocaleConfigDecl,
+                   GovernanceRuleDecl, AgentAdapterDecl,
+                   BlueprintDecl,
+                   KnowledgeWeaverAgentDecl, AdaptAgentDecl,
+                   StorytellerAgentDecl>;
   SourceSpan span;
   Variant node;
 };

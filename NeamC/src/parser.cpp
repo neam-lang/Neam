@@ -2768,6 +2768,64 @@ StmtPtr Parser::parse_declaration()
     }
     current_ = saved;
   }
+  // ═══ v1.1: NeamOS Foundation keyword dispatches ═══
+  // Simple keywords: knowledge_card, context_assembly, agent_persona, locale, governance_rule, agent_adapter, blueprint
+  {
+    static const std::vector<std::pair<std::string, int>> v11_keywords = {
+      {"knowledge_card", 19}, {"context_assembly", 20}, {"agent_persona", 21},
+      {"locale", 22}, {"governance_rule", 23}, {"agent_adapter", 24}, {"blueprint", 25}
+    };
+    for (const auto& [kw, id] : v11_keywords) {
+      if (check(TokenType::Identifier) && peek().lexeme == kw) {
+        auto saved = current_;
+        advance();
+        if (check(TokenType::Identifier)) {
+          return parse_v10_generic_decl(kw, id);
+        }
+        current_ = saved;
+      }
+    }
+  }
+  // v1.1: Special agents (2-keyword: "knowledgeweaver agent", "adaptagent agent", "storyteller agent")
+  if (check(TokenType::Identifier) && peek().lexeme == "knowledgeweaver")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_knowledge_weaver_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "adaptagent")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_adapt_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "storyteller")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_storyteller_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+    }
+    current_ = saved;
+  }
 
   // v0.9.5: schema_source declaration
   if (check(TokenType::Identifier) && peek().lexeme == "schema_source")
@@ -19452,6 +19510,14 @@ StmtPtr Parser::parse_v10_generic_decl(const std::string& keyword, int type_id) 
     case 16: { GatewayDecl d; d.name = name; d.routes_json = fields_json; stmt->node = std::move(d); break; }
     case 17: { ModelRouterDecl d; d.name = name; d.routes_json = fields_json; stmt->node = std::move(d); break; }
     case 18: { MarketplaceV10Decl d; d.name = name; d.package_format_json = fields_json; stmt->node = std::move(d); break; }
+    // v1.1: NeamOS Foundation
+    case 19: { KnowledgeCardDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 20: { ContextAssemblyDecl d; d.name = name; d.target_agent_ref = fields_json; stmt->node = std::move(d); break; }
+    case 21: { AgentPersonaDecl d; d.name = name; d.personality_json = fields_json; stmt->node = std::move(d); break; }
+    case 22: { LocaleConfigDecl d; d.name = name; d.string_table = fields_json; stmt->node = std::move(d); break; }
+    case 23: { GovernanceRuleDecl d; d.name = name; d.condition_json = fields_json; stmt->node = std::move(d); break; }
+    case 24: { AgentAdapterDecl d; d.name = name; d.capabilities_json = fields_json; stmt->node = std::move(d); break; }
+    case 25: { BlueprintDecl d; d.name = name; d.parameters_json = fields_json; stmt->node = std::move(d); break; }
     default: error("Unknown v1.0 declaration type: " + keyword); break;
     }
 
@@ -19539,6 +19605,96 @@ StmtPtr Parser::parse_cost_guardian_agent_decl(const Visibility& vis) {
         else if (fname == "optimization") { decl.optimization_json = consume_json_block(); }
         else if (fname == "alerts") { decl.alerts_json = consume_json_block(); }
         else { advance(); /* skip unknown field value */ }
+        match(TokenType::Comma);
+    }
+    if (!match(TokenType::RightBrace)) error("Expected '}'");
+    auto stmt = std::make_unique<Statement>();
+    stmt->span = {0, 0, span, 0};
+    stmt->node = std::move(decl);
+    return stmt;
+}
+
+// v1.1: KnowledgeWeaver agent parser
+StmtPtr Parser::parse_knowledge_weaver_agent_decl(const Visibility& vis) {
+    auto span = previous().line;
+    if (!match(TokenType::Identifier)) error("Expected agent name");
+    KnowledgeWeaverAgentDecl decl;
+    decl.visibility = vis;
+    decl.name = previous().lexeme;
+    if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name");
+        std::string fname = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+
+        if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+        else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+        else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+        else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.budget = previous().lexeme; }
+        else if (fname == "fabric") { decl.fabric_json = consume_json_block(); }
+        else if (fname == "monitors") { decl.monitors_json = consume_json_block(); }
+        else { advance(); }
+        match(TokenType::Comma);
+    }
+    if (!match(TokenType::RightBrace)) error("Expected '}'");
+    auto stmt = std::make_unique<Statement>();
+    stmt->span = {0, 0, span, 0};
+    stmt->node = std::move(decl);
+    return stmt;
+}
+
+// v1.1: AdaptAgent parser
+StmtPtr Parser::parse_adapt_agent_decl(const Visibility& vis) {
+    auto span = previous().line;
+    if (!match(TokenType::Identifier)) error("Expected agent name");
+    AdaptAgentDecl decl;
+    decl.visibility = vis;
+    decl.name = previous().lexeme;
+    if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name");
+        std::string fname = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+
+        if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+        else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+        else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+        else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.budget = previous().lexeme; }
+        else if (fname == "monitors") { decl.monitors_json = consume_json_block(); }
+        else if (fname == "proposals") { decl.proposals_json = consume_json_block(); }
+        else { advance(); }
+        match(TokenType::Comma);
+    }
+    if (!match(TokenType::RightBrace)) error("Expected '}'");
+    auto stmt = std::make_unique<Statement>();
+    stmt->span = {0, 0, span, 0};
+    stmt->node = std::move(decl);
+    return stmt;
+}
+
+// v1.1: Storyteller agent parser
+StmtPtr Parser::parse_storyteller_agent_decl(const Visibility& vis) {
+    auto span = previous().line;
+    if (!match(TokenType::Identifier)) error("Expected agent name");
+    StorytellerAgentDecl decl;
+    decl.visibility = vis;
+    decl.name = previous().lexeme;
+    if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name");
+        std::string fname = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+
+        if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+        else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+        else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+        else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.budget = previous().lexeme; }
+        else if (fname == "sub_agents") { decl.sub_agents_json = consume_json_block(); }
+        else if (fname == "safety") { decl.safety_json = consume_json_block(); }
+        else { advance(); }
         match(TokenType::Comma);
     }
     if (!match(TokenType::RightBrace)) error("Expected '}'");
