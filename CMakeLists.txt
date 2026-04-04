@@ -243,6 +243,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/dio_types.cpp
     NeamC/src/vm/security_v10_types.cpp
     NeamC/src/vm/neamos_types.cpp
+    NeamC/src/vm/prod_types.cpp
     NeamC/src/vm/migration/audit_trail.cpp
     NeamC/src/vm/migration/schema_translator.cpp
     NeamC/src/vm/migration/data_movement.cpp
@@ -689,6 +690,13 @@ add_executable(v110_neamos_foundation_test
 )
 target_link_libraries(v110_neamos_foundation_test PRIVATE neamc_core gtest_main)
 add_test(NAME v110_neamos_foundation_test COMMAND v110_neamos_foundation_test)
+
+# v1.2: NeamProd tests (plugins, sessions, evaluation, artifacts, streaming, interop)
+add_executable(v120_prod_readiness_test
+    tests/unit/v120_prod_readiness_test.cpp
+)
+target_link_libraries(v120_prod_readiness_test PRIVATE neamc_core gtest_main)
+add_test(NAME v120_prod_readiness_test COMMAND v120_prod_readiness_test)
 
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)

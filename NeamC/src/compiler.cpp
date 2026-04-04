@@ -7039,6 +7039,29 @@ void Compiler::emit_statement(const Statement& stmt)
         V11_EMIT_SIMPLE(AgentAdapterDecl, capabilities_json)
         V11_EMIT_SIMPLE(BlueprintDecl, parameters_json)
 
+        // ═══ v1.2: NeamProd ═══
+#define V12_EMIT_SIMPLE(DeclType, FieldName) \
+        else if constexpr (std::is_same_v<T, DeclType>) { \
+          uint8_t field_count = 0; \
+          auto push_str = [&](const std::string& k, const std::string& v) { \
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size())); \
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size())); \
+            field_count++; }; \
+          push_str("name", node.name); \
+          if (!node.FieldName.empty()) push_str(#FieldName, node.FieldName); \
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION); \
+          chunk_.write_byte(20); /* v1.2 consolidated sub-type */ \
+          chunk_.write_byte(field_count); \
+        }
+
+        V12_EMIT_SIMPLE(PluginDecl, hooks_json)
+        V12_EMIT_SIMPLE(SessionServiceDecl, connection_json)
+        V12_EMIT_SIMPLE(EvalTestDecl, criteria_json)
+        V12_EMIT_SIMPLE(EvalSetDecl, thresholds_json)
+        V12_EMIT_SIMPLE(ArtifactStoreDecl, metadata_json)
+        V12_EMIT_SIMPLE(StreamConfigDecl, voice_json)
+        V12_EMIT_SIMPLE(A2AConfigDecl, agent_card_json)
+
         // v1.0: Special agents
         else if constexpr (std::is_same_v<T, SecuritySentinelAgentDecl>) {
           uint8_t field_count = 0;
@@ -7163,6 +7186,7 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_byte(field_count);
         }
 
+#undef V12_EMIT_SIMPLE
 #undef V11_EMIT_SIMPLE
 #undef V10_EMIT_SIMPLE
       },

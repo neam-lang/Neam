@@ -3983,6 +3983,86 @@ struct StorytellerAgentDecl {
     SourceSpan span;
 };
 
+// ═══ v1.2: NeamProd — Enterprise Production Readiness ═══
+
+// Plugin declaration
+struct PluginDecl {
+    std::string name;
+    std::string hooks_json;            // [{hook, mode, handler}]
+    int priority = 100;
+    bool enabled = true;
+    std::string description;
+    std::string scope;                 // "global"|"agent"
+    std::string config_json;           // plugin-specific configuration
+    SourceSpan span;
+};
+
+// Session Service declaration
+struct SessionServiceDecl {
+    std::string name;
+    std::string backend;               // "inmemory"|"sqlite"|"postgresql"|"redis"|"dynamodb"
+    std::string connection_json;       // backend-specific connection config
+    std::string scoping_json;          // {app_prefix, user_prefix, temp_prefix}
+    std::string compression_json;      // {strategy, token_threshold, keep_recent}
+    std::string ttl;                   // session expiry duration
+    SourceSpan span;
+};
+
+// Eval Test declaration
+struct EvalTestDecl {
+    std::string name;
+    std::string agent_ref;             // agent to evaluate
+    std::string input;                 // test input message
+    std::string expected_tools_json;   // expected tool call sequence
+    std::string expected_response;     // expected response pattern
+    std::string criteria_json;         // evaluation criteria
+    std::string trajectory_mode;       // "exact"|"in_order"|"any_order"
+    double threshold = 0.8;
+    SourceSpan span;
+};
+
+// Eval Set declaration
+struct EvalSetDecl {
+    std::string name;
+    std::vector<std::string> test_refs; // references to eval_test declarations
+    std::string judge_json;            // {provider, model, num_samples}
+    std::string thresholds_json;       // per-metric thresholds
+    std::string output_format;         // "json"|"junit"|"markdown"
+    std::string output_path;
+    SourceSpan span;
+};
+
+// Artifact Store declaration
+struct ArtifactStoreDecl {
+    std::string name;
+    std::string backend;               // "filesystem"|"s3"|"gcs"|"azure_blob"
+    std::string path;                  // base path or bucket
+    std::string scoping;               // "session"|"user"|"app"
+    std::string metadata_json;         // custom metadata config
+    SourceSpan span;
+};
+
+// Stream Config declaration
+struct StreamConfigDecl {
+    std::string name;
+    std::string mode;                  // "none"|"sse"|"bidi"
+    std::string voice_json;            // {stt_model, tts_model, vad_enabled}
+    bool interrupt_enabled = true;
+    std::string event_format;          // "json"|"binary"
+    SourceSpan span;
+};
+
+// A2A Config declaration
+struct A2AConfigDecl {
+    std::string name;
+    std::string agent_card_json;       // {name, description, capabilities, endpoint}
+    std::string auth_json;             // {method, credentials}
+    std::string protocols_json;        // supported protocol versions
+    bool expose_as_server = false;
+    bool discover_peers = false;
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -4101,7 +4181,12 @@ struct Statement
                    GovernanceRuleDecl, AgentAdapterDecl,
                    BlueprintDecl,
                    KnowledgeWeaverAgentDecl, AdaptAgentDecl,
-                   StorytellerAgentDecl>;
+                   StorytellerAgentDecl,
+                   // v1.2: NeamProd
+                   PluginDecl, SessionServiceDecl,
+                   EvalTestDecl, EvalSetDecl,
+                   ArtifactStoreDecl,
+                   StreamConfigDecl, A2AConfigDecl>;
   SourceSpan span;
   Variant node;
 };

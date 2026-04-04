@@ -2786,6 +2786,24 @@ StmtPtr Parser::parse_declaration()
       }
     }
   }
+  // ═══ v1.2: NeamProd keyword dispatches ═══
+  {
+    static const std::vector<std::pair<std::string, int>> v12_keywords = {
+      {"plugin", 26}, {"session_service", 27}, {"eval_test", 28},
+      {"eval_set", 29}, {"artifact_store", 30}, {"stream_config", 31},
+      {"a2a_config", 32}
+    };
+    for (const auto& [kw, id] : v12_keywords) {
+      if (check(TokenType::Identifier) && peek().lexeme == kw) {
+        auto saved = current_;
+        advance();
+        if (check(TokenType::Identifier)) {
+          return parse_v10_generic_decl(kw, id);
+        }
+        current_ = saved;
+      }
+    }
+  }
   // v1.1: Special agents (2-keyword: "knowledgeweaver agent", "adaptagent agent", "storyteller agent")
   if (check(TokenType::Identifier) && peek().lexeme == "knowledgeweaver")
   {
@@ -19518,6 +19536,14 @@ StmtPtr Parser::parse_v10_generic_decl(const std::string& keyword, int type_id) 
     case 23: { GovernanceRuleDecl d; d.name = name; d.condition_json = fields_json; stmt->node = std::move(d); break; }
     case 24: { AgentAdapterDecl d; d.name = name; d.capabilities_json = fields_json; stmt->node = std::move(d); break; }
     case 25: { BlueprintDecl d; d.name = name; d.parameters_json = fields_json; stmt->node = std::move(d); break; }
+    // v1.2: NeamProd
+    case 26: { PluginDecl d; d.name = name; d.hooks_json = fields_json; stmt->node = std::move(d); break; }
+    case 27: { SessionServiceDecl d; d.name = name; d.connection_json = fields_json; stmt->node = std::move(d); break; }
+    case 28: { EvalTestDecl d; d.name = name; d.criteria_json = fields_json; stmt->node = std::move(d); break; }
+    case 29: { EvalSetDecl d; d.name = name; d.thresholds_json = fields_json; stmt->node = std::move(d); break; }
+    case 30: { ArtifactStoreDecl d; d.name = name; d.metadata_json = fields_json; stmt->node = std::move(d); break; }
+    case 31: { StreamConfigDecl d; d.name = name; d.voice_json = fields_json; stmt->node = std::move(d); break; }
+    case 32: { A2AConfigDecl d; d.name = name; d.agent_card_json = fields_json; stmt->node = std::move(d); break; }
     default: error("Unknown v1.0 declaration type: " + keyword); break;
     }
 
