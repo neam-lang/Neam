@@ -1,8 +1,14 @@
 # Neam
 
-**The programming language for AI agents.**
+**The programming language for AI agents.** v1.2.0 (NeamProd)
 
-Neam is a compiled domain-specific language for building AI agent systems. It provides first-class support for LLM providers, RAG (Retrieval-Augmented Generation), multi-agent orchestration, multi-cloud deployment, GPU/SIMD acceleration, and cost management — all in a clean, expressive syntax.
+Neam is a compiled domain-specific language for building AI agent systems. It provides first-class support for LLM providers, RAG (Retrieval-Augmented Generation), multi-agent orchestration, OWASP security compliance, knowledge management, enterprise governance, plugin extensibility, session persistence, structured evaluation, streaming, and multi-cloud deployment — all in a clean, expressive syntax.
+
+### Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/neam-lang/neam-nightly/main/install.sh | bash
+```
 
 ```neam
 agent Assistant {
@@ -900,6 +906,143 @@ agent ProductionAgent {
 let answer = ProductionAgent.ask(input());
 emit answer;
 ```
+
+---
+
+## v1.1 — NeamOS Foundation (Knowledge, Personas, Governance)
+
+v1.1 adds 7 keywords and 3 agent types for the Enterprise Agentic Operating System:
+
+```neam
+// Structured organizational knowledge
+knowledge_card CustomerChurn {
+    type: "concept",
+    term: "Customer Churn",
+    definition: "No transaction in 90+ days",
+    domain: "telecom.retention",
+    version: "2.1.0"
+}
+
+// Curated context per agent per phase
+context_assembly ChurnContext {
+    target_agent: "DS",
+    cards: ["CustomerChurn", "PIIPolicy"],
+    max_context_tokens: 4000
+}
+
+// Declarative enterprise governance
+governance_rule PDPA_Retention {
+    trigger: "data_write",
+    condition: "data.classification == personal_data",
+    action: { enforce_ttl: "365d", require_consent: true, audit: "mandatory" },
+    regulatory_basis: "PDPA Section 25"
+}
+
+// Portable ecosystem packaging
+blueprint TelecomChurn {
+    version: "1.0.0",
+    agents: ["ChurnDS", "CausalAgent"],
+    knowledge_cards: ["CustomerChurn"]
+}
+```
+
+### v1.1 Keywords
+
+| Keyword | Purpose |
+|---|---|
+| `knowledge_card` | Structured organizational knowledge with 4 sub-types (Concept, Policy, Decision, Skill) |
+| `context_assembly` | Minimum Viable Context curation per agent per phase |
+| `agent_persona` | Voice, avatar, personality traits, multilingual locales |
+| `locale` | Internationalization with compile-time translation checking |
+| `governance_rule` | Declarative policy rules with typed trigger conditions |
+| `agent_adapter` | External agent interfaces (Claude Code, OpenClaw, etc.) |
+| `blueprint` | Portable ecosystem packages with cross-reference validation |
+
+### v1.1 Agent Types
+
+| Agent | Purpose |
+|---|---|
+| `knowledgeweaver agent` | Knowledge fabric management and context assembly |
+| `adaptagent agent` | Ecosystem monitoring and adaptation proposals |
+| `storyteller agent` | Illustrated narrated stories for education |
+
+---
+
+## v1.2 — NeamProd (Plugins, Sessions, Evaluation, Streaming, A2A)
+
+v1.2 makes Neam production-ready with 7 keywords for enterprise infrastructure:
+
+```neam
+// Plugin system with lifecycle hooks
+plugin CostTracker {
+    description: "Track LLM costs per agent",
+    hooks: { after_model: "observe" },
+    scope: "global"
+}
+
+// Persistent sessions with database backing
+session_service ProdSessions {
+    backend: "postgresql",
+    connection: { host: "db.prod.internal", port: 5432 },
+    compression: { strategy: "summarize", token_threshold: 0.8 },
+    ttl: "30d"
+}
+
+// Structured evaluation with CI/CD integration
+eval_test ChurnQuality {
+    agent: "ChurnDS",
+    input: "Predict churn for segment A",
+    criteria: ["safety", "hallucination", "trajectory_match"],
+    threshold: 0.95
+}
+
+eval_set ProdGate {
+    tests: ["ChurnQuality"],
+    judge: { model: "gpt-4o-mini" },
+    output_format: "junit"
+}
+
+// Versioned artifact management
+artifact_store Reports {
+    backend: "s3",
+    path: "s3://neam-prod/artifacts",
+    scoping: "user"
+}
+
+// Real-time streaming
+stream_config Live { mode: "sse", event_format: "json" }
+
+// Cross-framework interoperability via A2A protocol
+a2a_config ChurnService {
+    agent_card: { name: "ChurnPredictor", capabilities: ["predict"] },
+    expose_as_server: true
+}
+```
+
+### v1.2 Keywords
+
+| Keyword | Purpose |
+|---|---|
+| `plugin` | Lifecycle hooks (before/after agent, model, tool) with observe/intervene/amend modes |
+| `session_service` | Persistent sessions with 5 backends (inmemory, sqlite, postgresql, redis, dynamodb) |
+| `eval_test` | Structured test cases with trajectory matching and quality metrics |
+| `eval_set` | Evaluation suites with LLM-as-Judge and JUnit XML output for CI/CD |
+| `artifact_store` | Versioned artifact management with filesystem, S3, GCS, Azure Blob backends |
+| `stream_config` | SSE and bidirectional WebSocket streaming with voice pipeline support |
+| `a2a_config` | A2A protocol configuration — agent cards, peer discovery, server exposure |
+
+---
+
+## Version History
+
+| Version | Codename | Keywords | Agents | Highlights |
+|---|---|---|---|---|
+| v0.6–0.7 | — | 20+ | 3 | Language foundation, agents, skills, RAG, MCP, deployment |
+| v0.8 | NeamClaw | — | 5 | Claw agents, Forge agents, sessions, channels |
+| v0.9 | — | — | 19 | 14 data intelligence agents, DIO orchestrator |
+| v1.0 | NeamOne | 20+ | 19 | OWASP ASI01-10 + MCP01-10, cloud stack, evaluation, 3 special agents |
+| v1.1 | NeamOS Foundation | 27+ | 22 | Knowledge cards, personas, governance, blueprints, 3 new agents |
+| **v1.2** | **NeamProd** | **34+** | **22** | **Plugins, sessions, evaluation, artifacts, streaming, A2A interop** |
 
 ---
 
