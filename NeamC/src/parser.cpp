@@ -2804,6 +2804,36 @@ StmtPtr Parser::parse_declaration()
       }
     }
   }
+  // ═══ v1.3: NeamLab — Auto Research Agent dispatches ═══
+  {
+    static const std::vector<std::pair<std::string, int>> v13_keywords = {
+      {"program", 33}, {"experiment_loop", 34}, {"metric_extractor", 35}
+    };
+    for (const auto& [kw, id] : v13_keywords) {
+      if (check(TokenType::Identifier) && peek().lexeme == kw) {
+        auto saved = current_;
+        advance();
+        if (check(TokenType::Identifier)) {
+          return parse_v10_generic_decl(kw, id);
+        }
+        current_ = saved;
+      }
+    }
+  }
+  // v1.3: research agent (2-keyword: "research agent")
+  if (check(TokenType::Identifier) && peek().lexeme == "research")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_research_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+    }
+    current_ = saved;
+  }
   // v1.1: Special agents (2-keyword: "knowledgeweaver agent", "adaptagent agent", "storyteller agent")
   if (check(TokenType::Identifier) && peek().lexeme == "knowledgeweaver")
   {
@@ -19544,6 +19574,10 @@ StmtPtr Parser::parse_v10_generic_decl(const std::string& keyword, int type_id) 
     case 30: { ArtifactStoreDecl d; d.name = name; d.metadata_json = fields_json; stmt->node = std::move(d); break; }
     case 31: { StreamConfigDecl d; d.name = name; d.voice_json = fields_json; stmt->node = std::move(d); break; }
     case 32: { A2AConfigDecl d; d.name = name; d.agent_card_json = fields_json; stmt->node = std::move(d); break; }
+    // v1.3: NeamLab
+    case 33: { ProgramDecl d; d.name = name; d.metadata_json = fields_json; stmt->node = std::move(d); break; }
+    case 34: { ExperimentLoopDecl d; d.name = name; d.until_json = fields_json; stmt->node = std::move(d); break; }
+    case 35: { MetricExtractorDecl d; d.name = name; d.pattern = fields_json; stmt->node = std::move(d); break; }
     default: error("Unknown v1.0 declaration type: " + keyword); break;
     }
 
@@ -19720,6 +19754,84 @@ StmtPtr Parser::parse_storyteller_agent_decl(const Visibility& vis) {
         else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.budget = previous().lexeme; }
         else if (fname == "sub_agents") { decl.sub_agents_json = consume_json_block(); }
         else if (fname == "safety") { decl.safety_json = consume_json_block(); }
+        else { advance(); }
+        match(TokenType::Comma);
+    }
+    if (!match(TokenType::RightBrace)) error("Expected '}'");
+    auto stmt = std::make_unique<Statement>();
+    stmt->span = {0, 0, span, 0};
+    stmt->node = std::move(decl);
+    return stmt;
+}
+
+// v1.3: Research agent parser
+StmtPtr Parser::parse_research_agent_decl(const Visibility& vis) {
+    auto span = previous().line;
+    if (!match(TokenType::Identifier)) error("Expected agent name");
+    ResearchAgentDecl decl;
+    decl.visibility = vis;
+    decl.name = previous().lexeme;
+    if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name");
+        std::string fname = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+
+        if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+        else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+        else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+        else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.budget = previous().lexeme; }
+        else if (fname == "program") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.program_ref = previous().lexeme; }
+        else if (fname == "metric") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.metric_ref = previous().lexeme; }
+        else if (fname == "experiment_log") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.experiment_log_ref = previous().lexeme; }
+        else if (fname == "eval_set") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.eval_set_ref = previous().lexeme; }
+        else if (fname == "iteration_budget") { decl.iteration_budget_json = consume_json_block(); }
+        else if (fname == "mutable_artifacts") {
+            // Consume array literal: [ "file1", "file2", ... ]
+            if (!match(TokenType::LeftBracket)) error("Expected '[' for mutable_artifacts");
+            std::string arr = "[";
+            int depth = 1;
+            while (depth > 0 && !is_at_end()) {
+                if (check(TokenType::LeftBracket)) { depth++; arr += "["; advance(); continue; }
+                if (check(TokenType::RightBracket)) { depth--; if (depth > 0) { arr += "]"; advance(); continue; } else break; }
+                if (check(TokenType::String)) { arr += "\"" + previous().lexeme; advance(); arr += "\""; continue; }
+                if (check(TokenType::Comma)) { arr += ","; advance(); continue; }
+                advance();
+            }
+            if (!match(TokenType::RightBracket)) error("Expected ']' for mutable_artifacts");
+            arr += "]";
+            decl.mutable_artifacts_json = arr;
+        }
+        else if (fname == "immutable_artifacts") {
+            if (!match(TokenType::LeftBracket)) error("Expected '[' for immutable_artifacts");
+            std::string arr = "[";
+            int depth = 1;
+            while (depth > 0 && !is_at_end()) {
+                if (check(TokenType::LeftBracket)) { depth++; arr += "["; advance(); continue; }
+                if (check(TokenType::RightBracket)) { depth--; if (depth > 0) { arr += "]"; advance(); continue; } else break; }
+                if (check(TokenType::String)) { arr += "\"" + previous().lexeme; advance(); arr += "\""; continue; }
+                if (check(TokenType::Comma)) { arr += ","; advance(); continue; }
+                advance();
+            }
+            if (!match(TokenType::RightBracket)) error("Expected ']' for immutable_artifacts");
+            arr += "]";
+            decl.immutable_artifacts_json = arr;
+        }
+        else if (fname == "on_improvement") { if (!match(TokenType::String)) error("Expected string"); decl.on_improvement = previous().lexeme; }
+        else if (fname == "on_failure") { if (!match(TokenType::String)) error("Expected string"); decl.on_failure = previous().lexeme; }
+        else if (fname == "hypothesis_required") {
+            if (match(TokenType::True)) decl.hypothesis_required = true;
+            else if (match(TokenType::False)) decl.hypothesis_required = false;
+            else { advance(); }
+        }
+        else if (fname == "until_interrupted") {
+            if (match(TokenType::True)) decl.until_interrupted = true;
+            else if (match(TokenType::False)) decl.until_interrupted = false;
+            else { advance(); }
+        }
+        else if (fname == "target_metric") { if (!match(TokenType::Number)) error("Expected number"); decl.target_metric = std::stod(previous().lexeme); decl.target_metric_set = true; }
+        else if (fname == "plugin_throttle") { if (!match(TokenType::String)) error("Expected string"); decl.plugin_throttle = previous().lexeme; }
         else { advance(); }
         match(TokenType::Comma);
     }

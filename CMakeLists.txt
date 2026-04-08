@@ -244,6 +244,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/security_v10_types.cpp
     NeamC/src/vm/neamos_types.cpp
     NeamC/src/vm/prod_types.cpp
+    NeamC/src/vm/lab_types.cpp
     NeamC/src/vm/migration/audit_trail.cpp
     NeamC/src/vm/migration/schema_translator.cpp
     NeamC/src/vm/migration/data_movement.cpp
@@ -697,6 +698,13 @@ add_executable(v120_prod_readiness_test
 )
 target_link_libraries(v120_prod_readiness_test PRIVATE neamc_core gtest_main)
 add_test(NAME v120_prod_readiness_test COMMAND v120_prod_readiness_test)
+
+# v1.3: NeamLab tests (auto research agent, program, experiment_loop, metric_extractor)
+add_executable(v130_research_agent_test
+    tests/unit/v130_research_agent_test.cpp
+)
+target_link_libraries(v130_research_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v130_research_agent_test COMMAND v130_research_agent_test)
 
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)

@@ -49,6 +49,7 @@
 #include "neamc/vm/dio_types.hpp"
 #include "neamc/vm/neamos_types.hpp"
 #include "neamc/vm/prod_types.hpp"
+#include "neamc/vm/lab_types.hpp"
 #include "neamc/vm/forge_loop.hpp"
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/context_builder.hpp"
@@ -11726,6 +11727,39 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
               agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
             }
           }
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 21)
+        {
+          // v1.3: NeamLab simple declarations (program, experiment_loop, metric_extractor)
+          std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
+          auto* name_str = copy_string(decl_name.c_str(), decl_name.size());
+          auto* agent = new_dio_agent();
+          agent->name = decl_name;
+          agent->mode = "v1.3_lab";
+          for (const auto& [k, v] : fields) {
+            if (k != "name") {
+              if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";
+              agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
+            }
+          }
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 22)
+        {
+          // v1.3: Research Agent
+          auto* agent = new_dio_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+          if (fields.count("program")) agent->managed_agents_json = "program:" + fields["program"];
+          if (fields.count("metric")) agent->guardrails_json = "metric:" + fields["metric"];
+          agent->mode = "research";
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
           globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
           stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
         }

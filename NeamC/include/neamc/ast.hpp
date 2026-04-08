@@ -4063,6 +4063,74 @@ struct A2AConfigDecl {
     SourceSpan span;
 };
 
+// ═══ v1.3: NeamLab — Auto Research Agent ═══
+
+// Program declaration (replaces autoresearch's program.md)
+struct ProgramDecl {
+    std::string name;
+    std::string mission;                  // overall goal
+    std::string success_criterion;        // metric reference
+    std::vector<std::string> constraints; // hard rules
+    std::vector<std::string> process;     // numbered steps
+    std::string autonomy;                 // "full"|"ask_on_uncertain"|"human_in_loop"
+    std::vector<std::string> halt_conditions;
+    std::vector<std::string> style_preferences;
+    std::string version;                  // semver, default "1.0.0"
+    std::string metadata_json;            // org metadata
+    SourceSpan span;
+};
+
+// Research Agent declaration
+struct ResearchAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget;
+    std::string program_ref;              // program declaration reference
+    std::string mutable_artifacts_json;   // JSON array of mutable artifact refs
+    std::string immutable_artifacts_json; // JSON array of immutable artifact refs
+    std::string metric_ref;               // metric_extractor reference
+    std::string iteration_budget_json;    // {time_per_run, max_runs, max_total_time, max_total_cost}
+    std::string experiment_log_ref;       // session_service reference
+    std::string on_improvement;           // "keep"|"branch"|"merge"
+    std::string on_failure;               // "revert"|"annotate"|"halt"
+    bool hypothesis_required = false;
+    bool until_interrupted = false;
+    double target_metric = 0.0;
+    bool target_metric_set = false;
+    std::string eval_set_ref;             // optional eval_set reference
+    std::string plugin_throttle;          // optional throttle string
+    SourceSpan span;
+};
+
+// Experiment Loop declaration
+struct ExperimentLoopDecl {
+    std::string name;
+    std::string research_agent_ref;
+    std::string until_json;               // {time, cost, iterations, target_metric, interrupt}
+    std::string on_iteration_json;        // hook config
+    std::string on_improvement_json;      // hook config
+    std::string on_failure_json;          // hook config
+    std::string notify_ref;               // channel reference
+    SourceSpan span;
+};
+
+// Metric Extractor declaration
+struct MetricExtractorDecl {
+    std::string name;
+    std::string direction;                // "higher_is_better"|"lower_is_better"
+    std::string method;                   // "grep"|"regex"|"json_path"|"function"
+    std::string pattern;                  // for grep/regex
+    std::string path;                     // for json_path
+    std::string function_ref;             // for function method
+    int regex_group = 0;
+    double tolerance = 0.0;
+    std::string from_eval_ref;            // optional eval_test/eval_set ref
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -4186,7 +4254,10 @@ struct Statement
                    PluginDecl, SessionServiceDecl,
                    EvalTestDecl, EvalSetDecl,
                    ArtifactStoreDecl,
-                   StreamConfigDecl, A2AConfigDecl>;
+                   StreamConfigDecl, A2AConfigDecl,
+                   // v1.3: NeamLab
+                   ProgramDecl, ResearchAgentDecl,
+                   ExperimentLoopDecl, MetricExtractorDecl>;
   SourceSpan span;
   Variant node;
 };

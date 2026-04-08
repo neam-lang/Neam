@@ -7062,6 +7062,51 @@ void Compiler::emit_statement(const Statement& stmt)
         V12_EMIT_SIMPLE(StreamConfigDecl, voice_json)
         V12_EMIT_SIMPLE(A2AConfigDecl, agent_card_json)
 
+        // ═══ v1.3: NeamLab — Auto Research Agent ═══
+#define V13_EMIT_SIMPLE(DeclType, FieldName) \
+        else if constexpr (std::is_same_v<T, DeclType>) { \
+          uint8_t field_count = 0; \
+          auto push_str = [&](const std::string& k, const std::string& v) { \
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size())); \
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size())); \
+            field_count++; }; \
+          push_str("name", node.name); \
+          if (!node.FieldName.empty()) push_str(#FieldName, node.FieldName); \
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION); \
+          chunk_.write_byte(21); /* v1.3 consolidated sub-type */ \
+          chunk_.write_byte(field_count); \
+        }
+
+        V13_EMIT_SIMPLE(ProgramDecl, mission)
+        V13_EMIT_SIMPLE(ExperimentLoopDecl, until_json)
+        V13_EMIT_SIMPLE(MetricExtractorDecl, pattern)
+
+        else if constexpr (std::is_same_v<T, ResearchAgentDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          auto push_num = [&](const std::string& k, double v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::Number(v));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          push_num("temperature", node.temperature);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          if (!node.program_ref.empty()) push_str("program", node.program_ref);
+          if (!node.metric_ref.empty()) push_str("metric", node.metric_ref);
+          if (!node.experiment_log_ref.empty()) push_str("experiment_log", node.experiment_log_ref);
+          if (!node.mutable_artifacts_json.empty()) push_str("mutable_artifacts", node.mutable_artifacts_json);
+          if (!node.immutable_artifacts_json.empty()) push_str("immutable_artifacts", node.immutable_artifacts_json);
+          if (!node.iteration_budget_json.empty()) push_str("iteration_budget", node.iteration_budget_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(22); /* sub-type 22 = ResearchAgent */
+          chunk_.write_byte(field_count);
+        }
+
         // v1.0: Special agents
         else if constexpr (std::is_same_v<T, SecuritySentinelAgentDecl>) {
           uint8_t field_count = 0;
@@ -7186,6 +7231,7 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_byte(field_count);
         }
 
+#undef V13_EMIT_SIMPLE
 #undef V12_EMIT_SIMPLE
 #undef V11_EMIT_SIMPLE
 #undef V10_EMIT_SIMPLE
