@@ -7107,6 +7107,48 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_byte(field_count);
         }
 
+        // ═══ v1.4: NeamWiki — Compiled LLM Wiki ═══
+        else if constexpr (std::is_same_v<T, WikiDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(23); /* sub-type 23 = Wiki */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, WikiAgentDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          auto push_num = [&](const std::string& k, double v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::Number(v));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.provider.empty()) push_str("provider", node.provider);
+          if (!node.model.empty()) push_str("model", node.model);
+          push_num("temperature", node.temperature);
+          if (!node.budget.empty()) push_str("budget", node.budget);
+          if (!node.wikis_json.empty()) push_str("wikis", node.wikis_json);
+          if (!node.operations_json.empty()) push_str("operations", node.operations_json);
+          if (!node.research_config_json.empty()) push_str("research_config", node.research_config_json);
+          if (!node.lint_policies_json.empty()) push_str("lint_policies", node.lint_policies_json);
+          if (!node.graph_config_json.empty()) push_str("graph_config", node.graph_config_json);
+          if (!node.output_formats_json.empty()) push_str("output_formats", node.output_formats_json);
+          if (!node.governance_json.empty()) push_str("governance", node.governance_json);
+          if (!node.plugin_hooks_json.empty()) push_str("plugin_hooks", node.plugin_hooks_json);
+          if (!node.knowledge_cards_json.empty()) push_str("knowledge_cards", node.knowledge_cards_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(24); /* sub-type 24 = WikiAgent */
+          chunk_.write_byte(field_count);
+        }
+
         // v1.0: Special agents
         else if constexpr (std::is_same_v<T, SecuritySentinelAgentDecl>) {
           uint8_t field_count = 0;

@@ -294,6 +294,9 @@ enum class ObjType
   OBJ_RESEARCH_AGENT,
   OBJ_EXPERIMENT_LOOP,
   OBJ_METRIC_EXTRACTOR,
+  // v1.4: NeamWiki
+  OBJ_WIKI,
+  OBJ_WIKI_AGENT,
 };
 
 struct ObjString : Obj

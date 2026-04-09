@@ -4131,6 +4131,54 @@ struct MetricExtractorDecl {
     SourceSpan span;
 };
 
+// ═══ v1.4: NeamWiki — Compiled LLM Wiki ═══
+
+// Wiki declaration — data definition for a NeamWiki instance
+struct WikiDecl {
+    std::string name;
+    std::string topic;                    // human-readable topic
+    std::string raw_path;                 // where raw sources live
+    std::string wiki_path;                // where compiled wiki pages live
+    std::string description;
+    std::string hub;                      // optional hub directory
+    std::string inbox_path;
+    std::string output_path;
+    std::string page_types_json;          // JSON array of canonical page types
+    std::string naming_convention;        // kebab_case|TitleCase|snake_case
+    std::string frontmatter_format;       // yaml|toml
+    bool auto_compile = true;
+    bool contradiction_detection = true;
+    bool auto_link = true;
+    bool auto_extract_entities = true;
+    bool obsidian_compat = false;
+    std::string vector_store;             // "usearch" default
+    std::string embedding_model;
+    std::string chunk_strategy;           // markdown_section default
+    std::string sibling_wikis_json;       // JSON array of sibling wiki names
+    std::string fields_json;              // raw blob (mirrors v1.3 simple decls)
+    SourceSpan span;
+};
+
+// Wiki Agent declaration — Neam's 24th typed agent
+struct WikiAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget;
+    std::string wikis_json;               // JSON array of wiki references
+    std::string operations_json;          // JSON array of enabled operations
+    std::string research_config_json;     // {parallel_agents, angles, max_rounds, max_time_per_topic}
+    std::string lint_policies_json;       // {flag_orphans, flag_broken_links, ...}
+    std::string graph_config_json;        // {deterministic_pass, semantic_pass, community_detection, output_format}
+    std::string output_formats_json;      // JSON array of output format names
+    std::string governance_json;          // JSON array of governance_rule refs
+    std::string plugin_hooks_json;        // JSON array of plugin refs
+    std::string knowledge_cards_json;     // JSON array of knowledge_card refs
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -4257,7 +4305,9 @@ struct Statement
                    StreamConfigDecl, A2AConfigDecl,
                    // v1.3: NeamLab
                    ProgramDecl, ResearchAgentDecl,
-                   ExperimentLoopDecl, MetricExtractorDecl>;
+                   ExperimentLoopDecl, MetricExtractorDecl,
+                   // v1.4: NeamWiki
+                   WikiDecl, WikiAgentDecl>;
   SourceSpan span;
   Variant node;
 };

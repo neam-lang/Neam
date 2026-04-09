@@ -397,6 +397,9 @@ enum class OpCode : uint16_t
   OP_DEFINE_RESEARCH_AGENT,
   OP_DEFINE_EXPERIMENT_LOOP,
   OP_DEFINE_METRIC_EXTRACTOR,
+  // v1.4: NeamWiki — Compiled LLM Wiki
+  OP_DEFINE_WIKI,
+  OP_DEFINE_WIKI_AGENT,
 };
 
 class Bytecode

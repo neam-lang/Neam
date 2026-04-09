@@ -706,6 +706,13 @@ add_executable(v130_research_agent_test
 target_link_libraries(v130_research_agent_test PRIVATE neamc_core gtest_main)
 add_test(NAME v130_research_agent_test COMMAND v130_research_agent_test)
 
+# v1.4: NeamWiki tests (compiled llm-wiki: wiki, wiki agent, page schema, ops)
+add_executable(v140_wiki_test
+    tests/unit/v140_wiki_test.cpp
+)
+target_link_libraries(v140_wiki_test PRIVATE neamc_core gtest_main)
+add_test(NAME v140_wiki_test COMMAND v140_wiki_test)
+
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)
 # ============================================================================

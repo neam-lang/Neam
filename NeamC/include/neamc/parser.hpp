@@ -477,6 +477,9 @@ private:
   // v1.3: NeamLab Research Agent
   StmtPtr parse_research_agent_decl(const Visibility& visibility);
 
+  // v1.4: NeamWiki Wiki Agent
+  StmtPtr parse_wiki_agent_decl(const Visibility& visibility);
+
   // v0.9.4: Governance sub-block parsers
   AutoClassifyConfig parse_auto_classify_config();
   SemanticClassifyConfig parse_semantic_classify_config();

@@ -80,4 +80,56 @@ struct ObjMetricExtractor : Obj {
     mutable int extractions_performed = 0;
 };
 
+// ═══ v1.4: NeamWiki Runtime Types ═══
+
+struct ObjWiki : Obj {
+    std::string name;
+    std::string topic;
+    std::string raw_path;
+    std::string wiki_path;
+    std::string description;
+    std::string hub;
+    std::string inbox_path;
+    std::string output_path;
+    std::string page_types_json;
+    std::string naming_convention;
+    std::string frontmatter_format;
+    bool auto_compile = true;
+    bool contradiction_detection = true;
+    bool auto_link = true;
+    bool auto_extract_entities = true;
+    bool obsidian_compat = false;
+    std::string vector_store;
+    std::string embedding_model;
+    std::string chunk_strategy;
+    std::string sibling_wikis_json;
+    std::string fields_json;
+    // Runtime state
+    mutable int page_count = 0;
+    mutable int source_count = 0;
+    mutable std::string status = "initialized";
+};
+
+struct ObjWikiAgent : Obj {
+    std::string name;
+    std::string provider;
+    std::string llm_model;
+    double temperature = 0.2;
+    std::string budget_ref;
+    std::string wikis_json;
+    std::string operations_json;
+    std::string research_config_json;
+    std::string lint_policies_json;
+    std::string graph_config_json;
+    std::string output_formats_json;
+    std::string governance_json;
+    std::string plugin_hooks_json;
+    std::string knowledge_cards_json;
+    // Runtime state
+    mutable std::string status = "initialized";
+    mutable int operations_performed = 0;
+    mutable int ingests_done = 0;
+    mutable int queries_done = 0;
+};
+
 } // namespace neamc::vm

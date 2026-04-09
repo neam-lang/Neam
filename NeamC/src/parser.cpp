@@ -2834,6 +2834,30 @@ StmtPtr Parser::parse_declaration()
     }
     current_ = saved;
   }
+  // ═══ v1.4: NeamWiki dispatches ═══
+  // v1.4: wiki agent (2-keyword: "wiki agent <name>") MUST be checked before single-keyword wiki
+  if (check(TokenType::Identifier) && peek().lexeme == "wiki")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_wiki_agent_decl(has_visibility ? visibility : Visibility{});
+      }
+      current_ = saved;
+    }
+    else if (check(TokenType::Identifier))
+    {
+      // single-keyword wiki: "wiki <name>"
+      return parse_v10_generic_decl("wiki", 36);
+    }
+    else
+    {
+      current_ = saved;
+    }
+  }
   // v1.1: Special agents (2-keyword: "knowledgeweaver agent", "adaptagent agent", "storyteller agent")
   if (check(TokenType::Identifier) && peek().lexeme == "knowledgeweaver")
   {
@@ -19578,6 +19602,8 @@ StmtPtr Parser::parse_v10_generic_decl(const std::string& keyword, int type_id) 
     case 33: { ProgramDecl d; d.name = name; d.metadata_json = fields_json; stmt->node = std::move(d); break; }
     case 34: { ExperimentLoopDecl d; d.name = name; d.until_json = fields_json; stmt->node = std::move(d); break; }
     case 35: { MetricExtractorDecl d; d.name = name; d.pattern = fields_json; stmt->node = std::move(d); break; }
+    // v1.4: NeamWiki
+    case 36: { WikiDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
     default: error("Unknown v1.0 declaration type: " + keyword); break;
     }
 
@@ -19832,6 +19858,64 @@ StmtPtr Parser::parse_research_agent_decl(const Visibility& vis) {
         }
         else if (fname == "target_metric") { if (!match(TokenType::Number)) error("Expected number"); decl.target_metric = std::stod(previous().lexeme); decl.target_metric_set = true; }
         else if (fname == "plugin_throttle") { if (!match(TokenType::String)) error("Expected string"); decl.plugin_throttle = previous().lexeme; }
+        else { advance(); }
+        match(TokenType::Comma);
+    }
+    if (!match(TokenType::RightBrace)) error("Expected '}'");
+    auto stmt = std::make_unique<Statement>();
+    stmt->span = {0, 0, span, 0};
+    stmt->node = std::move(decl);
+    return stmt;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// v1.4: NeamWiki — parse_wiki_agent_decl (2-keyword: "wiki agent Name { ... }")
+// ═══════════════════════════════════════════════════════════════════════════
+StmtPtr Parser::parse_wiki_agent_decl(const Visibility& vis) {
+    auto span = previous().line;
+    if (!match(TokenType::Identifier)) error("Expected wiki agent name");
+    WikiAgentDecl decl;
+    decl.visibility = vis;
+    decl.name = previous().lexeme;
+    if (!match(TokenType::LeftBrace)) error("Expected '{'");
+
+    auto consume_array = [&](const std::string& field_name) -> std::string {
+        if (!match(TokenType::LeftBracket)) error("Expected '[' for " + field_name);
+        std::string arr = "[";
+        int depth = 1;
+        bool first = true;
+        while (depth > 0 && !is_at_end()) {
+            if (check(TokenType::LeftBracket)) { depth++; arr += "["; advance(); first = true; continue; }
+            if (check(TokenType::RightBracket)) { depth--; if (depth > 0) { arr += "]"; advance(); continue; } else break; }
+            if (check(TokenType::Comma)) { arr += ","; advance(); first = true; continue; }
+            if (check(TokenType::String)) { if (!first) {} arr += "\"" + peek().lexeme + "\""; advance(); first = false; continue; }
+            if (check(TokenType::Identifier)) { arr += "\"" + peek().lexeme + "\""; advance(); first = false; continue; }
+            if (check(TokenType::Number)) { arr += peek().lexeme; advance(); first = false; continue; }
+            advance();
+        }
+        if (!match(TokenType::RightBracket)) error("Expected ']' for " + field_name);
+        arr += "]";
+        return arr;
+    };
+
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        if (!match(TokenType::Identifier) && !match_keyword_as_identifier()) error("Expected field name");
+        std::string fname = previous().lexeme;
+        if (!match(TokenType::Colon)) error("Expected ':'");
+
+        if (fname == "provider") { if (!match(TokenType::String)) error("Expected string"); decl.provider = previous().lexeme; }
+        else if (fname == "model") { if (!match(TokenType::String)) error("Expected string"); decl.model = previous().lexeme; }
+        else if (fname == "temperature") { if (!match(TokenType::Number)) error("Expected number"); decl.temperature = std::stod(previous().lexeme); }
+        else if (fname == "budget") { if (!match(TokenType::Identifier)) error("Expected ref"); decl.budget = previous().lexeme; }
+        else if (fname == "wikis") { decl.wikis_json = consume_array("wikis"); }
+        else if (fname == "operations") { decl.operations_json = consume_array("operations"); }
+        else if (fname == "research_config") { decl.research_config_json = consume_json_block(); }
+        else if (fname == "lint_policies") { decl.lint_policies_json = consume_json_block(); }
+        else if (fname == "graph_config") { decl.graph_config_json = consume_json_block(); }
+        else if (fname == "output_formats") { decl.output_formats_json = consume_array("output_formats"); }
+        else if (fname == "governance") { decl.governance_json = consume_array("governance"); }
+        else if (fname == "plugin_hooks") { decl.plugin_hooks_json = consume_array("plugin_hooks"); }
+        else if (fname == "knowledge_cards") { decl.knowledge_cards_json = consume_array("knowledge_cards"); }
         else { advance(); }
         match(TokenType::Comma);
     }

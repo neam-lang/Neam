@@ -1,0 +1,200 @@
+// ============================================================
+// Neam v1.4 — NeamWiki End-to-End Test Program
+//
+// Demonstrates the full v1.4 NeamWiki paradigm in a single
+// compilable Neam program:
+//   - Multiple wiki declarations (hub-and-spoke topic isolation)
+//   - Sibling wiki cross-reference
+//   - Wiki agent with all 6 core operations + extended ops
+//   - Knowledge graph two-pass with Louvain clustering
+//   - Parallel research configuration (skillsllm.com angles)
+//   - Lint policies (orphans, broken links, contradictions)
+//   - Integration with v1.0 OWASP, v1.1 governance + cards,
+//     v1.2 plugins + sessions, v1.3 research agent
+//
+// This file is consumed by the integration test runner and
+// must compile cleanly under the v1.4 release.
+// ============================================================
+
+// ── v1.0: OWASP security baseline ──
+goal_integrity WikiGoals {
+  declared_objectives: ["accurate knowledge", "auditable provenance"]
+}
+
+circuit_breaker WikiBreaker {
+  failure_threshold: 3
+}
+
+// ── v1.1: Governance + knowledge cards ──
+governance_rule WikiPDPA {
+  trigger: "data_write",
+  condition: "pii",
+  action: { audit: "yes" }
+}
+
+knowledge_card RAGConcept {
+  type: "concept",
+  term: "RAG",
+  definition: "Retrieval-Augmented Generation",
+  domain: "ml.nlp",
+  version: "1.0.0"
+}
+
+knowledge_card LLMWikiConcept {
+  type: "concept",
+  term: "llm-wiki",
+  definition: "Compiled LLM-curated wiki paradigm",
+  domain: "ml.knowledge",
+  version: "1.0.0"
+}
+
+// ── v1.2: Plugin + session for observability ──
+plugin WikiAuditLogger {
+  hooks: { before_agent: "audit_log" },
+  priority: 10
+}
+
+session_service WikiSessions {
+  backend: "inmemory",
+  ttl: "30d"
+}
+
+artifact_store WikiArtifacts {
+  backend: "filesystem",
+  path: "./wiki/artifacts"
+}
+
+// ── Budget for the wiki agent ──
+budget WikiBudget {
+  cost: 500.00,
+  tokens: 10000000
+}
+
+// ── v1.4: Hub-and-spoke wiki declarations ──
+// Math wiki — base topic, no siblings
+wiki MathWiki {
+  topic: "mathematics",
+  raw_path: "./hub/topics/math/raw",
+  wiki_path: "./hub/topics/math",
+  hub: "./hub",
+  description: "Mathematical foundations",
+  page_types: ["source", "entity", "concept", "synthesis"],
+  contradiction_detection: true,
+  auto_link: true,
+  auto_extract_entities: true,
+  vector_store: "usearch",
+  embedding_model: "nomic-embed-text",
+  chunk_strategy: "markdown_section"
+}
+
+// ML wiki — sibling of MathWiki for cross-topic queries
+wiki MLWiki {
+  topic: "machine_learning",
+  raw_path: "./hub/topics/ml/raw",
+  wiki_path: "./hub/topics/ml",
+  hub: "./hub",
+  description: "Machine learning research",
+  page_types: ["source", "entity", "concept", "synthesis"],
+  sibling_wikis: ["MathWiki"],
+  contradiction_detection: true,
+  auto_extract_entities: true,
+  obsidian_compat: true
+}
+
+// Engineering wiki — third spoke for the platform team
+wiki EngineeringWiki {
+  topic: "platform_engineering",
+  raw_path: "./hub/topics/eng/raw",
+  wiki_path: "./hub/topics/eng",
+  hub: "./hub",
+  description: "Platform & infrastructure knowledge",
+  page_types: ["source", "entity", "concept", "synthesis"],
+  sibling_wikis: ["MLWiki"],
+  output_path: "./hub/topics/eng/output"
+}
+
+// ── v1.4: Wiki agent — Neam's 24th typed agent ──
+// Full operations enabled, two-pass knowledge graph,
+// parallel research, lint policies, integrations.
+wiki agent PlatformCurator {
+  provider: "anthropic",
+  model: "claude-opus-4",
+  budget: WikiBudget,
+  wikis: [MathWiki, MLWiki, EngineeringWiki],
+  operations: [
+    "ingest",
+    "query",
+    "lint",
+    "graph",
+    "research",
+    "compile",
+    "output",
+    "thesis",
+    "assess",
+    "retract"
+  ],
+  research_config: {
+    parallel_agents: 5,
+    max_rounds: 3,
+    max_time_per_topic: "1h"
+  },
+  lint_policies: {
+    flag_orphans: true,
+    flag_broken_links: true,
+    flag_contradictions: true,
+    auto_fix: false
+  },
+  graph_config: {
+    deterministic_pass: true,
+    semantic_pass: true,
+    community_detection: "louvain",
+    output_format: "html"
+  },
+  output_formats: ["report", "slides", "glossary", "timeline", "comparison"],
+  governance: [WikiPDPA],
+  plugin_hooks: [WikiAuditLogger],
+  knowledge_cards: [RAGConcept, LLMWikiConcept]
+}
+
+// ── v1.3: Research agent feeding the wiki ──
+program WikiResearchProgram {
+  mission: "Compound knowledge into MLWiki via accumulated research",
+  success_criterion: "WikiCoverage",
+  constraints: ["Only ingest peer-reviewed sources"],
+  process: [
+    "Identify gap in MLWiki",
+    "Run parallel research with diverse angles",
+    "Ingest into wiki via wiki_ingest",
+    "Verify lint passes",
+    "Update knowledge graph"
+  ],
+  autonomy: "human_in_loop"
+}
+
+metric_extractor WikiCoverage {
+  direction: "higher_is_better",
+  method: "regex",
+  pattern: "coverage:"
+}
+
+research agent WikiOptimizer {
+  provider: "openai",
+  model: "gpt-4o",
+  budget: WikiBudget,
+  program: WikiResearchProgram,
+  metric: WikiCoverage,
+  experiment_log: WikiSessions,
+  mutable_artifacts: ["./hub/topics/ml/raw"],
+  immutable_artifacts: ["./hub/topics/ml/index.md"]
+}
+
+// ── Read-only audit agent (capability minimization) ──
+wiki agent AuditAgent {
+  provider: "openai",
+  model: "gpt-4o-mini",
+  budget: WikiBudget,
+  wikis: [MathWiki, MLWiki, EngineeringWiki],
+  operations: ["query", "lint"]
+}
+
+print("Neam v1.4 NeamWiki — full e2e configuration loaded");
