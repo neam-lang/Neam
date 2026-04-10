@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Neam v1.2.0 Installer
+# Neam v1.4.0 Installer — NeamWiki: Compiled LLM Wiki + NeamLab Research Agent
 # Usage: curl -fsSL https://raw.githubusercontent.com/neam-lang/neam-nightly/main/install.sh | bash
 set -euo pipefail
 
-VERSION="1.2.0"
+VERSION="1.4.0"
 REPO="neam-lang/neam-nightly"
 INSTALL_DIR="${NEAM_INSTALL_DIR:-/usr/local/bin}"
 
