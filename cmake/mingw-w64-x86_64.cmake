@@ -70,7 +70,7 @@ set(CURL_STATIC_DEPS
     "${NEAM_WIN_DEPS_DIR}/lib/libnghttp2.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libnghttp3.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libngtcp2.a"
-    "${NEAM_WIN_DEPS_DIR}/lib/libngtcp2_crypto_quictls.a"
+    "${NEAM_WIN_DEPS_DIR}/lib/libngtcp2_crypto_libressl.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libssh2.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libpsl.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libbrotlidec.a"
@@ -82,6 +82,8 @@ set(CURL_STATIC_DEPS
     crypt32     # Windows crypto API (certificate stores)
     wldap32     # LDAP
     bcrypt      # BCrypt (LibreSSL backend)
+    secur32     # SSPI (InitSecurityInterfaceA — curl 8.19+)
+    iphlpapi    # if_nametoindex (curl 8.19+)
 )
 
 # -- OpenSSL / LibreSSL hints ------------------------------------------------
