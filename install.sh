@@ -4,7 +4,7 @@
 set -euo pipefail
 
 VERSION="1.4.0"
-REPO="neam-lang/neam-nightly"
+REPO="${NEAM_REPO:-neam-lang/Neam}"
 INSTALL_DIR="${NEAM_INSTALL_DIR:-/usr/local/bin}"
 
 # Colors
