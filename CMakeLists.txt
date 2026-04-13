@@ -241,6 +241,10 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/databa_types.cpp
     NeamC/src/vm/datatest_types.cpp
     NeamC/src/vm/dio_types.cpp
+    NeamC/src/vm/security_v10_types.cpp
+    NeamC/src/vm/neamos_types.cpp
+    NeamC/src/vm/prod_types.cpp
+    NeamC/src/vm/lab_types.cpp
     NeamC/src/vm/migration/audit_trail.cpp
     NeamC/src/vm/migration/schema_translator.cpp
     NeamC/src/vm/migration/data_movement.cpp
@@ -673,6 +677,41 @@ add_executable(v099_dio_agent_test
 )
 target_link_libraries(v099_dio_agent_test PRIVATE neamc_core gtest_main)
 add_test(NAME v099_dio_agent_test COMMAND v099_dio_agent_test)
+
+# v1.0: Security, Cloud, RAG, Evaluation & Special Agents tests
+add_executable(v100_security_cloud_eval_test
+    tests/unit/v100_security_cloud_eval_test.cpp
+)
+target_link_libraries(v100_security_cloud_eval_test PRIVATE neamc_core gtest_main)
+add_test(NAME v100_security_cloud_eval_test COMMAND v100_security_cloud_eval_test)
+
+# v1.1: NeamOS Foundation tests (knowledge cards, personas, governance, adapters, blueprints, new agents)
+add_executable(v110_neamos_foundation_test
+    tests/unit/v110_neamos_foundation_test.cpp
+)
+target_link_libraries(v110_neamos_foundation_test PRIVATE neamc_core gtest_main)
+add_test(NAME v110_neamos_foundation_test COMMAND v110_neamos_foundation_test)
+
+# v1.2: NeamProd tests (plugins, sessions, evaluation, artifacts, streaming, interop)
+add_executable(v120_prod_readiness_test
+    tests/unit/v120_prod_readiness_test.cpp
+)
+target_link_libraries(v120_prod_readiness_test PRIVATE neamc_core gtest_main)
+add_test(NAME v120_prod_readiness_test COMMAND v120_prod_readiness_test)
+
+# v1.3: NeamLab tests (auto research agent, program, experiment_loop, metric_extractor)
+add_executable(v130_research_agent_test
+    tests/unit/v130_research_agent_test.cpp
+)
+target_link_libraries(v130_research_agent_test PRIVATE neamc_core gtest_main)
+add_test(NAME v130_research_agent_test COMMAND v130_research_agent_test)
+
+# v1.4: NeamWiki tests (compiled llm-wiki: wiki, wiki agent, page schema, ops)
+add_executable(v140_wiki_test
+    tests/unit/v140_wiki_test.cpp
+)
+target_link_libraries(v140_wiki_test PRIVATE neamc_core gtest_main)
+add_test(NAME v140_wiki_test COMMAND v140_wiki_test)
 
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)

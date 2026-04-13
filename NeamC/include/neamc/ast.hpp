@@ -3818,6 +3818,367 @@ struct DIOAgentDecl {
   std::string budget;
 };
 
+// ═══ v1.0: OWASP Security Declarations ═══
+struct GoalIntegrityDecl { std::string name; std::vector<std::string> declared_objectives; std::string verification_json; std::string input_guard_ref; std::string output_guard_ref; bool audit = true; };
+struct ToolValidatorDecl { std::string name; std::string schema_enforcement; bool additional_properties = false; std::string rate_limits_json; int max_call_depth = 5; bool detect_cycles = true; std::string budget_per_call_json; };
+struct AgentIdentityDecl { std::string name; std::string credential_mode; std::string ttl; std::string rotation; std::string scope_json; bool session_binding = true; bool cross_agent_sharing = false; };
+struct SupplyChainPolicyDecl { std::string name; std::string agent_md_signing_json; std::string tool_pinning_json; std::string mcp_verification_json; std::string aibom_json; };
+struct CodeSandboxDecl { std::string name; std::string runtime; std::string filesystem_json; std::string network_json; std::string resources_json; std::string pre_execution_review_json; bool log_all_executions = true; };
+struct MemoryIntegrityDecl { std::string name; std::string hash_algorithm; bool verify_on_read = true; bool verify_on_write = true; std::string provenance_json; std::string access_guard_json; std::string integrity_scan_json; };
+struct MessageSecurityDecl { std::string name; std::string signing_json; std::string encryption_json; std::string authentication_json; bool log_all_messages = true; };
+struct CircuitBreakerV10Decl { std::string name; int failure_threshold = 3; int success_threshold = 5; std::string half_open_timeout; std::string isolation_json; };
+struct HumanGateDecl { std::string name; std::vector<std::string> approve_before; std::string confidence_escalation_json; std::string workflow_json; bool log_all_decisions = true; };
+struct AgentAttestationDecl { std::string name; std::string attest_interval; std::string baseline_json; std::string kill_switch_json; std::string collusion_detection_json; };
+
+// v1.0: MCP Security
+struct MCPAllowlistDecl { std::string name; std::string servers_json; bool block_unlisted = true; bool alert_on_new = true; };
+struct ToolPinningDecl { std::string name; std::string method; bool pin_descriptions = true; bool block_on_change = true; };
+struct ContextGuardDecl { std::string name; bool compartmentalize = true; std::string cross_task_sharing; std::string max_context_age; bool purge_on_completion = true; };
+
+// v1.0: AIBOM
+struct AIBOMConfigDecl { std::string name; std::string format; std::string version; std::string components_json; std::string provenance_json; bool auto_generate = true; std::string trigger; std::string output_path; std::string eu_ai_act_json; };
+
+// v1.0: Evaluation
+struct GymEvaluatorDecl { std::string name; std::string mode; std::string agent_path; std::string dataset_path; std::string graders_json; std::string thresholds_json; std::string reproducibility_json; std::string metrics_json; std::string output_path; };
+
+// v1.0: Cloud Stack
+struct GatewayDecl { std::string name; std::string auth_json; std::string rate_limit_json; std::string routes_json; std::string observability_json; };
+struct ModelRouterDecl { std::string name; std::string strategy; std::string routes_json; std::string fallback_chain_json; std::string budget_json; };
+struct MarketplaceV10Decl { std::string name; std::string package_format_json; std::string publish_requires_json; std::string install_policy_json; };
+
+// v1.0: Special Agents
+struct SecuritySentinelAgentDecl { Visibility visibility; std::string name; std::string provider; std::string model; double temperature = 0.2; std::string budget; std::string monitors_json; std::string actions_json; std::string reporting_json; };
+struct ProtocolBridgeAgentDecl { Visibility visibility; std::string name; std::string provider; std::string model; double temperature = 0.2; std::string budget; std::string protocols_json; std::string firewall_json; };
+struct CostGuardianAgentDecl { Visibility visibility; std::string name; std::string provider; std::string model; double temperature = 0.2; std::string budget; std::string tracking_json; std::string optimization_json; std::string alerts_json; };
+
+// ═══ v1.1: NeamOS Foundation ═══
+
+// Knowledge Card (4 sub-types: concept, policy, decision, skill)
+struct KnowledgeCardDecl {
+    std::string name;
+    std::string card_type;                 // "concept"|"policy"|"decision"|"skill"
+    std::string fields_json;               // type-specific fields as JSON
+    std::string owner_agent_ref;           // agent reference (cross-validated)
+    std::string version;                   // semver
+    std::string ttl;                       // duration ("180d", "24h") or empty
+    std::string domain;                    // dot-path ("telecom.retention")
+    std::string provenance_json;           // {created_by, verified_by, source, last_reviewed}
+    SourceSpan span;
+};
+
+// Context Assembly (Minimum Viable Context)
+struct ContextAssemblyDecl {
+    std::string name;
+    std::string target_agent_ref;          // agent reference (cross-validated)
+    std::string phase;                     // DIO phase or empty for all
+    std::vector<std::string> card_refs;    // knowledge_card references (cross-validated)
+    int max_context_tokens = 4000;
+    std::string assembly_strategy;         // "relevance_ranked"|"chronological"|"priority"
+    bool include_metadata = false;
+    std::string fallback;                  // "truncate"|"prioritize"|"error"
+    SourceSpan span;
+};
+
+// Agent Persona (voice, personality, localization)
+struct AgentPersonaDecl {
+    std::string name;
+    std::string target_agent_ref;          // agent reference (cross-validated)
+    std::string display_name;
+    std::string avatar_path;               // file path (existence checked at compile)
+    std::string voice_json;                // {engine, voice_id}
+    std::string personality_json;          // {trait: float} all 0.0-1.0
+    std::string catchphrase;
+    std::string locales_json;              // {lang: {voice_id, catchphrases}}
+    std::string animation_set;             // directory path
+    SourceSpan span;
+};
+
+// Locale Configuration (i18n)
+struct LocaleConfigDecl {
+    std::string name;
+    std::vector<std::string> supported;    // ISO 639-1 codes
+    std::vector<std::string> rtl;          // RTL subset
+    std::string fallback;                  // must be in supported
+    std::string string_table;              // path template "./locales/{lang}.json"
+    SourceSpan span;
+};
+
+// Governance Rule (declarative policy with typed conditions)
+struct GovernanceRuleDecl {
+    std::string name;
+    std::string trigger;                   // "data_write"|"data_read"|"tool_call"|"agent_spawn"|"config_change"|"budget_exceed"
+    std::string condition_json;            // type-checked condition expression as JSON AST
+    std::string action_json;               // {enforce_ttl, require_consent, notify, audit, block}
+    std::string regulatory_basis;
+    std::string effective_date;
+    std::string review_date;
+    SourceSpan span;
+};
+
+// Agent Adapter (external agent interface)
+struct AgentAdapterDecl {
+    std::string name;
+    std::string adapter_type;              // "local_coding_agent"|"gateway_agent"|"cloud_agent"|"custom"
+    std::string binary;                    // for local agents
+    std::string protocol;                  // "stdin_stdout"|"rpc"|"sse"|"websocket"
+    std::string endpoint;                  // for gateway/cloud agents
+    std::string capabilities_json;         // ["code_gen", "review", ...]
+    std::string communication;             // "stdin_stdout"|"rpc"|"sse"|"websocket"
+    bool skill_injection = false;
+    std::string cost_tracking;             // "token_based"|"api_based"|"time_based"|"none"
+    bool device_key_pairing = false;
+    SourceSpan span;
+};
+
+// Blueprint (portable ecosystem package)
+struct BlueprintDecl {
+    std::string name;
+    std::string version;                   // semver
+    std::string description;
+    std::string author;
+    std::vector<std::string> agent_refs;   // agent references (cross-validated)
+    std::vector<std::string> skill_refs;   // skill references
+    std::vector<std::string> card_refs;    // knowledge_card references
+    std::string dio_spec_ref;
+    std::string parameters_json;           // {param: {type, default, range}}
+    SourceSpan span;
+};
+
+// KnowledgeWeaver Agent
+struct KnowledgeWeaverAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget;
+    std::string fabric_json;               // {card_store, embedding_model, search, certification}
+    std::string monitors_json;             // {card_freshness, coverage_gaps, conflict_detection}
+    SourceSpan span;
+};
+
+// AdaptAgent
+struct AdaptAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget;
+    std::string monitors_json;             // {model_releases, protocol_updates, security_advisories}
+    std::string proposals_json;            // {channel, requires_approval}
+    SourceSpan span;
+};
+
+// Storyteller Agent (Dreamland)
+struct StorytellerAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.7;
+    std::string budget;
+    std::string sub_agents_json;           // {scene_artist, voice_caster, mood_composer}
+    std::string safety_json;               // {content_filter, age_groups, image_scan, parent_preview}
+    SourceSpan span;
+};
+
+// ═══ v1.2: NeamProd — Enterprise Production Readiness ═══
+
+// Plugin declaration
+struct PluginDecl {
+    std::string name;
+    std::string hooks_json;            // [{hook, mode, handler}]
+    int priority = 100;
+    bool enabled = true;
+    std::string description;
+    std::string scope;                 // "global"|"agent"
+    std::string config_json;           // plugin-specific configuration
+    SourceSpan span;
+};
+
+// Session Service declaration
+struct SessionServiceDecl {
+    std::string name;
+    std::string backend;               // "inmemory"|"sqlite"|"postgresql"|"redis"|"dynamodb"
+    std::string connection_json;       // backend-specific connection config
+    std::string scoping_json;          // {app_prefix, user_prefix, temp_prefix}
+    std::string compression_json;      // {strategy, token_threshold, keep_recent}
+    std::string ttl;                   // session expiry duration
+    SourceSpan span;
+};
+
+// Eval Test declaration
+struct EvalTestDecl {
+    std::string name;
+    std::string agent_ref;             // agent to evaluate
+    std::string input;                 // test input message
+    std::string expected_tools_json;   // expected tool call sequence
+    std::string expected_response;     // expected response pattern
+    std::string criteria_json;         // evaluation criteria
+    std::string trajectory_mode;       // "exact"|"in_order"|"any_order"
+    double threshold = 0.8;
+    SourceSpan span;
+};
+
+// Eval Set declaration
+struct EvalSetDecl {
+    std::string name;
+    std::vector<std::string> test_refs; // references to eval_test declarations
+    std::string judge_json;            // {provider, model, num_samples}
+    std::string thresholds_json;       // per-metric thresholds
+    std::string output_format;         // "json"|"junit"|"markdown"
+    std::string output_path;
+    SourceSpan span;
+};
+
+// Artifact Store declaration
+struct ArtifactStoreDecl {
+    std::string name;
+    std::string backend;               // "filesystem"|"s3"|"gcs"|"azure_blob"
+    std::string path;                  // base path or bucket
+    std::string scoping;               // "session"|"user"|"app"
+    std::string metadata_json;         // custom metadata config
+    SourceSpan span;
+};
+
+// Stream Config declaration
+struct StreamConfigDecl {
+    std::string name;
+    std::string mode;                  // "none"|"sse"|"bidi"
+    std::string voice_json;            // {stt_model, tts_model, vad_enabled}
+    bool interrupt_enabled = true;
+    std::string event_format;          // "json"|"binary"
+    SourceSpan span;
+};
+
+// A2A Config declaration
+struct A2AConfigDecl {
+    std::string name;
+    std::string agent_card_json;       // {name, description, capabilities, endpoint}
+    std::string auth_json;             // {method, credentials}
+    std::string protocols_json;        // supported protocol versions
+    bool expose_as_server = false;
+    bool discover_peers = false;
+    SourceSpan span;
+};
+
+// ═══ v1.3: NeamLab — Auto Research Agent ═══
+
+// Program declaration (replaces autoresearch's program.md)
+struct ProgramDecl {
+    std::string name;
+    std::string mission;                  // overall goal
+    std::string success_criterion;        // metric reference
+    std::vector<std::string> constraints; // hard rules
+    std::vector<std::string> process;     // numbered steps
+    std::string autonomy;                 // "full"|"ask_on_uncertain"|"human_in_loop"
+    std::vector<std::string> halt_conditions;
+    std::vector<std::string> style_preferences;
+    std::string version;                  // semver, default "1.0.0"
+    std::string metadata_json;            // org metadata
+    SourceSpan span;
+};
+
+// Research Agent declaration
+struct ResearchAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget;
+    std::string program_ref;              // program declaration reference
+    std::string mutable_artifacts_json;   // JSON array of mutable artifact refs
+    std::string immutable_artifacts_json; // JSON array of immutable artifact refs
+    std::string metric_ref;               // metric_extractor reference
+    std::string iteration_budget_json;    // {time_per_run, max_runs, max_total_time, max_total_cost}
+    std::string experiment_log_ref;       // session_service reference
+    std::string on_improvement;           // "keep"|"branch"|"merge"
+    std::string on_failure;               // "revert"|"annotate"|"halt"
+    bool hypothesis_required = false;
+    bool until_interrupted = false;
+    double target_metric = 0.0;
+    bool target_metric_set = false;
+    std::string eval_set_ref;             // optional eval_set reference
+    std::string plugin_throttle;          // optional throttle string
+    SourceSpan span;
+};
+
+// Experiment Loop declaration
+struct ExperimentLoopDecl {
+    std::string name;
+    std::string research_agent_ref;
+    std::string until_json;               // {time, cost, iterations, target_metric, interrupt}
+    std::string on_iteration_json;        // hook config
+    std::string on_improvement_json;      // hook config
+    std::string on_failure_json;          // hook config
+    std::string notify_ref;               // channel reference
+    SourceSpan span;
+};
+
+// Metric Extractor declaration
+struct MetricExtractorDecl {
+    std::string name;
+    std::string direction;                // "higher_is_better"|"lower_is_better"
+    std::string method;                   // "grep"|"regex"|"json_path"|"function"
+    std::string pattern;                  // for grep/regex
+    std::string path;                     // for json_path
+    std::string function_ref;             // for function method
+    int regex_group = 0;
+    double tolerance = 0.0;
+    std::string from_eval_ref;            // optional eval_test/eval_set ref
+    SourceSpan span;
+};
+
+// ═══ v1.4: NeamWiki — Compiled LLM Wiki ═══
+
+// Wiki declaration — data definition for a NeamWiki instance
+struct WikiDecl {
+    std::string name;
+    std::string topic;                    // human-readable topic
+    std::string raw_path;                 // where raw sources live
+    std::string wiki_path;                // where compiled wiki pages live
+    std::string description;
+    std::string hub;                      // optional hub directory
+    std::string inbox_path;
+    std::string output_path;
+    std::string page_types_json;          // JSON array of canonical page types
+    std::string naming_convention;        // kebab_case|TitleCase|snake_case
+    std::string frontmatter_format;       // yaml|toml
+    bool auto_compile = true;
+    bool contradiction_detection = true;
+    bool auto_link = true;
+    bool auto_extract_entities = true;
+    bool obsidian_compat = false;
+    std::string vector_store;             // "usearch" default
+    std::string embedding_model;
+    std::string chunk_strategy;           // markdown_section default
+    std::string sibling_wikis_json;       // JSON array of sibling wiki names
+    std::string fields_json;              // raw blob (mirrors v1.3 simple decls)
+    SourceSpan span;
+};
+
+// Wiki Agent declaration — Neam's 24th typed agent
+struct WikiAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget;
+    std::string wikis_json;               // JSON array of wiki references
+    std::string operations_json;          // JSON array of enabled operations
+    std::string research_config_json;     // {parallel_agents, angles, max_rounds, max_time_per_topic}
+    std::string lint_policies_json;       // {flag_orphans, flag_broken_links, ...}
+    std::string graph_config_json;        // {deterministic_pass, semantic_pass, community_detection, output_format}
+    std::string output_formats_json;      // JSON array of output format names
+    std::string governance_json;          // JSON array of governance_rule refs
+    std::string plugin_hooks_json;        // JSON array of plugin refs
+    std::string knowledge_cards_json;     // JSON array of knowledge_card refs
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -3915,7 +4276,38 @@ struct Statement
                    PatternSelectorDecl, ExecutionManagerDIODecl, DIOStateMachineDecl,
                    DIOErrorHandlingDecl, ResultSynthesizerDecl, InfrastructureProfileDecl,
                    RoleFrameworkDecl, DelegationProtocolDecl, DIOAccountabilityDecl,
-                   DIOAgentDecl>;
+                   DIOAgentDecl,
+                   // v1.0: OWASP Security
+                   GoalIntegrityDecl, ToolValidatorDecl, AgentIdentityDecl,
+                   SupplyChainPolicyDecl, CodeSandboxDecl, MemoryIntegrityDecl,
+                   MessageSecurityDecl, CircuitBreakerV10Decl, HumanGateDecl,
+                   AgentAttestationDecl,
+                   // v1.0: MCP Security
+                   MCPAllowlistDecl, ToolPinningDecl, ContextGuardDecl,
+                   // v1.0: AIBOM + Evaluation
+                   AIBOMConfigDecl, GymEvaluatorDecl,
+                   // v1.0: Cloud Stack
+                   GatewayDecl, ModelRouterDecl, MarketplaceV10Decl,
+                   // v1.0: Special Agents
+                   SecuritySentinelAgentDecl, ProtocolBridgeAgentDecl,
+                   CostGuardianAgentDecl,
+                   // v1.1: NeamOS Foundation
+                   KnowledgeCardDecl, ContextAssemblyDecl,
+                   AgentPersonaDecl, LocaleConfigDecl,
+                   GovernanceRuleDecl, AgentAdapterDecl,
+                   BlueprintDecl,
+                   KnowledgeWeaverAgentDecl, AdaptAgentDecl,
+                   StorytellerAgentDecl,
+                   // v1.2: NeamProd
+                   PluginDecl, SessionServiceDecl,
+                   EvalTestDecl, EvalSetDecl,
+                   ArtifactStoreDecl,
+                   StreamConfigDecl, A2AConfigDecl,
+                   // v1.3: NeamLab
+                   ProgramDecl, ResearchAgentDecl,
+                   ExperimentLoopDecl, MetricExtractorDecl,
+                   // v1.4: NeamWiki
+                   WikiDecl, WikiAgentDecl>;
   SourceSpan span;
   Variant node;
 };

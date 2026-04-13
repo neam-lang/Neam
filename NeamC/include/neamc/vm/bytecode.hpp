@@ -15,7 +15,7 @@
 
 namespace neamc::vm
 {
-enum class OpCode : uint8_t
+enum class OpCode : uint16_t
 {
   OP_CONST = 0,
   OP_NIL,
@@ -332,9 +332,74 @@ enum class OpCode : uint8_t
   // 12=QualityGate, 13=TestReportConfig, 14=DefectManagement, 15=DataTestAgent
   OP_DEFINE_TEST_DECLARATION,
 
-  // v0.9.9: Data Intelligent Orchestrator — THE LAST uint8_t OPCODE
-  // After this, OpCode enum is FULL (256/256). Future agents must widen to uint16_t.
+  // v0.9.9: Data Intelligent Orchestrator
   OP_DEFINE_DIO_DECLARATION,
+
+  // ═══ v1.0: Enum widened to uint16_t for type safety ═══
+  // Bytecode encoding: opcodes 0-255 remain single-byte for backward compat.
+  // v1.0 uses enum values > 255 ONLY as internal identifiers.
+  // In bytecode, v1.0 constructs are emitted using consolidated opcodes
+  // from v0.9.8.3+ pattern (existing opcode + sub-type + field_count).
+
+  // v1.0: OWASP Security (sub-types of OP_DEFINE_BA_DECLARATION or new consolidated)
+  OP_DEFINE_GOAL_INTEGRITY = 256,
+  OP_DEFINE_TOOL_VALIDATOR,
+  OP_DEFINE_AGENT_IDENTITY,
+  OP_DEFINE_SUPPLY_CHAIN_POLICY,
+  OP_DEFINE_CODE_SANDBOX,
+  OP_DEFINE_MEMORY_INTEGRITY,
+  OP_DEFINE_MESSAGE_SECURITY,
+  OP_DEFINE_CIRCUIT_BREAKER_DECL,
+  OP_DEFINE_HUMAN_GATE,
+  OP_DEFINE_AGENT_ATTESTATION,
+
+  // v1.0: MCP Security
+  OP_DEFINE_MCP_ALLOWLIST,
+  OP_DEFINE_TOOL_PINNING,
+  OP_DEFINE_CONTEXT_GUARD,
+
+  // v1.0: NHI + AIBOM
+  OP_DEFINE_AIBOM_CONFIG,
+
+  // v1.0: Evaluation
+  OP_DEFINE_GYM_EVALUATOR,
+
+  // v1.0: Cloud Stack
+  OP_DEFINE_GATEWAY,
+  OP_DEFINE_MODEL_ROUTER,
+  OP_DEFINE_MARKETPLACE_DECL,
+
+  // v1.0: Special Agents
+  OP_DEFINE_SECURITY_SENTINEL,
+  OP_DEFINE_PROTOCOL_BRIDGE,
+  OP_DEFINE_COST_GUARDIAN,
+  // v1.1: NeamOS Foundation
+  OP_DEFINE_KNOWLEDGE_CARD,
+  OP_DEFINE_CONTEXT_ASSEMBLY,
+  OP_DEFINE_AGENT_PERSONA,
+  OP_DEFINE_LOCALE,
+  OP_DEFINE_GOVERNANCE_RULE,
+  OP_DEFINE_AGENT_ADAPTER,
+  OP_DEFINE_BLUEPRINT,
+  OP_DEFINE_KNOWLEDGE_WEAVER,
+  OP_DEFINE_ADAPT_AGENT,
+  OP_DEFINE_STORYTELLER,
+  // v1.2: NeamProd
+  OP_DEFINE_PLUGIN,
+  OP_DEFINE_SESSION_SERVICE,
+  OP_DEFINE_EVAL_TEST,
+  OP_DEFINE_EVAL_SET,
+  OP_DEFINE_ARTIFACT_STORE,
+  OP_DEFINE_STREAM_CONFIG,
+  OP_DEFINE_A2A_CONFIG,
+  // v1.3: NeamLab — Auto Research Agent
+  OP_DEFINE_PROGRAM,
+  OP_DEFINE_RESEARCH_AGENT,
+  OP_DEFINE_EXPERIMENT_LOOP,
+  OP_DEFINE_METRIC_EXTRACTOR,
+  // v1.4: NeamWiki — Compiled LLM Wiki
+  OP_DEFINE_WIKI,
+  OP_DEFINE_WIKI_AGENT,
 };
 
 class Bytecode

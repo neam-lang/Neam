@@ -1,10 +1,14 @@
-# Neam v0.9.9
+# Neam
 
-**The programming language for AI agents.**
+**The programming language for AI agents.** v1.2.0 (NeamProd)
 
-Neam is a compiled domain-specific language for building AI agent systems. It provides first-class support for LLM providers, RAG (Retrieval-Augmented Generation), multi-agent orchestration, multi-cloud deployment, GPU/SIMD acceleration, and cost management — all in a clean, expressive syntax.
+Neam is a compiled domain-specific language for building AI agent systems. It provides first-class support for LLM providers, RAG (Retrieval-Augmented Generation), multi-agent orchestration, OWASP security compliance, knowledge management, enterprise governance, plugin extensibility, session persistence, structured evaluation, streaming, and multi-cloud deployment — all in a clean, expressive syntax.
 
-**v0.9.9** introduces the **Data Intelligence Ecosystem** — 14 specialist AI agents coordinated by the **Data Intelligent Orchestrator (DIO)** for autonomous data lifecycle management.
+### Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/neam-lang/neam-nightly/main/install.sh | bash
+```
 
 ```neam
 agent Assistant {
@@ -19,81 +23,7 @@ emit answer;
 
 ---
 
-## Books
-
-| | Title | Link |
-|---|---|---|
-| **The Intelligent Data Organization with Neam** | How 14 agents + 1 orchestrator manage the entire data lifecycle — from ingestion to production ML. Includes the DataSims evaluation (50 experiments, 93.7% cost reduction). | [Read Online](https://neam-lang.github.io/The-Intelligent-Data-Organization-with-Neam/index.html) |
-| **Neam: The AI-Native Programming Language** | Complete language reference — syntax, agents, RAG, skills, tools, guards, budgets, deployment, and 100+ built-in functions. | [Read Online](https://neam-lang.github.io/Neam-The-AI-Native-Programming-Language/index.html) |
-
----
-
-## Install
-
-**One-line install (macOS / Linux):**
-
-```bash
-curl -fsSL https://github.com/neam-lang/Neam/releases/download/v0.9.9/install.sh | bash
-```
-
-Auto-detects your OS and architecture, downloads the correct binary, and installs to `/usr/local/bin` (or `~/.neam/bin`).
-
-**Manual install:**
-
-```bash
-# Download from https://github.com/neam-lang/Neam/releases/tag/v0.9.9
-tar -xzf neam-v0.9.9-darwin-arm64.tar.gz   # or linux-amd64
-cd bin
-sudo cp neamc neam neam-cli neam-api neam-pkg neam-lambda neam-lsp neam-dap neam-gym neam-forge /usr/local/bin/
-```
-
-### 10 Executables
-
-| Binary | Purpose |
-|---|---|
-| `neamc` | Compiler — compiles `.neam` source to `.neamb` bytecode |
-| `neam` | Runtime — executes `.neamb` bytecode |
-| `neam-cli` | Interactive REPL and script runner |
-| `neam-api` | HTTP API server |
-| `neam-pkg` | Package manager |
-| `neam-lambda` | AWS Lambda runtime |
-| `neam-lsp` | Language Server Protocol |
-| `neam-dap` | Debug Adapter Protocol |
-| `neam-gym` | Training and benchmarking |
-| `neam-forge` | Forge agent runner |
-
----
-
-## What's New in v0.9.9
-
-### 14 Specialist Agents + 1 Orchestrator
-
-| Layer | Agents | Role |
-|---|---|---|
-| **Infrastructure** | Data Agent, ETL Agent, Migration Agent | Source discovery, SQL-first warehousing, zero-downtime migrations |
-| **Platform** | DataOps, Governance, Modeling, Analyst | SRE for data, compliance, architecture intelligence, NL-to-SQL |
-| **Analytical** | Data-BA, DataScientist, Causal, DataTest, MLOps | Requirements, EDA-to-AutoML, causal reasoning, testing, production ops |
-| **Orchestration** | DIO | Dynamic crew, RACI, 8 auto-patterns, swarm, evolutionary |
-
-### Key Capabilities
-
-- 111 declaration types, 250 runtime types, 429 native functions
-- 10+ infrastructure profiles (Snowflake, BigQuery, Databricks, Redshift, Oracle, PostgreSQL, Teradata, Fabric)
-- 7 RAG retrieval strategies (basic, MMR, hybrid, HyDE, self-RAG, CRAG, agentic)
-
-### Validated Results ([DataSims](https://github.com/neam-lang/Data-Sims))
-
-| Metric | Traditional Team | Neam Agent Stack |
-|---|---|---|
-| **Cost** | $548,000 | $34,700 |
-| **Model AUC** | Varies | 0.847 |
-| **Test coverage** | Varies | 94% |
-| **Reproducibility** | Low | 100% (50/50 runs) |
-| **Cost reduction** | — | 93.7% |
-
----
-
-## Build from Source
+## Setup
 
 ### Prerequisites
 
@@ -114,6 +44,13 @@ mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build . --parallel
 ```
+
+This produces two binaries:
+
+| Binary | Purpose |
+|---|---|
+| `neamc` | Compiler — compiles `.neam` source to `.neamb` bytecode |
+| `neam-cli` | Runtime — executes bytecode, includes interactive REPL |
 
 ### Verify Installation
 
@@ -972,6 +909,143 @@ emit answer;
 
 ---
 
+## v1.1 — NeamOS Foundation (Knowledge, Personas, Governance)
+
+v1.1 adds 7 keywords and 3 agent types for the Enterprise Agentic Operating System:
+
+```neam
+// Structured organizational knowledge
+knowledge_card CustomerChurn {
+    type: "concept",
+    term: "Customer Churn",
+    definition: "No transaction in 90+ days",
+    domain: "telecom.retention",
+    version: "2.1.0"
+}
+
+// Curated context per agent per phase
+context_assembly ChurnContext {
+    target_agent: "DS",
+    cards: ["CustomerChurn", "PIIPolicy"],
+    max_context_tokens: 4000
+}
+
+// Declarative enterprise governance
+governance_rule PDPA_Retention {
+    trigger: "data_write",
+    condition: "data.classification == personal_data",
+    action: { enforce_ttl: "365d", require_consent: true, audit: "mandatory" },
+    regulatory_basis: "PDPA Section 25"
+}
+
+// Portable ecosystem packaging
+blueprint TelecomChurn {
+    version: "1.0.0",
+    agents: ["ChurnDS", "CausalAgent"],
+    knowledge_cards: ["CustomerChurn"]
+}
+```
+
+### v1.1 Keywords
+
+| Keyword | Purpose |
+|---|---|
+| `knowledge_card` | Structured organizational knowledge with 4 sub-types (Concept, Policy, Decision, Skill) |
+| `context_assembly` | Minimum Viable Context curation per agent per phase |
+| `agent_persona` | Voice, avatar, personality traits, multilingual locales |
+| `locale` | Internationalization with compile-time translation checking |
+| `governance_rule` | Declarative policy rules with typed trigger conditions |
+| `agent_adapter` | External agent interfaces (Claude Code, OpenClaw, etc.) |
+| `blueprint` | Portable ecosystem packages with cross-reference validation |
+
+### v1.1 Agent Types
+
+| Agent | Purpose |
+|---|---|
+| `knowledgeweaver agent` | Knowledge fabric management and context assembly |
+| `adaptagent agent` | Ecosystem monitoring and adaptation proposals |
+| `storyteller agent` | Illustrated narrated stories for education |
+
+---
+
+## v1.2 — NeamProd (Plugins, Sessions, Evaluation, Streaming, A2A)
+
+v1.2 makes Neam production-ready with 7 keywords for enterprise infrastructure:
+
+```neam
+// Plugin system with lifecycle hooks
+plugin CostTracker {
+    description: "Track LLM costs per agent",
+    hooks: { after_model: "observe" },
+    scope: "global"
+}
+
+// Persistent sessions with database backing
+session_service ProdSessions {
+    backend: "postgresql",
+    connection: { host: "db.prod.internal", port: 5432 },
+    compression: { strategy: "summarize", token_threshold: 0.8 },
+    ttl: "30d"
+}
+
+// Structured evaluation with CI/CD integration
+eval_test ChurnQuality {
+    agent: "ChurnDS",
+    input: "Predict churn for segment A",
+    criteria: ["safety", "hallucination", "trajectory_match"],
+    threshold: 0.95
+}
+
+eval_set ProdGate {
+    tests: ["ChurnQuality"],
+    judge: { model: "gpt-4o-mini" },
+    output_format: "junit"
+}
+
+// Versioned artifact management
+artifact_store Reports {
+    backend: "s3",
+    path: "s3://neam-prod/artifacts",
+    scoping: "user"
+}
+
+// Real-time streaming
+stream_config Live { mode: "sse", event_format: "json" }
+
+// Cross-framework interoperability via A2A protocol
+a2a_config ChurnService {
+    agent_card: { name: "ChurnPredictor", capabilities: ["predict"] },
+    expose_as_server: true
+}
+```
+
+### v1.2 Keywords
+
+| Keyword | Purpose |
+|---|---|
+| `plugin` | Lifecycle hooks (before/after agent, model, tool) with observe/intervene/amend modes |
+| `session_service` | Persistent sessions with 5 backends (inmemory, sqlite, postgresql, redis, dynamodb) |
+| `eval_test` | Structured test cases with trajectory matching and quality metrics |
+| `eval_set` | Evaluation suites with LLM-as-Judge and JUnit XML output for CI/CD |
+| `artifact_store` | Versioned artifact management with filesystem, S3, GCS, Azure Blob backends |
+| `stream_config` | SSE and bidirectional WebSocket streaming with voice pipeline support |
+| `a2a_config` | A2A protocol configuration — agent cards, peer discovery, server exposure |
+
+---
+
+## Version History
+
+| Version | Codename | Keywords | Agents | Highlights |
+|---|---|---|---|---|
+| v0.6–0.7 | — | 20+ | 3 | Language foundation, agents, skills, RAG, MCP, deployment |
+| v0.8 | NeamClaw | — | 5 | Claw agents, Forge agents, sessions, channels |
+| v0.9 | — | — | 19 | 14 data intelligence agents, DIO orchestrator |
+| v1.0 | NeamOne | 20+ | 19 | OWASP ASI01-10 + MCP01-10, cloud stack, evaluation, 3 special agents |
+| v1.1 | NeamOS Foundation | 27+ | 22 | Knowledge cards, personas, governance, blueprints, 3 new agents |
+| **v1.2** | **NeamProd** | **34+** | **22** | **Plugins, sessions, evaluation, artifacts, streaming, A2A interop** |
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -985,13 +1059,6 @@ emit answer;
 | `AWS_REGION` | us-east-1 | AWS region for Bedrock |
 
 ---
-
-## Resources
-
-- [The Intelligent Data Organization with Neam](https://neam-lang.github.io/The-Intelligent-Data-Organization-with-Neam/index.html) — Book: agent-driven data lifecycle management
-- [Neam: The AI-Native Programming Language](https://neam-lang.github.io/Neam-The-AI-Native-Programming-Language/index.html) — Book: complete language reference
-- [DataSims](https://github.com/neam-lang/Data-Sims) — Simulated enterprise evaluation platform
-- [Releases](https://github.com/neam-lang/Neam/releases) — Download binaries
 
 ## Contributing
 

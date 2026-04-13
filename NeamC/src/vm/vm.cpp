@@ -47,6 +47,9 @@
 #include "neamc/vm/databa_types.hpp"
 #include "neamc/vm/datatest_types.hpp"
 #include "neamc/vm/dio_types.hpp"
+#include "neamc/vm/neamos_types.hpp"
+#include "neamc/vm/prod_types.hpp"
+#include "neamc/vm/lab_types.hpp"
 #include "neamc/vm/forge_loop.hpp"
 #include "neamc/vm/session_manager.hpp"
 #include "neamc/vm/context_builder.hpp"
@@ -11637,6 +11640,158 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           if (fields.count("autonomy")) agent->autonomy = fields["autonomy"];
           if (fields.count("budget")) agent->budget_ref = fields["budget"];
 
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 16)
+        {
+          // v1.1: NeamOS Foundation simple keywords (knowledge_card, context_assembly, etc.)
+          // Register name in globals as a generic declaration
+          std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
+          auto* name_str = copy_string(decl_name.c_str(), decl_name.size());
+          // Create a minimal object - fields stored in globals for native function access
+          auto* agent = new_dio_agent();
+          agent->name = decl_name;
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          for (const auto& [k, v] : fields) {
+            if (k != "name" && k != "provider" && k != "model") {
+              // Store extra fields in managed_agents_json for later retrieval
+              if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";
+              agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
+            }
+          }
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 17)
+        {
+          // v1.1: KnowledgeWeaver agent
+          auto* agent = new_dio_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+          if (fields.count("fabric")) agent->managed_agents_json = fields["fabric"];
+          if (fields.count("monitors")) agent->guardrails_json = fields["monitors"];
+          agent->mode = "knowledgeweaver";
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 18)
+        {
+          // v1.1: AdaptAgent
+          auto* agent = new_dio_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+          if (fields.count("monitors")) agent->managed_agents_json = fields["monitors"];
+          if (fields.count("proposals")) agent->guardrails_json = fields["proposals"];
+          agent->mode = "adaptagent";
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 19)
+        {
+          // v1.1: Storyteller agent
+          auto* agent = new_dio_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+          if (fields.count("sub_agents")) agent->managed_agents_json = fields["sub_agents"];
+          if (fields.count("safety")) agent->guardrails_json = fields["safety"];
+          agent->mode = "storyteller";
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 20)
+        {
+          // v1.2: NeamProd declarations (plugin, session_service, eval_test, etc.)
+          std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
+          auto* name_str = copy_string(decl_name.c_str(), decl_name.size());
+          auto* agent = new_dio_agent();
+          agent->name = decl_name;
+          agent->mode = "v1.2_prod";
+          for (const auto& [k, v] : fields) {
+            if (k != "name") {
+              if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";
+              agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
+            }
+          }
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 21)
+        {
+          // v1.3: NeamLab simple declarations (program, experiment_loop, metric_extractor)
+          std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
+          auto* name_str = copy_string(decl_name.c_str(), decl_name.size());
+          auto* agent = new_dio_agent();
+          agent->name = decl_name;
+          agent->mode = "v1.3_lab";
+          for (const auto& [k, v] : fields) {
+            if (k != "name") {
+              if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";
+              agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
+            }
+          }
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 22)
+        {
+          // v1.3: Research Agent
+          auto* agent = new_dio_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+          if (fields.count("program")) agent->managed_agents_json = "program:" + fields["program"];
+          if (fields.count("metric")) agent->guardrails_json = "metric:" + fields["metric"];
+          agent->mode = "research";
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 23)
+        {
+          // v1.4: NeamWiki — Wiki declaration
+          std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
+          auto* name_str = copy_string(decl_name.c_str(), decl_name.size());
+          auto* agent = new_dio_agent();
+          agent->name = decl_name;
+          agent->mode = "v1.4_wiki";
+          for (const auto& [k, v] : fields) {
+            if (k != "name") {
+              if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";
+              agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
+            }
+          }
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 24)
+        {
+          // v1.4: NeamWiki — Wiki Agent
+          auto* agent = new_dio_agent();
+          if (fields.count("name")) agent->name = fields["name"];
+          if (fields.count("provider")) agent->provider = fields["provider"];
+          if (fields.count("model")) agent->llm_model = fields["model"];
+          if (fields.count("temperature")) agent->temperature = std::stod(fields["temperature"]);
+          if (fields.count("budget")) agent->budget_ref = fields["budget"];
+          if (fields.count("wikis")) agent->managed_agents_json = "wikis:" + fields["wikis"];
+          if (fields.count("operations")) agent->guardrails_json = "operations:" + fields["operations"];
+          agent->mode = "wiki_agent";
           auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
           globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
           stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
