@@ -201,10 +201,13 @@ public:
 
     try
     {
+      // v1.4.5: bumped timeout from 30s to 180s — reasoning models (gpt-5,
+      // gpt-5-mini) regularly exceed 30s on hard math/logic problems.
       const std::string response = http_post_json(
           config_.endpoint, payload.dump(),
           {"Content-Type: application/json",
-           "Authorization: Bearer " + config_.api_key});
+           "Authorization: Bearer " + config_.api_key},
+          /*timeout_ms=*/180000);
       auto parsed = nlohmann::json::parse(response);
       auto text = extract_response_text(parsed);
       LLMLogger::debug("openai", "Response: " + std::to_string(text.size()) + " chars");
