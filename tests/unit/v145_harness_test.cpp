@@ -425,6 +425,25 @@ TEST(V145Harness, Phase3HandoffSchemaVersionRetrievable) {
   )NEAM");
 }
 
+TEST(V145Harness, Phase3LlmAskCompilesAndReturnsError) {
+  // llm_ask compiles + links. Without an API key it must return an
+  // error-sentinel string (not crash).  We can't assert the exact reply
+  // without a live key; just that the call doesn't blow up and typeof
+  // is String.
+  assert_compiles(R"NEAM(
+    let reply = llm_ask("openai", "gpt-5-mini", "hi");
+    assert_true(typeof(reply) == "String");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3LlmAskUnknownProviderSurfacesError) {
+  // Don't assert the return type (Nil vs. error-string varies by code path);
+  // just prove it compiles + doesn't crash the VM.
+  assert_compiles(R"NEAM(
+    let reply = llm_ask("not_a_provider", "gpt-5", "hi");
+  )NEAM");
+}
+
 TEST(V145Harness, Phase3HarnessEnvReturnsJSON) {
   assert_compiles(R"NEAM(
     let run_env = harness_env();

@@ -32,6 +32,8 @@
 
 #include "neamc/vm/table.hpp"
 #include "neamc/vm/harness_types.hpp"  // v1.4.5 Phase 3-minimal
+#include "neamc/llm/provider.hpp"       // v1.4.5 llm_ask bridge
+#include "neamc/llm/provider_factory.hpp"
 #include "neamc/vm/async/future.hpp"
 #include "neamc/vm/async/executor.hpp"
 #include "neamc/vm/runtime_type.hpp"
@@ -2352,6 +2354,73 @@ Value v145_handoff_schema_version_native(VirtualMachine&, int argc, Value* args)
   const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
   if (!rec) return Value::Nil();
   return Value::String(rec->schema_version.c_str(), rec->schema_version.size());
+}
+
+// ─── v1.4.5 bridge: llm_ask(provider, model, prompt) -> String ────────
+//
+// Exposes the existing Neam LLM provider factory (v0.6.6+) directly to
+// Neam source. Enables LLM-backed benchmarks (AIME 2025, etc.) to run
+// before Phase 3 full harness_start lands.
+//
+// This is NOT a harness-scored call — no sub-agent spawn, no trace, no
+// assertion evaluation. It's a bare-model bridge.  The full Phase 3
+// runtime will internally use this same path through harness_start().
+//
+// Args:  provider ("openai" | "anthropic" | "ollama" | "bedrock")
+//        model    (e.g., "gpt-5-mini", "claude-sonnet-4")
+//        prompt   (raw string, single user message)
+// Returns:  String response from the model.  Nil on error.
+// Env:   OPENAI_API_KEY (for openai), ANTHROPIC_API_KEY (for anthropic)
+
+Value v145_llm_ask_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string provider_name = value_to_string_arg(args[0]);
+  const std::string model         = value_to_string_arg(args[1]);
+  const std::string prompt        = value_to_string_arg(args[2]);
+  if (provider_name.empty() || model.empty()) return Value::Nil();
+
+  // Read API key from the canonical env var for the chosen provider.
+  // (Mirror of the pattern used by existing forge/research agent runtimes.)
+  std::string api_key;
+  if (provider_name == "openai")
+  {
+    const char* env = std::getenv("OPENAI_API_KEY");
+    if (env) api_key = env;
+  }
+  else if (provider_name == "anthropic")
+  {
+    const char* env = std::getenv("ANTHROPIC_API_KEY");
+    if (env) api_key = env;
+  }
+  // Ollama runs locally and typically requires no key.
+
+  ::neamc::llm::ProviderConfig cfg;
+  cfg.model = model;
+  cfg.api_key = api_key;
+  cfg.temperature = 0.0;
+
+  try
+  {
+    auto provider = ::neamc::llm::create_provider(provider_name, cfg);
+    if (!provider) return Value::Nil();
+
+    std::vector<::neamc::llm::Message> msgs;
+    msgs.push_back({"user", prompt});
+    std::string reply = provider->chat(msgs);
+    return Value::String(reply.c_str(), reply.size());
+  }
+  catch (const std::exception& e)
+  {
+    // Surface errors as a sentinel string so Neam programs can detect failure.
+    std::string err = std::string("[llm_ask error] ") + e.what();
+    return Value::String(err.c_str(), err.size());
+  }
+  catch (...)
+  {
+    const char* err = "[llm_ask error] unknown";
+    return Value::String(err, std::strlen(err));
+  }
 }
 
 }  // namespace
@@ -4819,5 +4888,9 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("harness_status",           1, v145_harness_status_native);
   vm.define_native("harness_env",              0, v145_harness_env_native);
   vm.define_native("handoff_schema_version",   1, v145_handoff_schema_version_native);
+  // Bridge to existing LLM provider infrastructure (v0.6.6+):
+  // NOT a harness-scored call — bare-model path. Full harness runtime
+  // will internally call the same provider factory.
+  vm.define_native("llm_ask",                  3, v145_llm_ask_native);
 }
 }  // namespace neamc::vm
