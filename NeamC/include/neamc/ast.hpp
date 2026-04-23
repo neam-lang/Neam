@@ -4179,6 +4179,30 @@ struct WikiAgentDecl {
     SourceSpan span;
 };
 
+// v1.4.5: NeamHarness — unified harness declaration (sub-type 25 on OP_DEFINE_DIO_DECLARATION)
+struct HarnessDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget_ref;
+    std::string tools_ref;                // -> ToolRegistryDecl (v1.4.5 phase 1)
+    std::string handoff_ref;              // -> HandoffDecl (v1.4.5 phase 1)
+    std::string assertions_ref;           // -> AssertionRegistryDecl (v1.4.5 phase 1)
+    std::string program_ref;
+    std::string goal_integrity_ref;
+    std::string circuit_breaker_ref;
+    std::string sub_agents_json;
+    std::string context_json;
+    std::string governance_json;
+    std::string trace_json;
+    std::string observability_json;
+    std::string safety_json;
+    std::string fields_json;              // catch-all raw blob (mirrors WikiDecl.fields_json)
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -4307,7 +4331,9 @@ struct Statement
                    ProgramDecl, ResearchAgentDecl,
                    ExperimentLoopDecl, MetricExtractorDecl,
                    // v1.4: NeamWiki
-                   WikiDecl, WikiAgentDecl>;
+                   WikiDecl, WikiAgentDecl,
+                   // v1.4.5: NeamHarness
+                   HarnessDecl>;
   SourceSpan span;
   Variant node;
 };

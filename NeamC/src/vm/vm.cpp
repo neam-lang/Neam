@@ -11796,6 +11796,23 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
           stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
         }
+        else if (sub_type == 25)
+        {
+          // v1.4.5: NeamHarness — unified harness declaration
+          std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
+          auto* agent = new_dio_agent();
+          agent->name = decl_name;
+          agent->mode = "v1.4.5_harness";
+          for (const auto& [k, v] : fields) {
+            if (k != "name") {
+              if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";
+              agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
+            }
+          }
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
         else
         {
           // For sub_types 0-14, just pop fields and push Nil (generic handler)

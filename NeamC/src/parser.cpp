@@ -2858,6 +2858,20 @@ StmtPtr Parser::parse_declaration()
       current_ = saved;
     }
   }
+  // ═══ v1.4.5: NeamHarness dispatches ═══
+  // Single-keyword decls that reuse parse_v10_generic_decl.
+  // (harness, handoff, tool_registry, assertion_registry, harness_benchmark)
+  if (check(TokenType::Identifier) && peek().lexeme == "harness")
+  {
+    auto saved = current_;
+    advance();
+    // Two-keyword form: "harness_benchmark" would go here in later phase
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("harness", 37);
+    }
+    current_ = saved;
+  }
   // v1.1: Special agents (2-keyword: "knowledgeweaver agent", "adaptagent agent", "storyteller agent")
   if (check(TokenType::Identifier) && peek().lexeme == "knowledgeweaver")
   {
@@ -19604,6 +19618,8 @@ StmtPtr Parser::parse_v10_generic_decl(const std::string& keyword, int type_id) 
     case 35: { MetricExtractorDecl d; d.name = name; d.pattern = fields_json; stmt->node = std::move(d); break; }
     // v1.4: NeamWiki
     case 36: { WikiDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    // v1.4.5: NeamHarness (phase 0 — single harness decl via generic blob; full field parsing in later phase)
+    case 37: { HarnessDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
     default: error("Unknown v1.0 declaration type: " + keyword); break;
     }
 

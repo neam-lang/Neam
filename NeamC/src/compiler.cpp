@@ -7120,6 +7120,19 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_byte(23); /* sub-type 23 = Wiki */
           chunk_.write_byte(field_count);
         }
+        // ═══ v1.4.5: NeamHarness — unified harness declaration ═══
+        else if constexpr (std::is_same_v<T, HarnessDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(25); /* sub-type 25 = Harness */
+          chunk_.write_byte(field_count);
+        }
         else if constexpr (std::is_same_v<T, WikiAgentDecl>) {
           uint8_t field_count = 0;
           auto push_str = [&](const std::string& k, const std::string& v) {

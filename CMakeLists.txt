@@ -713,6 +713,13 @@ add_executable(v140_wiki_test
 target_link_libraries(v140_wiki_test PRIVATE neamc_core gtest_main)
 add_test(NAME v140_wiki_test COMMAND v140_wiki_test)
 
+# v1.4.5: NeamHarness tests (Phase 0 — harness declaration parse/compile/VM dispatch)
+add_executable(v145_harness_test
+    tests/unit/v145_harness_test.cpp
+)
+target_link_libraries(v145_harness_test PRIVATE neamc_core gtest_main)
+add_test(NAME v145_harness_test COMMAND v145_harness_test)
+
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)
 # ============================================================================
