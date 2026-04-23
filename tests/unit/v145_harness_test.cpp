@@ -371,6 +371,68 @@ TEST(V145Harness, BasicHarnessBenchmark) {
 // PART 8: Full Integration (all 5 declarations together)
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// Phase 3-minimal: HarnessRegistry + lifecycle natives
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, Phase3HarnessHashDeterministic) {
+  // Same harness declaration MUST produce the same 64-char SHA-256 hex
+  // across two independent compile+run cycles (FR-H-5 determinism).
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.00, tokens: 100000 }
+    agent M { provider: "anthropic", model: "claude-sonnet-4", system: "m", budget: B }
+    harness H {
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        budget: B,
+        sub_agents: { main: M }
+    }
+    let h = harness_hash("H");
+    assert_true(typeof(h) == "String");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3HarnessStatusRegisteredAfterCompile) {
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.00, tokens: 100000 }
+    agent M { provider: "anthropic", model: "claude-sonnet-4", system: "m", budget: B }
+    harness H {
+        provider: "anthropic", model: "claude-sonnet-4",
+        budget: B, sub_agents: { main: M }
+    }
+    let s = harness_status("H");
+    assert_true(s == "registered");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3HarnessStatusUnknownForMissing) {
+  assert_compiles(R"NEAM(
+    let s = harness_status("NoSuchHarness");
+    assert_true(s == "unknown");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3HandoffSchemaVersionRetrievable) {
+  // Phase 3 makes schema_version readable at runtime.
+  assert_compiles(R"NEAM(
+    handoff HF {
+        path: "./p.md",
+        schema: "markdown",
+        schema_version: "2.3.4"
+    }
+    let v = handoff_schema_version("HF");
+    assert_true(v == "2.3.4");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3HarnessEnvReturnsJSON) {
+  assert_compiles(R"NEAM(
+    let run_env = harness_env();
+    // Must be a non-empty JSON string containing NEAM_RUN_ID
+    assert_true(typeof(run_env) == "String");
+  )NEAM");
+}
+
 TEST(V145Harness, FullStackAllFiveDeclarations) {
   assert_compiles(R"NEAM(
     budget B { cost: 200.00, tokens: 5000000 }

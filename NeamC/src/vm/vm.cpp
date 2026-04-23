@@ -33,6 +33,7 @@
 #include "neamc/vm/sealed_type.hpp"
 #include "neamc/vm/claw_agent_type.hpp"
 #include "neamc/vm/forge_agent_type.hpp"
+#include "neamc/vm/harness_types.hpp"  // v1.4.5 Phase 3-minimal
 #include "neamc/vm/data_agent_types.hpp"
 #include "neamc/vm/etl_agent_types.hpp"
 #include "neamc/vm/migration_types.hpp"
@@ -11822,6 +11823,44 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
           globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
           stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+          // v1.4.5 Phase 3-minimal: populate HarnessRegistry side table.
+          // FR-H-5 hash is over (name + fields_json).
+          const std::string fields_blob = fields.count("fields") ? fields["fields"] : "";
+          auto& reg = ::neamc::vm::harness::HarnessRegistry::instance();
+          if (sub_type == 25) {
+            ::neamc::vm::harness::HarnessRecord rec;
+            rec.name = decl_name;
+            rec.provider = fields.count("provider") ? fields["provider"] : "";
+            rec.model = fields.count("model") ? fields["model"] : "";
+            rec.fields_json = fields_blob;
+            rec.bytecode_hash =
+                ::neamc::vm::harness::compute_harness_hash(decl_name, fields_blob);
+            rec.status = "registered";
+            reg.register_harness(std::move(rec));
+          } else if (sub_type == 26) {
+            ::neamc::vm::harness::HandoffRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            rec.schema_version =
+                ::neamc::vm::harness::extract_json_string(fields_blob, "schema_version");
+            reg.register_handoff(std::move(rec));
+          } else if (sub_type == 27) {
+            ::neamc::vm::harness::ToolRegistryRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_tool_registry(std::move(rec));
+          } else if (sub_type == 28) {
+            ::neamc::vm::harness::AssertionRegistryRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_assertion_registry(std::move(rec));
+          } else if (sub_type == 29) {
+            ::neamc::vm::harness::HarnessBenchmarkRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_harness_benchmark(std::move(rec));
+          }
         }
         else
         {

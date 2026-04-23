@@ -31,6 +31,7 @@
 #include <openssl/sha.h>
 
 #include "neamc/vm/table.hpp"
+#include "neamc/vm/harness_types.hpp"  // v1.4.5 Phase 3-minimal
 #include "neamc/vm/async/future.hpp"
 #include "neamc/vm/async/executor.hpp"
 #include "neamc/vm/runtime_type.hpp"
@@ -2296,6 +2297,61 @@ Value dataops_report_native(VirtualMachine& vm, int arg_count, Value* args) {
   report["mode"] = agent->mode;
   std::string s = report.dump();
   return Value::String(s.c_str(), s.size());
+}
+
+// ─── v1.4.5 Phase 3-minimal: harness lifecycle natives ────────────────
+
+static std::string value_to_string_arg(const Value& v)
+{
+  if (v.is_string())
+  {
+    return to_std_string(v);
+  }
+  return {};
+}
+
+Value v145_harness_hash_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Nil();
+  const std::string name = value_to_string_arg(args[0]);
+  if (name.empty()) return Value::Nil();
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance().lookup_harness(name);
+  if (!rec) return Value::Nil();
+  return Value::String(rec->bytecode_hash.c_str(), rec->bytecode_hash.size());
+}
+
+Value v145_harness_status_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Nil();
+  const std::string name = value_to_string_arg(args[0]);
+  if (name.empty()) return Value::Nil();
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance().lookup_harness(name);
+  if (!rec)
+  {
+    const char* unk = "unknown";
+    return Value::String(unk, 7);
+  }
+  return Value::String(rec->status.c_str(), rec->status.size());
+}
+
+Value v145_harness_env_native(VirtualMachine&, int, Value*)
+{
+  // Serialize the NEAM_RUN_* map as JSON.
+  const auto& env = ::neamc::vm::harness::harness_runtime_env_map();
+  nlohmann::json j;
+  for (const auto& [k, v] : env) j[k] = v;
+  std::string s = j.dump();
+  return Value::String(s.c_str(), s.size());
+}
+
+Value v145_handoff_schema_version_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Nil();
+  const std::string name = value_to_string_arg(args[0]);
+  if (name.empty()) return Value::Nil();
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!rec) return Value::Nil();
+  return Value::String(rec->schema_version.c_str(), rec->schema_version.size());
 }
 
 }  // namespace
@@ -4757,5 +4813,11 @@ void register_core_natives(VirtualMachine& vm)
     }
     return Value::Nil();
   });
+
+  // ─── v1.4.5 Phase 3-minimal: harness lifecycle ─────────────────────
+  vm.define_native("harness_hash",             1, v145_harness_hash_native);
+  vm.define_native("harness_status",           1, v145_harness_status_native);
+  vm.define_native("harness_env",              0, v145_harness_env_native);
+  vm.define_native("handoff_schema_version",   1, v145_handoff_schema_version_native);
 }
 }  // namespace neamc::vm
