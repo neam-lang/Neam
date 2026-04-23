@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/CMakeFiles/lexbor-populate"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/CMakeFiles/lexbor-populate.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/CMakeFiles/lexbor-populate-complete.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/lexbor-populate-build.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/lexbor-populate-configure.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/lexbor-populate-download.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/lexbor-populate-install.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/lexbor-populate-mkdir.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/lexbor-populate-patch.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/lexbor-populate-test.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/lexbor-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"lexbor-populate"
+		],
+		"name" : "lexbor-populate"
+	}
+}

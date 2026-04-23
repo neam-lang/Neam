@@ -1,0 +1,5 @@
+#pragma once
+#define NEAM_VERSION "1.3.0"
+#define NEAM_VERSION_MAJOR 1
+#define NEAM_VERSION_MINOR 3
+#define NEAM_VERSION_PATCH 0

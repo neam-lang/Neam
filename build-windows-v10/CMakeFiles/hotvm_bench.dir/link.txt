@@ -1,0 +1,3 @@
+/opt/homebrew/bin/cmake -E rm -f CMakeFiles/hotvm_bench.dir/objects.a
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc CMakeFiles/hotvm_bench.dir/objects.a @CMakeFiles/hotvm_bench.dir/objects1.rsp
+/opt/homebrew/bin/x86_64-w64-mingw32-g++ -O3 -DNDEBUG -Wl,--whole-archive CMakeFiles/hotvm_bench.dir/objects.a -Wl,--no-whole-archive -o hotvm_bench.exe -Wl,--out-implib,libhotvm_bench.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/hotvm_bench.dir/linkLibs.rsp

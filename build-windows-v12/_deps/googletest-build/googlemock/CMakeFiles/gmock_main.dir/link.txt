@@ -1,0 +1,2 @@
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc ../../../lib/libgmock_main.a CMakeFiles/gmock_main.dir/src/gmock_main.cc.obj
+/opt/homebrew/bin/x86_64-w64-mingw32-ranlib ../../../lib/libgmock_main.a

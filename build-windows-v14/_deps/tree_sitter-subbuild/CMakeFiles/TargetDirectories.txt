@@ -1,0 +1,3 @@
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/CMakeFiles/tree_sitter-populate.dir
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/CMakeFiles/edit_cache.dir
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/CMakeFiles/rebuild_cache.dir

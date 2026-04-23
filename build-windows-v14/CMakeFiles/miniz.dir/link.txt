@@ -1,0 +1,2 @@
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc libminiz.a "CMakeFiles/miniz.dir/_deps/miniz-src/miniz.c.obj" "CMakeFiles/miniz.dir/_deps/miniz-src/miniz_tdef.c.obj" "CMakeFiles/miniz.dir/_deps/miniz-src/miniz_tinfl.c.obj" "CMakeFiles/miniz.dir/_deps/miniz-src/miniz_zip.c.obj"
+/opt/homebrew/bin/x86_64-w64-mingw32-ranlib libminiz.a

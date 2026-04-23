@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/lexbor-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -1,0 +1,12 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=url
+command=/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/miniz-subbuild/miniz-populate-prefix/src/miniz-populate-stamp/download-miniz-populate.cmake;COMMAND;/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/miniz-subbuild/miniz-populate-prefix/src/miniz-populate-stamp/verify-miniz-populate.cmake;COMMAND;/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/miniz-subbuild/miniz-populate-prefix/src/miniz-populate-stamp/extract-miniz-populate.cmake
+source_dir=/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/miniz-src
+work_dir=/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps
+url(s)=https://github.com/richgel999/miniz/archive/refs/tags/3.0.2.tar.gz
+hash=
+      no_extract=
+

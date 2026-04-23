@@ -1,0 +1,12 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=url
+command=/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/nlohmann_json_schema_validator-subbuild/nlohmann_json_schema_validator-populate-prefix/src/nlohmann_json_schema_validator-populate-stamp/download-nlohmann_json_schema_validator-populate.cmake;COMMAND;/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/nlohmann_json_schema_validator-subbuild/nlohmann_json_schema_validator-populate-prefix/src/nlohmann_json_schema_validator-populate-stamp/verify-nlohmann_json_schema_validator-populate.cmake;COMMAND;/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/nlohmann_json_schema_validator-subbuild/nlohmann_json_schema_validator-populate-prefix/src/nlohmann_json_schema_validator-populate-stamp/extract-nlohmann_json_schema_validator-populate.cmake
+source_dir=/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/nlohmann_json_schema_validator-src
+work_dir=/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps
+url(s)=https://github.com/pboettch/json-schema-validator/archive/refs/tags/2.3.0.tar.gz
+hash=
+      no_extract=
+

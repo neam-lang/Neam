@@ -1,0 +1,3 @@
+/opt/homebrew/bin/cmake -E rm -f CMakeFiles/neam-lambda.dir/objects.a
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc CMakeFiles/neam-lambda.dir/objects.a @CMakeFiles/neam-lambda.dir/objects1.rsp
+/opt/homebrew/bin/x86_64-w64-mingw32-g++ -O3 -DNDEBUG -Wl,--whole-archive CMakeFiles/neam-lambda.dir/objects.a -Wl,--no-whole-archive -o neam-lambda.exe -Wl,--out-implib,libneam-lambda.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/neam-lambda.dir/linkLibs.rsp

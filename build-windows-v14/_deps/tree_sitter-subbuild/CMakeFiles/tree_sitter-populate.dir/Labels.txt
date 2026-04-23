@@ -1,0 +1,14 @@
+# Target labels
+ tree_sitter-populate
+# Source files and their labels
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/CMakeFiles/tree_sitter-populate
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/CMakeFiles/tree_sitter-populate.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/CMakeFiles/tree_sitter-populate-complete.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-build.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-configure.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-download.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-install.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-mkdir.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-patch.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-test.rule
+/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-update.rule

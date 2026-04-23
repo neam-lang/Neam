@@ -1,0 +1,12 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=url
+command=/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/download-tree_sitter-populate.cmake;COMMAND;/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/verify-tree_sitter-populate.cmake;COMMAND;/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/extract-tree_sitter-populate.cmake
+source_dir=/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/tree_sitter-src
+work_dir=/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps
+url(s)=https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v0.22.6.tar.gz
+hash=
+      no_extract=
+

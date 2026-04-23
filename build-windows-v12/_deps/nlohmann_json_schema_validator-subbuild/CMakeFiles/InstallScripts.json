@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/nlohmann_json_schema_validator-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

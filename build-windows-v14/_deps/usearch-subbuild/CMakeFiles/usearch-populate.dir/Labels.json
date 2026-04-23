@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/CMakeFiles/usearch-populate"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/CMakeFiles/usearch-populate.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/CMakeFiles/usearch-populate-complete.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/usearch-populate-prefix/src/usearch-populate-stamp/usearch-populate-build.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/usearch-populate-prefix/src/usearch-populate-stamp/usearch-populate-configure.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/usearch-populate-prefix/src/usearch-populate-stamp/usearch-populate-download.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/usearch-populate-prefix/src/usearch-populate-stamp/usearch-populate-install.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/usearch-populate-prefix/src/usearch-populate-stamp/usearch-populate-mkdir.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/usearch-populate-prefix/src/usearch-populate-stamp/usearch-populate-patch.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/usearch-populate-prefix/src/usearch-populate-stamp/usearch-populate-test.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/usearch-subbuild/usearch-populate-prefix/src/usearch-populate-stamp/usearch-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"usearch-populate"
+		],
+		"name" : "usearch-populate"
+	}
+}

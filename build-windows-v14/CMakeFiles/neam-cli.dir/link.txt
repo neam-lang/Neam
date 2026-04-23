@@ -1,0 +1,3 @@
+/opt/homebrew/bin/cmake -E rm -f CMakeFiles/neam-cli.dir/objects.a
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc CMakeFiles/neam-cli.dir/objects.a @CMakeFiles/neam-cli.dir/objects1.rsp
+/opt/homebrew/bin/x86_64-w64-mingw32-g++ --sysroot=/opt/homebrew/Cellar/mingw-w64/13.0.0_2/toolchain-x86_64/x86_64-w64-mingw32 -O3 -DNDEBUG  -static-libgcc -static-libstdc++ -static-libgcc -static-libstdc++ -Wl,--whole-archive CMakeFiles/neam-cli.dir/objects.a -Wl,--no-whole-archive -o neam-cli.exe -Wl,--out-implib,libneam-cli.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/neam-cli.dir/linkLibs.rsp

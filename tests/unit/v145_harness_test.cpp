@@ -141,4 +141,171 @@ TEST(V145Harness, BackwardCompatWikiOnly) {
   )NEAM");
 }
 
+// ═══════════════════════════════════════════════════════════════
+// PART 4: Handoff Declaration (sub-type 26, Phase 0b)
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, BasicHandoff) {
+  assert_compiles(R"NEAM(
+    handoff HF {
+        path: "./progress.md",
+        schema: "markdown",
+        required_sections: ["completed", "in_progress", "next"],
+        max_size_kb: 16,
+        on_overflow: "summarize",
+        versioning: "git",
+        on_read: "strict",
+        on_write: "lenient",
+        schema_version: "1.0.0"
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, HandoffInsideHarness) {
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.00, tokens: 100000 }
+    agent Worker { provider: "anthropic", model: "claude-sonnet-4", system: "w", budget: B }
+    handoff HF {
+        path: "./hf.md",
+        schema: "markdown",
+        required_sections: ["state"],
+        schema_version: "1.0.0"
+    }
+    harness H {
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        budget: B,
+        handoff: HF,
+        sub_agents: { main: Worker }
+    }
+  )NEAM");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PART 5: Tool Registry (sub-type 27, Phase 0b)
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, BasicToolRegistry) {
+  assert_compiles(R"NEAM(
+    tool_registry TR {
+        builtin: ["fetch", "parse"],
+        project: ["compile_neam"],
+        user: [],
+        max_active: 12
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, ToolRegistryWithBriefs) {
+  assert_compiles(R"NEAM(
+    tool_registry TR {
+        builtin: ["fetch", "parse"],
+        max_active: 5,
+        briefs: {
+            fetch: { safe_max: 5, note: "Each fetch ~8KB; 5 fills ~40% of 100k context." },
+            parse: { safe_max: 20, note: "Parse results are compact (~200 tokens each)." }
+        }
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, ToolRegistryWithScoping) {
+  assert_compiles(R"NEAM(
+    tool_registry TR {
+        builtin: ["fetch", "run_tests", "write_file"],
+        max_active: 10,
+        scoping: {
+            planner: ["fetch"],
+            generator: ["run_tests", "write_file"],
+            evaluator: ["run_tests"]
+        }
+    }
+  )NEAM");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PART 6: Assertion Registry (sub-type 28, Phase 0b)
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, BasicAssertionRegistry) {
+  assert_compiles(R"NEAM(
+    assertion_registry AR {
+        no_secrets: {
+            kind: "regex",
+            pattern: "api_key",
+            severity: "hard",
+            on_violation: "abort_and_log"
+        }
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, AssertionRegistryAllKinds) {
+  assert_compiles(R"NEAM(
+    assertion_registry AR {
+        no_secrets: { kind: "regex", pattern: "secret", severity: "hard" },
+        respect_budget: { kind: "runtime", metric: "cost", op: "<=", value: 500, severity: "hard" },
+        no_network: { kind: "capability", forbid: ["network_call"], severity: "hard" },
+        reactor_safe: { kind: "domain", invariant: "temperature < 500", severity: "hard" }
+    }
+  )NEAM");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PART 7: Harness Benchmark (sub-type 29, Phase 0b)
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, BasicHarnessBenchmark) {
+  assert_compiles(R"NEAM(
+    harness_benchmark NB {
+        description: "NeamBench v1",
+        dimensions: ["pass_rate", "efficiency", "determinism", "compile_time_catch_rate"],
+        repetitions: 3,
+        seed: 42
+    }
+  )NEAM");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PART 8: Full Integration (all 5 declarations together)
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, FullStackAllFiveDeclarations) {
+  assert_compiles(R"NEAM(
+    budget B { cost: 200.00, tokens: 5000000 }
+
+    agent Main { provider: "anthropic", model: "claude-opus-4", system: "m", budget: B }
+
+    handoff HF {
+        path: "./progress.md", schema: "markdown",
+        required_sections: ["done", "todo"],
+        schema_version: "1.0.0"
+    }
+
+    tool_registry TR {
+        builtin: ["compile", "test"],
+        max_active: 4
+    }
+
+    assertion_registry AR {
+        respect_budget: { kind: "runtime", metric: "cost", op: "<=", value: 200, severity: "hard" }
+    }
+
+    harness App {
+        provider: "anthropic", model: "claude-opus-4",
+        budget: B,
+        handoff: HF,
+        tools: TR,
+        assertions: AR,
+        sub_agents: { main: Main }
+    }
+
+    harness_benchmark NB {
+        description: "App benchmark",
+        dimensions: ["pass_rate", "efficiency"],
+        repetitions: 1
+    }
+  )NEAM");
+}
+
 }  // namespace

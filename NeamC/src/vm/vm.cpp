@@ -11796,13 +11796,23 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
           stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
         }
-        else if (sub_type == 25)
+        else if (sub_type == 25 || sub_type == 26 || sub_type == 27 ||
+                 sub_type == 28 || sub_type == 29)
         {
-          // v1.4.5: NeamHarness — unified harness declaration
+          // v1.4.5: NeamHarness family —
+          //   25: harness  26: handoff  27: tool_registry
+          //   28: assertion_registry  29: harness_benchmark
+          static const char* kModes[] = {
+            "v1.4.5_harness",            // 25
+            "v1.4.5_handoff",            // 26
+            "v1.4.5_tool_registry",      // 27
+            "v1.4.5_assertion_registry", // 28
+            "v1.4.5_harness_benchmark"   // 29
+          };
           std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
           auto* agent = new_dio_agent();
           agent->name = decl_name;
-          agent->mode = "v1.4.5_harness";
+          agent->mode = kModes[sub_type - 25];
           for (const auto& [k, v] : fields) {
             if (k != "name") {
               if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";

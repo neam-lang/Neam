@@ -4203,6 +4203,38 @@ struct HarnessDecl {
     SourceSpan span;
 };
 
+// v1.4.5: Typed, schema-validated progress/state file (sub-type 26)
+struct HandoffDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // path, schema, required_sections, max_size_kb, etc.
+    SourceSpan span;
+};
+
+// v1.4.5: Scoped 3-tier tool registry (sub-type 27)
+struct ToolRegistryDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // builtin, project, user, max_active, scoping, briefs
+    SourceSpan span;
+};
+
+// v1.4.5: CAAF-inspired Unified Assertion Interface (sub-type 28)
+struct AssertionRegistryDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // name -> {kind, severity, on_violation, pattern?, metric?, ...}
+    SourceSpan span;
+};
+
+// v1.4.5: Typed benchmark declaration for harness evaluation (sub-type 29)
+struct HarnessBenchmarkDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // harnesses_under_test, models, task_suites, dimensions, etc.
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -4333,7 +4365,8 @@ struct Statement
                    // v1.4: NeamWiki
                    WikiDecl, WikiAgentDecl,
                    // v1.4.5: NeamHarness
-                   HarnessDecl>;
+                   HarnessDecl, HandoffDecl, ToolRegistryDecl,
+                   AssertionRegistryDecl, HarnessBenchmarkDecl>;
   SourceSpan span;
   Variant node;
 };

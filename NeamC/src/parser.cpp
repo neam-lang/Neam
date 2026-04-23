@@ -2865,10 +2865,49 @@ StmtPtr Parser::parse_declaration()
   {
     auto saved = current_;
     advance();
-    // Two-keyword form: "harness_benchmark" would go here in later phase
     if (check(TokenType::Identifier))
     {
       return parse_v10_generic_decl("harness", 37);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "handoff")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("handoff", 38);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "tool_registry")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("tool_registry", 39);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "assertion_registry")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("assertion_registry", 40);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "harness_benchmark")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("harness_benchmark", 41);
     }
     current_ = saved;
   }
@@ -19618,8 +19657,12 @@ StmtPtr Parser::parse_v10_generic_decl(const std::string& keyword, int type_id) 
     case 35: { MetricExtractorDecl d; d.name = name; d.pattern = fields_json; stmt->node = std::move(d); break; }
     // v1.4: NeamWiki
     case 36: { WikiDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
-    // v1.4.5: NeamHarness (phase 0 — single harness decl via generic blob; full field parsing in later phase)
+    // v1.4.5: NeamHarness (phase 0 — generic blob; full field parsing in later phase)
     case 37: { HarnessDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 38: { HandoffDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 39: { ToolRegistryDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 40: { AssertionRegistryDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 41: { HarnessBenchmarkDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
     default: error("Unknown v1.0 declaration type: " + keyword); break;
     }
 

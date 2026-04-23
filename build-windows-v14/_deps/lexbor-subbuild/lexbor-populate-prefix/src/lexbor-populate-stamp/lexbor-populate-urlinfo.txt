@@ -1,0 +1,12 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=url
+command=/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/download-lexbor-populate.cmake;COMMAND;/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/verify-lexbor-populate.cmake;COMMAND;/opt/homebrew/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/lexbor-subbuild/lexbor-populate-prefix/src/lexbor-populate-stamp/extract-lexbor-populate.cmake
+source_dir=/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps/lexbor-src
+work_dir=/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v14/_deps
+url(s)=https://github.com/lexbor/lexbor/archive/refs/tags/v2.2.0.tar.gz
+hash=
+      no_extract=
+

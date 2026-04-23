@@ -1,0 +1,15 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/cmake_install.cmake",
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/nlohmann_json-build/cmake_install.cmake",
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/nlohmann_json_schema_validator-build/cmake_install.cmake",
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/nlohmann_json_schema_validator-build/src/cmake_install.cmake",
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/googletest-build/cmake_install.cmake",
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/googletest-build/googlemock/cmake_install.cmake",
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/googletest-build/googletest/cmake_install.cmake",
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/benchmark-build/cmake_install.cmake",
+		"/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v12/_deps/benchmark-build/src/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

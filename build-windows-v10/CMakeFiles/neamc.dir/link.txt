@@ -1,0 +1,3 @@
+/opt/homebrew/bin/cmake -E rm -f CMakeFiles/neamc.dir/objects.a
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc CMakeFiles/neamc.dir/objects.a @CMakeFiles/neamc.dir/objects1.rsp
+/opt/homebrew/bin/x86_64-w64-mingw32-g++ -O3 -DNDEBUG -Wl,--whole-archive CMakeFiles/neamc.dir/objects.a -Wl,--no-whole-archive -o neamc.exe -Wl,--out-implib,libneamc.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/neamc.dir/linkLibs.rsp

@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/CMakeFiles/tree_sitter-populate"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/CMakeFiles/tree_sitter-populate.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/CMakeFiles/tree_sitter-populate-complete.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-build.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-configure.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-download.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-install.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-mkdir.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-patch.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-test.rule"
+		},
+		{
+			"file" : "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-windows-v10/_deps/tree_sitter-subbuild/tree_sitter-populate-prefix/src/tree_sitter-populate-stamp/tree_sitter-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"tree_sitter-populate"
+		],
+		"name" : "tree_sitter-populate"
+	}
+}

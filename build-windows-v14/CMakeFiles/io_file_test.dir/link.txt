@@ -1,0 +1,3 @@
+/opt/homebrew/bin/cmake -E rm -f CMakeFiles/io_file_test.dir/objects.a
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc CMakeFiles/io_file_test.dir/objects.a @CMakeFiles/io_file_test.dir/objects1.rsp
+/opt/homebrew/bin/x86_64-w64-mingw32-g++ --sysroot=/opt/homebrew/Cellar/mingw-w64/13.0.0_2/toolchain-x86_64/x86_64-w64-mingw32 -O3 -DNDEBUG  -static-libgcc -static-libstdc++ -static-libgcc -static-libstdc++ -Wl,--whole-archive CMakeFiles/io_file_test.dir/objects.a -Wl,--no-whole-archive -o io_file_test.exe -Wl,--out-implib,libio_file_test.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles/io_file_test.dir/linkLibs.rsp

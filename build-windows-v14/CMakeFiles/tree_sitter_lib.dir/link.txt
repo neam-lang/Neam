@@ -1,0 +1,2 @@
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc libtree_sitter_lib.a "CMakeFiles/tree_sitter_lib.dir/_deps/tree_sitter-src/lib/src/lib.c.obj"
+/opt/homebrew/bin/x86_64-w64-mingw32-ranlib libtree_sitter_lib.a

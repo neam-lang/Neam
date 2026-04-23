@@ -1,0 +1,2 @@
+/opt/homebrew/bin/x86_64-w64-mingw32-ar qc ../../../lib/libgtest_main.a CMakeFiles/gtest_main.dir/src/gtest_main.cc.obj
+/opt/homebrew/bin/x86_64-w64-mingw32-ranlib ../../../lib/libgtest_main.a

@@ -1,0 +1,1 @@
+ libneamc_core.a "_deps/nlohmann_json_schema_validator-build/libnlohmann_json_schema_validator.a" libtree_sitter_lib.a /opt/homebrew/lib/libcrypto.a libminiz.a -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 
