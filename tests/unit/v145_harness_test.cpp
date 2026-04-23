@@ -276,6 +276,86 @@ TEST(V145Harness, AssertionRegistryAllKinds) {
 // PART 7: Harness Benchmark (sub-type 29, Phase 0b)
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// Phase 2: ForgeAgent role extension
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, Phase2ForgeRolePlannerParses) {
+  assert_compiles(R"NEAM(
+    fun check_result(ctx) { return true; }
+    budget B { cost: 10.00, tokens: 100000 }
+    forge agent Planner {
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        role: "planner",
+        loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 },
+        verify: check_result,
+        budget: B
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, Phase2ForgeRoleGeneratorParses) {
+  assert_compiles(R"NEAM(
+    fun check_result(ctx) { return true; }
+    budget B { cost: 10.00, tokens: 100000 }
+    forge agent Generator {
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        role: "generator",
+        loop: { max_iterations: 5 max_cost: 5.0 max_tokens: 100000 },
+        verify: check_result,
+        budget: B
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, Phase2ForgeRoleEvaluatorParses) {
+  assert_compiles(R"NEAM(
+    fun check_result(ctx) { return true; }
+    budget B { cost: 10.00, tokens: 100000 }
+    forge agent Evaluator {
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        role: "evaluator",
+        loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 },
+        verify: check_result,
+        budget: B
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, Phase2ForgeRoleInvalidRejected) {
+  // P-FR-001: role must be one of planner/generator/evaluator
+  assert_fails(R"NEAM(
+    fun check_result(ctx) { return true; }
+    budget B { cost: 10.00, tokens: 100000 }
+    forge agent Bad {
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        role: "critic",
+        loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 },
+        verify: check_result,
+        budget: B
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, Phase2ForgeNoRoleBackwardCompat) {
+  // Existing v1.4 forge agents without role: must still compile.
+  assert_compiles(R"NEAM(
+    fun check_result(ctx) { return true; }
+    budget B { cost: 10.00, tokens: 100000 }
+    forge agent Legacy {
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 },
+        verify: check_result,
+        budget: B
+    }
+  )NEAM");
+}
+
 TEST(V145Harness, BasicHarnessBenchmark) {
   assert_compiles(R"NEAM(
     harness_benchmark NB {

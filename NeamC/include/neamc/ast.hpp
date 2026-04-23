@@ -979,6 +979,13 @@ struct ForgeAgentDecl
   LoopConfig loop;
   ExprPtr verify;       // required: fun(ctx) -> VerifyResult
   std::optional<std::string> checkpoint;  // "git", "snapshot", "none"
+  // v1.4.5: optional role / function / ops field extensions
+  // role:     "planner" | "generator" | "evaluator" | "" (unset — default v1.4 behavior)
+  // function: JSON describing the forge agent as a submodule-tool callable
+  // ops:      JSON array of per-op {op, mode} modifiers (task vs step)
+  std::string role;
+  std::string function_json;
+  std::string ops_json;
 };
 
 // v0.8 Phase 6: Channel declaration

@@ -4897,6 +4897,8 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
   LoopConfig loop;
   ExprPtr verify;
   std::optional<std::string> checkpoint;
+  // v1.4.5: forge agent role extension
+  std::string forge_role;
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -5006,6 +5008,21 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
       workspace = previous().lexeme;
       continue;
     }
+    // v1.4.5: forge agent role extension (planner/generator/evaluator)
+    if (match_identifier("role"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after role"); }
+      if (!match(TokenType::String)) { error("Expected string for role"); }
+      const std::string r = previous().lexeme;
+      if (r != "planner" && r != "generator" && r != "evaluator")
+      {
+        error("P-FR-001: forge agent role must be one of: planner, generator, evaluator (got '" + r + "')");
+      }
+      // Store on the local variable; attached to the decl below.
+      // We use a parser-local variable for clarity:
+      forge_role = r;
+      continue;
+    }
     // Field rejection: claw-only fields
     if (match_identifier("session"))
     {
@@ -5067,7 +5084,9 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
       std::move(endpoint), std::move(api_key_env), std::move(temperature), std::move(system),
       std::move(skills), std::move(guardchains),
       std::move(policy), std::move(budget), std::move(env), std::move(workspace),
-      std::move(loop), std::move(verify), std::move(checkpoint)};
+      std::move(loop), std::move(verify), std::move(checkpoint),
+      // v1.4.5: role + function_json + ops_json (Phase 2 wires role; function/ops stay empty)
+      std::move(forge_role), std::string{}, std::string{}};
   return stmt;
 }
 
