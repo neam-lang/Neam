@@ -72,13 +72,23 @@ TEST(V145Harness, HarnessWithAllCoreFields) {
   )NEAM");
 }
 
-TEST(V145Harness, MinimalHarnessNoAgents) {
-  // Phase 0 accepts this; Phase 1 H-001 validation will reject empty sub_agents.
-  // This test documents the current boundary.
-  assert_compiles(R"NEAM(
+TEST(V145Harness, H001EmptyHarnessRejected) {
+  // Phase 1 H-001: harness must declare non-empty sub_agents.
+  // This test documents the validation boundary activated in Phase 1.
+  assert_fails(R"NEAM(
     harness Empty {
         provider: "anthropic",
         model: "claude-sonnet-4"
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, H001EmptySubAgentsRejected) {
+  assert_fails(R"NEAM(
+    harness E {
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        sub_agents: {}
     }
   )NEAM");
 }
@@ -157,6 +167,17 @@ TEST(V145Harness, BasicHandoff) {
         on_read: "strict",
         on_write: "lenient",
         schema_version: "1.0.0"
+    }
+  )NEAM");
+}
+
+TEST(V145Harness, H015HandoffMissingSchemaVersionRejected) {
+  // Phase 1 H-015: handoff must declare schema_version.
+  // Prevents silent breaking changes across sessions.
+  assert_fails(R"NEAM(
+    handoff NoVer {
+        path: "./p.md",
+        schema: "markdown"
     }
   )NEAM");
 }

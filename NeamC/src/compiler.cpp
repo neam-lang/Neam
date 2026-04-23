@@ -7122,6 +7122,26 @@ void Compiler::emit_statement(const Statement& stmt)
         }
         // ═══ v1.4.5: NeamHarness — unified harness declaration ═══
         else if constexpr (std::is_same_v<T, HarnessDecl>) {
+          // v1.4.5 Phase 1 validation: H-001 harness has ≥1 sub_agent.
+          // The parser stores all fields as JSON; parse it here to inspect.
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              // H-001: sub_agents must be declared and non-empty
+              auto it = j.find("sub_agents");
+              if (it == j.end() || !it->is_object() || it->empty()) {
+                throw std::runtime_error(
+                    "H-001: harness '" + node.name + "' has no sub_agents");
+              }
+            } catch (const nlohmann::json::parse_error&) {
+              // Fall through: malformed JSON from parser; let bytecode layer
+              // surface the issue. Don't block compile on parse-side artifacts.
+            }
+          } else {
+            throw std::runtime_error(
+                "H-001: harness '" + node.name + "' has no body");
+          }
+
           uint8_t field_count = 0;
           auto push_str = [&](const std::string& k, const std::string& v) {
             chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
@@ -7134,6 +7154,24 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_byte(field_count);
         }
         else if constexpr (std::is_same_v<T, HandoffDecl>) {
+          // v1.4.5 Phase 1 validation:
+          //   H-015: handoff must declare schema_version (FR-HF-6)
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              if (!j.contains("schema_version")) {
+                throw std::runtime_error(
+                    "H-015: handoff '" + node.name +
+                    "' must declare schema_version (e.g., \"1.0.0\")");
+              }
+            } catch (const nlohmann::json::parse_error&) {
+              // Malformed JSON; let VM surface the issue.
+            }
+          } else {
+            throw std::runtime_error(
+                "H-015: handoff '" + node.name + "' has no body");
+          }
+
           uint8_t field_count = 0;
           auto push_str = [&](const std::string& k, const std::string& v) {
             chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
