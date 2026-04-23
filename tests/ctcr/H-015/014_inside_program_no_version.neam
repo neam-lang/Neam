@@ -1,0 +1,8 @@
+// CTCR expects: H-015
+handoff X {
+    path: "./x.md",
+    schema: "markdown",
+    required_sections: ["state"],
+    on_overflow: "error",
+    versioning: "none"
+}

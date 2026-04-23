@@ -1,0 +1,6 @@
+// CTCR expects: H-015 (typo: "version" instead of "schema_version")
+handoff Typo {
+    path: "./typo.md",
+    schema: "markdown",
+    version: "1.0.0"
+}

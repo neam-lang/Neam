@@ -1,0 +1,7 @@
+// Positive control
+assertion_registry AR {
+    no_secrets:  { kind: "regex",      pattern: "api_key",    severity: "hard" },
+    cost_bound:  { kind: "runtime",    metric: "cost", op: "<=", value: 500, severity: "hard" },
+    no_network:  { kind: "capability", forbid: ["network_call"], severity: "hard" },
+    reactor:     { kind: "domain",     invariant: "temp < 500", severity: "hard" }
+}

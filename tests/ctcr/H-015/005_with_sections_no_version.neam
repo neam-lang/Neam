@@ -1,0 +1,6 @@
+// CTCR expects: H-015
+handoff Secs {
+    path: "./p.md",
+    schema: "markdown",
+    required_sections: ["completed", "in_progress"]
+}

@@ -1,0 +1,8 @@
+// Positive control
+tool_registry TR {
+    builtin: ["fetch"],
+    max_active: 3,
+    briefs: {
+        fetch: { safe_max: 5, note: "Each fetch ~8KB." }
+    }
+}

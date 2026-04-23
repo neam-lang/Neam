@@ -1,0 +1,3 @@
+// Positive control: pre-v1.4.5 program compiles unchanged
+budget B { cost: 10.00, tokens: 100000 }
+agent Plain { provider: "anthropic", model: "claude-sonnet-4", system: "hi", budget: B }

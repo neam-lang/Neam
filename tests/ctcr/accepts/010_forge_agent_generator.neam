@@ -1,0 +1,9 @@
+// Positive control
+fun check_result(ctx) { return true; }
+budget B { cost: 10.00, tokens: 100000 }
+forge agent Gen {
+    provider: "anthropic", model: "claude-sonnet-4",
+    role: "generator",
+    loop: { max_iterations: 5 max_cost: 5.0 max_tokens: 100000 },
+    verify: check_result, budget: B
+}

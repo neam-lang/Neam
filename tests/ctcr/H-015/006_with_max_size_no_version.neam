@@ -1,0 +1,6 @@
+// CTCR expects: H-015
+handoff Size {
+    path: "./p.md",
+    schema: "markdown",
+    max_size_kb: 16
+}

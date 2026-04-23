@@ -1,0 +1,5 @@
+// Positive control: v1.4 wiki + v1.4.5 harness together
+wiki KB { topic: "t", raw_path: "./r", wiki_path: "./w" }
+budget B { cost: 10.00, tokens: 100000 }
+agent M { provider: "anthropic", model: "claude-sonnet-4", system: "m", budget: B }
+harness H { provider: "anthropic", model: "claude-sonnet-4", budget: B, sub_agents: { main: M } }

@@ -1,0 +1,2 @@
+// CTCR expects: H-001
+harness OnlyModel { model: "claude-sonnet-4" }

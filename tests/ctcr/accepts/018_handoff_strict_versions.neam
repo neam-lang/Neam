@@ -1,0 +1,4 @@
+// Positive control: multiple schema versions
+handoff H1 { path: "./h1.md", schema: "markdown", schema_version: "1.0.0" }
+handoff H2 { path: "./h2.json", schema: "json", schema_version: "2.1.0" }
+handoff H3 { path: "./h3.neam", schema: "neam", schema_version: "0.1.0" }

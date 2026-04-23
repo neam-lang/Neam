@@ -1,0 +1,6 @@
+// CTCR expects: H-001
+harness T2 {
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    temperature: 0.5
+}

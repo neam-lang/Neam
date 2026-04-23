@@ -1,0 +1,5 @@
+// CTCR expects: H-001  (second harness triggers it)
+budget B { cost: 10.00, tokens: 100000 }
+agent M { provider: "anthropic", model: "claude-sonnet-4", system: "m", budget: B }
+harness Good { provider: "anthropic", model: "claude-sonnet-4", budget: B, sub_agents: { main: M } }
+harness Bad  { provider: "anthropic", model: "claude-sonnet-4", budget: B }
