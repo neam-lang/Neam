@@ -32,6 +32,7 @@
 
 #include "neamc/vm/table.hpp"
 #include "neamc/vm/harness_types.hpp"  // v1.4.5 Phase 3-minimal
+#include "neamc/vm/handoff_runtime.hpp" // v1.4.5 Phase 4
 #include "neamc/llm/provider.hpp"       // v1.4.5 llm_ask bridge
 #include "neamc/llm/provider_factory.hpp"
 #include "neamc/vm/async/future.hpp"
@@ -2371,6 +2372,139 @@ Value v145_handoff_schema_version_native(VirtualMachine&, int argc, Value* args)
 //        prompt   (raw string, single user message)
 // Returns:  String response from the model.  Nil on error.
 // Env:   OPENAI_API_KEY (for openai), ANTHROPIC_API_KEY (for anthropic)
+
+// ─── Phase 4: handoff runtime natives ──────────────────────────────────
+//
+// Pulls the declared handoff from HarnessRegistry, unpacks fields_json
+// into handoff::HandoffRecord, dispatches to handoff_runtime.cpp.
+
+namespace {
+::neamc::vm::handoff::HandoffRecord v145_build_handoff_record(
+    const ::neamc::vm::harness::HandoffRecord& meta)
+{
+  ::neamc::vm::handoff::HandoffRecord rec;
+  rec.name = meta.name;
+  rec.schema_version = meta.schema_version;
+  // Parse fields_json for runtime fields
+  try
+  {
+    auto j = nlohmann::json::parse(meta.fields_json.empty() ? "{}" : meta.fields_json);
+    auto gs = [&](const char* k) -> std::string {
+      auto it = j.find(k);
+      return (it != j.end() && it->is_string()) ? it->get<std::string>() : "";
+    };
+    auto gi = [&](const char* k, int dflt) -> int {
+      auto it = j.find(k);
+      if (it == j.end()) return dflt;
+      if (it->is_number_integer()) return it->get<int>();
+      if (it->is_number()) return (int)it->get<double>();
+      if (it->is_string())
+      {
+        try { return std::stoi(it->get<std::string>()); } catch (...) {}
+      }
+      return dflt;
+    };
+    rec.path_template = gs("path");
+    rec.schema = gs("schema");
+    rec.max_size_kb = gi("max_size_kb", 0);
+    rec.on_overflow = gs("on_overflow");
+    rec.versioning  = gs("versioning");
+    rec.on_read     = gs("on_read");
+    rec.on_write    = gs("on_write");
+    if (rec.schema_version.empty()) rec.schema_version = gs("schema_version");
+    // required_sections — may be an array of strings, a string, or missing
+    auto rs = j.find("required_sections");
+    if (rs != j.end())
+    {
+      if (rs->is_array())
+      {
+        for (auto& s : *rs)
+          if (s.is_string()) rec.required_sections.push_back(s.get<std::string>());
+      }
+      else if (rs->is_string())
+      {
+        // Legacy stringified form: split on commas.
+        std::string s = rs->get<std::string>();
+        std::stringstream ss(s); std::string tok;
+        while (std::getline(ss, tok, ','))
+        {
+          auto l = tok.find_first_not_of(" \t\"'");
+          auto r = tok.find_last_not_of(" \t\"'");
+          if (l != std::string::npos)
+            rec.required_sections.push_back(tok.substr(l, r - l + 1));
+        }
+      }
+    }
+  }
+  catch (...) {}
+  return rec;
+}
+
+Value v145_string_value(const std::string& s)
+{
+  return Value::String(s.c_str(), s.size());
+}
+
+}  // anonymous namespace
+
+Value v145_handoff_write_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string name    = value_to_string_arg(args[0]);
+  const std::string section = value_to_string_arg(args[1]);
+  const std::string content = value_to_string_arg(args[2]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return v145_string_value("[handoff_write error] HF-UNKNOWN: " + name);
+  auto rec = v145_build_handoff_record(*meta);
+  auto r = ::neamc::vm::handoff::write(rec, section, content);
+  if (!r.ok) return v145_string_value("[handoff_write error] " + r.error);
+  return v145_string_value("ok");
+}
+
+Value v145_handoff_read_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc < 1 || argc > 2) return Value::Nil();
+  const std::string name    = value_to_string_arg(args[0]);
+  const std::string section = (argc == 2) ? value_to_string_arg(args[1]) : std::string{};
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return v145_string_value("[handoff_read error] HF-UNKNOWN: " + name);
+  auto rec = v145_build_handoff_record(*meta);
+  auto r = ::neamc::vm::handoff::read(rec, section);
+  if (!r.ok) return v145_string_value("[handoff_read error] " + r.error);
+  return v145_string_value(r.content);
+}
+
+Value v145_handoff_exists_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Bool(false);
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return Value::Bool(false);
+  auto rec = v145_build_handoff_record(*meta);
+  return Value::Bool(::neamc::vm::handoff::exists(rec));
+}
+
+Value v145_handoff_size_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Number(0.0);
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return Value::Number(0.0);
+  auto rec = v145_build_handoff_record(*meta);
+  return Value::Number(static_cast<double>(::neamc::vm::handoff::size_bytes(rec)));
+}
+
+Value v145_handoff_validate_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Nil();
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return v145_string_value("[handoff_validate error] HF-UNKNOWN: " + name);
+  auto rec = v145_build_handoff_record(*meta);
+  auto r = ::neamc::vm::handoff::validate(rec);
+  if (!r.ok) return v145_string_value("[handoff_validate error] " + r.error);
+  return v145_string_value("ok");
+}
 
 Value v145_llm_ask_native(VirtualMachine&, int argc, Value* args)
 {
@@ -4892,5 +5026,11 @@ void register_core_natives(VirtualMachine& vm)
   // NOT a harness-scored call — bare-model path. Full harness runtime
   // will internally call the same provider factory.
   vm.define_native("llm_ask",                  3, v145_llm_ask_native);
+  // Phase 4: handoff runtime (file-backed I/O + schema validation)
+  vm.define_native("handoff_write",            3, v145_handoff_write_native);
+  vm.define_native("handoff_read",            -1, v145_handoff_read_native); // 1 or 2 args
+  vm.define_native("handoff_exists",           1, v145_handoff_exists_native);
+  vm.define_native("handoff_size",             1, v145_handoff_size_native);
+  vm.define_native("handoff_validate",         1, v145_handoff_validate_native);
 }
 }  // namespace neamc::vm

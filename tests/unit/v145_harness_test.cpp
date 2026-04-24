@@ -452,6 +452,65 @@ TEST(V145Harness, Phase3HarnessEnvReturnsJSON) {
   )NEAM");
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Phase 4: handoff runtime natives
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, Phase4HandoffWriteThenReadRoundtrip) {
+  assert_compiles(R"NEAM(
+    handoff HF {
+        path: "/tmp/neam_test_handoff_roundtrip.md",
+        schema: "markdown",
+        required_sections: ["status"],
+        schema_version: "1.0.0"
+    }
+    let r = handoff_write("HF", "status", "All green");
+    assert_true(r == "ok");
+    let back = handoff_read("HF", "status");
+    assert_true(back == "All green");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase4HandoffExistsAndSize) {
+  assert_compiles(R"NEAM(
+    handoff HF {
+        path: "/tmp/neam_test_handoff_exists.md",
+        schema: "markdown",
+        schema_version: "1.0.0"
+    }
+    handoff_write("HF", "body", "hello world");
+    assert_true(handoff_exists("HF") == true);
+    let n = handoff_size("HF");
+    assert_true(n > 0);
+  )NEAM");
+}
+
+TEST(V145Harness, Phase4HandoffValidateRequiredSections) {
+  assert_compiles(R"NEAM(
+    handoff HF {
+        path: "/tmp/neam_test_handoff_validate.md",
+        schema: "markdown",
+        required_sections: ["alpha", "beta"],
+        schema_version: "1.0.0"
+    }
+    handoff_write("HF", "alpha", "a");
+    let v1 = handoff_validate("HF");
+    // Missing 'beta' — expect error string, not "ok"
+    assert_true(v1 != "ok");
+    handoff_write("HF", "beta", "b");
+    let v2 = handoff_validate("HF");
+    assert_true(v2 == "ok");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase4HandoffUnknownNameSurfacesError) {
+  assert_compiles(R"NEAM(
+    let r = handoff_write("NoSuchHandoff", "x", "y");
+    // Should return an error string containing HF-UNKNOWN
+    assert_true(typeof(r) == "String");
+  )NEAM");
+}
+
 TEST(V145Harness, FullStackAllFiveDeclarations) {
   assert_compiles(R"NEAM(
     budget B { cost: 200.00, tokens: 5000000 }

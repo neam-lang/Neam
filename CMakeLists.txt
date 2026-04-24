@@ -219,6 +219,7 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/metrics.cpp
     NeamC/src/vm/session_manager.cpp
     NeamC/src/vm/harness_types.cpp
+    NeamC/src/vm/handoff_runtime.cpp
     NeamC/src/vm/context_builder.cpp
     NeamC/src/vm/compaction.cpp
     NeamC/src/vm/memory_index.cpp
