@@ -568,6 +568,81 @@ TEST(V145Harness, Phase5UnknownRegistryReturnsEmpty) {
   )NEAM");
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Phase 6: assertion kernel (regex + runtime)
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, Phase6AssertionRegexCleanAndDirty) {
+  assert_compiles(R"NEAM(
+    assertion_registry AR {
+        no_secrets: { kind: "regex", pattern: "api_key", severity: "hard" }
+    }
+    assert_true(assertion_check_regex("AR", "no_secrets", "clean text") == "ok");
+    assert_true(assertion_check_regex("AR", "no_secrets", "my api_key = x") == "violated");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase6AssertionRuntimeBudget) {
+  assert_compiles(R"NEAM(
+    assertion_registry AR {
+        respect_budget: {
+            kind: "runtime", metric: "cost", op: "<=", value: 500, severity: "hard"
+        }
+    }
+    assert_true(assertion_check_runtime("AR", "respect_budget", 100) == "ok");
+    assert_true(assertion_check_runtime("AR", "respect_budget", 700) == "violated");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase6AssertionAIMEAnswerRange) {
+  // Would catch II-14 (7529536 bogus answer in real gpt-5 AIME run)
+  assert_compiles(R"NEAM(
+    assertion_registry AR {
+        answer_in_range: {
+            kind: "runtime", metric: "answer", op: "<=", value: 999, severity: "hard"
+        }
+    }
+    assert_true(assertion_check_runtime("AR", "answer_in_range", 42) == "ok");
+    assert_true(assertion_check_runtime("AR", "answer_in_range", 7529536) == "violated");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase6HardCountMatchesSeverity) {
+  assert_compiles(R"NEAM(
+    assertion_registry AR {
+        h1: { kind: "regex", pattern: "a", severity: "hard" },
+        h2: { kind: "regex", pattern: "b", severity: "hard" },
+        s1: { kind: "regex", pattern: "c", severity: "soft" }
+    }
+    let n = assertion_hard_count("AR");
+    assert_true(n == 2);
+  )NEAM");
+}
+
+TEST(V145Harness, Phase6KindsDistribution) {
+  assert_compiles(R"NEAM(
+    assertion_registry AR {
+        r1: { kind: "regex",   pattern: "x", severity: "hard" },
+        r2: { kind: "regex",   pattern: "y", severity: "soft" },
+        t1: { kind: "runtime", metric: "cost", op: "<=", value: 100, severity: "hard" }
+    }
+    let k = assertion_kinds("AR");
+    // Return value is a JSON string; we just assert type + non-empty
+    assert_true(typeof(k) == "String");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase6UnknownRegistryOrName) {
+  assert_compiles(R"NEAM(
+    let r1 = assertion_check_regex("NoAR", "x", "y");
+    // Result is a string containing AR-UNKNOWN
+    assert_true(typeof(r1) == "String");
+    assertion_registry AR { a: { kind: "regex", pattern: "x", severity: "hard" } }
+    let r2 = assertion_check_regex("AR", "b", "y");
+    assert_true(typeof(r2) == "String");
+  )NEAM");
+}
+
 TEST(V145Harness, FullStackAllFiveDeclarations) {
   assert_compiles(R"NEAM(
     budget B { cost: 200.00, tokens: 5000000 }

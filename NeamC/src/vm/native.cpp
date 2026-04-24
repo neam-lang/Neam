@@ -18,6 +18,7 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <random>
+#include <regex>  // v1.4.5 Phase 6 assertion kernel
 #include <sstream>
 #include <thread>
 #include <unordered_map>
@@ -2653,6 +2654,200 @@ Value v145_tool_registry_brief_native(VirtualMachine&, int argc, Value* args)
   return v145_string_value(out);
 }
 
+// ─── Phase 6: assertion kernel ─────────────────────────────────────────
+//
+// Four assertion kinds per the v1.4.5 impl spec §11:
+//   regex      - pattern match over content
+//   runtime    - metric OP value (e.g. cost <= 500)
+//   capability - forbid list of capability names
+//   domain     - boolean invariant over typed fields (simple expressions)
+//
+// Natives exposed to Neam source:
+//   assertion_check_regex(ar_name, assertion_name, content)  -> "ok" | "violated" | error
+//   assertion_check_runtime(ar_name, assertion_name, value)  -> "ok" | "violated" | error
+//   assertion_hard_count(ar_name)                            -> Number
+//   assertion_kinds(ar_name)                                 -> JSON map kind -> count
+//   assertion_by_name(ar_name, assertion_name)               -> JSON assertion spec or ""
+
+namespace {
+
+// Look up the assertion_registry record, parse fields_json once.
+nlohmann::json v145_ar_parsed(const std::string& ar_name)
+{
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance()
+                         .lookup_assertion_registry(ar_name);
+  if (!meta) return nlohmann::json();
+  try
+  {
+    return nlohmann::json::parse(meta->fields_json.empty() ? "{}" : meta->fields_json);
+  }
+  catch (...) { return nlohmann::json(); }
+}
+
+// Fetch a single assertion spec from the registry's fields_json. Assertions
+// live at the top level alongside any other fields (the generic parser
+// stores them flat). Skip any non-object entries (those are metadata).
+nlohmann::json v145_assertion_spec(const nlohmann::json& ar, const std::string& name)
+{
+  if (!ar.is_object()) return nlohmann::json();
+  auto it = ar.find(name);
+  if (it == ar.end() || !it->is_object()) return nlohmann::json();
+  return *it;
+}
+
+// Comparison helper for runtime kind: op in {"<=", ">=", "<", ">", "==", "!="}.
+bool v145_cmp(double lhs, const std::string& op, double rhs)
+{
+  if (op == "<=" ) return lhs <= rhs;
+  if (op == ">=" ) return lhs >= rhs;
+  if (op == "<"  ) return lhs <  rhs;
+  if (op == ">"  ) return lhs >  rhs;
+  if (op == "==" ) return lhs == rhs;
+  if (op == "!=" ) return lhs != rhs;
+  return false;
+}
+
+}  // anonymous namespace
+
+// assertion_check_regex(ar, name, content) -> "ok" | "violated" | error
+Value v145_assertion_check_regex_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string ar_name     = value_to_string_arg(args[0]);
+  const std::string ass_name    = value_to_string_arg(args[1]);
+  const std::string content     = value_to_string_arg(args[2]);
+
+  auto ar = v145_ar_parsed(ar_name);
+  if (ar.is_null())
+    return v145_string_value("[assertion_check_regex error] AR-UNKNOWN: " + ar_name);
+
+  auto spec = v145_assertion_spec(ar, ass_name);
+  if (spec.is_null())
+    return v145_string_value("[assertion_check_regex error] AR-NONAME: " + ass_name);
+
+  auto kind_it = spec.find("kind");
+  if (kind_it == spec.end() || !kind_it->is_string() || kind_it->get<std::string>() != "regex")
+    return v145_string_value("[assertion_check_regex error] AR-KIND: expected regex");
+
+  auto pattern_it = spec.find("pattern");
+  if (pattern_it == spec.end() || !pattern_it->is_string())
+    return v145_string_value("[assertion_check_regex error] AR-PATTERN: missing");
+
+  try
+  {
+    std::regex re(pattern_it->get<std::string>());
+    bool matched = std::regex_search(content, re);
+    // Semantics: if the regex represents a forbidden pattern (e.g., secrets),
+    // a MATCH means VIOLATION.  This mirrors the impl spec §11's CAAF-style
+    // "never_commit_secrets" example.
+    return v145_string_value(matched ? "violated" : "ok");
+  }
+  catch (const std::regex_error& e)
+  {
+    return v145_string_value(std::string("[assertion_check_regex error] AR-COMPILE: ") + e.what());
+  }
+}
+
+// assertion_check_runtime(ar, name, observed_value) -> "ok" | "violated" | error
+// Evaluates the spec's (op, value) against the observed value provided by the
+// caller.  Caller is responsible for supplying the correct metric value.
+Value v145_assertion_check_runtime_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string ar_name  = value_to_string_arg(args[0]);
+  const std::string ass_name = value_to_string_arg(args[1]);
+
+  // args[2] may be a Number or a numeric string — accept both.
+  double observed = 0.0;
+  if (args[2].is_number())        observed = args[2].as_number();
+  else if (args[2].is_string())
+  {
+    try { observed = std::stod(value_to_string_arg(args[2])); }
+    catch (...) { return v145_string_value("[assertion_check_runtime error] AR-TYPE: not numeric"); }
+  }
+  else return v145_string_value("[assertion_check_runtime error] AR-TYPE: expected number");
+
+  auto ar = v145_ar_parsed(ar_name);
+  if (ar.is_null())
+    return v145_string_value("[assertion_check_runtime error] AR-UNKNOWN: " + ar_name);
+  auto spec = v145_assertion_spec(ar, ass_name);
+  if (spec.is_null())
+    return v145_string_value("[assertion_check_runtime error] AR-NONAME: " + ass_name);
+  auto kind_it = spec.find("kind");
+  if (kind_it == spec.end() || !kind_it->is_string() || kind_it->get<std::string>() != "runtime")
+    return v145_string_value("[assertion_check_runtime error] AR-KIND: expected runtime");
+
+  auto op_it = spec.find("op");
+  auto val_it = spec.find("value");
+  if (op_it == spec.end() || !op_it->is_string())
+    return v145_string_value("[assertion_check_runtime error] AR-OP: missing");
+  if (val_it == spec.end())
+    return v145_string_value("[assertion_check_runtime error] AR-VALUE: missing");
+
+  double threshold = 0.0;
+  if (val_it->is_number()) threshold = val_it->get<double>();
+  else if (val_it->is_string())
+  {
+    try { threshold = std::stod(val_it->get<std::string>()); }
+    catch (...) { return v145_string_value("[assertion_check_runtime error] AR-VALUE: not numeric"); }
+  }
+  else return v145_string_value("[assertion_check_runtime error] AR-VALUE: type");
+
+  const std::string op = op_it->get<std::string>();
+  const bool holds = v145_cmp(observed, op, threshold);
+  // Semantics: spec (op, value) expresses the invariant (e.g. cost <= 500).
+  //   holds == true  → invariant satisfied → "ok"
+  //   holds == false → invariant broken    → "violated"
+  return v145_string_value(holds ? "ok" : "violated");
+}
+
+// assertion_hard_count(ar) -> Number
+Value v145_assertion_hard_count_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Number(0.0);
+  auto ar = v145_ar_parsed(value_to_string_arg(args[0]));
+  if (ar.is_null() || !ar.is_object()) return Value::Number(0.0);
+  int count = 0;
+  for (auto it = ar.begin(); it != ar.end(); ++it)
+  {
+    if (!it.value().is_object()) continue;
+    auto sev = it.value().find("severity");
+    if (sev != it.value().end() && sev->is_string() && sev->get<std::string>() == "hard")
+      count++;
+  }
+  return Value::Number(static_cast<double>(count));
+}
+
+// assertion_kinds(ar) -> JSON map {kind: count, ...}
+Value v145_assertion_kinds_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("{}");
+  auto ar = v145_ar_parsed(value_to_string_arg(args[0]));
+  if (ar.is_null() || !ar.is_object()) return v145_string_value("{}");
+  std::unordered_map<std::string, int> counts;
+  for (auto it = ar.begin(); it != ar.end(); ++it)
+  {
+    if (!it.value().is_object()) continue;
+    auto k = it.value().find("kind");
+    if (k == it.value().end() || !k->is_string()) continue;
+    counts[k->get<std::string>()]++;
+  }
+  nlohmann::json j;
+  for (auto& [k, c] : counts) j[k] = c;
+  return v145_string_value(j.dump());
+}
+
+// assertion_by_name(ar, name) -> JSON string of the spec, or ""
+Value v145_assertion_by_name_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("");
+  auto ar = v145_ar_parsed(value_to_string_arg(args[0]));
+  if (ar.is_null()) return v145_string_value("");
+  auto spec = v145_assertion_spec(ar, value_to_string_arg(args[1]));
+  if (spec.is_null()) return v145_string_value("");
+  return v145_string_value(spec.dump());
+}
+
 // tool_registry_format_briefs(tr_name, role) -> string
 // Renders all briefs for role-scoped tools into a planner-prompt block.
 // Other roles (generator, evaluator) receive empty string per FR-TB-2.
@@ -5233,5 +5428,11 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("tool_registry_scope_of",      2, v145_tool_registry_scope_of_native);
   vm.define_native("tool_registry_brief",         2, v145_tool_registry_brief_native);
   vm.define_native("tool_registry_format_briefs", 2, v145_tool_registry_format_briefs_native);
+  // Phase 6: assertion kernel (regex + runtime evaluators)
+  vm.define_native("assertion_check_regex",      3, v145_assertion_check_regex_native);
+  vm.define_native("assertion_check_runtime",    3, v145_assertion_check_runtime_native);
+  vm.define_native("assertion_hard_count",       1, v145_assertion_hard_count_native);
+  vm.define_native("assertion_kinds",            1, v145_assertion_kinds_native);
+  vm.define_native("assertion_by_name",          2, v145_assertion_by_name_native);
 }
 }  // namespace neamc::vm
