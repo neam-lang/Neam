@@ -57,6 +57,15 @@ struct HarnessBenchmarkRecord {
   std::string fields_json;
 };
 
+// v1.4.5 Phase 7: per-forge-agent metadata populated by sub-type 30 emission.
+// Introspection natives (forge_role_of etc.) read from here.
+struct ForgeMetadataRecord {
+  std::string name;
+  std::string role;           // "planner" | "generator" | "evaluator" | ""
+  std::string function_json;  // typed function block (submodule-as-tool)
+  std::string ops_json;       // per-op task/step modifiers
+};
+
 // ─── Process-wide registry ────────────────────────────────────────────
 
 class HarnessRegistry {
@@ -69,6 +78,7 @@ class HarnessRegistry {
   void register_tool_registry(ToolRegistryRecord rec);
   void register_assertion_registry(AssertionRegistryRecord rec);
   void register_harness_benchmark(HarnessBenchmarkRecord rec);
+  void register_forge_metadata(ForgeMetadataRecord rec);
 
   // Lookup (called from natives).
   const HarnessRecord* lookup_harness(const std::string& name) const;
@@ -76,6 +86,7 @@ class HarnessRegistry {
   const ToolRegistryRecord* lookup_tool_registry(const std::string& name) const;
   const AssertionRegistryRecord* lookup_assertion_registry(const std::string& name) const;
   const HarnessBenchmarkRecord* lookup_harness_benchmark(const std::string& name) const;
+  const ForgeMetadataRecord*    lookup_forge_metadata(const std::string& name) const;
 
   // Set status on an existing harness (for harness_start / _complete / _abort
   // natives — currently only "registered" is set; other states land in Phase 3+).
@@ -95,6 +106,7 @@ class HarnessRegistry {
   std::unordered_map<std::string, ToolRegistryRecord> tool_registries_;
   std::unordered_map<std::string, AssertionRegistryRecord> assertion_registries_;
   std::unordered_map<std::string, HarnessBenchmarkRecord> benchmarks_;
+  std::unordered_map<std::string, ForgeMetadataRecord>    forge_metadata_;
 };
 
 // ─── Free functions ────────────────────────────────────────────────────

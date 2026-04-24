@@ -11797,6 +11797,26 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
           stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
         }
+        else if (sub_type == 30)
+        {
+          // v1.4.5 Phase 7: ForgeAgent metadata (role/function/ops). Emitted
+          // immediately after OP_DEFINE_FORGE_AGENT by the compiler when the
+          // forge agent has any of role/function/ops set.  Populates side
+          // table; does NOT create a new Obj (the OP_DEFINE_FORGE_AGENT has
+          // already registered the ForgeAgent in globals_).
+          std::string decl_name = fields.count("name") ? fields["name"] : "";
+          if (!decl_name.empty())
+          {
+            ::neamc::vm::harness::ForgeMetadataRecord rec;
+            rec.name = decl_name;
+            if (fields.count("role"))     rec.role          = fields["role"];
+            if (fields.count("function")) rec.function_json = fields["function"];
+            if (fields.count("ops"))      rec.ops_json      = fields["ops"];
+            ::neamc::vm::harness::HarnessRegistry::instance()
+                .register_forge_metadata(std::move(rec));
+          }
+          stack_.push_back(Value::Nil());
+        }
         else if (sub_type == 25 || sub_type == 26 || sub_type == 27 ||
                  sub_type == 28 || sub_type == 29)
         {

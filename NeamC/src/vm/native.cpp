@@ -2837,6 +2837,42 @@ Value v145_assertion_kinds_native(VirtualMachine&, int argc, Value* args)
   return v145_string_value(j.dump());
 }
 
+// ─── Phase 7: forge role introspection ─────────────────────────────────
+
+// forge_role_of(name) -> "planner" | "generator" | "evaluator" | ""
+// Returns "" if forge agent has no role set (legacy v1.4 agents).
+Value v145_forge_role_of_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance()
+                        .lookup_forge_metadata(name);
+  if (!rec) return v145_string_value("");
+  return v145_string_value(rec->role);
+}
+
+// forge_function_of(name) -> JSON string of the function block, or ""
+Value v145_forge_function_of_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance()
+                        .lookup_forge_metadata(name);
+  if (!rec) return v145_string_value("");
+  return v145_string_value(rec->function_json);
+}
+
+// forge_ops_of(name) -> JSON array of {op, mode} objects, or ""
+Value v145_forge_ops_of_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance()
+                        .lookup_forge_metadata(name);
+  if (!rec) return v145_string_value("");
+  return v145_string_value(rec->ops_json);
+}
+
 // assertion_by_name(ar, name) -> JSON string of the spec, or ""
 Value v145_assertion_by_name_native(VirtualMachine&, int argc, Value* args)
 {
@@ -5434,5 +5470,9 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("assertion_hard_count",       1, v145_assertion_hard_count_native);
   vm.define_native("assertion_kinds",            1, v145_assertion_kinds_native);
   vm.define_native("assertion_by_name",          2, v145_assertion_by_name_native);
+  // Phase 7: forge role introspection (role, function, ops)
+  vm.define_native("forge_role_of",              1, v145_forge_role_of_native);
+  vm.define_native("forge_function_of",          1, v145_forge_function_of_native);
+  vm.define_native("forge_ops_of",               1, v145_forge_ops_of_native);
 }
 }  // namespace neamc::vm

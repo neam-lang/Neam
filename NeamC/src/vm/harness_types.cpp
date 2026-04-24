@@ -47,6 +47,11 @@ void HarnessRegistry::register_harness_benchmark(HarnessBenchmarkRecord rec) {
   benchmarks_[rec.name] = std::move(rec);
 }
 
+void HarnessRegistry::register_forge_metadata(ForgeMetadataRecord rec) {
+  std::lock_guard<std::mutex> lk(mu_);
+  forge_metadata_[rec.name] = std::move(rec);
+}
+
 const HarnessRecord* HarnessRegistry::lookup_harness(const std::string& name) const {
   std::lock_guard<std::mutex> lk(mu_);
   auto it = harnesses_.find(name);
@@ -77,6 +82,12 @@ const HarnessBenchmarkRecord* HarnessRegistry::lookup_harness_benchmark(const st
   return it == benchmarks_.end() ? nullptr : &it->second;
 }
 
+const ForgeMetadataRecord* HarnessRegistry::lookup_forge_metadata(const std::string& name) const {
+  std::lock_guard<std::mutex> lk(mu_);
+  auto it = forge_metadata_.find(name);
+  return it == forge_metadata_.end() ? nullptr : &it->second;
+}
+
 void HarnessRegistry::set_harness_status(const std::string& name, const std::string& status) {
   std::lock_guard<std::mutex> lk(mu_);
   auto it = harnesses_.find(name);
@@ -100,6 +111,7 @@ void HarnessRegistry::reset_for_tests() {
   tool_registries_.clear();
   assertion_registries_.clear();
   benchmarks_.clear();
+  forge_metadata_.clear();
 }
 
 // ─── compute_harness_hash ──────────────────────────────────────────────

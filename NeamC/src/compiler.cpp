@@ -1541,6 +1541,27 @@ void Compiler::emit_statement(const Statement& stmt)
           else { chunk_.write_op(OpCode::OP_NIL); }
           chunk_.write_op(OpCode::OP_DEFINE_FORGE_AGENT);
           agent_types_[node.name] = AgentKind::Forge;
+
+          // v1.4.5 Phase 7: if the forge agent has role/function/ops set,
+          // emit a secondary OP_DEFINE_DIO_DECLARATION (sub-type 30) that
+          // registers the metadata into HarnessRegistry. This keeps the
+          // legacy OP_DEFINE_FORGE_AGENT path unchanged.
+          if (!node.role.empty() || !node.function_json.empty() ||
+              !node.ops_json.empty())
+          {
+            uint8_t field_count = 0;
+            auto push_str_md = [&](const std::string& k, const std::string& v) {
+              chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+              chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+              field_count++; };
+            push_str_md("name", node.name);
+            if (!node.role.empty())          push_str_md("role", node.role);
+            if (!node.function_json.empty()) push_str_md("function", node.function_json);
+            if (!node.ops_json.empty())      push_str_md("ops", node.ops_json);
+            chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+            chunk_.write_byte(30); /* sub-type 30 = ForgeMetadata */
+            chunk_.write_byte(field_count);
+          }
         }
         // v0.9: Schema declaration
         else if constexpr (std::is_same_v<T, SchemaDecl>)

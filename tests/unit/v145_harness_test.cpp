@@ -643,6 +643,66 @@ TEST(V145Harness, Phase6UnknownRegistryOrName) {
   )NEAM");
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Phase 7: forge role introspection
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, Phase7ForgeRoleOfReturnsDeclaredRole) {
+  assert_compiles(R"NEAM(
+    fun check_result(ctx) { return true; }
+    budget B { cost: 10.00, tokens: 100000 }
+    forge agent Planner {
+        provider: "anthropic", model: "claude-sonnet-4",
+        role: "planner",
+        loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 },
+        verify: check_result, budget: B
+    }
+    assert_true(forge_role_of("Planner") == "planner");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase7ForgeRoleOfLegacyIsEmpty) {
+  // Backward compat: v1.4 forge agents without role: stay introspectable-as-empty.
+  assert_compiles(R"NEAM(
+    fun check_result(ctx) { return true; }
+    budget B { cost: 10.00, tokens: 100000 }
+    forge agent Legacy {
+        provider: "anthropic", model: "claude-sonnet-4",
+        loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 },
+        verify: check_result, budget: B
+    }
+    assert_true(forge_role_of("Legacy") == "");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase7ForgeRoleOfUnknownIsEmpty) {
+  assert_compiles(R"NEAM(
+    assert_true(forge_role_of("NoSuchAgent") == "");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase7AllThreeRolesIntrospectable) {
+  assert_compiles(R"NEAM(
+    fun check_result(ctx) { return true; }
+    budget B { cost: 10.00, tokens: 100000 }
+    forge agent P {
+        provider: "anthropic", model: "claude-sonnet-4", role: "planner",
+        loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 }, verify: check_result, budget: B
+    }
+    forge agent G {
+        provider: "anthropic", model: "claude-sonnet-4", role: "generator",
+        loop: { max_iterations: 5 max_cost: 5.0 max_tokens: 100000 }, verify: check_result, budget: B
+    }
+    forge agent E {
+        provider: "anthropic", model: "claude-sonnet-4", role: "evaluator",
+        loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 }, verify: check_result, budget: B
+    }
+    assert_true(forge_role_of("P") == "planner");
+    assert_true(forge_role_of("G") == "generator");
+    assert_true(forge_role_of("E") == "evaluator");
+  )NEAM");
+}
+
 TEST(V145Harness, FullStackAllFiveDeclarations) {
   assert_compiles(R"NEAM(
     budget B { cost: 200.00, tokens: 5000000 }
