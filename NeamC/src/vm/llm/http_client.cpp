@@ -578,7 +578,17 @@ void http_post_streaming(const std::string& url, const std::string& body,
   curl_easy_setopt(handle, CURLOPT_POST, 1L);
   curl_easy_setopt(handle, CURLOPT_POSTFIELDS, body.c_str());
   curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
-  curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, timeout_ms);
+  // v1.4.5.1: use recv-idle timeout for long-running reasoning models.
+  // - CURLOPT_TIMEOUT_MS stays as an absolute ceiling (scaled up 10× for
+  //   streaming since token-by-token delivery keeps the socket alive).
+  // - CURLOPT_LOW_SPEED_* aborts only if we see < 1 byte/sec for the
+  //   configured low-speed window (derived from caller's timeout_ms).
+  // Effect: a reasoning model taking 20 minutes still succeeds as long
+  // as a byte trickles in every ~timeout_ms / 1000 seconds.
+  const long absolute_ceiling_ms = timeout_ms * 10;  // 1200s -> 12,000s cap
+  curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, absolute_ceiling_ms);
+  curl_easy_setopt(handle, CURLOPT_LOW_SPEED_LIMIT, 1L);              // bytes/sec
+  curl_easy_setopt(handle, CURLOPT_LOW_SPEED_TIME, timeout_ms / 1000); // seconds
   curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION,
                    static_cast<size_t (*)(char*, size_t, size_t, void*)>(stream_write));
   curl_easy_setopt(handle, CURLOPT_WRITEDATA, &ctx);

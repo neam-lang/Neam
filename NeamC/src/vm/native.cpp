@@ -2984,6 +2984,69 @@ Value v145_llm_ask_native(VirtualMachine&, int argc, Value* args)
   }
 }
 
+// v1.4.5.1: llm_ask_stream — same interface, but uses the provider's
+// streaming chat (SSE) under the hood. Benefits for reasoning models:
+//   - Recv-idle timeout (http_client v1.4.5.1) keeps the socket alive
+//     as long as tokens trickle in. A 10-minute reasoning call doesn't
+//     get killed by HTTP retries.
+//   - First-token latency is faster (no need to wait for full response
+//     to be buffered on the server).
+// Behaves identically to llm_ask for the caller — accumulates the
+// streamed response into a single String.
+Value v145_llm_ask_stream_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string provider_name = value_to_string_arg(args[0]);
+  const std::string model         = value_to_string_arg(args[1]);
+  const std::string prompt        = value_to_string_arg(args[2]);
+  if (provider_name.empty() || model.empty()) return Value::Nil();
+
+  std::string api_key;
+  if (provider_name == "openai")
+  {
+    const char* env = std::getenv("OPENAI_API_KEY");
+    if (env) api_key = env;
+  }
+  else if (provider_name == "anthropic")
+  {
+    const char* env = std::getenv("ANTHROPIC_API_KEY");
+    if (env) api_key = env;
+  }
+
+  ::neamc::llm::ProviderConfig cfg;
+  cfg.model = model;
+  cfg.api_key = api_key;
+  cfg.temperature = 0.0;
+
+  try
+  {
+    auto provider = ::neamc::llm::create_provider(provider_name, cfg);
+    if (!provider) return Value::Nil();
+
+    std::vector<::neamc::llm::Message> msgs;
+    msgs.push_back({"user", prompt});
+
+    std::string accumulated;
+    provider->chat_stream(msgs,
+        [&accumulated](const std::string& chunk, bool is_final) {
+          (void)is_final;
+          accumulated += chunk;
+        });
+
+    return Value::String(accumulated.c_str(), accumulated.size());
+  }
+  catch (const std::exception& e)
+  {
+    std::string err = std::string("[llm_ask_stream error] ") + e.what();
+    return Value::String(err.c_str(), err.size());
+  }
+  catch (...)
+  {
+    const char* err = "[llm_ask_stream error] unknown";
+    return Value::String(err, std::strlen(err));
+  }
+}
+
 }  // namespace
 
 void register_core_natives(VirtualMachine& vm)
@@ -5453,6 +5516,8 @@ void register_core_natives(VirtualMachine& vm)
   // NOT a harness-scored call — bare-model path. Full harness runtime
   // will internally call the same provider factory.
   vm.define_native("llm_ask",                  3, v145_llm_ask_native);
+  // v1.4.5.1: streaming variant — survives long reasoning via recv-idle timeout
+  vm.define_native("llm_ask_stream",           3, v145_llm_ask_stream_native);
   // Phase 4: handoff runtime (file-backed I/O + schema validation)
   vm.define_native("handoff_write",            3, v145_handoff_write_native);
   vm.define_native("handoff_read",            -1, v145_handoff_read_native); // 1 or 2 args
