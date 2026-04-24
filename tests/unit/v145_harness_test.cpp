@@ -511,6 +511,63 @@ TEST(V145Harness, Phase4HandoffUnknownNameSurfacesError) {
   )NEAM");
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Phase 5: tool registry scope + brief injection
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, Phase5ToolRegistryScopeCheck) {
+  assert_compiles(R"NEAM(
+    tool_registry TR {
+        builtin: ["fetch", "execute_python_code"],
+        max_active: 5,
+        scoping: {
+            planner: ["fetch"],
+            generator: ["execute_python_code"]
+        }
+    }
+    assert_true(tool_registry_check("TR", "planner", "fetch") == true);
+    assert_true(tool_registry_check("TR", "planner", "execute_python_code") == false);
+    assert_true(tool_registry_check("TR", "generator", "execute_python_code") == true);
+  )NEAM");
+}
+
+TEST(V145Harness, Phase5ToolRegistryPermissiveForAbsentRole) {
+  // If scoping doesn't mention a role, tool_registry_check returns true
+  // (permissive for roles not declared — harness's compile-time role
+  // validation is where denial actually happens).
+  assert_compiles(R"NEAM(
+    tool_registry TR {
+        builtin: ["fetch"],
+        max_active: 5,
+        scoping: { planner: ["fetch"] }
+    }
+    assert_true(tool_registry_check("TR", "some_other_role", "fetch") == true);
+  )NEAM");
+}
+
+TEST(V145Harness, Phase5BriefsOnlyForPlanner) {
+  // FR-TB-2: briefs only visible to planner role.
+  assert_compiles(R"NEAM(
+    tool_registry TR {
+        builtin: ["fetch"],
+        max_active: 5,
+        scoping: { planner: ["fetch"] },
+        briefs: { fetch: { safe_max: 5, note: "small chunks" } }
+    }
+    let planner_briefs = tool_registry_format_briefs("TR", "planner");
+    let gen_briefs     = tool_registry_format_briefs("TR", "generator");
+    assert_true(gen_briefs == "");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase5UnknownRegistryReturnsEmpty) {
+  assert_compiles(R"NEAM(
+    let scope = tool_registry_scope_of("NoTR", "planner");
+    assert_true(scope == "[]");
+    assert_true(tool_registry_check("NoTR", "planner", "fetch") == false);
+  )NEAM");
+}
+
 TEST(V145Harness, FullStackAllFiveDeclarations) {
   assert_compiles(R"NEAM(
     budget B { cost: 200.00, tokens: 5000000 }

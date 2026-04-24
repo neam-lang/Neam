@@ -2506,6 +2506,202 @@ Value v145_handoff_validate_native(VirtualMachine&, int argc, Value* args)
   return v145_string_value("ok");
 }
 
+// ─── Phase 5: tool registry scope + brief injection ────────────────────
+//
+// Reads the tool_registry's fields_json from the HarnessRegistry side
+// table, parses scoping/briefs, answers natives.
+
+namespace {
+
+// Parse a JSON list of strings; accept either array or comma-stringified.
+std::vector<std::string> v145_parse_string_list(const nlohmann::json& j)
+{
+  std::vector<std::string> out;
+  if (j.is_array())
+  {
+    for (const auto& v : j)
+      if (v.is_string()) out.push_back(v.get<std::string>());
+  }
+  else if (j.is_string())
+  {
+    std::stringstream ss(j.get<std::string>());
+    std::string tok;
+    while (std::getline(ss, tok, ','))
+    {
+      auto l = tok.find_first_not_of(" \t\"'");
+      auto r = tok.find_last_not_of(" \t\"'");
+      if (l != std::string::npos) out.push_back(tok.substr(l, r - l + 1));
+    }
+  }
+  return out;
+}
+
+// Pull the scoping map from fields_json: { role -> [tool, tool, ...] }
+std::vector<std::string> v145_tool_registry_scope(
+    const ::neamc::vm::harness::ToolRegistryRecord& meta,
+    const std::string& role)
+{
+  try
+  {
+    auto j = nlohmann::json::parse(meta.fields_json.empty() ? "{}" : meta.fields_json);
+    auto scoping = j.find("scoping");
+    if (scoping == j.end() || !scoping->is_object()) return {};
+    auto entry = scoping->find(role);
+    if (entry == scoping->end()) return {};
+    return v145_parse_string_list(*entry);
+  }
+  catch (...) { return {}; }
+}
+
+// Pull briefs: { tool_name -> { safe_max: N, note: "..." } }
+struct V145ToolBrief
+{
+  int safe_max = 0;
+  std::string note;
+  bool has = false;
+};
+
+V145ToolBrief v145_tool_registry_brief(
+    const ::neamc::vm::harness::ToolRegistryRecord& meta,
+    const std::string& tool_name)
+{
+  V145ToolBrief out;
+  try
+  {
+    auto j = nlohmann::json::parse(meta.fields_json.empty() ? "{}" : meta.fields_json);
+    auto briefs = j.find("briefs");
+    if (briefs == j.end() || !briefs->is_object()) return out;
+    auto entry = briefs->find(tool_name);
+    if (entry == briefs->end() || !entry->is_object()) return out;
+    auto sm = entry->find("safe_max");
+    if (sm != entry->end())
+    {
+      if (sm->is_number_integer()) out.safe_max = sm->get<int>();
+      else if (sm->is_number())    out.safe_max = (int)sm->get<double>();
+    }
+    auto nt = entry->find("note");
+    if (nt != entry->end() && nt->is_string()) out.note = nt->get<std::string>();
+    out.has = true;
+  }
+  catch (...) {}
+  return out;
+}
+
+}  // anonymous namespace
+
+// tool_registry_check(tr_name, role, tool_name) -> Bool
+// True if the tool is in the role's scope OR no scoping is declared.
+Value v145_tool_registry_check_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Bool(false);
+  const std::string tr   = value_to_string_arg(args[0]);
+  const std::string role = value_to_string_arg(args[1]);
+  const std::string tool = value_to_string_arg(args[2]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_tool_registry(tr);
+  if (!meta) return Value::Bool(false);
+
+  auto scope = v145_tool_registry_scope(*meta, role);
+  if (scope.empty())
+  {
+    // No scoping declared for this role → if scoping key is entirely absent
+    // allow-all; if scoping block exists but this role is missing, deny.
+    try
+    {
+      auto j = nlohmann::json::parse(meta->fields_json.empty() ? "{}" : meta->fields_json);
+      auto scoping = j.find("scoping");
+      if (scoping == j.end() || !scoping->is_object()) return Value::Bool(true);
+      return Value::Bool(scoping->find(role) != scoping->end()
+                         ? false   // role declared but empty → deny all
+                         : true);  // role absent → permissive
+    }
+    catch (...) { return Value::Bool(true); }
+  }
+  return Value::Bool(std::find(scope.begin(), scope.end(), tool) != scope.end());
+}
+
+// tool_registry_scope_of(tr_name, role) -> JSON string array
+Value v145_tool_registry_scope_of_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[]");
+  const std::string tr   = value_to_string_arg(args[0]);
+  const std::string role = value_to_string_arg(args[1]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_tool_registry(tr);
+  if (!meta) return v145_string_value("[]");
+
+  auto scope = v145_tool_registry_scope(*meta, role);
+  nlohmann::json j = nlohmann::json::array();
+  for (const auto& s : scope) j.push_back(s);
+  auto out = j.dump();
+  return v145_string_value(out);
+}
+
+// tool_registry_brief(tr_name, tool_name) -> "safe_max=N|note" or ""
+Value v145_tool_registry_brief_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("");
+  const std::string tr   = value_to_string_arg(args[0]);
+  const std::string tool = value_to_string_arg(args[1]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_tool_registry(tr);
+  if (!meta) return v145_string_value("");
+
+  auto brief = v145_tool_registry_brief(*meta, tool);
+  if (!brief.has) return v145_string_value("");
+  nlohmann::json j;
+  j["safe_max"] = brief.safe_max;
+  j["note"]     = brief.note;
+  auto out = j.dump();
+  return v145_string_value(out);
+}
+
+// tool_registry_format_briefs(tr_name, role) -> string
+// Renders all briefs for role-scoped tools into a planner-prompt block.
+// Other roles (generator, evaluator) receive empty string per FR-TB-2.
+Value v145_tool_registry_format_briefs_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("");
+  const std::string tr   = value_to_string_arg(args[0]);
+  const std::string role = value_to_string_arg(args[1]);
+  if (role != "planner") return v145_string_value("");
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_tool_registry(tr);
+  if (!meta) return v145_string_value("");
+
+  auto scope = v145_tool_registry_scope(*meta, role);
+  // If scope is empty, format briefs for ALL tools in the registry.
+  std::vector<std::string> tools_for_briefs = scope;
+  if (tools_for_briefs.empty())
+  {
+    try
+    {
+      auto j = nlohmann::json::parse(meta->fields_json.empty() ? "{}" : meta->fields_json);
+      for (const char* tier : {"builtin", "project", "user"})
+      {
+        auto it = j.find(tier);
+        if (it != j.end())
+        {
+          auto list = v145_parse_string_list(*it);
+          for (auto& t : list) tools_for_briefs.push_back(t);
+        }
+      }
+    }
+    catch (...) {}
+  }
+
+  std::ostringstream out;
+  out << "## Tool Briefs (planner-only)\n";
+  int emitted = 0;
+  for (const auto& tool : tools_for_briefs)
+  {
+    auto b = v145_tool_registry_brief(*meta, tool);
+    if (!b.has) continue;
+    out << "- " << tool << " (safe_max=" << b.safe_max << "): " << b.note << "\n";
+    emitted++;
+  }
+  if (emitted == 0) return v145_string_value("");
+  auto s = out.str();
+  return v145_string_value(s);
+}
+
+
 Value v145_llm_ask_native(VirtualMachine&, int argc, Value* args)
 {
   if (argc != 3) return Value::Nil();
@@ -5032,5 +5228,10 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("handoff_exists",           1, v145_handoff_exists_native);
   vm.define_native("handoff_size",             1, v145_handoff_size_native);
   vm.define_native("handoff_validate",         1, v145_handoff_validate_native);
+  // Phase 5: tool registry scope + brief injection
+  vm.define_native("tool_registry_check",         3, v145_tool_registry_check_native);
+  vm.define_native("tool_registry_scope_of",      2, v145_tool_registry_scope_of_native);
+  vm.define_native("tool_registry_brief",         2, v145_tool_registry_brief_native);
+  vm.define_native("tool_registry_format_briefs", 2, v145_tool_registry_format_briefs_native);
 }
 }  // namespace neamc::vm
