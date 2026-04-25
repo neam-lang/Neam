@@ -4242,6 +4242,40 @@ struct HarnessBenchmarkDecl {
     SourceSpan span;
 };
 
+// v1.5: NeamEvolve — Self-evolving agent (sub-type 31).
+// Compiles via the same field-bag path as HarnessDecl but registers as
+// HarnessRecord with evolve_mode=true (no new ObjType).
+struct EvolveAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // belief, handoff, assertions, sub_agents, safety, ...
+    SourceSpan span;
+};
+
+// v1.5: NeamEvolve — Mutable strategy text cell (sub-type 32).
+struct BeliefDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // initial, constraints, revision_trigger, trigger_n, ...
+    SourceSpan span;
+};
+
+// v1.5: NeamEvolve — Runtime-acquired skill registry (sub-type 33).
+struct SkillLibraryDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // verify, deprecate, allow_runtime_acquisition, trusted_signers
+    SourceSpan span;
+};
+
+// v1.5: NeamEvolve — Auto-progression of task difficulty (sub-type 34, P1).
+struct CurriculumDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // mode, difficulty_metric, advance_threshold, fallback_threshold
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -4373,7 +4407,9 @@ struct Statement
                    WikiDecl, WikiAgentDecl,
                    // v1.4.5: NeamHarness
                    HarnessDecl, HandoffDecl, ToolRegistryDecl,
-                   AssertionRegistryDecl, HarnessBenchmarkDecl>;
+                   AssertionRegistryDecl, HarnessBenchmarkDecl,
+                   // v1.5: NeamEvolve
+                   EvolveAgentDecl, BeliefDecl, SkillLibraryDecl, CurriculumDecl>;
   SourceSpan span;
   Variant node;
 };

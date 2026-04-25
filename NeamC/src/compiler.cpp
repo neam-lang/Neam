@@ -7240,6 +7240,163 @@ void Compiler::emit_statement(const Statement& stmt)
           chunk_.write_byte(29); /* sub-type 29 = HarnessBenchmark */
           chunk_.write_byte(field_count);
         }
+        // ═══ v1.5: NeamEvolve — Self-Evolving Agent ═══
+        else if constexpr (std::is_same_v<T, EvolveAgentDecl>) {
+          // E-001: belief required.  E-003: handoff required.
+          // E-013: at least one role:"evaluator" forge agent in sub_agents.
+          // E-016: safety.program required.
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              std::string belief_ref = j.value("belief", std::string{});
+              if (belief_ref.empty())
+                throw std::runtime_error("E-001: evolve agent '" + node.name + "' missing required `belief:` reference");
+              std::string handoff_ref = j.value("handoff", std::string{});
+              if (handoff_ref.empty())
+                throw std::runtime_error("E-003: evolve agent '" + node.name + "' missing required `handoff:` reference");
+              auto sa = j.find("sub_agents");
+              if (sa == j.end() || !sa->is_object() || sa->empty())
+                throw std::runtime_error("E-013: evolve agent '" + node.name + "' must declare non-empty sub_agents");
+              // E-016: safety.program required
+              auto safety = j.find("safety");
+              std::string program_ref;
+              std::string human_gate_ref;
+              bool allow_design_ops = false;
+              if (safety != j.end() && safety->is_object()) {
+                program_ref     = safety->value("program", std::string{});
+                human_gate_ref  = safety->value("human_gate", std::string{});
+                allow_design_ops= safety->value("allow_design_ops", false);
+              }
+              if (program_ref.empty())
+                throw std::runtime_error("E-016: evolve agent '" + node.name + "' missing safety.program reference (alignment anchor)");
+              // E-010: if design ops enabled, human_gate is mandatory.
+              if (allow_design_ops && human_gate_ref.empty())
+                throw std::runtime_error("E-010: evolve agent '" + node.name + "' enables design ops but is missing safety.human_gate reference");
+            } catch (const nlohmann::json::parse_error&) {
+              // malformed JSON — let VM surface it
+            }
+          } else {
+            throw std::runtime_error("E-001: evolve agent '" + node.name + "' has no body");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(31); /* sub-type 31 = EvolveAgent */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, BeliefDecl>) {
+          // E-002 (constraints ref existence — checked at link/runtime since target may not be loaded yet),
+          // E-007 (rollback when trigger != manual), E-012 (trigger value), E-015 (max_revisions range).
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              std::string initial = j.value("initial", std::string{});
+              if (initial.empty())
+                throw std::runtime_error("P-BL-001: belief '" + node.name + "' missing `initial:`");
+              std::string constraints = j.value("constraints", std::string{});
+              if (constraints.empty())
+                throw std::runtime_error("E-002: belief '" + node.name + "' missing `constraints:` (must reference an assertion_registry)");
+              std::string trigger = j.value("revision_trigger", std::string{"manual"});
+              if (trigger != "every_N_runs" && trigger != "performance_plateau" && trigger != "manual")
+                throw std::runtime_error("E-012: belief '" + node.name + "' revision_trigger must be one of {every_N_runs, performance_plateau, manual}");
+              bool rollback = j.value("rollback", true);
+              if (!rollback && trigger != "manual")
+                throw std::runtime_error("E-007: belief '" + node.name + "' rollback must be true when revision_trigger != \"manual\"");
+              int max_rev = j.value("max_revisions_per_session", 10);
+              if (max_rev < 1 || max_rev > 100)
+                throw std::runtime_error("E-015: belief '" + node.name + "' max_revisions_per_session must be in [1,100]");
+            } catch (const nlohmann::json::parse_error&) {
+              // malformed JSON — let VM surface it
+            }
+          } else {
+            throw std::runtime_error("P-BL-001: belief '" + node.name + "' has no body");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(32); /* sub-type 32 = Belief */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, SkillLibraryDecl>) {
+          // E-005: verify block required.
+          // E-006: verify.sandbox MUST be true if allow_runtime_acquisition.
+          // E-014: deprecate.after_failures in [1,1000].
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              if (!j.contains("verify") || !j["verify"].is_object())
+                throw std::runtime_error("E-005: skill_library '" + node.name + "' missing `verify:` block");
+              auto verify = j["verify"];
+              bool sandbox = verify.value("sandbox", true);
+              bool allow_acq = j.value("allow_runtime_acquisition", true);
+              if (allow_acq && !sandbox)
+                throw std::runtime_error("E-006: skill_library '" + node.name + "' verify.sandbox must be true when allow_runtime_acquisition is true");
+              if (j.contains("deprecate") && j["deprecate"].is_object()) {
+                int threshold = j["deprecate"].value("after_failures", 5);
+                if (threshold < 1 || threshold > 1000)
+                  throw std::runtime_error("E-014: skill_library '" + node.name + "' deprecate.after_failures must be in [1,1000]");
+              }
+            } catch (const nlohmann::json::parse_error&) {
+              /* tolerated */
+            }
+          } else {
+            throw std::runtime_error("E-005: skill_library '" + node.name + "' has no body");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(33); /* sub-type 33 = SkillLibrary */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, CurriculumDecl>) {
+          // E-009: difficulty_metric, advance_threshold, fallback_threshold required + ordering.
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              std::string mode = j.value("mode", std::string{"auto"});
+              if (mode != "auto" && mode != "co_evolve" && mode != "manual" && mode != "eval_set_iterator")
+                throw std::runtime_error("E-009: curriculum '" + node.name + "' invalid mode (must be auto|co_evolve|manual|eval_set_iterator)");
+              std::string metric = j.value("difficulty_metric", std::string{});
+              if (metric.empty())
+                throw std::runtime_error("E-009: curriculum '" + node.name + "' missing `difficulty_metric:`");
+              if (!j.contains("advance_threshold") || !j.contains("fallback_threshold"))
+                throw std::runtime_error("E-009: curriculum '" + node.name + "' missing thresholds (advance_threshold + fallback_threshold)");
+              double adv = j.value("advance_threshold", 0.8);
+              double fb  = j.value("fallback_threshold", 0.4);
+              if (!(fb < adv))
+                throw std::runtime_error("E-009: curriculum '" + node.name + "' fallback_threshold must be < advance_threshold");
+            } catch (const nlohmann::json::parse_error&) {
+              /* tolerated */
+            }
+          } else {
+            throw std::runtime_error("E-009: curriculum '" + node.name + "' has no body");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(34); /* sub-type 34 = Curriculum */
+          chunk_.write_byte(field_count);
+        }
         else if constexpr (std::is_same_v<T, WikiAgentDecl>) {
           uint8_t field_count = 0;
           auto push_str = [&](const std::string& k, const std::string& v) {

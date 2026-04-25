@@ -33,6 +33,12 @@
 
 #include "neamc/vm/table.hpp"
 #include "neamc/vm/harness_types.hpp"  // v1.4.5 Phase 3-minimal
+#include "neamc/vm/harness_runtime.hpp"  // v1.4.5 Phase 3 full
+#include "neamc/vm/belief_runtime.hpp"   // v1.5 NeamEvolve
+#include "neamc/vm/evolve_agent_runtime.hpp"  // v1.5 NeamEvolve
+#include "neamc/vm/skill_library_runtime.hpp" // v1.5 NeamEvolve P0
+#include "neamc/vm/curriculum_runtime.hpp"    // v1.5 NeamEvolve P1
+#include "neamc/vm/design_runtime.hpp"        // v1.5 NeamEvolve P2
 #include "neamc/vm/handoff_runtime.hpp" // v1.4.5 Phase 4
 #include "neamc/llm/provider.hpp"       // v1.4.5 llm_ask bridge
 #include "neamc/llm/provider_factory.hpp"
@@ -3047,6 +3053,272 @@ Value v145_llm_ask_stream_native(VirtualMachine&, int argc, Value* args)
   }
 }
 
+// ─── v1.4.5 Phase 3 full: harness orchestration lifecycle ─────────────
+// harness_start(name)              -> "ok" | "[harness_start error] ..."
+// harness_run(name, goal)          -> final sub-agent output | "[harness_run error] ..."
+// harness_complete(name)           -> "ok" | error string
+// harness_abort(name, reason)      -> "ok" | error string
+// harness_trace_path(name)         -> file path | ""
+
+Value v145_harness_start_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[harness_start error] argc");
+  auto r = ::neamc::vm::harness::harness_start(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[harness_start error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v145_harness_run_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[harness_run error] argc");
+  auto r = ::neamc::vm::harness::harness_run(value_to_string_arg(args[0]),
+                                             value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[harness_run error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v145_harness_complete_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[harness_complete error] argc");
+  auto r = ::neamc::vm::harness::harness_complete(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[harness_complete error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v145_harness_abort_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[harness_abort error] argc");
+  auto r = ::neamc::vm::harness::harness_abort(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[harness_abort error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v145_harness_trace_path_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  return v145_string_value(::neamc::vm::harness::harness_trace_path(value_to_string_arg(args[0])));
+}
+
+// ─── v1.5 NeamEvolve — EvolveAgent lifecycle natives ─────────────────
+// evolve_agent_start / _run / _complete / _abort / _status / _trace_path
+// All delegate to evolve::* which delegates to harness::* (NFR-COMPAT-3).
+
+Value v15_evolve_agent_start_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[evolve_agent_start error] argc");
+  auto r = ::neamc::vm::evolve::evolve_agent_start(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[evolve_agent_start error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_evolve_agent_run_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[evolve_agent_run error] argc");
+  auto r = ::neamc::vm::evolve::evolve_agent_run(value_to_string_arg(args[0]),
+                                                 value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[evolve_agent_run error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_evolve_agent_complete_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[evolve_agent_complete error] argc");
+  auto r = ::neamc::vm::evolve::evolve_agent_complete(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[evolve_agent_complete error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_evolve_agent_abort_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[evolve_agent_abort error] argc");
+  auto r = ::neamc::vm::evolve::evolve_agent_abort(value_to_string_arg(args[0]),
+                                                   value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[evolve_agent_abort error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_evolve_agent_status_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("unknown");
+  return v145_string_value(::neamc::vm::evolve::evolve_agent_status(value_to_string_arg(args[0])));
+}
+
+Value v15_evolve_agent_trace_path_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  return v145_string_value(::neamc::vm::evolve::evolve_agent_trace_path(value_to_string_arg(args[0])));
+}
+
+// ─── v1.5 NeamEvolve — Belief natives ────────────────────────────────
+
+Value v15_belief_text_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[belief_text error] argc");
+  auto r = ::neamc::vm::belief::belief_text(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[belief_text error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_belief_revise_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[belief_revise error] argc");
+  // P0: infer the active evolve_agent automatically (find_active_evolve_agent_for_belief).
+  auto r = ::neamc::vm::belief::belief_revise(value_to_string_arg(args[0]),
+                                              value_to_string_arg(args[1]),
+                                              "");
+  if (!r.ok) return v145_string_value("[belief_revise error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_belief_rollback_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc < 1 || argc > 2) return v145_string_value("[belief_rollback error] argc");
+  std::string version_hash = (argc == 2) ? value_to_string_arg(args[1]) : std::string{};
+  auto r = ::neamc::vm::belief::belief_rollback(value_to_string_arg(args[0]), version_hash);
+  if (!r.ok) return v145_string_value("[belief_rollback error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_belief_history_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[]");
+  return v145_string_value(::neamc::vm::belief::belief_history_json(value_to_string_arg(args[0])));
+}
+
+Value v15_belief_diff_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return v145_string_value("[belief_diff error] argc");
+  return v145_string_value(::neamc::vm::belief::belief_diff(value_to_string_arg(args[0]),
+                                                            value_to_string_arg(args[1]),
+                                                            value_to_string_arg(args[2])));
+}
+
+Value v15_belief_hash_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc < 1 || argc > 2) return v145_string_value("");
+  int version = -1;
+  if (argc == 2 && args[1].is_number()) version = static_cast<int>(args[1].as_number());
+  return v145_string_value(::neamc::vm::belief::belief_hash(value_to_string_arg(args[0]), version));
+}
+
+// ─── v1.5 NeamEvolve — Skill library natives ─────────────────────────
+
+Value v15_skill_acquire_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return v145_string_value("[skill_acquire error] argc");
+  auto r = ::neamc::vm::skill::skill_acquire(value_to_string_arg(args[0]),
+                                             value_to_string_arg(args[1]),
+                                             value_to_string_arg(args[2]));
+  if (!r.ok) return v145_string_value("[skill_acquire error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_skill_get_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[skill_get error] argc");
+  auto r = ::neamc::vm::skill::skill_get(value_to_string_arg(args[0]),
+                                         value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[skill_get error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_skill_list_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[]");
+  return v145_string_value(::neamc::vm::skill::skill_list_json(value_to_string_arg(args[0])));
+}
+
+Value v15_skill_test_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[skill_test error] argc");
+  auto r = ::neamc::vm::skill::skill_test(value_to_string_arg(args[0]),
+                                          value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[skill_test error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_skill_deprecate_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[skill_deprecate error] argc");
+  auto r = ::neamc::vm::skill::skill_deprecate(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[skill_deprecate error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_skill_invoke_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return v145_string_value("[skill_invoke error] argc");
+  auto r = ::neamc::vm::skill::skill_invoke(value_to_string_arg(args[0]),
+                                            value_to_string_arg(args[1]),
+                                            value_to_string_arg(args[2]));
+  if (!r.ok) return v145_string_value("[skill_invoke error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+// ─── v1.5 NeamEvolve P1 — Curriculum natives ─────────────────────────
+
+Value v15_curriculum_next_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[curriculum_next error] argc");
+  auto r = ::neamc::vm::curriculum::curriculum_next(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[curriculum_next error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_curriculum_advance_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[curriculum_advance error] argc");
+  bool success = false;
+  if (args[1].is_bool()) success = args[1].as_bool();
+  else if (args[1].is_number()) success = args[1].as_number() != 0.0;
+  auto r = ::neamc::vm::curriculum::curriculum_advance(value_to_string_arg(args[0]), success);
+  if (!r.ok) return v145_string_value("[curriculum_advance error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_curriculum_difficulty_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Number(-1.0);
+  return Value::Number(::neamc::vm::curriculum::curriculum_difficulty(value_to_string_arg(args[0])));
+}
+
+// ─── v1.5 NeamEvolve P2 — Design operation natives ───────────────────
+
+Value v15_design_propose_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[design_propose error] argc");
+  auto r = ::neamc::vm::design::design_propose(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[design_propose error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_design_compile_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[design_compile_in_sandbox error] argc");
+  auto r = ::neamc::vm::design::design_compile_in_sandbox(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[design_compile_in_sandbox error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_design_score_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return Value::Number(0.0);
+  return Value::Number(::neamc::vm::design::design_score(value_to_string_arg(args[0]),
+                                                          value_to_string_arg(args[1])));
+}
+
+Value v15_design_promote_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[design_promote error] argc");
+  auto r = ::neamc::vm::design::design_promote(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[design_promote error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
 }  // namespace
 
 void register_core_natives(VirtualMachine& vm)
@@ -5539,5 +5811,42 @@ void register_core_natives(VirtualMachine& vm)
   vm.define_native("forge_role_of",              1, v145_forge_role_of_native);
   vm.define_native("forge_function_of",          1, v145_forge_function_of_native);
   vm.define_native("forge_ops_of",               1, v145_forge_ops_of_native);
+  // Phase 3 full: harness orchestration lifecycle
+  vm.define_native("harness_start",              1, v145_harness_start_native);
+  vm.define_native("harness_run",                2, v145_harness_run_native);
+  vm.define_native("harness_complete",           1, v145_harness_complete_native);
+  vm.define_native("harness_abort",              2, v145_harness_abort_native);
+  vm.define_native("harness_trace_path",         1, v145_harness_trace_path_native);
+  // ─── v1.5 NeamEvolve P0 ─────────────────────────────────────────────
+  // Lifecycle (6) — thin shim over harness_*
+  vm.define_native("evolve_agent_start",         1, v15_evolve_agent_start_native);
+  vm.define_native("evolve_agent_run",           2, v15_evolve_agent_run_native);
+  vm.define_native("evolve_agent_complete",      1, v15_evolve_agent_complete_native);
+  vm.define_native("evolve_agent_abort",         2, v15_evolve_agent_abort_native);
+  vm.define_native("evolve_agent_status",        1, v15_evolve_agent_status_native);
+  vm.define_native("evolve_agent_trace_path",    1, v15_evolve_agent_trace_path_native);
+  // Belief (6) — mutable strategy cell
+  vm.define_native("belief_text",                1, v15_belief_text_native);
+  vm.define_native("belief_revise",              2, v15_belief_revise_native);
+  vm.define_native("belief_rollback",           -1, v15_belief_rollback_native);  // 1 or 2 args
+  vm.define_native("belief_history",             1, v15_belief_history_native);
+  vm.define_native("belief_diff",                3, v15_belief_diff_native);
+  vm.define_native("belief_hash",               -1, v15_belief_hash_native);      // 1 or 2 args
+  // Skill library (6) — runtime-acquired skills with sandbox + capability monotonicity
+  vm.define_native("skill_acquire",              3, v15_skill_acquire_native);
+  vm.define_native("skill_get",                  2, v15_skill_get_native);
+  vm.define_native("skill_list",                 1, v15_skill_list_native);
+  vm.define_native("skill_test",                 2, v15_skill_test_native);
+  vm.define_native("skill_deprecate",            2, v15_skill_deprecate_native);
+  vm.define_native("skill_invoke",               3, v15_skill_invoke_native);
+  // Curriculum (3) — P1
+  vm.define_native("curriculum_next",            1, v15_curriculum_next_native);
+  vm.define_native("curriculum_advance",         2, v15_curriculum_advance_native);
+  vm.define_native("curriculum_difficulty",      1, v15_curriculum_difficulty_native);
+  // Design operation (4) — P2, gated on safety.human_gate
+  vm.define_native("design_propose",             2, v15_design_propose_native);
+  vm.define_native("design_compile_in_sandbox",  1, v15_design_compile_native);
+  vm.define_native("design_score",               2, v15_design_score_native);
+  vm.define_native("design_promote",             2, v15_design_promote_native);
 }
 }  // namespace neamc::vm

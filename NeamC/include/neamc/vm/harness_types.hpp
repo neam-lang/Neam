@@ -34,6 +34,13 @@ struct HarnessRecord {
   std::string model;
   std::string fields_json;    // raw declaration body (for later field-level access)
   std::string status;         // "registered" | "running" | "complete" | "aborted"
+  // ── v1.5 NeamEvolve additions ──
+  bool        evolve_mode = false;          // sub-type 31 sets this to true
+  std::string belief_ref;                   // resolved from fields_json["belief"]
+  std::string skills_ref;                   // resolved from fields_json["skills"]
+  std::string curriculum_ref;               // P1
+  std::string safety_program_ref;           // alignment-anchor purpose
+  std::string safety_human_gate_ref;        // P2 design op gate
 };
 
 struct HandoffRecord {
@@ -66,6 +73,69 @@ struct ForgeMetadataRecord {
   std::string ops_json;       // per-op task/step modifiers
 };
 
+// v1.5 NeamEvolve — versioned snapshot of a belief.
+struct BeliefVersion {
+  int         version;
+  std::string text;
+  std::string hash;            // SHA-256 hex of text
+  std::string ts;              // ISO-8601 UTC
+  std::string committed_by_trigger;
+};
+
+// v1.5 NeamEvolve — mutable belief runtime cell (sub-type 32).
+struct BeliefRecord {
+  std::string                name;
+  std::string                initial_text;
+  std::string                current_text;     // mutable runtime cell
+  std::string                current_hash;     // SHA-256 of current_text
+  std::string                constraints_ref;  // assertion_registry name
+  std::string                revision_trigger; // "every_N_runs" | "performance_plateau" | "manual"
+  int                        trigger_n = 5;
+  int                        max_revisions_per_session = 10;
+  bool                       rollback_enabled = true;
+  float                      max_drift = 0.7f;
+  float                      rollback_on_regression = 0.10f;
+  std::string                distillation_method;
+  std::vector<BeliefVersion> history;
+  int                        revisions_this_run = 0;
+};
+
+// v1.5 NeamEvolve — one entry in a SkillLibraryRecord::skills map.
+struct AcquiredSkill {
+  std::string              name;
+  std::string              hash;          // SHA-256 of canonical body
+  std::string              body;          // single-file source (P0)
+  std::vector<std::string> requires_capabilities;
+  std::string              signed_by;     // agent_identity hex / agent name
+  std::string              acquired_ts;   // ISO-8601 UTC
+  bool                     active = true;
+  int                      invocations = 0;
+  int                      failures = 0;
+};
+
+// v1.5 NeamEvolve — runtime-acquired skill registry (sub-type 33).
+struct SkillLibraryRecord {
+  std::string                                       name;
+  std::string                                       verify_method;     // "self_test"|"surrogate"|"evaluator_role"
+  bool                                              verify_sandbox = true;
+  int                                               deprecate_after_failures = 5;
+  bool                                              allow_runtime_acquisition = true;
+  std::vector<std::string>                          trusted_signers;
+  std::unordered_map<std::string, AcquiredSkill>    skills;            // mutable cell
+};
+
+// v1.5 NeamEvolve — curriculum record (sub-type 34, P1).
+struct CurriculumRecord {
+  std::string              name;
+  std::string              mode;              // "auto"|"co_evolve"|"manual"|"eval_set_iterator"
+  std::string              difficulty_metric;
+  float                    advance_threshold = 0.8f;
+  float                    fallback_threshold = 0.4f;
+  std::vector<std::string> task_pool;
+  float                    current_difficulty = 0.5f;
+  std::vector<bool>        recent_outcomes;   // rolling window
+};
+
 // ─── Process-wide registry ────────────────────────────────────────────
 
 class HarnessRegistry {
@@ -79,6 +149,10 @@ class HarnessRegistry {
   void register_assertion_registry(AssertionRegistryRecord rec);
   void register_harness_benchmark(HarnessBenchmarkRecord rec);
   void register_forge_metadata(ForgeMetadataRecord rec);
+  // v1.5 NeamEvolve
+  void register_belief(BeliefRecord rec);
+  void register_skill_library(SkillLibraryRecord rec);
+  void register_curriculum(CurriculumRecord rec);
 
   // Lookup (called from natives).
   const HarnessRecord* lookup_harness(const std::string& name) const;
@@ -87,6 +161,13 @@ class HarnessRegistry {
   const AssertionRegistryRecord* lookup_assertion_registry(const std::string& name) const;
   const HarnessBenchmarkRecord* lookup_harness_benchmark(const std::string& name) const;
   const ForgeMetadataRecord*    lookup_forge_metadata(const std::string& name) const;
+  // v1.5 NeamEvolve
+  const BeliefRecord*           lookup_belief(const std::string& name) const;
+        BeliefRecord*           lookup_belief_mut(const std::string& name);
+  const SkillLibraryRecord*     lookup_skill_library(const std::string& name) const;
+        SkillLibraryRecord*     lookup_skill_library_mut(const std::string& name);
+  const CurriculumRecord*       lookup_curriculum(const std::string& name) const;
+        CurriculumRecord*       lookup_curriculum_mut(const std::string& name);
 
   // Set status on an existing harness (for harness_start / _complete / _abort
   // natives — currently only "registered" is set; other states land in Phase 3+).
@@ -107,6 +188,10 @@ class HarnessRegistry {
   std::unordered_map<std::string, AssertionRegistryRecord> assertion_registries_;
   std::unordered_map<std::string, HarnessBenchmarkRecord> benchmarks_;
   std::unordered_map<std::string, ForgeMetadataRecord>    forge_metadata_;
+  // v1.5 NeamEvolve
+  std::unordered_map<std::string, BeliefRecord>           beliefs_;
+  std::unordered_map<std::string, SkillLibraryRecord>     skill_libraries_;
+  std::unordered_map<std::string, CurriculumRecord>       curricula_;
 };
 
 // ─── Free functions ────────────────────────────────────────────────────

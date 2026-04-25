@@ -52,6 +52,21 @@ void HarnessRegistry::register_forge_metadata(ForgeMetadataRecord rec) {
   forge_metadata_[rec.name] = std::move(rec);
 }
 
+void HarnessRegistry::register_belief(BeliefRecord rec) {
+  std::lock_guard<std::mutex> lk(mu_);
+  beliefs_[rec.name] = std::move(rec);
+}
+
+void HarnessRegistry::register_skill_library(SkillLibraryRecord rec) {
+  std::lock_guard<std::mutex> lk(mu_);
+  skill_libraries_[rec.name] = std::move(rec);
+}
+
+void HarnessRegistry::register_curriculum(CurriculumRecord rec) {
+  std::lock_guard<std::mutex> lk(mu_);
+  curricula_[rec.name] = std::move(rec);
+}
+
 const HarnessRecord* HarnessRegistry::lookup_harness(const std::string& name) const {
   std::lock_guard<std::mutex> lk(mu_);
   auto it = harnesses_.find(name);
@@ -88,6 +103,42 @@ const ForgeMetadataRecord* HarnessRegistry::lookup_forge_metadata(const std::str
   return it == forge_metadata_.end() ? nullptr : &it->second;
 }
 
+const BeliefRecord* HarnessRegistry::lookup_belief(const std::string& name) const {
+  std::lock_guard<std::mutex> lk(mu_);
+  auto it = beliefs_.find(name);
+  return it == beliefs_.end() ? nullptr : &it->second;
+}
+
+BeliefRecord* HarnessRegistry::lookup_belief_mut(const std::string& name) {
+  std::lock_guard<std::mutex> lk(mu_);
+  auto it = beliefs_.find(name);
+  return it == beliefs_.end() ? nullptr : &it->second;
+}
+
+const SkillLibraryRecord* HarnessRegistry::lookup_skill_library(const std::string& name) const {
+  std::lock_guard<std::mutex> lk(mu_);
+  auto it = skill_libraries_.find(name);
+  return it == skill_libraries_.end() ? nullptr : &it->second;
+}
+
+SkillLibraryRecord* HarnessRegistry::lookup_skill_library_mut(const std::string& name) {
+  std::lock_guard<std::mutex> lk(mu_);
+  auto it = skill_libraries_.find(name);
+  return it == skill_libraries_.end() ? nullptr : &it->second;
+}
+
+const CurriculumRecord* HarnessRegistry::lookup_curriculum(const std::string& name) const {
+  std::lock_guard<std::mutex> lk(mu_);
+  auto it = curricula_.find(name);
+  return it == curricula_.end() ? nullptr : &it->second;
+}
+
+CurriculumRecord* HarnessRegistry::lookup_curriculum_mut(const std::string& name) {
+  std::lock_guard<std::mutex> lk(mu_);
+  auto it = curricula_.find(name);
+  return it == curricula_.end() ? nullptr : &it->second;
+}
+
 void HarnessRegistry::set_harness_status(const std::string& name, const std::string& status) {
   std::lock_guard<std::mutex> lk(mu_);
   auto it = harnesses_.find(name);
@@ -112,6 +163,9 @@ void HarnessRegistry::reset_for_tests() {
   assertion_registries_.clear();
   benchmarks_.clear();
   forge_metadata_.clear();
+  beliefs_.clear();
+  skill_libraries_.clear();
+  curricula_.clear();
 }
 
 // ─── compute_harness_hash ──────────────────────────────────────────────

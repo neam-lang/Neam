@@ -220,6 +220,12 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/session_manager.cpp
     NeamC/src/vm/harness_types.cpp
     NeamC/src/vm/handoff_runtime.cpp
+    NeamC/src/vm/harness_runtime.cpp
+    NeamC/src/vm/belief_runtime.cpp           # v1.5 NeamEvolve P0
+    NeamC/src/vm/evolve_agent_runtime.cpp     # v1.5 NeamEvolve P0
+    NeamC/src/vm/skill_library_runtime.cpp    # v1.5 NeamEvolve P0
+    NeamC/src/vm/curriculum_runtime.cpp       # v1.5 NeamEvolve P1
+    NeamC/src/vm/design_runtime.cpp           # v1.5 NeamEvolve P2
     NeamC/src/vm/context_builder.cpp
     NeamC/src/vm/compaction.cpp
     NeamC/src/vm/memory_index.cpp
@@ -721,6 +727,13 @@ add_executable(v145_harness_test
 )
 target_link_libraries(v145_harness_test PRIVATE neamc_core gtest_main)
 add_test(NAME v145_harness_test COMMAND v145_harness_test)
+
+# v1.5: NeamEvolve tests (Phase A–F — evolve agent + belief)
+add_executable(v15_evolve_test
+    tests/unit/v15_evolve_test.cpp
+)
+target_link_libraries(v15_evolve_test PRIVATE neamc_core gtest_main)
+add_test(NAME v15_evolve_test COMMAND v15_evolve_test)
 
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)

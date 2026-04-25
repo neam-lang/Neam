@@ -2911,6 +2911,54 @@ StmtPtr Parser::parse_declaration()
     }
     current_ = saved;
   }
+  // ═══ v1.5: NeamEvolve dispatches ═══
+  // 2-keyword: "evolve agent <Name> { ... }"  (must be checked before single "evolve")
+  if (check(TokenType::Identifier) && peek().lexeme == "evolve")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_v10_generic_decl("evolve_agent", 42);
+      }
+    }
+    current_ = saved;
+  }
+  // 1-keyword: "belief <Name> { ... }"
+  if (check(TokenType::Identifier) && peek().lexeme == "belief")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("belief", 43);
+    }
+    current_ = saved;
+  }
+  // 1-keyword: "skill_library <Name> { ... }"
+  if (check(TokenType::Identifier) && peek().lexeme == "skill_library")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("skill_library", 44);
+    }
+    current_ = saved;
+  }
+  // 1-keyword: "curriculum <Name> { ... }" (P1)
+  if (check(TokenType::Identifier) && peek().lexeme == "curriculum")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("curriculum", 45);
+    }
+    current_ = saved;
+  }
   // v1.1: Special agents (2-keyword: "knowledgeweaver agent", "adaptagent agent", "storyteller agent")
   if (check(TokenType::Identifier) && peek().lexeme == "knowledgeweaver")
   {
@@ -19682,6 +19730,11 @@ StmtPtr Parser::parse_v10_generic_decl(const std::string& keyword, int type_id) 
     case 39: { ToolRegistryDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
     case 40: { AssertionRegistryDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
     case 41: { HarnessBenchmarkDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    // v1.5: NeamEvolve
+    case 42: { EvolveAgentDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 43: { BeliefDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 44: { SkillLibraryDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 45: { CurriculumDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
     default: error("Unknown v1.0 declaration type: " + keyword); break;
     }
 

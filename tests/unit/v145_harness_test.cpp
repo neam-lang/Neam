@@ -741,4 +741,138 @@ TEST(V145Harness, FullStackAllFiveDeclarations) {
   )NEAM");
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Phase 3 FULL: harness lifecycle — start / run / complete / abort.
+// All tests use NEAM_HARNESS_DRY_RUN=1 to skip live LLM calls.
+// ═══════════════════════════════════════════════════════════════
+
+TEST(V145Harness, Phase3FullStartChangesStatusToRunning) {
+  setenv("NEAM_HARNESS_DRY_RUN", "1", 1);
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.0, tokens: 1000 }
+    agent Worker { provider: "openai", model: "gpt-4o-mini", system: "w", budget: B }
+    harness H1 {
+        provider: "openai", model: "gpt-4o-mini", budget: B,
+        sub_agents: { main: Worker }
+    }
+    let s0 = harness_status("H1");
+    let r  = harness_start("H1");
+    let s1 = harness_status("H1");
+    assert_true(s0 == "registered");
+    assert_true(r == "ok");
+    assert_true(s1 == "running");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3FullDoubleStartRejected) {
+  setenv("NEAM_HARNESS_DRY_RUN", "1", 1);
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.0, tokens: 1000 }
+    agent Worker { provider: "openai", model: "gpt-4o-mini", system: "w", budget: B }
+    harness H2 {
+        provider: "openai", model: "gpt-4o-mini", budget: B,
+        sub_agents: { main: Worker }
+    }
+    let r1 = harness_start("H2");
+    let r2 = harness_start("H2");  // second start must fail
+    assert_true(r1 == "ok");
+    assert_true(r2 != "ok");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3FullRunDryReturnsEchoOutput) {
+  setenv("NEAM_HARNESS_DRY_RUN", "1", 1);
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.0, tokens: 1000 }
+    agent Worker { provider: "openai", model: "gpt-4o-mini", system: "w", budget: B }
+    harness H3 {
+        provider: "openai", model: "gpt-4o-mini", budget: B,
+        sub_agents: { main: Worker }
+    }
+    let r0 = harness_start("H3");
+    let out = harness_run("H3", "hello-world-goal");
+    assert_true(r0 == "ok");
+    assert_true(out != "");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3FullCompleteSetsStatus) {
+  setenv("NEAM_HARNESS_DRY_RUN", "1", 1);
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.0, tokens: 1000 }
+    agent Worker { provider: "openai", model: "gpt-4o-mini", system: "w", budget: B }
+    harness H4 {
+        provider: "openai", model: "gpt-4o-mini", budget: B,
+        sub_agents: { main: Worker }
+    }
+    let _1 = harness_start("H4");
+    let _2 = harness_run("H4", "goal");
+    let c  = harness_complete("H4");
+    let s  = harness_status("H4");
+    assert_true(c == "ok");
+    assert_true(s == "complete");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3FullAbortSetsStatus) {
+  setenv("NEAM_HARNESS_DRY_RUN", "1", 1);
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.0, tokens: 1000 }
+    agent Worker { provider: "openai", model: "gpt-4o-mini", system: "w", budget: B }
+    harness H5 {
+        provider: "openai", model: "gpt-4o-mini", budget: B,
+        sub_agents: { main: Worker }
+    }
+    let _1 = harness_start("H5");
+    let a  = harness_abort("H5", "user-requested");
+    let s  = harness_status("H5");
+    assert_true(a == "ok");
+    assert_true(s == "aborted");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3FullCompleteWithoutStartFails) {
+  setenv("NEAM_HARNESS_DRY_RUN", "1", 1);
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.0, tokens: 1000 }
+    agent Worker { provider: "openai", model: "gpt-4o-mini", system: "w", budget: B }
+    harness H6 {
+        provider: "openai", model: "gpt-4o-mini", budget: B,
+        sub_agents: { main: Worker }
+    }
+    let c = harness_complete("H6");  // never started
+    assert_true(c != "ok");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3FullRunWithoutStartFails) {
+  setenv("NEAM_HARNESS_DRY_RUN", "1", 1);
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.0, tokens: 1000 }
+    agent Worker { provider: "openai", model: "gpt-4o-mini", system: "w", budget: B }
+    harness H7 {
+        provider: "openai", model: "gpt-4o-mini", budget: B,
+        sub_agents: { main: Worker }
+    }
+    let out = harness_run("H7", "g");  // never started
+    assert_true(out != "");
+  )NEAM");
+}
+
+TEST(V145Harness, Phase3FullTracePathRetrievable) {
+  setenv("NEAM_HARNESS_DRY_RUN", "1", 1);
+  assert_compiles(R"NEAM(
+    budget B { cost: 10.0, tokens: 1000 }
+    agent Worker { provider: "openai", model: "gpt-4o-mini", system: "w", budget: B }
+    harness H8 {
+        provider: "openai", model: "gpt-4o-mini", budget: B,
+        sub_agents: { main: Worker }
+    }
+    let r0 = harness_start("H8");
+    let p = harness_trace_path("H8");
+    assert_true(r0 == "ok");
+    assert_true(p != "");
+  )NEAM");
+}
+
 }  // namespace
