@@ -1,9 +1,26 @@
 #!/usr/bin/env bash
-# Neam v1.4.0 Installer — NeamWiki: Compiled LLM Wiki + NeamLab Research Agent
+# Neam v1.5.0 Installer — NeamEvolve: Self-Evolving Agent
+#   built on top of v1.4.5 NeamHarness (compile-time-validated agent orchestration)
+#
 # Usage: curl -fsSL https://raw.githubusercontent.com/neam-lang/Neam/main/install.sh | bash
+#        NEAM_INSTALL_DIR=/opt/neam/bin curl ... | bash    # custom install dir
+#
+# What ships:
+#   neamc      — compiler (.neam → .neamb)
+#   neam       — runtime / bytecode interpreter
+#   neam-cli   — interactive REPL with autocomplete
+#   neam-api   — HTTP API server
+#   neam-pkg   — package manager
+#   neam-lsp   — language server (LSP)
+#   neam-dap   — debug adapter (DAP)
+#   neam-lambda, neam-gym — lambda runner + benchmarking gym
+#
+# v1.5 declarations: evolve agent, belief, skill_library, curriculum
+# v1.4.5 declarations: harness, handoff, tool_registry, assertion_registry,
+#                      harness_benchmark + Phase 3-full lifecycle natives
 set -euo pipefail
 
-VERSION="1.4.0"
+VERSION="1.5.0"
 REPO="${NEAM_REPO:-neam-lang/Neam}"
 INSTALL_DIR="${NEAM_INSTALL_DIR:-/usr/local/bin}"
 
@@ -27,7 +44,7 @@ echo -e " | |\  |  __/ (_| | | | | | |"
 echo -e " |_| \_|\___|\__,_|_| |_| |_|${NC}"
 echo ""
 echo -e " The Programming Language for AI Agents"
-echo -e " Version ${VERSION}"
+echo -e " Version ${VERSION} — NeamEvolve (self-evolving agents on the v1.4.5 harness substrate)"
 echo ""
 
 # Detect OS and architecture
