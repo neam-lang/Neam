@@ -7,7 +7,7 @@ Neam is a compiled domain-specific language for building AI agent systems. It pr
 ### Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neam-lang/neam-nightly/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/neam-lang/Neam/main/install.sh | bash
 ```
 
 ```neam
