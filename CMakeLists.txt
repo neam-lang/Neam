@@ -218,6 +218,17 @@ set(NEAMC_CORE_SOURCES
     NeamC/src/vm/vm_pool.cpp
     NeamC/src/vm/metrics.cpp
     NeamC/src/vm/session_manager.cpp
+    NeamC/src/vm/harness_types.cpp
+    NeamC/src/vm/handoff_runtime.cpp
+    NeamC/src/vm/harness_runtime.cpp
+    NeamC/src/vm/belief_runtime.cpp           # v1.5 NeamEvolve P0
+    NeamC/src/vm/evolve_agent_runtime.cpp     # v1.5 NeamEvolve P0
+    NeamC/src/vm/skill_library_runtime.cpp    # v1.5 NeamEvolve P0
+    NeamC/src/vm/curriculum_runtime.cpp       # v1.5 NeamEvolve P1
+    NeamC/src/vm/design_runtime.cpp           # v1.5 NeamEvolve P2
+    NeamC/src/vm/process_runtime.cpp          # v1.6 NeamMesh shim (≤350 LOC by ADR-003)
+    NeamC/src/vm/process_persistence.cpp      # v1.6 NeamMesh file-backed persistence
+    NeamC/src/vm/hitl_runtime.cpp             # v1.6 NeamMesh HITL resume (Phase F)
     NeamC/src/vm/context_builder.cpp
     NeamC/src/vm/compaction.cpp
     NeamC/src/vm/memory_index.cpp
@@ -712,6 +723,27 @@ add_executable(v140_wiki_test
 )
 target_link_libraries(v140_wiki_test PRIVATE neamc_core gtest_main)
 add_test(NAME v140_wiki_test COMMAND v140_wiki_test)
+
+# v1.4.5: NeamHarness tests (Phase 0 — harness declaration parse/compile/VM dispatch)
+add_executable(v145_harness_test
+    tests/unit/v145_harness_test.cpp
+)
+target_link_libraries(v145_harness_test PRIVATE neamc_core gtest_main)
+add_test(NAME v145_harness_test COMMAND v145_harness_test)
+
+# v1.5: NeamEvolve tests (Phase A–F — evolve agent + belief)
+add_executable(v15_evolve_test
+    tests/unit/v15_evolve_test.cpp
+)
+target_link_libraries(v15_evolve_test PRIVATE neamc_core gtest_main)
+add_test(NAME v15_evolve_test COMMAND v15_evolve_test)
+
+# v1.6: NeamMesh tests (Phases A–H — process / task / decision / event / pool + HITL)
+add_executable(v16_process_test
+    tests/unit/v16_process_test.cpp
+)
+target_link_libraries(v16_process_test PRIVATE neamc_core gtest_main)
+add_test(NAME v16_process_test COMMAND v16_process_test)
 
 # ============================================================================
 # Full Suite Integration Test (v0.8.0 – v0.9.1)

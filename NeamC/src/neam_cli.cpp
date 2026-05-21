@@ -257,9 +257,17 @@ public:
   static constexpr int KEY_ENTER = 13;
   static constexpr int KEY_TAB = 9;
   static constexpr int KEY_CTRL_A = 1;
+  static constexpr int KEY_CTRL_B = 2;
   static constexpr int KEY_CTRL_C = 3;
   static constexpr int KEY_CTRL_D = 4;
+  static constexpr int KEY_CTRL_E = 5;
+  static constexpr int KEY_CTRL_F = 6;
+  static constexpr int KEY_CTRL_K = 11;
   static constexpr int KEY_CTRL_L = 12;
+  static constexpr int KEY_CTRL_N = 14;
+  static constexpr int KEY_CTRL_P = 16;
+  static constexpr int KEY_CTRL_U = 21;
+  static constexpr int KEY_CTRL_W = 23;
 
 private:
   bool raw_mode_;

@@ -1,0 +1,7 @@
+// Positive control
+budget B1 { cost: 10.00, tokens: 100000 }
+budget B2 { cost: 50.00, tokens: 500000 }
+agent A { provider: "anthropic", model: "claude-sonnet-4", system: "a", budget: B1 }
+agent C { provider: "anthropic", model: "claude-opus-4", system: "c", budget: B2 }
+harness H1 { provider: "anthropic", model: "claude-sonnet-4", budget: B1, sub_agents: { main: A } }
+harness H2 { provider: "anthropic", model: "claude-opus-4",   budget: B2, sub_agents: { main: C } }

@@ -1,0 +1,6 @@
+// Positive control
+assertion_registry AR {
+    hard_rule:     { kind: "regex", pattern: "secret",   severity: "hard" },
+    soft_rule:     { kind: "regex", pattern: "todo",     severity: "soft" },
+    escalate_rule: { kind: "regex", pattern: "expense",  severity: "escalate" }
+}

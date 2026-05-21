@@ -1,0 +1,6 @@
+// CTCR expects: H-015 (versioning != schema_version)
+handoff V {
+    path: "./p.md",
+    schema: "markdown",
+    versioning: "git"
+}

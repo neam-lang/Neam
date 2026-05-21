@@ -1,0 +1,3 @@
+// CTCR expects: H-001
+tool_registry TR { builtin: ["fetch"], max_active: 4 }
+harness Z { provider: "anthropic", model: "claude-sonnet-4", tools: TR }

@@ -1,0 +1,3 @@
+// CTCR expects: H-001
+handoff HF { path: "./p.md", schema: "markdown", schema_version: "1.0.0" }
+harness H { provider: "anthropic", model: "claude-sonnet-4", handoff: HF }

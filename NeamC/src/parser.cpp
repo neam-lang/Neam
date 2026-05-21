@@ -2858,6 +2858,158 @@ StmtPtr Parser::parse_declaration()
       current_ = saved;
     }
   }
+  // ═══ v1.4.5: NeamHarness dispatches ═══
+  // Single-keyword decls that reuse parse_v10_generic_decl.
+  // (harness, handoff, tool_registry, assertion_registry, harness_benchmark)
+  if (check(TokenType::Identifier) && peek().lexeme == "harness")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("harness", 37);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "handoff")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("handoff", 38);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "tool_registry")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("tool_registry", 39);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "assertion_registry")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("assertion_registry", 40);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "harness_benchmark")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("harness_benchmark", 41);
+    }
+    current_ = saved;
+  }
+  // ═══ v1.5: NeamEvolve dispatches ═══
+  // 2-keyword: "evolve agent <Name> { ... }"  (must be checked before single "evolve")
+  if (check(TokenType::Identifier) && peek().lexeme == "evolve")
+  {
+    auto saved = current_;
+    advance();
+    if (match(TokenType::Agent))
+    {
+      if (check(TokenType::Identifier))
+      {
+        return parse_v10_generic_decl("evolve_agent", 42);
+      }
+    }
+    current_ = saved;
+  }
+  // 1-keyword: "belief <Name> { ... }"
+  if (check(TokenType::Identifier) && peek().lexeme == "belief")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("belief", 43);
+    }
+    current_ = saved;
+  }
+  // 1-keyword: "skill_library <Name> { ... }"
+  if (check(TokenType::Identifier) && peek().lexeme == "skill_library")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("skill_library", 44);
+    }
+    current_ = saved;
+  }
+  // 1-keyword: "curriculum <Name> { ... }" (P1)
+  if (check(TokenType::Identifier) && peek().lexeme == "curriculum")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("curriculum", 45);
+    }
+    current_ = saved;
+  }
+  // ═══ v1.6: NeamMesh dispatches (process / task / decision / event / pool) ═══
+  if (check(TokenType::Identifier) && peek().lexeme == "process")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("process", 46);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "task")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("task", 47);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "decision")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("decision", 48);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "event")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("event", 49);
+    }
+    current_ = saved;
+  }
+  if (check(TokenType::Identifier) && peek().lexeme == "pool")
+  {
+    auto saved = current_;
+    advance();
+    if (check(TokenType::Identifier))
+    {
+      return parse_v10_generic_decl("pool", 50);
+    }
+    current_ = saved;
+  }
   // v1.1: Special agents (2-keyword: "knowledgeweaver agent", "adaptagent agent", "storyteller agent")
   if (check(TokenType::Identifier) && peek().lexeme == "knowledgeweaver")
   {
@@ -4844,6 +4996,8 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
   LoopConfig loop;
   ExprPtr verify;
   std::optional<std::string> checkpoint;
+  // v1.4.5: forge agent role extension
+  std::string forge_role;
 
   while (!check(TokenType::RightBrace) && !is_at_end())
   {
@@ -4953,6 +5107,21 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
       workspace = previous().lexeme;
       continue;
     }
+    // v1.4.5: forge agent role extension (planner/generator/evaluator)
+    if (match_identifier("role"))
+    {
+      if (!match(TokenType::Colon)) { error("Expected ':' after role"); }
+      if (!match(TokenType::String)) { error("Expected string for role"); }
+      const std::string r = previous().lexeme;
+      if (r != "planner" && r != "generator" && r != "evaluator" && r != "human")
+      {
+        error("P-FR-001: forge agent role must be one of: planner, generator, evaluator, human (got '" + r + "')");
+      }
+      // Store on the local variable; attached to the decl below.
+      // We use a parser-local variable for clarity:
+      forge_role = r;
+      continue;
+    }
     // Field rejection: claw-only fields
     if (match_identifier("session"))
     {
@@ -5014,7 +5183,9 @@ StmtPtr Parser::parse_forge_agent(const Visibility& visibility)
       std::move(endpoint), std::move(api_key_env), std::move(temperature), std::move(system),
       std::move(skills), std::move(guardchains),
       std::move(policy), std::move(budget), std::move(env), std::move(workspace),
-      std::move(loop), std::move(verify), std::move(checkpoint)};
+      std::move(loop), std::move(verify), std::move(checkpoint),
+      // v1.4.5: role + function_json + ops_json (Phase 2 wires role; function/ops stay empty)
+      std::move(forge_role), std::string{}, std::string{}};
   return stmt;
 }
 
@@ -19604,6 +19775,23 @@ StmtPtr Parser::parse_v10_generic_decl(const std::string& keyword, int type_id) 
     case 35: { MetricExtractorDecl d; d.name = name; d.pattern = fields_json; stmt->node = std::move(d); break; }
     // v1.4: NeamWiki
     case 36: { WikiDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    // v1.4.5: NeamHarness (phase 0 — generic blob; full field parsing in later phase)
+    case 37: { HarnessDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 38: { HandoffDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 39: { ToolRegistryDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 40: { AssertionRegistryDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 41: { HarnessBenchmarkDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    // v1.5: NeamEvolve
+    case 42: { EvolveAgentDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 43: { BeliefDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 44: { SkillLibraryDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 45: { CurriculumDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    // v1.6: NeamMesh
+    case 46: { ProcessDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 47: { TaskDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 48: { DecisionDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 49: { EventDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
+    case 50: { PoolDecl d; d.name = name; d.fields_json = fields_json; stmt->node = std::move(d); break; }
     default: error("Unknown v1.0 declaration type: " + keyword); break;
     }
 

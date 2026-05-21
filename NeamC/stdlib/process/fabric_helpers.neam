@@ -1,0 +1,23 @@
+// v1.6 NeamMesh — fabric helpers for cross-pool / multi-process orchestration.
+
+module std.process.fabric;
+
+// Start a process and immediately advance it to completion (or first error).
+pub fun run_to_completion(process_name) {
+  let inst_id = process_start(process_name);
+  process_advance(inst_id);
+  return inst_id;
+}
+
+// Start, persist after first advance, return both ids.
+pub fun start_and_persist(process_name) {
+  let inst_id = process_start(process_name);
+  let path = process_persist(inst_id);
+  return { instance_id: inst_id, state_path: path };
+}
+
+// Resume a HITL-paused process with the supplied human payload.
+pub fun resume_human(instance_id, payload) {
+  hitl_resume(instance_id, payload);
+  return process_advance(instance_id);
+}

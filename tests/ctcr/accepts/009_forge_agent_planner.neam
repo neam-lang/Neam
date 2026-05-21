@@ -1,0 +1,9 @@
+// Positive control: valid forge role
+fun check_result(ctx) { return true; }
+budget B { cost: 10.00, tokens: 100000 }
+forge agent Planner {
+    provider: "anthropic", model: "claude-sonnet-4",
+    role: "planner",
+    loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 },
+    verify: check_result, budget: B
+}

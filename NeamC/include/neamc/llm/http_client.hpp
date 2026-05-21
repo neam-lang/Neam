@@ -49,7 +49,9 @@ using StreamChunkCallback = std::function<void(const char* data, size_t size)>;
 void http_post_streaming(const std::string& url, const std::string& body,
                          const std::vector<std::string>& headers,
                          StreamChunkCallback chunk_callback,
-                         long timeout_ms = 120000);
+                         // v1.4.5.1: 300s recv-idle window — gpt-5 on hard
+                         // reasoning problems can silence-think for 2+ minutes.
+                         long timeout_ms = 300000);
 
 // v0.7.2: Connection pool configuration and monitoring
 struct ConnectionPoolConfig

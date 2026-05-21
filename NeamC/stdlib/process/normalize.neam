@@ -1,0 +1,39 @@
+// v1.6 NeamMesh — process body normalization helpers.
+// Used by tooling that builds process declarations programmatically
+// (BPMN importers, fabric helpers).
+
+module std.process.normalize;
+
+// Build a minimal process body: one start, one end, no decisions.
+// tasks_map: { task_name: agent_ref, ... } in chained order.
+pub fun linear_process(name, tasks_map, start_event, end_event) {
+  return {
+    name: name,
+    start: start_event,
+    tasks: tasks_map,
+    events: { start: { type: "start" }, end: { type: "end" } }
+  };
+}
+
+// Build a single task body.
+pub fun task(name, agent_ref, next_step) {
+  return {
+    name: name,
+    agent: agent_ref,
+    next: next_step
+  };
+}
+
+// Build a binary decision body.
+pub fun binary_decision(name, expr, yes_step, no_step) {
+  return {
+    name: name,
+    expr: expr,
+    branches: { yes: yes_step, no: no_step }
+  };
+}
+
+// Build a typed event body.
+pub fun event(name, kind) {
+  return { name: name, type: kind };
+}

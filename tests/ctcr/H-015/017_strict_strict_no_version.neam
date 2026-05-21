@@ -1,0 +1,7 @@
+// CTCR expects: H-015
+handoff SS {
+    path: "./ss.md",
+    schema: "markdown",
+    on_read: "strict",
+    on_write: "strict"
+}

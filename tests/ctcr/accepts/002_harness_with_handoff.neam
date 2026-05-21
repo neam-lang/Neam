@@ -1,0 +1,9 @@
+// Positive control
+budget B { cost: 10.00, tokens: 100000 }
+agent M { provider: "anthropic", model: "claude-sonnet-4", system: "m", budget: B }
+handoff HF { path: "./p.md", schema: "markdown", schema_version: "1.0.0" }
+harness H {
+    provider: "anthropic", model: "claude-sonnet-4",
+    budget: B, handoff: HF,
+    sub_agents: { main: M }
+}

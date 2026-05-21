@@ -1,0 +1,6 @@
+// CTCR expects: H-001
+harness SafetyOnly {
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    safety: { max_skill_count: 200 }
+}

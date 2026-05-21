@@ -1,0 +1,6 @@
+// Positive control
+tool_registry TR {
+    builtin: ["fetch", "parse"],
+    project: ["compile_neam"],
+    max_active: 5
+}

@@ -1,0 +1,6 @@
+// CTCR expects: H-001
+harness T {
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    trace: { enabled: true, path: "./trace.jsonl" }
+}

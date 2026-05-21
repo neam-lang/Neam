@@ -1,0 +1,8 @@
+// CTCR expects: H-001
+harness Nested {
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    sub_agents: {
+
+    }
+}

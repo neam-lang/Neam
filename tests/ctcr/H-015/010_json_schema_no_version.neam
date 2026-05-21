@@ -1,0 +1,5 @@
+// CTCR expects: H-015
+handoff J {
+    path: "./p.json",
+    schema: "json"
+}

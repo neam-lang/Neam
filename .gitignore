@@ -3,3 +3,14 @@
 /build-windows/
 /.cmake/
 /.cache/
+
+# v1.4.5: previously-tracked build artifacts removed via filter-branch
+/build-relwithdebinfo/
+/build-windows-v10/
+/build-windows-v12/
+/build-windows-v14/
+/build-windows-v15/
+/build-windows-v16/
+
+# macOS noise
+.DS_Store

@@ -1,0 +1,3 @@
+// CTCR expects: H-001
+budget B { cost: 10.00, tokens: 100000 }
+harness AfterBudget { provider: "anthropic", model: "claude-sonnet-4", budget: B }

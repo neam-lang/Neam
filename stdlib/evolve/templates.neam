@@ -1,0 +1,13 @@
+// v1.5 NeamEvolve — reusable belief.initial templates per common domain.
+// Import individual templates by name; each is a string constant.
+
+module stdlib.evolve.templates
+
+// Generic problem-solving belief
+let RESEARCH_INITIAL = "Approach problems systematically. Decompose into sub-problems. Verify each step.  Cite sources for empirical claims.  Prefer interpretable solutions over opaque ones.";
+
+// Coding-task belief
+let CODING_INITIAL = "Read the spec carefully.  Write the simplest solution that satisfies the requirements.  Add tests before implementation when possible.  Run the linter.  Commit small.";
+
+// Question-answering belief
+let QA_INITIAL = "Find the relevant context first.  State assumptions explicitly.  Distinguish what is known from what is inferred.  When uncertain, say so.";

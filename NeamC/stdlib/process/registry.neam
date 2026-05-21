@@ -1,0 +1,20 @@
+// v1.6 NeamMesh — process registry helpers.
+// Wraps the runtime native list_processes() and exposes lookup helpers.
+
+module std.process.registry;
+
+pub fun list_all() {
+  return process_list();
+}
+
+pub fun status_of(instance_id) {
+  return process_status(instance_id);
+}
+
+pub fun is_complete(instance_id) {
+  return process_status(instance_id) == "complete";
+}
+
+pub fun is_aborted(instance_id) {
+  return process_status(instance_id) == "aborted";
+}

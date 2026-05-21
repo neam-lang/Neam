@@ -1541,6 +1541,27 @@ void Compiler::emit_statement(const Statement& stmt)
           else { chunk_.write_op(OpCode::OP_NIL); }
           chunk_.write_op(OpCode::OP_DEFINE_FORGE_AGENT);
           agent_types_[node.name] = AgentKind::Forge;
+
+          // v1.4.5 Phase 7: if the forge agent has role/function/ops set,
+          // emit a secondary OP_DEFINE_DIO_DECLARATION (sub-type 30) that
+          // registers the metadata into HarnessRegistry. This keeps the
+          // legacy OP_DEFINE_FORGE_AGENT path unchanged.
+          if (!node.role.empty() || !node.function_json.empty() ||
+              !node.ops_json.empty())
+          {
+            uint8_t field_count = 0;
+            auto push_str_md = [&](const std::string& k, const std::string& v) {
+              chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+              chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+              field_count++; };
+            push_str_md("name", node.name);
+            if (!node.role.empty())          push_str_md("role", node.role);
+            if (!node.function_json.empty()) push_str_md("function", node.function_json);
+            if (!node.ops_json.empty())      push_str_md("ops", node.ops_json);
+            chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+            chunk_.write_byte(30); /* sub-type 30 = ForgeMetadata */
+            chunk_.write_byte(field_count);
+          }
         }
         // v0.9: Schema declaration
         else if constexpr (std::is_same_v<T, SchemaDecl>)
@@ -7118,6 +7139,400 @@ void Compiler::emit_statement(const Statement& stmt)
           if (!node.fields_json.empty()) push_str("fields", node.fields_json);
           chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
           chunk_.write_byte(23); /* sub-type 23 = Wiki */
+          chunk_.write_byte(field_count);
+        }
+        // ═══ v1.4.5: NeamHarness — unified harness declaration ═══
+        else if constexpr (std::is_same_v<T, HarnessDecl>) {
+          // v1.4.5 Phase 1 validation: H-001 harness has ≥1 sub_agent.
+          // The parser stores all fields as JSON; parse it here to inspect.
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              // H-001: sub_agents must be declared and non-empty
+              auto it = j.find("sub_agents");
+              if (it == j.end() || !it->is_object() || it->empty()) {
+                throw std::runtime_error(
+                    "H-001: harness '" + node.name + "' has no sub_agents");
+              }
+            } catch (const nlohmann::json::parse_error&) {
+              // Fall through: malformed JSON from parser; let bytecode layer
+              // surface the issue. Don't block compile on parse-side artifacts.
+            }
+          } else {
+            throw std::runtime_error(
+                "H-001: harness '" + node.name + "' has no body");
+          }
+
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(25); /* sub-type 25 = Harness */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, HandoffDecl>) {
+          // v1.4.5 Phase 1 validation:
+          //   H-015: handoff must declare schema_version (FR-HF-6)
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              if (!j.contains("schema_version")) {
+                throw std::runtime_error(
+                    "H-015: handoff '" + node.name +
+                    "' must declare schema_version (e.g., \"1.0.0\")");
+              }
+            } catch (const nlohmann::json::parse_error&) {
+              // Malformed JSON; let VM surface the issue.
+            }
+          } else {
+            throw std::runtime_error(
+                "H-015: handoff '" + node.name + "' has no body");
+          }
+
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(26); /* sub-type 26 = Handoff */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, ToolRegistryDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(27); /* sub-type 27 = ToolRegistry */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, AssertionRegistryDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(28); /* sub-type 28 = AssertionRegistry */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, HarnessBenchmarkDecl>) {
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(29); /* sub-type 29 = HarnessBenchmark */
+          chunk_.write_byte(field_count);
+        }
+        // ═══ v1.5: NeamEvolve — Self-Evolving Agent ═══
+        else if constexpr (std::is_same_v<T, EvolveAgentDecl>) {
+          // E-001: belief required.  E-003: handoff required.
+          // E-013: at least one role:"evaluator" forge agent in sub_agents.
+          // E-016: safety.program required.
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              std::string belief_ref = j.value("belief", std::string{});
+              if (belief_ref.empty())
+                throw std::runtime_error("E-001: evolve agent '" + node.name + "' missing required `belief:` reference");
+              std::string handoff_ref = j.value("handoff", std::string{});
+              if (handoff_ref.empty())
+                throw std::runtime_error("E-003: evolve agent '" + node.name + "' missing required `handoff:` reference");
+              auto sa = j.find("sub_agents");
+              if (sa == j.end() || !sa->is_object() || sa->empty())
+                throw std::runtime_error("E-013: evolve agent '" + node.name + "' must declare non-empty sub_agents");
+              // E-016: safety.program required
+              auto safety = j.find("safety");
+              std::string program_ref;
+              std::string human_gate_ref;
+              bool allow_design_ops = false;
+              if (safety != j.end() && safety->is_object()) {
+                program_ref     = safety->value("program", std::string{});
+                human_gate_ref  = safety->value("human_gate", std::string{});
+                allow_design_ops= safety->value("allow_design_ops", false);
+              }
+              if (program_ref.empty())
+                throw std::runtime_error("E-016: evolve agent '" + node.name + "' missing safety.program reference (alignment anchor)");
+              // E-010: if design ops enabled, human_gate is mandatory.
+              if (allow_design_ops && human_gate_ref.empty())
+                throw std::runtime_error("E-010: evolve agent '" + node.name + "' enables design ops but is missing safety.human_gate reference");
+            } catch (const nlohmann::json::parse_error&) {
+              // malformed JSON — let VM surface it
+            }
+          } else {
+            throw std::runtime_error("E-001: evolve agent '" + node.name + "' has no body");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(31); /* sub-type 31 = EvolveAgent */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, BeliefDecl>) {
+          // E-002 (constraints ref existence — checked at link/runtime since target may not be loaded yet),
+          // E-007 (rollback when trigger != manual), E-012 (trigger value), E-015 (max_revisions range).
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              std::string initial = j.value("initial", std::string{});
+              if (initial.empty())
+                throw std::runtime_error("P-BL-001: belief '" + node.name + "' missing `initial:`");
+              std::string constraints = j.value("constraints", std::string{});
+              if (constraints.empty())
+                throw std::runtime_error("E-002: belief '" + node.name + "' missing `constraints:` (must reference an assertion_registry)");
+              std::string trigger = j.value("revision_trigger", std::string{"manual"});
+              if (trigger != "every_N_runs" && trigger != "performance_plateau" && trigger != "manual")
+                throw std::runtime_error("E-012: belief '" + node.name + "' revision_trigger must be one of {every_N_runs, performance_plateau, manual}");
+              bool rollback = j.value("rollback", true);
+              if (!rollback && trigger != "manual")
+                throw std::runtime_error("E-007: belief '" + node.name + "' rollback must be true when revision_trigger != \"manual\"");
+              int max_rev = j.value("max_revisions_per_session", 10);
+              if (max_rev < 1 || max_rev > 100)
+                throw std::runtime_error("E-015: belief '" + node.name + "' max_revisions_per_session must be in [1,100]");
+            } catch (const nlohmann::json::parse_error&) {
+              // malformed JSON — let VM surface it
+            }
+          } else {
+            throw std::runtime_error("P-BL-001: belief '" + node.name + "' has no body");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(32); /* sub-type 32 = Belief */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, SkillLibraryDecl>) {
+          // E-005: verify block required.
+          // E-006: verify.sandbox MUST be true if allow_runtime_acquisition.
+          // E-014: deprecate.after_failures in [1,1000].
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              if (!j.contains("verify") || !j["verify"].is_object())
+                throw std::runtime_error("E-005: skill_library '" + node.name + "' missing `verify:` block");
+              auto verify = j["verify"];
+              bool sandbox = verify.value("sandbox", true);
+              bool allow_acq = j.value("allow_runtime_acquisition", true);
+              if (allow_acq && !sandbox)
+                throw std::runtime_error("E-006: skill_library '" + node.name + "' verify.sandbox must be true when allow_runtime_acquisition is true");
+              if (j.contains("deprecate") && j["deprecate"].is_object()) {
+                int threshold = j["deprecate"].value("after_failures", 5);
+                if (threshold < 1 || threshold > 1000)
+                  throw std::runtime_error("E-014: skill_library '" + node.name + "' deprecate.after_failures must be in [1,1000]");
+              }
+            } catch (const nlohmann::json::parse_error&) {
+              /* tolerated */
+            }
+          } else {
+            throw std::runtime_error("E-005: skill_library '" + node.name + "' has no body");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(33); /* sub-type 33 = SkillLibrary */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, CurriculumDecl>) {
+          // E-009: difficulty_metric, advance_threshold, fallback_threshold required + ordering.
+          if (!node.fields_json.empty()) {
+            try {
+              auto j = nlohmann::json::parse(node.fields_json);
+              std::string mode = j.value("mode", std::string{"auto"});
+              if (mode != "auto" && mode != "co_evolve" && mode != "manual" && mode != "eval_set_iterator")
+                throw std::runtime_error("E-009: curriculum '" + node.name + "' invalid mode (must be auto|co_evolve|manual|eval_set_iterator)");
+              std::string metric = j.value("difficulty_metric", std::string{});
+              if (metric.empty())
+                throw std::runtime_error("E-009: curriculum '" + node.name + "' missing `difficulty_metric:`");
+              if (!j.contains("advance_threshold") || !j.contains("fallback_threshold"))
+                throw std::runtime_error("E-009: curriculum '" + node.name + "' missing thresholds (advance_threshold + fallback_threshold)");
+              double adv = j.value("advance_threshold", 0.8);
+              double fb  = j.value("fallback_threshold", 0.4);
+              if (!(fb < adv))
+                throw std::runtime_error("E-009: curriculum '" + node.name + "' fallback_threshold must be < advance_threshold");
+            } catch (const nlohmann::json::parse_error&) {
+              /* tolerated */
+            }
+          } else {
+            throw std::runtime_error("E-009: curriculum '" + node.name + "' has no body");
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(34); /* sub-type 34 = Curriculum */
+          chunk_.write_byte(field_count);
+        }
+        // ═══ v1.6: NeamMesh — Agentic Process Automation (sub-types 35-39) ═══
+        else if constexpr (std::is_same_v<T, ProcessDecl>) {
+          // P-FR-PR-1: process must declare `start` and at least one `tasks` entry.
+          // P-FR-PR-2: every task referenced must exist in `tasks`.
+          // (Cross-decl reference resolution happens at runtime via process_registry;
+          //  here we only enforce single-decl shape rules — keep validation cheap.)
+          if (node.fields_json.empty()) {
+            throw std::runtime_error("P-FR-PR-1: process '" + node.name + "' has no body");
+          }
+          try {
+            auto j = nlohmann::json::parse(node.fields_json);
+            if (!j.contains("start") || !j["start"].is_string())
+              throw std::runtime_error("P-FR-PR-1: process '" + node.name + "' missing required `start:` task ref");
+            if (!j.contains("tasks") || !j["tasks"].is_object() || j["tasks"].empty())
+              throw std::runtime_error("P-FR-PR-1: process '" + node.name + "' must declare non-empty `tasks:`");
+            // ADR-005 graph well-formedness: start must be a key in tasks (or in events).
+            std::string start = j.value("start", std::string{});
+            bool start_found = j["tasks"].contains(start);
+            if (!start_found && j.contains("events") && j["events"].is_object())
+              start_found = j["events"].contains(start);
+            if (!start_found)
+              throw std::runtime_error("P-FR-PR-2: process '" + node.name + "' start ref '" + start + "' not found in tasks/events");
+          } catch (const nlohmann::json::parse_error&) {
+            /* tolerated — runtime will surface */
+          }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(35); /* sub-type 35 = Process */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, TaskDecl>) {
+          // P-FR-TK-1: task must declare `agent`.  scope/input/output optional.
+          // Capability monotonicity (task.scope ⊆ agent.tool_registry.scoping) is
+          // verified at runtime when the agent record is resolved (ADR-005).
+          if (node.fields_json.empty()) {
+            throw std::runtime_error("P-FR-TK-1: task '" + node.name + "' has no body");
+          }
+          try {
+            auto j = nlohmann::json::parse(node.fields_json);
+            if (!j.contains("agent") || !j["agent"].is_string() || j.value("agent", std::string{}).empty())
+              throw std::runtime_error("P-FR-TK-1: task '" + node.name + "' missing required `agent:` reference");
+            // P-FR-TK-3: retries (if present) must be in [0,10].
+            if (j.contains("retries")) {
+              int r = j.value("retries", 0);
+              if (r < 0 || r > 10)
+                throw std::runtime_error("P-FR-TK-3: task '" + node.name + "' retries must be in [0,10]");
+            }
+          } catch (const nlohmann::json::parse_error&) { /* tolerated */ }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(36); /* sub-type 36 = Task */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, DecisionDecl>) {
+          // P-FR-DC-1: decision must declare `expr` (the condition source) and `branches`.
+          // P-FR-DC-2: branches MUST contain at least two keys.
+          if (node.fields_json.empty()) {
+            throw std::runtime_error("P-FR-DC-1: decision '" + node.name + "' has no body");
+          }
+          try {
+            auto j = nlohmann::json::parse(node.fields_json);
+            if (!j.contains("expr") || !j["expr"].is_string())
+              throw std::runtime_error("P-FR-DC-1: decision '" + node.name + "' missing required `expr:`");
+            if (!j.contains("branches") || !j["branches"].is_object() || j["branches"].size() < 2)
+              throw std::runtime_error("P-FR-DC-2: decision '" + node.name + "' must declare ≥ 2 branches");
+          } catch (const nlohmann::json::parse_error&) { /* tolerated */ }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(37); /* sub-type 37 = Decision */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, EventDecl>) {
+          // P-FR-EV-1: event must declare `type` ∈ {start, intermediate, end, timer, signal, message}.
+          if (node.fields_json.empty()) {
+            throw std::runtime_error("P-FR-EV-1: event '" + node.name + "' has no body");
+          }
+          try {
+            auto j = nlohmann::json::parse(node.fields_json);
+            std::string et = j.value("type", std::string{});
+            if (et.empty())
+              throw std::runtime_error("P-FR-EV-1: event '" + node.name + "' missing required `type:`");
+            static const char* kAllowed[] = {"start","intermediate","end","timer","signal","message"};
+            bool ok = false;
+            for (const char* a : kAllowed) if (et == a) { ok = true; break; }
+            if (!ok)
+              throw std::runtime_error("P-FR-EV-1: event '" + node.name +
+                  "' type must be one of {start,intermediate,end,timer,signal,message} (got '" + et + "')");
+          } catch (const nlohmann::json::parse_error&) { /* tolerated */ }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(38); /* sub-type 38 = Event */
+          chunk_.write_byte(field_count);
+        }
+        else if constexpr (std::is_same_v<T, PoolDecl>) {
+          // P-FR-PL-1: pool must declare `lanes` (BPMN swim-lane participants).
+          if (node.fields_json.empty()) {
+            throw std::runtime_error("P-FR-PL-1: pool '" + node.name + "' has no body");
+          }
+          try {
+            auto j = nlohmann::json::parse(node.fields_json);
+            if (!j.contains("lanes") || !j["lanes"].is_object() || j["lanes"].empty())
+              throw std::runtime_error("P-FR-PL-1: pool '" + node.name + "' must declare non-empty `lanes:`");
+          } catch (const nlohmann::json::parse_error&) { /* tolerated */ }
+          uint8_t field_count = 0;
+          auto push_str = [&](const std::string& k, const std::string& v) {
+            chunk_.emit_constant(vm::Value::String(k.c_str(), k.size()));
+            chunk_.emit_constant(vm::Value::String(v.c_str(), v.size()));
+            field_count++; };
+          push_str("name", node.name);
+          if (!node.fields_json.empty()) push_str("fields", node.fields_json);
+          chunk_.write_op(vm::OpCode::OP_DEFINE_DIO_DECLARATION);
+          chunk_.write_byte(39); /* sub-type 39 = Pool */
           chunk_.write_byte(field_count);
         }
         else if constexpr (std::is_same_v<T, WikiAgentDecl>) {

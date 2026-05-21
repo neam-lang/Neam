@@ -1,0 +1,16 @@
+{
+  "neam_version": "v1.4.5-feature",
+  "corpus_path": "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/tests/ctcr",
+  "neamc_path": "/Users/praveengovindaraj/Neam_Home/repo/neam-nightly/build-relwithdebinfo/neamc",
+  "per_rule": {
+    "H-001":    { "caught": 20, "total": 20, "rate": 1.000, "target": 1.0 },
+    "H-015":    { "caught": 20, "total": 20, "rate": 1.000, "target": 1.0 },
+    "P-FR-001": { "caught": 20,  "total": 20,  "rate": 1.000,  "target": 1.0 }
+  },
+  "positive_control": {
+    "accepted": 20, "total": 20, "rate": 1.000, "target": 1.0
+  },
+  "overall_ctcr": 1.000,
+  "overall_caught": 60,
+  "overall_total": 60
+}

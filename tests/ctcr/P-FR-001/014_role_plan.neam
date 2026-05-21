@@ -1,0 +1,11 @@
+// CTCR expects: P-FR-001
+fun check_result(ctx) { return true; }
+budget B { cost: 10.00, tokens: 100000 }
+forge agent X {
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    role: "plan",
+    loop: { max_iterations: 1 max_cost: 1.0 max_tokens: 10000 },
+    verify: check_result,
+    budget: B
+}

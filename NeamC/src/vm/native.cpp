@@ -18,6 +18,7 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <random>
+#include <regex>  // v1.4.5 Phase 6 assertion kernel
 #include <sstream>
 #include <thread>
 #include <unordered_map>
@@ -31,6 +32,18 @@
 #include <openssl/sha.h>
 
 #include "neamc/vm/table.hpp"
+#include "neamc/vm/harness_types.hpp"  // v1.4.5 Phase 3-minimal
+#include "neamc/vm/harness_runtime.hpp"  // v1.4.5 Phase 3 full
+#include "neamc/vm/belief_runtime.hpp"   // v1.5 NeamEvolve
+#include "neamc/vm/evolve_agent_runtime.hpp"  // v1.5 NeamEvolve
+#include "neamc/vm/skill_library_runtime.hpp" // v1.5 NeamEvolve P0
+#include "neamc/vm/curriculum_runtime.hpp"    // v1.5 NeamEvolve P1
+#include "neamc/vm/design_runtime.hpp"        // v1.5 NeamEvolve P2
+#include "neamc/vm/process_runtime.hpp"       // v1.6 NeamMesh
+#include "neamc/vm/hitl_runtime.hpp"          // v1.6 NeamMesh HITL
+#include "neamc/vm/handoff_runtime.hpp" // v1.4.5 Phase 4
+#include "neamc/llm/provider.hpp"       // v1.4.5 llm_ask bridge
+#include "neamc/llm/provider_factory.hpp"
 #include "neamc/vm/async/future.hpp"
 #include "neamc/vm/async/executor.hpp"
 #include "neamc/vm/runtime_type.hpp"
@@ -2296,6 +2309,1109 @@ Value dataops_report_native(VirtualMachine& vm, int arg_count, Value* args) {
   report["mode"] = agent->mode;
   std::string s = report.dump();
   return Value::String(s.c_str(), s.size());
+}
+
+// ─── v1.4.5 Phase 3-minimal: harness lifecycle natives ────────────────
+
+static std::string value_to_string_arg(const Value& v)
+{
+  if (v.is_string())
+  {
+    return to_std_string(v);
+  }
+  return {};
+}
+
+Value v145_harness_hash_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Nil();
+  const std::string name = value_to_string_arg(args[0]);
+  if (name.empty()) return Value::Nil();
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance().lookup_harness(name);
+  if (!rec) return Value::Nil();
+  return Value::String(rec->bytecode_hash.c_str(), rec->bytecode_hash.size());
+}
+
+Value v145_harness_status_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Nil();
+  const std::string name = value_to_string_arg(args[0]);
+  if (name.empty()) return Value::Nil();
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance().lookup_harness(name);
+  if (!rec)
+  {
+    const char* unk = "unknown";
+    return Value::String(unk, 7);
+  }
+  return Value::String(rec->status.c_str(), rec->status.size());
+}
+
+Value v145_harness_env_native(VirtualMachine&, int, Value*)
+{
+  // Serialize the NEAM_RUN_* map as JSON.
+  const auto& env = ::neamc::vm::harness::harness_runtime_env_map();
+  nlohmann::json j;
+  for (const auto& [k, v] : env) j[k] = v;
+  std::string s = j.dump();
+  return Value::String(s.c_str(), s.size());
+}
+
+Value v145_handoff_schema_version_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Nil();
+  const std::string name = value_to_string_arg(args[0]);
+  if (name.empty()) return Value::Nil();
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!rec) return Value::Nil();
+  return Value::String(rec->schema_version.c_str(), rec->schema_version.size());
+}
+
+// ─── v1.4.5 bridge: llm_ask(provider, model, prompt) -> String ────────
+//
+// Exposes the existing Neam LLM provider factory (v0.6.6+) directly to
+// Neam source. Enables LLM-backed benchmarks (AIME 2025, etc.) to run
+// before Phase 3 full harness_start lands.
+//
+// This is NOT a harness-scored call — no sub-agent spawn, no trace, no
+// assertion evaluation. It's a bare-model bridge.  The full Phase 3
+// runtime will internally use this same path through harness_start().
+//
+// Args:  provider ("openai" | "anthropic" | "ollama" | "bedrock")
+//        model    (e.g., "gpt-5-mini", "claude-sonnet-4")
+//        prompt   (raw string, single user message)
+// Returns:  String response from the model.  Nil on error.
+// Env:   OPENAI_API_KEY (for openai), ANTHROPIC_API_KEY (for anthropic)
+
+// ─── Phase 4: handoff runtime natives ──────────────────────────────────
+//
+// Pulls the declared handoff from HarnessRegistry, unpacks fields_json
+// into handoff::HandoffRecord, dispatches to handoff_runtime.cpp.
+
+namespace {
+::neamc::vm::handoff::HandoffRecord v145_build_handoff_record(
+    const ::neamc::vm::harness::HandoffRecord& meta)
+{
+  ::neamc::vm::handoff::HandoffRecord rec;
+  rec.name = meta.name;
+  rec.schema_version = meta.schema_version;
+  // Parse fields_json for runtime fields
+  try
+  {
+    auto j = nlohmann::json::parse(meta.fields_json.empty() ? "{}" : meta.fields_json);
+    auto gs = [&](const char* k) -> std::string {
+      auto it = j.find(k);
+      return (it != j.end() && it->is_string()) ? it->get<std::string>() : "";
+    };
+    auto gi = [&](const char* k, int dflt) -> int {
+      auto it = j.find(k);
+      if (it == j.end()) return dflt;
+      if (it->is_number_integer()) return it->get<int>();
+      if (it->is_number()) return (int)it->get<double>();
+      if (it->is_string())
+      {
+        try { return std::stoi(it->get<std::string>()); } catch (...) {}
+      }
+      return dflt;
+    };
+    rec.path_template = gs("path");
+    rec.schema = gs("schema");
+    rec.max_size_kb = gi("max_size_kb", 0);
+    rec.on_overflow = gs("on_overflow");
+    rec.versioning  = gs("versioning");
+    rec.on_read     = gs("on_read");
+    rec.on_write    = gs("on_write");
+    if (rec.schema_version.empty()) rec.schema_version = gs("schema_version");
+    // required_sections — may be an array of strings, a string, or missing
+    auto rs = j.find("required_sections");
+    if (rs != j.end())
+    {
+      if (rs->is_array())
+      {
+        for (auto& s : *rs)
+          if (s.is_string()) rec.required_sections.push_back(s.get<std::string>());
+      }
+      else if (rs->is_string())
+      {
+        // Legacy stringified form: split on commas.
+        std::string s = rs->get<std::string>();
+        std::stringstream ss(s); std::string tok;
+        while (std::getline(ss, tok, ','))
+        {
+          auto l = tok.find_first_not_of(" \t\"'");
+          auto r = tok.find_last_not_of(" \t\"'");
+          if (l != std::string::npos)
+            rec.required_sections.push_back(tok.substr(l, r - l + 1));
+        }
+      }
+    }
+  }
+  catch (...) {}
+  return rec;
+}
+
+Value v145_string_value(const std::string& s)
+{
+  return Value::String(s.c_str(), s.size());
+}
+
+}  // anonymous namespace
+
+Value v145_handoff_write_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string name    = value_to_string_arg(args[0]);
+  const std::string section = value_to_string_arg(args[1]);
+  const std::string content = value_to_string_arg(args[2]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return v145_string_value("[handoff_write error] HF-UNKNOWN: " + name);
+  auto rec = v145_build_handoff_record(*meta);
+  auto r = ::neamc::vm::handoff::write(rec, section, content);
+  if (!r.ok) return v145_string_value("[handoff_write error] " + r.error);
+  return v145_string_value("ok");
+}
+
+Value v145_handoff_read_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc < 1 || argc > 2) return Value::Nil();
+  const std::string name    = value_to_string_arg(args[0]);
+  const std::string section = (argc == 2) ? value_to_string_arg(args[1]) : std::string{};
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return v145_string_value("[handoff_read error] HF-UNKNOWN: " + name);
+  auto rec = v145_build_handoff_record(*meta);
+  auto r = ::neamc::vm::handoff::read(rec, section);
+  if (!r.ok) return v145_string_value("[handoff_read error] " + r.error);
+  return v145_string_value(r.content);
+}
+
+Value v145_handoff_exists_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Bool(false);
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return Value::Bool(false);
+  auto rec = v145_build_handoff_record(*meta);
+  return Value::Bool(::neamc::vm::handoff::exists(rec));
+}
+
+Value v145_handoff_size_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Number(0.0);
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return Value::Number(0.0);
+  auto rec = v145_build_handoff_record(*meta);
+  return Value::Number(static_cast<double>(::neamc::vm::handoff::size_bytes(rec)));
+}
+
+Value v145_handoff_validate_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Nil();
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_handoff(name);
+  if (!meta) return v145_string_value("[handoff_validate error] HF-UNKNOWN: " + name);
+  auto rec = v145_build_handoff_record(*meta);
+  auto r = ::neamc::vm::handoff::validate(rec);
+  if (!r.ok) return v145_string_value("[handoff_validate error] " + r.error);
+  return v145_string_value("ok");
+}
+
+// ─── Phase 5: tool registry scope + brief injection ────────────────────
+//
+// Reads the tool_registry's fields_json from the HarnessRegistry side
+// table, parses scoping/briefs, answers natives.
+
+namespace {
+
+// Parse a JSON list of strings; accept either array or comma-stringified.
+std::vector<std::string> v145_parse_string_list(const nlohmann::json& j)
+{
+  std::vector<std::string> out;
+  if (j.is_array())
+  {
+    for (const auto& v : j)
+      if (v.is_string()) out.push_back(v.get<std::string>());
+  }
+  else if (j.is_string())
+  {
+    std::stringstream ss(j.get<std::string>());
+    std::string tok;
+    while (std::getline(ss, tok, ','))
+    {
+      auto l = tok.find_first_not_of(" \t\"'");
+      auto r = tok.find_last_not_of(" \t\"'");
+      if (l != std::string::npos) out.push_back(tok.substr(l, r - l + 1));
+    }
+  }
+  return out;
+}
+
+// Pull the scoping map from fields_json: { role -> [tool, tool, ...] }
+std::vector<std::string> v145_tool_registry_scope(
+    const ::neamc::vm::harness::ToolRegistryRecord& meta,
+    const std::string& role)
+{
+  try
+  {
+    auto j = nlohmann::json::parse(meta.fields_json.empty() ? "{}" : meta.fields_json);
+    auto scoping = j.find("scoping");
+    if (scoping == j.end() || !scoping->is_object()) return {};
+    auto entry = scoping->find(role);
+    if (entry == scoping->end()) return {};
+    return v145_parse_string_list(*entry);
+  }
+  catch (...) { return {}; }
+}
+
+// Pull briefs: { tool_name -> { safe_max: N, note: "..." } }
+struct V145ToolBrief
+{
+  int safe_max = 0;
+  std::string note;
+  bool has = false;
+};
+
+V145ToolBrief v145_tool_registry_brief(
+    const ::neamc::vm::harness::ToolRegistryRecord& meta,
+    const std::string& tool_name)
+{
+  V145ToolBrief out;
+  try
+  {
+    auto j = nlohmann::json::parse(meta.fields_json.empty() ? "{}" : meta.fields_json);
+    auto briefs = j.find("briefs");
+    if (briefs == j.end() || !briefs->is_object()) return out;
+    auto entry = briefs->find(tool_name);
+    if (entry == briefs->end() || !entry->is_object()) return out;
+    auto sm = entry->find("safe_max");
+    if (sm != entry->end())
+    {
+      if (sm->is_number_integer()) out.safe_max = sm->get<int>();
+      else if (sm->is_number())    out.safe_max = (int)sm->get<double>();
+    }
+    auto nt = entry->find("note");
+    if (nt != entry->end() && nt->is_string()) out.note = nt->get<std::string>();
+    out.has = true;
+  }
+  catch (...) {}
+  return out;
+}
+
+}  // anonymous namespace
+
+// tool_registry_check(tr_name, role, tool_name) -> Bool
+// True if the tool is in the role's scope OR no scoping is declared.
+Value v145_tool_registry_check_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Bool(false);
+  const std::string tr   = value_to_string_arg(args[0]);
+  const std::string role = value_to_string_arg(args[1]);
+  const std::string tool = value_to_string_arg(args[2]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_tool_registry(tr);
+  if (!meta) return Value::Bool(false);
+
+  auto scope = v145_tool_registry_scope(*meta, role);
+  if (scope.empty())
+  {
+    // No scoping declared for this role → if scoping key is entirely absent
+    // allow-all; if scoping block exists but this role is missing, deny.
+    try
+    {
+      auto j = nlohmann::json::parse(meta->fields_json.empty() ? "{}" : meta->fields_json);
+      auto scoping = j.find("scoping");
+      if (scoping == j.end() || !scoping->is_object()) return Value::Bool(true);
+      return Value::Bool(scoping->find(role) != scoping->end()
+                         ? false   // role declared but empty → deny all
+                         : true);  // role absent → permissive
+    }
+    catch (...) { return Value::Bool(true); }
+  }
+  return Value::Bool(std::find(scope.begin(), scope.end(), tool) != scope.end());
+}
+
+// tool_registry_scope_of(tr_name, role) -> JSON string array
+Value v145_tool_registry_scope_of_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[]");
+  const std::string tr   = value_to_string_arg(args[0]);
+  const std::string role = value_to_string_arg(args[1]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_tool_registry(tr);
+  if (!meta) return v145_string_value("[]");
+
+  auto scope = v145_tool_registry_scope(*meta, role);
+  nlohmann::json j = nlohmann::json::array();
+  for (const auto& s : scope) j.push_back(s);
+  auto out = j.dump();
+  return v145_string_value(out);
+}
+
+// tool_registry_brief(tr_name, tool_name) -> "safe_max=N|note" or ""
+Value v145_tool_registry_brief_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("");
+  const std::string tr   = value_to_string_arg(args[0]);
+  const std::string tool = value_to_string_arg(args[1]);
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_tool_registry(tr);
+  if (!meta) return v145_string_value("");
+
+  auto brief = v145_tool_registry_brief(*meta, tool);
+  if (!brief.has) return v145_string_value("");
+  nlohmann::json j;
+  j["safe_max"] = brief.safe_max;
+  j["note"]     = brief.note;
+  auto out = j.dump();
+  return v145_string_value(out);
+}
+
+// ─── Phase 6: assertion kernel ─────────────────────────────────────────
+//
+// Four assertion kinds per the v1.4.5 impl spec §11:
+//   regex      - pattern match over content
+//   runtime    - metric OP value (e.g. cost <= 500)
+//   capability - forbid list of capability names
+//   domain     - boolean invariant over typed fields (simple expressions)
+//
+// Natives exposed to Neam source:
+//   assertion_check_regex(ar_name, assertion_name, content)  -> "ok" | "violated" | error
+//   assertion_check_runtime(ar_name, assertion_name, value)  -> "ok" | "violated" | error
+//   assertion_hard_count(ar_name)                            -> Number
+//   assertion_kinds(ar_name)                                 -> JSON map kind -> count
+//   assertion_by_name(ar_name, assertion_name)               -> JSON assertion spec or ""
+
+namespace {
+
+// Look up the assertion_registry record, parse fields_json once.
+nlohmann::json v145_ar_parsed(const std::string& ar_name)
+{
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance()
+                         .lookup_assertion_registry(ar_name);
+  if (!meta) return nlohmann::json();
+  try
+  {
+    return nlohmann::json::parse(meta->fields_json.empty() ? "{}" : meta->fields_json);
+  }
+  catch (...) { return nlohmann::json(); }
+}
+
+// Fetch a single assertion spec from the registry's fields_json. Assertions
+// live at the top level alongside any other fields (the generic parser
+// stores them flat). Skip any non-object entries (those are metadata).
+nlohmann::json v145_assertion_spec(const nlohmann::json& ar, const std::string& name)
+{
+  if (!ar.is_object()) return nlohmann::json();
+  auto it = ar.find(name);
+  if (it == ar.end() || !it->is_object()) return nlohmann::json();
+  return *it;
+}
+
+// Comparison helper for runtime kind: op in {"<=", ">=", "<", ">", "==", "!="}.
+bool v145_cmp(double lhs, const std::string& op, double rhs)
+{
+  if (op == "<=" ) return lhs <= rhs;
+  if (op == ">=" ) return lhs >= rhs;
+  if (op == "<"  ) return lhs <  rhs;
+  if (op == ">"  ) return lhs >  rhs;
+  if (op == "==" ) return lhs == rhs;
+  if (op == "!=" ) return lhs != rhs;
+  return false;
+}
+
+}  // anonymous namespace
+
+// assertion_check_regex(ar, name, content) -> "ok" | "violated" | error
+Value v145_assertion_check_regex_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string ar_name     = value_to_string_arg(args[0]);
+  const std::string ass_name    = value_to_string_arg(args[1]);
+  const std::string content     = value_to_string_arg(args[2]);
+
+  auto ar = v145_ar_parsed(ar_name);
+  if (ar.is_null())
+    return v145_string_value("[assertion_check_regex error] AR-UNKNOWN: " + ar_name);
+
+  auto spec = v145_assertion_spec(ar, ass_name);
+  if (spec.is_null())
+    return v145_string_value("[assertion_check_regex error] AR-NONAME: " + ass_name);
+
+  auto kind_it = spec.find("kind");
+  if (kind_it == spec.end() || !kind_it->is_string() || kind_it->get<std::string>() != "regex")
+    return v145_string_value("[assertion_check_regex error] AR-KIND: expected regex");
+
+  auto pattern_it = spec.find("pattern");
+  if (pattern_it == spec.end() || !pattern_it->is_string())
+    return v145_string_value("[assertion_check_regex error] AR-PATTERN: missing");
+
+  try
+  {
+    std::regex re(pattern_it->get<std::string>());
+    bool matched = std::regex_search(content, re);
+    // Semantics: if the regex represents a forbidden pattern (e.g., secrets),
+    // a MATCH means VIOLATION.  This mirrors the impl spec §11's CAAF-style
+    // "never_commit_secrets" example.
+    return v145_string_value(matched ? "violated" : "ok");
+  }
+  catch (const std::regex_error& e)
+  {
+    return v145_string_value(std::string("[assertion_check_regex error] AR-COMPILE: ") + e.what());
+  }
+}
+
+// assertion_check_runtime(ar, name, observed_value) -> "ok" | "violated" | error
+// Evaluates the spec's (op, value) against the observed value provided by the
+// caller.  Caller is responsible for supplying the correct metric value.
+Value v145_assertion_check_runtime_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string ar_name  = value_to_string_arg(args[0]);
+  const std::string ass_name = value_to_string_arg(args[1]);
+
+  // args[2] may be a Number or a numeric string — accept both.
+  double observed = 0.0;
+  if (args[2].is_number())        observed = args[2].as_number();
+  else if (args[2].is_string())
+  {
+    try { observed = std::stod(value_to_string_arg(args[2])); }
+    catch (...) { return v145_string_value("[assertion_check_runtime error] AR-TYPE: not numeric"); }
+  }
+  else return v145_string_value("[assertion_check_runtime error] AR-TYPE: expected number");
+
+  auto ar = v145_ar_parsed(ar_name);
+  if (ar.is_null())
+    return v145_string_value("[assertion_check_runtime error] AR-UNKNOWN: " + ar_name);
+  auto spec = v145_assertion_spec(ar, ass_name);
+  if (spec.is_null())
+    return v145_string_value("[assertion_check_runtime error] AR-NONAME: " + ass_name);
+  auto kind_it = spec.find("kind");
+  if (kind_it == spec.end() || !kind_it->is_string() || kind_it->get<std::string>() != "runtime")
+    return v145_string_value("[assertion_check_runtime error] AR-KIND: expected runtime");
+
+  auto op_it = spec.find("op");
+  auto val_it = spec.find("value");
+  if (op_it == spec.end() || !op_it->is_string())
+    return v145_string_value("[assertion_check_runtime error] AR-OP: missing");
+  if (val_it == spec.end())
+    return v145_string_value("[assertion_check_runtime error] AR-VALUE: missing");
+
+  double threshold = 0.0;
+  if (val_it->is_number()) threshold = val_it->get<double>();
+  else if (val_it->is_string())
+  {
+    try { threshold = std::stod(val_it->get<std::string>()); }
+    catch (...) { return v145_string_value("[assertion_check_runtime error] AR-VALUE: not numeric"); }
+  }
+  else return v145_string_value("[assertion_check_runtime error] AR-VALUE: type");
+
+  const std::string op = op_it->get<std::string>();
+  const bool holds = v145_cmp(observed, op, threshold);
+  // Semantics: spec (op, value) expresses the invariant (e.g. cost <= 500).
+  //   holds == true  → invariant satisfied → "ok"
+  //   holds == false → invariant broken    → "violated"
+  return v145_string_value(holds ? "ok" : "violated");
+}
+
+// assertion_hard_count(ar) -> Number
+Value v145_assertion_hard_count_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Number(0.0);
+  auto ar = v145_ar_parsed(value_to_string_arg(args[0]));
+  if (ar.is_null() || !ar.is_object()) return Value::Number(0.0);
+  int count = 0;
+  for (auto it = ar.begin(); it != ar.end(); ++it)
+  {
+    if (!it.value().is_object()) continue;
+    auto sev = it.value().find("severity");
+    if (sev != it.value().end() && sev->is_string() && sev->get<std::string>() == "hard")
+      count++;
+  }
+  return Value::Number(static_cast<double>(count));
+}
+
+// assertion_kinds(ar) -> JSON map {kind: count, ...}
+Value v145_assertion_kinds_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("{}");
+  auto ar = v145_ar_parsed(value_to_string_arg(args[0]));
+  if (ar.is_null() || !ar.is_object()) return v145_string_value("{}");
+  std::unordered_map<std::string, int> counts;
+  for (auto it = ar.begin(); it != ar.end(); ++it)
+  {
+    if (!it.value().is_object()) continue;
+    auto k = it.value().find("kind");
+    if (k == it.value().end() || !k->is_string()) continue;
+    counts[k->get<std::string>()]++;
+  }
+  nlohmann::json j;
+  for (auto& [k, c] : counts) j[k] = c;
+  return v145_string_value(j.dump());
+}
+
+// ─── Phase 7: forge role introspection ─────────────────────────────────
+
+// forge_role_of(name) -> "planner" | "generator" | "evaluator" | ""
+// Returns "" if forge agent has no role set (legacy v1.4 agents).
+Value v145_forge_role_of_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance()
+                        .lookup_forge_metadata(name);
+  if (!rec) return v145_string_value("");
+  return v145_string_value(rec->role);
+}
+
+// forge_function_of(name) -> JSON string of the function block, or ""
+Value v145_forge_function_of_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance()
+                        .lookup_forge_metadata(name);
+  if (!rec) return v145_string_value("");
+  return v145_string_value(rec->function_json);
+}
+
+// forge_ops_of(name) -> JSON array of {op, mode} objects, or ""
+Value v145_forge_ops_of_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  const std::string name = value_to_string_arg(args[0]);
+  const auto* rec = ::neamc::vm::harness::HarnessRegistry::instance()
+                        .lookup_forge_metadata(name);
+  if (!rec) return v145_string_value("");
+  return v145_string_value(rec->ops_json);
+}
+
+// assertion_by_name(ar, name) -> JSON string of the spec, or ""
+Value v145_assertion_by_name_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("");
+  auto ar = v145_ar_parsed(value_to_string_arg(args[0]));
+  if (ar.is_null()) return v145_string_value("");
+  auto spec = v145_assertion_spec(ar, value_to_string_arg(args[1]));
+  if (spec.is_null()) return v145_string_value("");
+  return v145_string_value(spec.dump());
+}
+
+// tool_registry_format_briefs(tr_name, role) -> string
+// Renders all briefs for role-scoped tools into a planner-prompt block.
+// Other roles (generator, evaluator) receive empty string per FR-TB-2.
+Value v145_tool_registry_format_briefs_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("");
+  const std::string tr   = value_to_string_arg(args[0]);
+  const std::string role = value_to_string_arg(args[1]);
+  if (role != "planner") return v145_string_value("");
+  const auto* meta = ::neamc::vm::harness::HarnessRegistry::instance().lookup_tool_registry(tr);
+  if (!meta) return v145_string_value("");
+
+  auto scope = v145_tool_registry_scope(*meta, role);
+  // If scope is empty, format briefs for ALL tools in the registry.
+  std::vector<std::string> tools_for_briefs = scope;
+  if (tools_for_briefs.empty())
+  {
+    try
+    {
+      auto j = nlohmann::json::parse(meta->fields_json.empty() ? "{}" : meta->fields_json);
+      for (const char* tier : {"builtin", "project", "user"})
+      {
+        auto it = j.find(tier);
+        if (it != j.end())
+        {
+          auto list = v145_parse_string_list(*it);
+          for (auto& t : list) tools_for_briefs.push_back(t);
+        }
+      }
+    }
+    catch (...) {}
+  }
+
+  std::ostringstream out;
+  out << "## Tool Briefs (planner-only)\n";
+  int emitted = 0;
+  for (const auto& tool : tools_for_briefs)
+  {
+    auto b = v145_tool_registry_brief(*meta, tool);
+    if (!b.has) continue;
+    out << "- " << tool << " (safe_max=" << b.safe_max << "): " << b.note << "\n";
+    emitted++;
+  }
+  if (emitted == 0) return v145_string_value("");
+  auto s = out.str();
+  return v145_string_value(s);
+}
+
+
+Value v145_llm_ask_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string provider_name = value_to_string_arg(args[0]);
+  const std::string model         = value_to_string_arg(args[1]);
+  const std::string prompt        = value_to_string_arg(args[2]);
+  if (provider_name.empty() || model.empty()) return Value::Nil();
+
+  // Read API key from the canonical env var for the chosen provider.
+  // (Mirror of the pattern used by existing forge/research agent runtimes.)
+  std::string api_key;
+  if (provider_name == "openai")
+  {
+    const char* env = std::getenv("OPENAI_API_KEY");
+    if (env) api_key = env;
+  }
+  else if (provider_name == "anthropic")
+  {
+    const char* env = std::getenv("ANTHROPIC_API_KEY");
+    if (env) api_key = env;
+  }
+  // Ollama runs locally and typically requires no key.
+
+  ::neamc::llm::ProviderConfig cfg;
+  cfg.model = model;
+  cfg.api_key = api_key;
+  cfg.temperature = 0.0;
+
+  try
+  {
+    auto provider = ::neamc::llm::create_provider(provider_name, cfg);
+    if (!provider) return Value::Nil();
+
+    std::vector<::neamc::llm::Message> msgs;
+    msgs.push_back({"user", prompt});
+    std::string reply = provider->chat(msgs);
+    return Value::String(reply.c_str(), reply.size());
+  }
+  catch (const std::exception& e)
+  {
+    // Surface errors as a sentinel string so Neam programs can detect failure.
+    std::string err = std::string("[llm_ask error] ") + e.what();
+    return Value::String(err.c_str(), err.size());
+  }
+  catch (...)
+  {
+    const char* err = "[llm_ask error] unknown";
+    return Value::String(err, std::strlen(err));
+  }
+}
+
+// v1.4.5.1: llm_ask_stream — same interface, but uses the provider's
+// streaming chat (SSE) under the hood. Benefits for reasoning models:
+//   - Recv-idle timeout (http_client v1.4.5.1) keeps the socket alive
+//     as long as tokens trickle in. A 10-minute reasoning call doesn't
+//     get killed by HTTP retries.
+//   - First-token latency is faster (no need to wait for full response
+//     to be buffered on the server).
+// Behaves identically to llm_ask for the caller — accumulates the
+// streamed response into a single String.
+Value v145_llm_ask_stream_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return Value::Nil();
+  const std::string provider_name = value_to_string_arg(args[0]);
+  const std::string model         = value_to_string_arg(args[1]);
+  const std::string prompt        = value_to_string_arg(args[2]);
+  if (provider_name.empty() || model.empty()) return Value::Nil();
+
+  std::string api_key;
+  if (provider_name == "openai")
+  {
+    const char* env = std::getenv("OPENAI_API_KEY");
+    if (env) api_key = env;
+  }
+  else if (provider_name == "anthropic")
+  {
+    const char* env = std::getenv("ANTHROPIC_API_KEY");
+    if (env) api_key = env;
+  }
+
+  ::neamc::llm::ProviderConfig cfg;
+  cfg.model = model;
+  cfg.api_key = api_key;
+  cfg.temperature = 0.0;
+
+  try
+  {
+    auto provider = ::neamc::llm::create_provider(provider_name, cfg);
+    if (!provider) return Value::Nil();
+
+    std::vector<::neamc::llm::Message> msgs;
+    msgs.push_back({"user", prompt});
+
+    std::string accumulated;
+    provider->chat_stream(msgs,
+        [&accumulated](const std::string& chunk, bool is_final) {
+          (void)is_final;
+          accumulated += chunk;
+        });
+
+    return Value::String(accumulated.c_str(), accumulated.size());
+  }
+  catch (const std::exception& e)
+  {
+    std::string err = std::string("[llm_ask_stream error] ") + e.what();
+    return Value::String(err.c_str(), err.size());
+  }
+  catch (...)
+  {
+    const char* err = "[llm_ask_stream error] unknown";
+    return Value::String(err, std::strlen(err));
+  }
+}
+
+// ─── v1.4.5 Phase 3 full: harness orchestration lifecycle ─────────────
+// harness_start(name)              -> "ok" | "[harness_start error] ..."
+// harness_run(name, goal)          -> final sub-agent output | "[harness_run error] ..."
+// harness_complete(name)           -> "ok" | error string
+// harness_abort(name, reason)      -> "ok" | error string
+// harness_trace_path(name)         -> file path | ""
+
+Value v145_harness_start_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[harness_start error] argc");
+  auto r = ::neamc::vm::harness::harness_start(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[harness_start error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v145_harness_run_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[harness_run error] argc");
+  auto r = ::neamc::vm::harness::harness_run(value_to_string_arg(args[0]),
+                                             value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[harness_run error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v145_harness_complete_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[harness_complete error] argc");
+  auto r = ::neamc::vm::harness::harness_complete(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[harness_complete error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v145_harness_abort_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[harness_abort error] argc");
+  auto r = ::neamc::vm::harness::harness_abort(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[harness_abort error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v145_harness_trace_path_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  return v145_string_value(::neamc::vm::harness::harness_trace_path(value_to_string_arg(args[0])));
+}
+
+// ─── v1.5 NeamEvolve — EvolveAgent lifecycle natives ─────────────────
+// evolve_agent_start / _run / _complete / _abort / _status / _trace_path
+// All delegate to evolve::* which delegates to harness::* (NFR-COMPAT-3).
+
+Value v15_evolve_agent_start_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[evolve_agent_start error] argc");
+  auto r = ::neamc::vm::evolve::evolve_agent_start(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[evolve_agent_start error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_evolve_agent_run_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[evolve_agent_run error] argc");
+  auto r = ::neamc::vm::evolve::evolve_agent_run(value_to_string_arg(args[0]),
+                                                 value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[evolve_agent_run error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_evolve_agent_complete_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[evolve_agent_complete error] argc");
+  auto r = ::neamc::vm::evolve::evolve_agent_complete(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[evolve_agent_complete error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_evolve_agent_abort_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[evolve_agent_abort error] argc");
+  auto r = ::neamc::vm::evolve::evolve_agent_abort(value_to_string_arg(args[0]),
+                                                   value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[evolve_agent_abort error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_evolve_agent_status_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("unknown");
+  return v145_string_value(::neamc::vm::evolve::evolve_agent_status(value_to_string_arg(args[0])));
+}
+
+Value v15_evolve_agent_trace_path_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  return v145_string_value(::neamc::vm::evolve::evolve_agent_trace_path(value_to_string_arg(args[0])));
+}
+
+// ─── v1.5 NeamEvolve — Belief natives ────────────────────────────────
+
+Value v15_belief_text_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[belief_text error] argc");
+  auto r = ::neamc::vm::belief::belief_text(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[belief_text error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_belief_revise_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[belief_revise error] argc");
+  // P0: infer the active evolve_agent automatically (find_active_evolve_agent_for_belief).
+  auto r = ::neamc::vm::belief::belief_revise(value_to_string_arg(args[0]),
+                                              value_to_string_arg(args[1]),
+                                              "");
+  if (!r.ok) return v145_string_value("[belief_revise error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_belief_rollback_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc < 1 || argc > 2) return v145_string_value("[belief_rollback error] argc");
+  std::string version_hash = (argc == 2) ? value_to_string_arg(args[1]) : std::string{};
+  auto r = ::neamc::vm::belief::belief_rollback(value_to_string_arg(args[0]), version_hash);
+  if (!r.ok) return v145_string_value("[belief_rollback error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_belief_history_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[]");
+  return v145_string_value(::neamc::vm::belief::belief_history_json(value_to_string_arg(args[0])));
+}
+
+Value v15_belief_diff_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return v145_string_value("[belief_diff error] argc");
+  return v145_string_value(::neamc::vm::belief::belief_diff(value_to_string_arg(args[0]),
+                                                            value_to_string_arg(args[1]),
+                                                            value_to_string_arg(args[2])));
+}
+
+Value v15_belief_hash_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc < 1 || argc > 2) return v145_string_value("");
+  int version = -1;
+  if (argc == 2 && args[1].is_number()) version = static_cast<int>(args[1].as_number());
+  return v145_string_value(::neamc::vm::belief::belief_hash(value_to_string_arg(args[0]), version));
+}
+
+// ─── v1.5 NeamEvolve — Skill library natives ─────────────────────────
+
+Value v15_skill_acquire_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return v145_string_value("[skill_acquire error] argc");
+  auto r = ::neamc::vm::skill::skill_acquire(value_to_string_arg(args[0]),
+                                             value_to_string_arg(args[1]),
+                                             value_to_string_arg(args[2]));
+  if (!r.ok) return v145_string_value("[skill_acquire error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_skill_get_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[skill_get error] argc");
+  auto r = ::neamc::vm::skill::skill_get(value_to_string_arg(args[0]),
+                                         value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[skill_get error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_skill_list_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[]");
+  return v145_string_value(::neamc::vm::skill::skill_list_json(value_to_string_arg(args[0])));
+}
+
+Value v15_skill_test_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[skill_test error] argc");
+  auto r = ::neamc::vm::skill::skill_test(value_to_string_arg(args[0]),
+                                          value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[skill_test error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_skill_deprecate_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[skill_deprecate error] argc");
+  auto r = ::neamc::vm::skill::skill_deprecate(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[skill_deprecate error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_skill_invoke_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 3) return v145_string_value("[skill_invoke error] argc");
+  auto r = ::neamc::vm::skill::skill_invoke(value_to_string_arg(args[0]),
+                                            value_to_string_arg(args[1]),
+                                            value_to_string_arg(args[2]));
+  if (!r.ok) return v145_string_value("[skill_invoke error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+// ─── v1.5 NeamEvolve P1 — Curriculum natives ─────────────────────────
+
+Value v15_curriculum_next_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[curriculum_next error] argc");
+  auto r = ::neamc::vm::curriculum::curriculum_next(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[curriculum_next error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_curriculum_advance_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[curriculum_advance error] argc");
+  bool success = false;
+  if (args[1].is_bool()) success = args[1].as_bool();
+  else if (args[1].is_number()) success = args[1].as_number() != 0.0;
+  auto r = ::neamc::vm::curriculum::curriculum_advance(value_to_string_arg(args[0]), success);
+  if (!r.ok) return v145_string_value("[curriculum_advance error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_curriculum_difficulty_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return Value::Number(-1.0);
+  return Value::Number(::neamc::vm::curriculum::curriculum_difficulty(value_to_string_arg(args[0])));
+}
+
+// ─── v1.5 NeamEvolve P2 — Design operation natives ───────────────────
+
+Value v15_design_propose_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[design_propose error] argc");
+  auto r = ::neamc::vm::design::design_propose(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[design_propose error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v15_design_compile_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[design_compile_in_sandbox error] argc");
+  auto r = ::neamc::vm::design::design_compile_in_sandbox(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[design_compile_in_sandbox error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v15_design_score_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return Value::Number(0.0);
+  return Value::Number(::neamc::vm::design::design_score(value_to_string_arg(args[0]),
+                                                          value_to_string_arg(args[1])));
+}
+
+Value v15_design_promote_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[design_promote error] argc");
+  auto r = ::neamc::vm::design::design_promote(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[design_promote error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+// ─── v1.6 NeamMesh — Process lifecycle natives ───────────────────────
+// process_start(name)            -> instance_id | error string
+// process_advance(instance_id)   -> last task output | error string
+// process_status(instance_id)    -> "running"|"complete"|"aborted"|"unknown"
+// process_abort(instance_id, reason) -> "ok" | error
+// process_trace_path(instance_id) -> file path | ""
+// process_persist(instance_id)   -> state file path | error
+// process_recover(state_path)    -> instance_id | error
+// process_list()                 -> JSON array of instance ids
+// hitl_resume(instance_id, payload) -> "ok" | error
+// hitl_is_pending(instance_id)   -> "true" | "false"
+
+Value v16_process_start_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[process_start error] argc");
+  auto r = ::neamc::vm::process::process_start(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[process_start error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v16_process_advance_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[process_advance error] argc");
+  auto r = ::neamc::vm::process::process_advance(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[process_advance error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v16_process_status_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("unknown");
+  return v145_string_value(::neamc::vm::process::process_status(value_to_string_arg(args[0])));
+}
+
+Value v16_process_abort_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[process_abort error] argc");
+  auto r = ::neamc::vm::process::process_abort(value_to_string_arg(args[0]),
+                                               value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[process_abort error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v16_process_trace_path_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("");
+  return v145_string_value(::neamc::vm::process::process_trace_path(value_to_string_arg(args[0])));
+}
+
+Value v16_process_persist_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[process_persist error] argc");
+  auto r = ::neamc::vm::process::process_persist(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[process_persist error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v16_process_recover_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("[process_recover error] argc");
+  auto r = ::neamc::vm::process::process_recover(value_to_string_arg(args[0]));
+  if (!r.ok) return v145_string_value("[process_recover error " + r.error_code + "] " + r.output);
+  return v145_string_value(r.output);
+}
+
+Value v16_process_list_native(VirtualMachine&, int argc, Value*)
+{
+  if (argc != 0) return v145_string_value("[process_list error] argc");
+  auto ids = ::neamc::vm::process::list_instances();
+  std::string out = "[";
+  for (size_t i = 0; i < ids.size(); ++i) {
+    if (i > 0) out += ",";
+    out += "\"" + ids[i] + "\"";
+  }
+  out += "]";
+  return v145_string_value(out);
+}
+
+Value v16_hitl_resume_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 2) return v145_string_value("[hitl_resume error] argc");
+  auto r = ::neamc::vm::hitl::hitl_resume(value_to_string_arg(args[0]),
+                                          value_to_string_arg(args[1]));
+  if (!r.ok) return v145_string_value("[hitl_resume error " + r.error_code + "] " + r.output);
+  return v145_string_value("ok");
+}
+
+Value v16_hitl_is_pending_native(VirtualMachine&, int argc, Value* args)
+{
+  if (argc != 1) return v145_string_value("false");
+  return v145_string_value(::neamc::vm::hitl::hitl_is_pending(value_to_string_arg(args[0])) ? "true" : "false");
 }
 
 }  // namespace
@@ -4757,5 +5873,86 @@ void register_core_natives(VirtualMachine& vm)
     }
     return Value::Nil();
   });
+
+  // ─── v1.4.5 Phase 3-minimal: harness lifecycle ─────────────────────
+  vm.define_native("harness_hash",             1, v145_harness_hash_native);
+  vm.define_native("harness_status",           1, v145_harness_status_native);
+  vm.define_native("harness_env",              0, v145_harness_env_native);
+  vm.define_native("handoff_schema_version",   1, v145_handoff_schema_version_native);
+  // Bridge to existing LLM provider infrastructure (v0.6.6+):
+  // NOT a harness-scored call — bare-model path. Full harness runtime
+  // will internally call the same provider factory.
+  vm.define_native("llm_ask",                  3, v145_llm_ask_native);
+  // v1.4.5.1: streaming variant — survives long reasoning via recv-idle timeout
+  vm.define_native("llm_ask_stream",           3, v145_llm_ask_stream_native);
+  // Phase 4: handoff runtime (file-backed I/O + schema validation)
+  vm.define_native("handoff_write",            3, v145_handoff_write_native);
+  vm.define_native("handoff_read",            -1, v145_handoff_read_native); // 1 or 2 args
+  vm.define_native("handoff_exists",           1, v145_handoff_exists_native);
+  vm.define_native("handoff_size",             1, v145_handoff_size_native);
+  vm.define_native("handoff_validate",         1, v145_handoff_validate_native);
+  // Phase 5: tool registry scope + brief injection
+  vm.define_native("tool_registry_check",         3, v145_tool_registry_check_native);
+  vm.define_native("tool_registry_scope_of",      2, v145_tool_registry_scope_of_native);
+  vm.define_native("tool_registry_brief",         2, v145_tool_registry_brief_native);
+  vm.define_native("tool_registry_format_briefs", 2, v145_tool_registry_format_briefs_native);
+  // Phase 6: assertion kernel (regex + runtime evaluators)
+  vm.define_native("assertion_check_regex",      3, v145_assertion_check_regex_native);
+  vm.define_native("assertion_check_runtime",    3, v145_assertion_check_runtime_native);
+  vm.define_native("assertion_hard_count",       1, v145_assertion_hard_count_native);
+  vm.define_native("assertion_kinds",            1, v145_assertion_kinds_native);
+  vm.define_native("assertion_by_name",          2, v145_assertion_by_name_native);
+  // Phase 7: forge role introspection (role, function, ops)
+  vm.define_native("forge_role_of",              1, v145_forge_role_of_native);
+  vm.define_native("forge_function_of",          1, v145_forge_function_of_native);
+  vm.define_native("forge_ops_of",               1, v145_forge_ops_of_native);
+  // Phase 3 full: harness orchestration lifecycle
+  vm.define_native("harness_start",              1, v145_harness_start_native);
+  vm.define_native("harness_run",                2, v145_harness_run_native);
+  vm.define_native("harness_complete",           1, v145_harness_complete_native);
+  vm.define_native("harness_abort",              2, v145_harness_abort_native);
+  vm.define_native("harness_trace_path",         1, v145_harness_trace_path_native);
+  // ─── v1.5 NeamEvolve P0 ─────────────────────────────────────────────
+  // Lifecycle (6) — thin shim over harness_*
+  vm.define_native("evolve_agent_start",         1, v15_evolve_agent_start_native);
+  vm.define_native("evolve_agent_run",           2, v15_evolve_agent_run_native);
+  vm.define_native("evolve_agent_complete",      1, v15_evolve_agent_complete_native);
+  vm.define_native("evolve_agent_abort",         2, v15_evolve_agent_abort_native);
+  vm.define_native("evolve_agent_status",        1, v15_evolve_agent_status_native);
+  vm.define_native("evolve_agent_trace_path",    1, v15_evolve_agent_trace_path_native);
+  // Belief (6) — mutable strategy cell
+  vm.define_native("belief_text",                1, v15_belief_text_native);
+  vm.define_native("belief_revise",              2, v15_belief_revise_native);
+  vm.define_native("belief_rollback",           -1, v15_belief_rollback_native);  // 1 or 2 args
+  vm.define_native("belief_history",             1, v15_belief_history_native);
+  vm.define_native("belief_diff",                3, v15_belief_diff_native);
+  vm.define_native("belief_hash",               -1, v15_belief_hash_native);      // 1 or 2 args
+  // Skill library (6) — runtime-acquired skills with sandbox + capability monotonicity
+  vm.define_native("skill_acquire",              3, v15_skill_acquire_native);
+  vm.define_native("skill_get",                  2, v15_skill_get_native);
+  vm.define_native("skill_list",                 1, v15_skill_list_native);
+  vm.define_native("skill_test",                 2, v15_skill_test_native);
+  vm.define_native("skill_deprecate",            2, v15_skill_deprecate_native);
+  vm.define_native("skill_invoke",               3, v15_skill_invoke_native);
+  // Curriculum (3) — P1
+  vm.define_native("curriculum_next",            1, v15_curriculum_next_native);
+  vm.define_native("curriculum_advance",         2, v15_curriculum_advance_native);
+  vm.define_native("curriculum_difficulty",      1, v15_curriculum_difficulty_native);
+  // Design operation (4) — P2, gated on safety.human_gate
+  vm.define_native("design_propose",             2, v15_design_propose_native);
+  vm.define_native("design_compile_in_sandbox",  1, v15_design_compile_native);
+  vm.define_native("design_score",               2, v15_design_score_native);
+  vm.define_native("design_promote",             2, v15_design_promote_native);
+  // ─── v1.6 NeamMesh — Process lifecycle (8) + HITL (2) ──────────────
+  vm.define_native("process_start",              1, v16_process_start_native);
+  vm.define_native("process_advance",            1, v16_process_advance_native);
+  vm.define_native("process_status",             1, v16_process_status_native);
+  vm.define_native("process_abort",              2, v16_process_abort_native);
+  vm.define_native("process_trace_path",         1, v16_process_trace_path_native);
+  vm.define_native("process_persist",            1, v16_process_persist_native);
+  vm.define_native("process_recover",            1, v16_process_recover_native);
+  vm.define_native("process_list",               0, v16_process_list_native);
+  vm.define_native("hitl_resume",                2, v16_hitl_resume_native);
+  vm.define_native("hitl_is_pending",            1, v16_hitl_is_pending_native);
 }
 }  // namespace neamc::vm

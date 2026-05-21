@@ -1,0 +1,4 @@
+# Each variant below prepends the following shared prelude (via run_ctcr.sh):
+#
+# fun check_result(ctx) { return true; }
+# budget B { cost: 10.00, tokens: 100000 }

@@ -33,6 +33,7 @@
 #include "neamc/vm/sealed_type.hpp"
 #include "neamc/vm/claw_agent_type.hpp"
 #include "neamc/vm/forge_agent_type.hpp"
+#include "neamc/vm/harness_types.hpp"  // v1.4.5 Phase 3-minimal
 #include "neamc/vm/data_agent_types.hpp"
 #include "neamc/vm/etl_agent_types.hpp"
 #include "neamc/vm/migration_types.hpp"
@@ -11795,6 +11796,255 @@ Value VirtualMachine::run_frames(std::size_t target_frame_count)
           auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
           globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
           stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+        }
+        else if (sub_type == 30)
+        {
+          // v1.4.5 Phase 7: ForgeAgent metadata (role/function/ops). Emitted
+          // immediately after OP_DEFINE_FORGE_AGENT by the compiler when the
+          // forge agent has any of role/function/ops set.  Populates side
+          // table; does NOT create a new Obj (the OP_DEFINE_FORGE_AGENT has
+          // already registered the ForgeAgent in globals_).
+          std::string decl_name = fields.count("name") ? fields["name"] : "";
+          if (!decl_name.empty())
+          {
+            ::neamc::vm::harness::ForgeMetadataRecord rec;
+            rec.name = decl_name;
+            if (fields.count("role"))     rec.role          = fields["role"];
+            if (fields.count("function")) rec.function_json = fields["function"];
+            if (fields.count("ops"))      rec.ops_json      = fields["ops"];
+            ::neamc::vm::harness::HarnessRegistry::instance()
+                .register_forge_metadata(std::move(rec));
+          }
+          stack_.push_back(Value::Nil());
+        }
+        else if (sub_type == 25 || sub_type == 26 || sub_type == 27 ||
+                 sub_type == 28 || sub_type == 29 || sub_type == 31 ||
+                 sub_type == 32 || sub_type == 33 || sub_type == 34)
+        {
+          // v1.4.5: NeamHarness family —
+          //   25: harness  26: handoff  27: tool_registry
+          //   28: assertion_registry  29: harness_benchmark
+          // v1.5: NeamEvolve family —
+          //   31: evolve_agent  32: belief
+          static const char* kModes[] = {
+            "v1.4.5_harness",            // 25
+            "v1.4.5_handoff",            // 26
+            "v1.4.5_tool_registry",      // 27
+            "v1.4.5_assertion_registry", // 28
+            "v1.4.5_harness_benchmark"   // 29
+          };
+          std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
+          auto* agent = new_dio_agent();
+          agent->name = decl_name;
+          if (sub_type >= 25 && sub_type <= 29) {
+            agent->mode = kModes[sub_type - 25];
+          } else if (sub_type == 31) {
+            agent->mode = "v1.5_evolve_agent";
+          } else if (sub_type == 32) {
+            agent->mode = "v1.5_belief";
+          } else if (sub_type == 33) {
+            agent->mode = "v1.5_skill_library";
+          } else if (sub_type == 34) {
+            agent->mode = "v1.5_curriculum";
+          }
+          for (const auto& [k, v] : fields) {
+            if (k != "name") {
+              if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";
+              agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
+            }
+          }
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+          // v1.4.5 Phase 3-minimal: populate HarnessRegistry side table.
+          // FR-H-5 hash is over (name + fields_json).
+          const std::string fields_blob = fields.count("fields") ? fields["fields"] : "";
+          auto& reg = ::neamc::vm::harness::HarnessRegistry::instance();
+          if (sub_type == 25) {
+            ::neamc::vm::harness::HarnessRecord rec;
+            rec.name = decl_name;
+            rec.provider = fields.count("provider") ? fields["provider"] : "";
+            rec.model = fields.count("model") ? fields["model"] : "";
+            rec.fields_json = fields_blob;
+            rec.bytecode_hash =
+                ::neamc::vm::harness::compute_harness_hash(decl_name, fields_blob);
+            rec.status = "registered";
+            reg.register_harness(std::move(rec));
+          } else if (sub_type == 26) {
+            ::neamc::vm::harness::HandoffRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            rec.schema_version =
+                ::neamc::vm::harness::extract_json_string(fields_blob, "schema_version");
+            reg.register_handoff(std::move(rec));
+          } else if (sub_type == 27) {
+            ::neamc::vm::harness::ToolRegistryRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_tool_registry(std::move(rec));
+          } else if (sub_type == 28) {
+            ::neamc::vm::harness::AssertionRegistryRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_assertion_registry(std::move(rec));
+          } else if (sub_type == 29) {
+            ::neamc::vm::harness::HarnessBenchmarkRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_harness_benchmark(std::move(rec));
+          } else if (sub_type == 31) {
+            // v1.5 NeamEvolve: evolve_agent registers as a HarnessRecord with
+            // evolve_mode=true (no new ObjType — see Impl Spec §4.3, §7.4).
+            ::neamc::vm::harness::HarnessRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            rec.bytecode_hash =
+                ::neamc::vm::harness::compute_harness_hash(decl_name, fields_blob);
+            rec.status = "registered";
+            rec.evolve_mode = true;
+            // Resolve named refs from fields_json for fast access at runtime
+            rec.provider = ::neamc::vm::harness::extract_json_string(fields_blob, "provider");
+            rec.model = ::neamc::vm::harness::extract_json_string(fields_blob, "model");
+            rec.belief_ref = ::neamc::vm::harness::extract_json_string(fields_blob, "belief");
+            rec.skills_ref = ::neamc::vm::harness::extract_json_string(fields_blob, "skills");
+            rec.curriculum_ref = ::neamc::vm::harness::extract_json_string(fields_blob, "curriculum");
+            // safety.program / safety.human_gate live nested
+            try {
+              auto j = nlohmann::json::parse(fields_blob);
+              if (j.contains("safety") && j["safety"].is_object()) {
+                if (j["safety"].contains("program") && j["safety"]["program"].is_string())
+                  rec.safety_program_ref = j["safety"]["program"].get<std::string>();
+                if (j["safety"].contains("human_gate") && j["safety"]["human_gate"].is_string())
+                  rec.safety_human_gate_ref = j["safety"]["human_gate"].get<std::string>();
+              }
+            } catch (...) { /* tolerated */ }
+            reg.register_harness(std::move(rec));
+          } else if (sub_type == 32) {
+            // v1.5 NeamEvolve: belief — mutable strategy text cell
+            ::neamc::vm::harness::BeliefRecord rec;
+            rec.name = decl_name;
+            try {
+              auto j = nlohmann::json::parse(fields_blob);
+              rec.initial_text = j.value("initial", std::string{});
+              rec.current_text = rec.initial_text;
+              rec.constraints_ref = j.value("constraints", std::string{});
+              rec.revision_trigger = j.value("revision_trigger", std::string{"manual"});
+              rec.trigger_n = j.value("trigger_n", 5);
+              rec.max_revisions_per_session = j.value("max_revisions_per_session", 10);
+              rec.rollback_enabled = j.value("rollback", true);
+              rec.max_drift = j.value("max_drift", 0.7f);
+              rec.rollback_on_regression = j.value("rollback_on_regression", 0.10f);
+              if (j.contains("distillation_method") && j["distillation_method"].is_string())
+                rec.distillation_method = j["distillation_method"].get<std::string>();
+            } catch (...) { /* tolerated; rec keeps defaults */ }
+            rec.current_hash = ::neamc::vm::harness::compute_harness_hash(decl_name, rec.initial_text);
+            // Seed history with the initial version
+            ::neamc::vm::harness::BeliefVersion v0;
+            v0.version = 0;
+            v0.text = rec.initial_text;
+            v0.hash = rec.current_hash;
+            v0.committed_by_trigger = "initial";
+            // ts left empty here; runtime will add one on first revise
+            rec.history.push_back(std::move(v0));
+            reg.register_belief(std::move(rec));
+          } else if (sub_type == 33) {
+            // v1.5 NeamEvolve: skill_library — runtime-acquired skill registry
+            ::neamc::vm::harness::SkillLibraryRecord rec;
+            rec.name = decl_name;
+            try {
+              auto j = nlohmann::json::parse(fields_blob);
+              if (j.contains("verify") && j["verify"].is_object()) {
+                rec.verify_method = j["verify"].value("method", std::string{"self_test"});
+                rec.verify_sandbox = j["verify"].value("sandbox", true);
+              }
+              if (j.contains("deprecate") && j["deprecate"].is_object()) {
+                rec.deprecate_after_failures = j["deprecate"].value("after_failures", 5);
+              }
+              rec.allow_runtime_acquisition = j.value("allow_runtime_acquisition", true);
+              if (j.contains("trusted_signers") && j["trusted_signers"].is_array()) {
+                for (auto& s : j["trusted_signers"]) {
+                  if (s.is_string()) rec.trusted_signers.push_back(s.get<std::string>());
+                }
+              }
+            } catch (...) { /* tolerated */ }
+            reg.register_skill_library(std::move(rec));
+          } else if (sub_type == 34) {
+            // v1.5 NeamEvolve: curriculum — auto-progression
+            ::neamc::vm::harness::CurriculumRecord rec;
+            rec.name = decl_name;
+            try {
+              auto j = nlohmann::json::parse(fields_blob);
+              rec.mode = j.value("mode", std::string{"auto"});
+              rec.difficulty_metric = j.value("difficulty_metric", std::string{});
+              rec.advance_threshold = j.value("advance_threshold", 0.8f);
+              rec.fallback_threshold = j.value("fallback_threshold", 0.4f);
+              if (j.contains("task_pool") && j["task_pool"].is_array()) {
+                for (auto& s : j["task_pool"]) {
+                  if (s.is_string()) rec.task_pool.push_back(s.get<std::string>());
+                }
+              }
+            } catch (...) { /* tolerated */ }
+            reg.register_curriculum(std::move(rec));
+          }
+        }
+        // ═══ v1.6 NeamMesh — Agentic Process Automation (sub-types 35-39) ═══
+        else if (sub_type == 35 || sub_type == 36 || sub_type == 37 ||
+                 sub_type == 38 || sub_type == 39)
+        {
+          //   35: process  36: task  37: decision  38: event  39: pool
+          static const char* kV16Modes[] = {
+            "v1.6_process",  // 35
+            "v1.6_task",     // 36
+            "v1.6_decision", // 37
+            "v1.6_event",    // 38
+            "v1.6_pool"      // 39
+          };
+          std::string decl_name = fields.count("name") ? fields["name"] : "unnamed";
+          auto* agent = new_dio_agent();
+          agent->name = decl_name;
+          agent->mode = kV16Modes[sub_type - 35];
+          for (const auto& [k, v] : fields) {
+            if (k != "name") {
+              if (!agent->managed_agents_json.empty()) agent->managed_agents_json += ",";
+              agent->managed_agents_json += "\"" + k + "\":\"" + v + "\"";
+            }
+          }
+          auto* name_str = copy_string(agent->name.c_str(), agent->name.size());
+          globals_.set(name_str, Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+          stack_.push_back(Value::ObjVal(reinterpret_cast<Obj*>(agent)));
+
+          // Side-table registration on HarnessRegistry.
+          const std::string fields_blob = fields.count("fields") ? fields["fields"] : "";
+          auto& reg = ::neamc::vm::harness::HarnessRegistry::instance();
+          if (sub_type == 35) {
+            ::neamc::vm::harness::ProcessRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_process(std::move(rec));
+          } else if (sub_type == 36) {
+            ::neamc::vm::harness::TaskRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            rec.agent_ref = ::neamc::vm::harness::extract_json_string(fields_blob, "agent");
+            reg.register_task(std::move(rec));
+          } else if (sub_type == 37) {
+            ::neamc::vm::harness::DecisionRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_decision(std::move(rec));
+          } else if (sub_type == 38) {
+            ::neamc::vm::harness::EventRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            rec.event_type = ::neamc::vm::harness::extract_json_string(fields_blob, "type");
+            reg.register_event(std::move(rec));
+          } else if (sub_type == 39) {
+            ::neamc::vm::harness::PoolRecord rec;
+            rec.name = decl_name;
+            rec.fields_json = fields_blob;
+            reg.register_pool(std::move(rec));
+          }
         }
         else
         {

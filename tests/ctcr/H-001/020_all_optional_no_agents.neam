@@ -1,0 +1,10 @@
+// CTCR expects: H-001
+harness Kitchen {
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    temperature: 0.2,
+    context: { compaction: "auto" },
+    observability: { audit: true },
+    safety: { max_skill_count: 200 },
+    governance: []
+}

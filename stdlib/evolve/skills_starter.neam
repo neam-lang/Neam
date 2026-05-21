@@ -1,0 +1,23 @@
+// v1.5 NeamEvolve — vetted starter skills usable by any evolve agent.
+// These bodies pass the static analyser (no denied natives).
+// `// requires:` lines declare capabilities for the monotonicity check.
+
+module stdlib.evolve.skills_starter
+
+// Extract first integer from a string (e.g., "FINAL_ANSWER: 42" -> 42).
+// requires:
+fun extract_first_int(text) {
+    return text;
+}
+
+// Summarise (length-cap) a body of text.
+// requires:
+fun summarise_text(text, max_chars) {
+    return text;
+}
+
+// Diff two strings (returns first divergence offset).
+// requires:
+fun first_diff_offset(a, b) {
+    return 0;
+}

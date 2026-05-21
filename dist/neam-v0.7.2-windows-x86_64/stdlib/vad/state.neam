@@ -1,8 +1,0 @@
-// VAD state constants
-
-module std.vad.state;
-
-pub fun state_silence() { return { kind: "Silence" }; }
-pub fun state_speech_start() { return { kind: "SpeechStart" }; }
-pub fun state_speech() { return { kind: "Speech" }; }
-pub fun state_speech_end() { return { kind: "SpeechEnd" }; }

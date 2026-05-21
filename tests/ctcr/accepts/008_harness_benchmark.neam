@@ -1,0 +1,6 @@
+// Positive control
+harness_benchmark NB {
+    description: "Neam bench v1",
+    dimensions: ["pass_rate", "efficiency", "determinism"],
+    repetitions: 3
+}

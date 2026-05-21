@@ -1,0 +1,26 @@
+// v1.6 NeamMesh — common process recipes (linear, fork-join, approval gate).
+// These are macros / helper builders, not declarations themselves.
+
+module std.process.recipes;
+
+// Approval gate: { task -> decision (approve/reject) -> approved_step | rejected_step }
+pub fun approval_gate(name, reviewer_agent, approved_next, rejected_next) {
+  return {
+    name: name,
+    review_task: { name: name + "_review", agent: reviewer_agent },
+    gate: {
+      name: name + "_decision",
+      expr: "approved",
+      branches: { yes: approved_next, no: rejected_next }
+    }
+  };
+}
+
+// HITL escalation pattern: try automated agent N times, then escalate to human.
+pub fun escalation(name, auto_agent, human_agent, max_retries) {
+  return {
+    name: name,
+    auto_task: { name: name + "_auto", agent: auto_agent, retries: max_retries },
+    human_task: { name: name + "_human", agent: human_agent }
+  };
+}

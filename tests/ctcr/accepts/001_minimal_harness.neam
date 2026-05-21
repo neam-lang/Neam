@@ -1,0 +1,4 @@
+// Positive control: minimal harness with one sub_agent
+budget B { cost: 10.00, tokens: 100000 }
+agent M { provider: "anthropic", model: "claude-sonnet-4", system: "m", budget: B }
+harness H { provider: "anthropic", model: "claude-sonnet-4", budget: B, sub_agents: { main: M } }

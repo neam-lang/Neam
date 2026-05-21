@@ -1,0 +1,20 @@
+// v1.5 NeamEvolve P1 — curriculum templates per task domain.
+
+module stdlib.evolve.curriculum_recipes
+
+// Standard auto-progression: 80% advance / 40% fallback over a 20-window.
+curriculum StandardAutoProgression {
+    mode: "auto",
+    difficulty_metric: "task_success_rate",
+    advance_threshold: 0.8,
+    fallback_threshold: 0.4
+}
+
+// Co-evolutionary curriculum (Agent0-style): difficulty driven by executor
+// uncertainty.  P1 — engages co-evolve mode in the runtime.
+curriculum CoEvolveProgression {
+    mode: "co_evolve",
+    difficulty_metric: "self_consistency",
+    advance_threshold: 0.7,
+    fallback_threshold: 0.3
+}

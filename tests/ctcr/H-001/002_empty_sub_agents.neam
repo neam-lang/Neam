@@ -1,0 +1,2 @@
+// CTCR expects: H-001
+harness E { provider: "anthropic", model: "claude-sonnet-4", sub_agents: {} }

@@ -70,7 +70,7 @@ set(CURL_STATIC_DEPS
     "${NEAM_WIN_DEPS_DIR}/lib/libnghttp2.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libnghttp3.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libngtcp2.a"
-    "${NEAM_WIN_DEPS_DIR}/lib/libngtcp2_crypto_libressl.a"
+    "${NEAM_WIN_DEPS_DIR}/lib/libngtcp2_crypto_quictls.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libssh2.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libpsl.a"
     "${NEAM_WIN_DEPS_DIR}/lib/libbrotlidec.a"

@@ -979,6 +979,13 @@ struct ForgeAgentDecl
   LoopConfig loop;
   ExprPtr verify;       // required: fun(ctx) -> VerifyResult
   std::optional<std::string> checkpoint;  // "git", "snapshot", "none"
+  // v1.4.5: optional role / function / ops field extensions
+  // role:     "planner" | "generator" | "evaluator" | "" (unset — default v1.4 behavior)
+  // function: JSON describing the forge agent as a submodule-tool callable
+  // ops:      JSON array of per-op {op, mode} modifiers (task vs step)
+  std::string role;
+  std::string function_json;
+  std::string ops_json;
 };
 
 // v0.8 Phase 6: Channel declaration
@@ -4179,6 +4186,134 @@ struct WikiAgentDecl {
     SourceSpan span;
 };
 
+// v1.4.5: NeamHarness — unified harness declaration (sub-type 25 on OP_DEFINE_DIO_DECLARATION)
+struct HarnessDecl {
+    Visibility visibility;
+    std::string name;
+    std::string provider;
+    std::string model;
+    double temperature = 0.2;
+    std::string budget_ref;
+    std::string tools_ref;                // -> ToolRegistryDecl (v1.4.5 phase 1)
+    std::string handoff_ref;              // -> HandoffDecl (v1.4.5 phase 1)
+    std::string assertions_ref;           // -> AssertionRegistryDecl (v1.4.5 phase 1)
+    std::string program_ref;
+    std::string goal_integrity_ref;
+    std::string circuit_breaker_ref;
+    std::string sub_agents_json;
+    std::string context_json;
+    std::string governance_json;
+    std::string trace_json;
+    std::string observability_json;
+    std::string safety_json;
+    std::string fields_json;              // catch-all raw blob (mirrors WikiDecl.fields_json)
+    SourceSpan span;
+};
+
+// v1.4.5: Typed, schema-validated progress/state file (sub-type 26)
+struct HandoffDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // path, schema, required_sections, max_size_kb, etc.
+    SourceSpan span;
+};
+
+// v1.4.5: Scoped 3-tier tool registry (sub-type 27)
+struct ToolRegistryDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // builtin, project, user, max_active, scoping, briefs
+    SourceSpan span;
+};
+
+// v1.4.5: CAAF-inspired Unified Assertion Interface (sub-type 28)
+struct AssertionRegistryDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // name -> {kind, severity, on_violation, pattern?, metric?, ...}
+    SourceSpan span;
+};
+
+// v1.4.5: Typed benchmark declaration for harness evaluation (sub-type 29)
+struct HarnessBenchmarkDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // harnesses_under_test, models, task_suites, dimensions, etc.
+    SourceSpan span;
+};
+
+// v1.5: NeamEvolve — Self-evolving agent (sub-type 31).
+// Compiles via the same field-bag path as HarnessDecl but registers as
+// HarnessRecord with evolve_mode=true (no new ObjType).
+struct EvolveAgentDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // belief, handoff, assertions, sub_agents, safety, ...
+    SourceSpan span;
+};
+
+// v1.5: NeamEvolve — Mutable strategy text cell (sub-type 32).
+struct BeliefDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // initial, constraints, revision_trigger, trigger_n, ...
+    SourceSpan span;
+};
+
+// v1.5: NeamEvolve — Runtime-acquired skill registry (sub-type 33).
+struct SkillLibraryDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // verify, deprecate, allow_runtime_acquisition, trusted_signers
+    SourceSpan span;
+};
+
+// v1.5: NeamEvolve — Auto-progression of task difficulty (sub-type 34, P1).
+struct CurriculumDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // mode, difficulty_metric, advance_threshold, fallback_threshold
+    SourceSpan span;
+};
+
+// v1.6: NeamMesh — BPMN 2.0 Level 1 Agentic Process Automation.
+// Five new declarations reuse the v1.4.5 field-bag emission path with
+// new VM sub-types 35-39.  See impl spec §4.1.
+struct ProcessDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // start, tasks, decisions, events, end, sla, persistence
+    SourceSpan span;
+};
+
+struct TaskDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // agent, scope, input, output, retries, on_error, sla
+    SourceSpan span;
+};
+
+struct DecisionDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // expr, branches: { yes: <task>, no: <task> }
+    SourceSpan span;
+};
+
+struct EventDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // type: start|intermediate|end|timer|signal|message; payload
+    SourceSpan span;
+};
+
+struct PoolDecl {
+    Visibility visibility;
+    std::string name;
+    std::string fields_json;              // lanes: { ... }; participants for cross-org orchestration
+    SourceSpan span;
+};
+
 struct ConstDecl
 {
   Visibility visibility;
@@ -4307,7 +4442,14 @@ struct Statement
                    ProgramDecl, ResearchAgentDecl,
                    ExperimentLoopDecl, MetricExtractorDecl,
                    // v1.4: NeamWiki
-                   WikiDecl, WikiAgentDecl>;
+                   WikiDecl, WikiAgentDecl,
+                   // v1.4.5: NeamHarness
+                   HarnessDecl, HandoffDecl, ToolRegistryDecl,
+                   AssertionRegistryDecl, HarnessBenchmarkDecl,
+                   // v1.5: NeamEvolve
+                   EvolveAgentDecl, BeliefDecl, SkillLibraryDecl, CurriculumDecl,
+                   // v1.6: NeamMesh
+                   ProcessDecl, TaskDecl, DecisionDecl, EventDecl, PoolDecl>;
   SourceSpan span;
   Variant node;
 };

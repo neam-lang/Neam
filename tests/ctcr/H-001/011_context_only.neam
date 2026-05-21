@@ -1,0 +1,6 @@
+// CTCR expects: H-001
+harness CtxOnly {
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    context: { compaction: "auto" }
+}

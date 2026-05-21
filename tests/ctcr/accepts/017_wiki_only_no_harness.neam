@@ -1,0 +1,2 @@
+// Positive control: wiki-only program compiles unchanged
+wiki W { topic: "t", raw_path: "./r", wiki_path: "./w" }

@@ -1,0 +1,10 @@
+// Positive control
+tool_registry TR {
+    builtin: ["fetch", "run_tests"],
+    max_active: 10,
+    scoping: {
+        planner: ["fetch"],
+        generator: ["run_tests"],
+        evaluator: ["run_tests"]
+    }
+}

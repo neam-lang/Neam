@@ -1,0 +1,6 @@
+// CTCR expects: H-015
+handoff L {
+    path: "./l.md",
+    schema: "markdown",
+    versioning: "append_log"
+}

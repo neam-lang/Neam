@@ -1,0 +1,12 @@
+// Positive control: all 5 v1.4.5 declarations together
+budget B { cost: 200.00, tokens: 5000000 }
+agent Main { provider: "anthropic", model: "claude-opus-4", system: "m", budget: B }
+handoff HF { path: "./p.md", schema: "markdown", required_sections: ["done"], schema_version: "1.0.0" }
+tool_registry TR { builtin: ["compile"], max_active: 4 }
+assertion_registry AR { budget_check: { kind: "runtime", metric: "cost", op: "<=", value: 200, severity: "hard" } }
+harness App {
+    provider: "anthropic", model: "claude-opus-4",
+    budget: B, handoff: HF, tools: TR, assertions: AR,
+    sub_agents: { main: Main }
+}
+harness_benchmark NB { description: "b", dimensions: ["pass_rate"], repetitions: 1 }
